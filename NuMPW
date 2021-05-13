@@ -508,13 +508,14 @@ def line8(inst): # divu,divs,sbcd,or
         set_nz(datum, size)
         v = c = False
 
-def line9(inst): # sub,subx,suba: very compactly encoded
+def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
     global x, n, z, v, c
+    sign = 1 if inst & 0x4000 else -1
     if inst & 0x0C0 == 0x0C0: # suba
         size = 4 if inst & 0x100 else 2
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = read_s(4, regs + 32 + an * 4) - read_s(size, ea)
+        result = read_s(4, regs + 32 + an * 4) + sign * read_s(size, ea)
         write(4, regs + 32 + an * 4, result)
 
     elif inst & 0x130 == 0x100: # subx: only two addressing modes allowed
@@ -523,7 +524,7 @@ def line9(inst): # sub,subx,suba: very compactly encoded
         src = address_by_mode(mode | (inst & 7), size)
         dest = address_by_mode(mode | ((inst >> 9) & 7), size)
 
-        result = add_then_set_vc(read_us(size, dest), -read_us(size, src)-x, size)
+        result = add_then_set_vc(read_us(size, dest), sign * (read_us(size, src) + x), size)
         write(size, dest, result)
         c = not c
         x = c
@@ -536,7 +537,7 @@ def line9(inst): # sub,subx,suba: very compactly encoded
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src # direction bit does a swap
-        result = add_then_set_vc(read_us(size, dest), -read_us(size, src), size)
+        result = add_then_set_vc(read_us(size, dest), sign * (read_us(size, src) + x), size)
         x = c
         set_nz(result, size)
         write(size, dest, result)
@@ -544,14 +545,153 @@ def line9(inst): # sub,subx,suba: very compactly encoded
 def lineA(inst): # macintosh os/toolbox
     pass
 
-def lineB(inst):
-    pass
+def lineB(inst): # cmpa,cmp,cmpm,eor
+    global x, n, z, v, c
+    if inst & 0x0C0 == 0x0C0: # cmpa
+        size = 4 if inst & 0x100 else 2 # size of ea but An is always .L
+        ea = address_by_mode(inst & 63, size)
+        an = (inst >> 9) & 7
+        result = add_then_set_vc(read_s(4, regs + 32 + an * 4), -read_s(size, ea), 4)
+        set_nz(result, 4)
+
+    elif inst & 0x100 == 0x000: # cmp
+        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        dn = (inst >> 9) & 7
+        dest = regs + dn * 4 + 4 - size
+        src = address_by_mode(inst & 63, size)
+        result = add_then_set_vc(read_us(size, regs + dn * 4 + 4 - size), -read_us(size, ea), size)
+        set_nz(result, size)
+
+    elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
+        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        src = address_by_mode(24 | (inst & 7)) # (An)+ mode
+        dest = address_by_mode(24 | ((inst >> 9) & 7))
+        result = add_then_set_vc(read_us(size, dest), -read_us(size, src), size)
+        set_nz(result, size)
+
+    else: # eor
+        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        dn = (inst >> 9) & 7; src = regs + 4 * dn + 4 - size
+        dest = address_by_mode(inst & 63, size)
+
+        result = read_us(size, dest) ^ read_us(size, src)
+        v = c = False
+        set_nz(result, size)
+        write(size, dest, result)
+
 def lineC(inst):
-    pass
-def lineD(inst):
-    pass
+    if inst & 0xC0 == 0xC0: # mulu,muls
+        pass
+    elif inst & 0x1F0 == 0x100: # abcd
+        1/0 # I don't like BCD instructions
+    elif inst & 0x1F8 in (0x140, 0x148, 0x180): # exg
+        rx = (inst >> 9) & 7
+        ry = inst & 7
+        if inst & 0x1F8 == 0x148: # Ax,Ay
+            rx |= 8; ry |= 8 # bump the addressing mode from Dn to An
+        if inst & 0x1F8 == 0x180: # Dx,Ay
+            ry |= 8
+
+        rx = address_by_mode(rx, 4)
+        ry = address_by_mode(ry, 4)
+
+        x = read_us(4, rx)
+        y = read_us(4, ry)
+        write(4, rx, y)
+        write(4, ry, x)
+
+    else: # and
+        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        dn = (inst >> 9) & 7; dest = address_by_mode(dn, size)
+        src = address_by_mode(inst & 63, size)
+
+        if inst & 0x100: src, dest = dest, src # direction bit
+
+        result = read_us(size, src) & read_us(size, dest)
+        set_nz(result, size)
+        v = c = False
+        write(size, dest, result)
+
+
+
 def lineE(inst):
-    pass
+    global x, n, z, v, c
+    size = (1, 2, 4, None)[(inst >> 6) & 3]
+
+    if size is None: # single-bit shift on a memory address
+        size = 2
+        kind = (inst >> 9) & 3
+        dest = address_by_mode(inst & 63, 2)
+        by = 1
+    else:
+        kind = (inst >> 3) & 3
+        dest = regs + ((inst >> 9) & 7) * 4 + 2 # dn
+        if inst & 0x20:
+            by = read_us(1, regs + ((inst >> 9) & 7) * 4 + 3) % 64
+        else:
+            by = (inst >> 9) & 7
+
+    isleft = bool(inst & 0x100)
+
+    c = False # clear C if shift count is zero
+
+    result = read_us(size, dest)
+    mask = (0x100 << size) - 1
+    msb = 1 << (size * 8 - 1)
+    numbits = size * 8
+    if kind == 0: # asl/asr
+        if isleft:
+            for i in range(by):
+                newresult = (result << 1) & mask
+                x = c = bool(newresult & (mask + 1)) # shifted-out bit
+                if newresult & msb != result & msb: v = 1 # set V if sign ever changes
+                result = newresult
+        else:
+            for i in range(by):
+                newresult = result >> 1
+                x = c = bool(result & 1) # shifted-out bit
+                newresult |= result & msb # replicate sign bit
+                result = newresult
+    elif kind == 1: # lsl/lsr
+        v = False
+        if isleft:
+            for i in range(by):
+                newresult = (result << 1) & mask
+                x = c = bool(newresult & (mask + 1)) # shifted-out bit
+                result = newresult
+        else:
+            for i in range(by):
+                newresult = result >> 1
+                x = c = bool(result & 1) # shifted-out bit
+                result = newresult
+    elif kind == 2: # roxl/roxr
+        v = False
+        if isleft:
+            for i in range(by):
+                newresult = (result << 1) | x
+                x = c = bool(newresult >> numbits)
+                result = newresult & mask
+        else:
+            for i in range(by):
+                newresult = (result >> 1) | (x * msb)
+                x = c = bool(result & 1)
+                result = newresult & mask
+    elif kind == 3: # rol/ror
+        v = False
+        if isleft:
+            for i in range(by):
+                result = (result << 1) | (result >> (numbits - 1))
+                c = bool(result & 1)
+        else:
+            for i in range(by):
+                c = bool(result & 1)
+                result = (result << (numbits - 1)) | (result >> 1)
+
+    set_nz(result, size)
+
+    write(size, dest, result)
+
+
 
 
 instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
