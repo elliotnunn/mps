@@ -48,7 +48,7 @@ def add_then_set_vc(a, b, size):
 def set_nz(num, size):
     global n, z
     bitsize = size * 8
-    n = bool(num && (1 << (bitsize - 1)))
+    n = bool(num & (1 << (bitsize - 1)))
     z = (num == 0)
 
 
@@ -244,8 +244,6 @@ def line0(inst):
         else:
             mem[dest_ptr:dest_ptr+size] = val.to_bytes(size, 'big')
 
-    else: 1/0 # line0, need better illegal instruction handling
-
 def line123(inst): # move, and movea which is a special-ish case
     global v, c
     size = (None, 1, 4, 2)[(inst >> 12) & 3] or 1/0
@@ -328,7 +326,7 @@ def line4(inst): # very,crowded,line
 
     elif inst & 0xFC0 == 0x840: # pea -- notice similarity to swap.w
         ea = address_by_mode(inst & 63, 4) # size doesn't matter here
-        push(ea.to_bytes(4, 'big')))
+        push(ea.to_bytes(4, 'big'))
 
     elif inst & 0xF00 == 0xA00: # tst,tas
         size, is_tas = ((1,0), (2,0), (4,0), (1,1))[(inst >> 6) & 3]
@@ -528,7 +526,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         write(size, dest, result)
         c = not c
         x = c
-        old_z = z; set_nz(result, size), z |= old_z
+        old_z = z; set_nz(result, size); z |= old_z
 
     else: # sub
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
@@ -691,11 +689,14 @@ def lineE(inst):
 
     write(size, dest, result)
 
+def lineF(inst):
+    pass
+
 
 
 
 instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
-    line8, line9, lineA, lineB, lineC, lineD, lineE, lineF)
+    line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
 
 while 1:
     inst = struct.unpack_from('>H', mem, pc)[0]; pc += 2
