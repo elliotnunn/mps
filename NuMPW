@@ -72,48 +72,48 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
     if mode >> 3 == 0: # Dn
         ptr = regs + (mode & 7) * 4 + 4 - size
     elif mode >> 3 == 1: # An
-        ptr = regs + (mode & 7) * 4 + 32 + 4 - size
+        ptr = regs + 32 + (mode & 7) * 4 + 4 - size
     elif mode >> 3 == 2: # (An)
-        regptr = regs + (mode & 7) * 4 + 32
-        ptr = struct.unpack_from('>L', mem, regptr)[0]
+        ptr = read_us(4, regs + 32 + (mode & 7) * 4)
     elif mode >> 3 == 3: # (An)+
-        regptr = regs + (mode & 7) * 4 + 32
-        newptr = ptr = struct.unpack_from('>L', mem, regptr)[0]
+        regptr = regs + 32 + (mode & 7) * 4
+        newptr = ptr = read_us(4, regptr)
         newptr += size
         if mode & 7 == 7 and size == 1: newptr += 1
-        struct.pack_into('>L', mem, regptr, newptr)
+        write(4, regptr, newptr)
     elif mode >> 3 == 4: # -(An)
-        regptr = regs + (mode & 7) * 4 + 32
-        ptr = struct.unpack_from('>L', mem, regptr)[0]
+        regptr = regs + 32 + (mode & 7) * 4
+        ptr = read_us(4, regptr)
         ptr -= size
         if mode & 7 == 7 and size == 1: ptr -= 1
-        struct.pack_into('>L', mem, regptr, ptr)
+        write(4, regptr, ptr)
     elif mode >> 3 == 5: # d16(An)
-        ptr = regs + (mode & 7) * 4 + 32
-        ptr = struct.unpack_from('>L', mem, ptr)[0]
-        ptr += struct.unpack_from('>h', mem, pc)[0]; pc += 2
+        regptr = regs + 32 + (mode & 7) * 4
+        ptr = (read_us(4, ptr) + read_s(2, pc)); pc += 2
     elif mode >> 3 == 6: # d8(An,Xn)
-        ptr = regs + (mode & 7) * 4 + 32
-        ptr = struct.unpack_from('>L', mem, ptr)[0]
+        ptr = regs + 32 + (mode & 7) * 4
+        ptr = read_us(4, ptr) # get An
         #
-        xreg, xofs = struct.unpack_from('>Bb', mem, pc); pc += 2
+        xreg = read_us(1, pc); pc += 1
+        xofs = read_s(1, pc); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = struct.unpack('>l', mem, whichreg)
-        else: rofs = struct.unpack('>h', mem, whichreg + 2)
+        if xreg & 8: rofs = read_s(4, whichreg)
+        else: rofs = read_s(2, whichreg + 2)
         ptr += xofs + rofs
     elif mode == 58: # d16(PC)
-        ptr = pc + struct.unpack_from('>h', mem, pc)[0]; pc += 2
+        ptr = pc + read_s(2, pc); pc += 2
     elif mode == 59: # d8(PC,Xn)
         ptr = pc
-        xreg, xofs = struct.unpack_from('>Bb', mem, pc); pc += 2
+        xreg = read_us(1, pc); pc += 1
+        xofs = read_s(1, pc); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = struct.unpack('>l', mem, whichreg)
-        else: rofs = struct.unpack('>h', mem, whichreg + 2)
+        if xreg & 8: rofs = read_s(4, whichreg)
+        else: rofs = read_s(2, whichreg + 2)
         ptr += xofs + rofs
     elif mode == 56: # abs.W
-        ptr = struct.unpack_from('>H', mem, pc)[0]; pc += 2
+        ptr = read_us(2, pc); pc += 2
     elif mode == 57: # abs.L
-        ptr = struct.unpack_from('>L', mem, pc)[0]; pc += 4
+        ptr = read_us(4, pc; pc += 4
     elif mode == 60: # #imm
         if size == 1:
             ptr = pc + 1; pc += 2
