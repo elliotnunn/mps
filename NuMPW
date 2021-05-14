@@ -23,11 +23,8 @@ def sign_extend(n, size):
     if n & (1 << (bitsize - 1)): n -= (1 << bitsize)
     return n
 
-def read_us(numbytes, addr):
-    return int.from_bytes(mem[addr:addr+numbytes], 'big')
-
-def read_s(numbytes, addr):
-    return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=True)
+def read(numbytes, addr, signed=False):
+    return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
 
 def write(numbytes, addr, val):
     val &= (1 << numbytes) - 1
@@ -74,46 +71,46 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
     elif mode >> 3 == 1: # An
         ptr = regs + 32 + (mode & 7) * 4 + 4 - size
     elif mode >> 3 == 2: # (An)
-        ptr = read_us(4, regs + 32 + (mode & 7) * 4)
+        ptr = read(4, regs + 32 + (mode & 7) * 4)
     elif mode >> 3 == 3: # (An)+
         regptr = regs + 32 + (mode & 7) * 4
-        newptr = ptr = read_us(4, regptr)
+        newptr = ptr = read(4, regptr)
         newptr += size
         if mode & 7 == 7 and size == 1: newptr += 1
         write(4, regptr, newptr)
     elif mode >> 3 == 4: # -(An)
         regptr = regs + 32 + (mode & 7) * 4
-        ptr = read_us(4, regptr)
+        ptr = read(4, regptr)
         ptr -= size
         if mode & 7 == 7 and size == 1: ptr -= 1
         write(4, regptr, ptr)
     elif mode >> 3 == 5: # d16(An)
         regptr = regs + 32 + (mode & 7) * 4
-        ptr = (read_us(4, ptr) + read_s(2, pc)); pc += 2
+        ptr = (read(4, ptr) + read(2, pc, signed=True)); pc += 2
     elif mode >> 3 == 6: # d8(An,Xn)
         ptr = regs + 32 + (mode & 7) * 4
-        ptr = read_us(4, ptr) # get An
+        ptr = read(4, ptr) # get An
         #
-        xreg = read_us(1, pc); pc += 1
-        xofs = read_s(1, pc); pc += 1
+        xreg = read(1, pc); pc += 1
+        xofs = read(1, pc, signed=True); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = read_s(4, whichreg)
-        else: rofs = read_s(2, whichreg + 2)
+        if xreg & 8: rofs = read(4, whichreg, signed=True)
+        else: rofs = read(2, whichreg + 2, signed=True)
         ptr += xofs + rofs
     elif mode == 58: # d16(PC)
-        ptr = pc + read_s(2, pc); pc += 2
+        ptr = pc + read(2, pc, signed=True); pc += 2
     elif mode == 59: # d8(PC,Xn)
         ptr = pc
-        xreg = read_us(1, pc); pc += 1
-        xofs = read_s(1, pc); pc += 1
+        xreg = read(1, pc); pc += 1
+        xofs = read(1, pc, signed=True); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = read_s(4, whichreg)
-        else: rofs = read_s(2, whichreg + 2)
+        if xreg & 8: rofs = read(4, whichreg, signed=True)
+        else: rofs = read(2, whichreg + 2, signed=True)
         ptr += xofs + rofs
     elif mode == 56: # abs.W
-        ptr = read_us(2, pc); pc += 2
+        ptr = read(2, pc); pc += 2
     elif mode == 57: # abs.L
-        ptr = read_us(4, pc; pc += 4
+        ptr = read(4, pc); pc += 4
     elif mode == 60: # #imm
         if size == 1:
             ptr = pc + 1; pc += 2
@@ -162,13 +159,13 @@ def test_condition(cond):
 
 
 
-def push(data):
-    ptr = address_by_mode(39, len(data)) # -(A7)
-    mem[ptr:ptr+len(data)] = data
+def push(size, data):
+    ptr = address_by_mode(39, size) # -(A7)
+    write(size, ptr, data)
 
-def pop(nbytes):
-    ptr = address_by_mode(31, nbytes) # (A7)+
-    return mem[ptr:ptr+nbytes]
+def pop(size):
+    ptr = address_by_mode(31, size) # (A7)+
+    return read(size, ptr)
 
 
 def line0(inst):
@@ -177,9 +174,9 @@ def line0(inst):
         if inst & 256: # bit numbered by data register
             if (inst >> 3) & 7 == 1: 1/0 # MOVEP instruction :(
             dn = inst >> 9
-            bit = struct.unpack_from('>L', mem, regs + dn * 4)
+            bit = read(4, regs + dn * 4)
         else: # bit numbered by immediate
-            bit = struct.unpack_from('>H', mem, pc)[0]; pc += 2
+            bit = read(2, pc); pc += 2
 
         mode = inst & 63
         if mode >> 3 <= 1: size = 4 # applies to register
@@ -189,7 +186,7 @@ def line0(inst):
         mask = 1 << bit
 
         ptr = address_by_mode(mode, size)
-        val = int.from_bytes(mem[ptr:ptr+size], 'big')
+        val = read(size, ptr)
         z = not (val & mask)
 
         if (inst >> 6) & 3 == 1: # bchg
@@ -200,12 +197,12 @@ def line0(inst):
             val |= mask
         # ^^ the btst case is already handled by setting z
 
-        mem[ptr:ptr+size] = val.to_bytes(size, 'big')
+        write(size, ptr, val)
 
     else: #ori,andi,subi,addi,eori -- including to SR/CCR
         size = (1,2,4,None)[(inst >> 6) & 3] or 1/0 # illegal %11 size!
         src_ptr = address_by_mode(60, size) # '#imm' mode, advances pc
-        imm = int.from_bytes(mem[src_ptr:src_ptr+size], 'big')
+        imm = read(size, src_ptr)
 
         # now, are we operating on a special mode?
         dest_mode = inst & 63
@@ -213,7 +210,7 @@ def line0(inst):
             val = get_ccr()
         else:
             dest_ptr = address_by_mode(dest_mode, size)
-            val = int.from_bytes(mem[dest_ptr:dest_ptr+size], 'big')
+            val = read(size, dest_ptr)
 
         if inst >> 9 == 0: # ori
             val |= imm
@@ -242,7 +239,7 @@ def line0(inst):
         if dest_mode == 60:
             set_ccr(val)
         else:
-            mem[dest_ptr:dest_ptr+size] = val.to_bytes(size, 'big')
+            write(size, dest_ptr, val)
 
 def line123(inst): # move, and movea which is a special-ish case
     global v, c
@@ -251,7 +248,7 @@ def line123(inst): # move, and movea which is a special-ish case
     src_mode = inst & 63
 
     src = address_by_mode(src_mode, size)
-    datum = int.from_bytes(mem[src:src+size], 'big', signed=True)
+    datum = read(size, src, signed=True)
 
     if dest_mode >> 3 == 1: # movea: sign extend to 32 bits
         size = 4
@@ -260,21 +257,21 @@ def line123(inst): # move, and movea which is a special-ish case
         set_nz(datum, size)
 
     dest = address_by_mode(dest_mode, size)
-    mem[dest:dest+size] = datum.to_bytes(size, 'big', signed=True)
+    write(size, dest, datum)
 
 def line4(inst): # very,crowded,line
     global x, n, z, v, c
     if (inst >> 6) & 63 == 3: # move from sr
         dest = address_by_mode(inst & 63, 2) # sr is 2 bytes
-        struct.pack_into('>H', mem, dest, get_ccr())
+        write(2, dest, get_ccr())
     elif (inst >> 6) & 63 in (19, 27): # move to sr/ccr
         size = 1 if (inst >> 6) & 63 == 19 else 2 # ccr or sr?
         src = address_by_mode(inst & 63, size)
-        set_ccr(int.from_bytes(mem[src:src+size], 'big'))
+        set_ccr(read(size, src))
     elif (inst >> 8) & 15 in (2, 4, 6): # negx,neg,not
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
         dest = address_by_mode(inst & 63, size)
-        datum = int.from_bytes(mem[dest:dest+size], 'big')
+        datum = read(size, dest)
 
         if (inst >> 8) & 15 == 2: # negx
             datum = add_then_set_vc(0, -datum-x, size)
@@ -292,7 +289,7 @@ def line4(inst): # very,crowded,line
             v = c = False
             set_nz(datum, size)
 
-        mem[dest:dest+size] = datum.to_bytes(size, 'big')
+        write(size, dest, datum)
 
     elif (inst >> 8) & 15 == 0: # clr
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
@@ -303,75 +300,74 @@ def line4(inst): # very,crowded,line
         v = False
         c = False
 
-        mem[dest:dest+size] = b'\0' * size
+        write(size, dest, 0)
 
     elif inst & 0xFB8 == 0x880: # ext
         size = 4 if inst & 64 else 2
         dn = (inst >> 3) & 7
         src = regs + dn * 4 + 4 - size//2
         dest = regs + dn * 4 + 4 - size
-        datum = int.from_bytes(mem[src:src+size//2], 'big', signed=True)
+        datum = read(size//2, src)
         set_nz(datum, size)
         v = c = False
-        mem[src:src+size] = datum.to_bytes(size, 'big', signed=True)
+        write(size, src, datum)
 
     elif inst & 0xFF8 == 0x840: # swap.w
         dn = (inst >> 3) & 7
         dest = regs + dn * 4
-        datum = int.from_bytes(mem[dest:dest+4], 'big')
+        datum = read(4, dest)
         datum = ((datum >> 16) & 0xFFFF) | ((datum & 0xFFFF) << 16)
         set_nz(datum, 4)
         v = c = False
-        mem[dest:dest+4] = datum.to_bytes(4, 'big')
+        write(4, dest, datum)
 
     elif inst & 0xFC0 == 0x840: # pea -- notice similarity to swap.w
         ea = address_by_mode(inst & 63, 4) # size doesn't matter here
-        push(ea.to_bytes(4, 'big'))
+        push(4, ea)
 
     elif inst & 0xF00 == 0xA00: # tst,tas
         size, is_tas = ((1,0), (2,0), (4,0), (1,1))[(inst >> 6) & 3]
         dest = address_by_mode(inst & 63, size)
-        datum = int.from_bytes(mem[dest:dest+size], 'big')
+        datum = read(size, dest)
         set_nz(datum, size)
         v = c = False
-        if is_tas: mem[dest] |= 0x80
+        if is_tas: write(1, dest, datum | 0x80)
 
     elif inst & 0xFF8 == 0xE50: # link
         an = inst & 7; an_ea = regs + 32 + an * 4
-        imm = struct.unpack_from('>h', mem, pc)[0]; pc += 2
+        imm = read(2, pc, signed=True); pc += 2
 
-        push(mem[an_ea:an_ea+4]) # push a6 to stack
-        sp = struct.unpack_from('>L', mem, regs+60)[0]
-        struct.pack_into('>L', mem, an_ea, sp)
-        struct.pack_into('>L', mem, regs+60, sp+imm)
+        push(4, read(4, an_ea)) # move.l a6,-(sp)
+        sp = read(4, regs+60)
+        write(4, an_ea, sp) # move.l sp,a6
+        write(4, regs+60, sp + imm) # add.w #imm,sp
 
     elif inst & 0xFF8 == 0xE58: # unlk
         an = inst & 7; an_ea = regs + 32 + an * 4
 
-        a6 = struct.unpack_from('>L', mem, an_ea)[0]
-        struct.pack_into('>L', mem, regs+60, a6)
-        mem[an_ea:an_ea+4] = pop(4)
+        write(4, regs+60, read(4, an_ea)) # move.l a6,sp
+        write(4, an_ea, pop(4)) # move.l (sp)+,a6
 
     elif inst & 0xFFF == 0xE71: # nop
         pass
 
     elif inst & 0xFFF == 0xE75: # rts
-        pc = int.from_bytes(pop(4), 'big')
+        pc = pop(4)
 
     elif inst & 0xFFF == 0xE77: # rtr
-        set_ccr(int.from_bytes(pop(2), 'big'))
-        pc = int.from_bytes(pop(4), 'big')
+        set_ccr(pop(2))
+        pc = pop(4)
 
     elif inst & 0xF80 == 0xE80: # jsr/jmp
         targ = address_by_mode(inst & 63, 4) # any size
         if not inst & 0x40:
-            push(pc.to_bytes(4, 'big'))
+            push(4, pc)
         pc = targ
 
     elif inst & 0xB80 == 0x880: # movem
         size = 4 if inst & 64 else 2
         dir_to_reg = bool(inst & 0x400)
-        which = struct.unpack_from('>H', mem, pc)[0]; pc += 2
+        which = read(2, pc); pc += 2
 
         if dir_to_reg: which = [r for r in range(16) if which & (1 << r)]
         else: which = [r for r in range(16) if which & (0x8000 >> r)]
@@ -380,23 +376,22 @@ def line4(inst): # very,crowded,line
 
         for reg in which:
             if dir_to_reg:
-                datum = int.from_bytes(mem[ptr:ptr+size], 'big', signed=True)
-                ptr += size
-                mem[regs+reg*4:regs+reg*4+4] = datum.to_bytes(4, 'big', signed=True)
+                datum = read(size, ptr, signed=True); ptr += size
+                write(4, regs+reg*4, datum)
             else:
-                mem[ptr:ptr+size] = mem[regs+reg*4+4-size:regs+reg*4+4]
-                ptr += size
+                datum = read(size, regs + reg * 4 + 4 - size)
+                write(size, ptr, datum); ptr += size
 
     elif inst & 0x1C0 == 0x1C0: # lea
         an = (inst >> 9) & 7
         ea = address_by_mode(inst & 63, 4) # any size
-        struct.pack_into('>L', mem, regs + 32 + an * 4, ea)
+        write(4, regs + 32 + an * 4, ea)
 
     elif inst & 0x1C0 == 0x180: # chk
         dn = (inst >> 9) & 7
-        testee = struct.unpack_from('>h', mem, regs + 4 * dn + 2)[0]
+        testee = read(2, regs + 4 * dn + 2, signed=True)
         ea = address_by_mode(inst & 63, 2)
-        ubound = struct.unpack_from('>h', mem, ea)[0]
+        ubound = read(2, ea, signed=True)
         if not 0 <= testee <= ubound: raise ValueError('chk failed') # raise exception
 
 
@@ -410,21 +405,20 @@ def line5(inst): # addq,subq,scc,dbcc
         if inst & 256: imm = -imm # subq, not addq
 
         dest = address_by_mode(inst & 63, size)
-        datum = int.from_bytes(mem[dest:dest+size], 'big')
+        datum = read(size, dest)
         datum = add_then_set_vc(x, imm, size); x = c
         if inst & 256: c = not c # subq, not addq
         set_nz(datum, size)
-        mem[dest:dest+size] = datum.to_bytes(size)
+        write(size, dest, datum)
 
     elif (inst >> 3) & 7 == 1: # dbcc
-        disp = struct.unpack_from('>h', mem, pc)[0]; pc += 2
+        disp = read(2, pc, signed=True); pc += 2
 
         # decrement the counter (dn)
         dn = inst & 7
         dest = regs + dn * 4 + 2
-        counter = struct.unpack_from('>H', mem, dest)[0]
-        counter = (counter - 1) & 0xFFFF
-        struct.pack_into('>H', mem, dest, counter)
+        counter = (read(2, dest) - 1) & 0xFFFF
+        write(2, dest, counter)
         if counter == 0xFFFF: return # do not take the branch
 
         cond = (inst >> 8) & 15 # if cond satisfied then DO NOT take loop
@@ -435,22 +429,19 @@ def line5(inst): # addq,subq,scc,dbcc
     else: # scc
         dest = address_by_mode(inst & 63, 1)
         cont = (inst >> 8) & 15
-        if test_condition(cond):
-            mem[dest] = 255
-        else:
-            mem[dest] = 0
+        write(1, dest, 0xFF * test_condition(cond))
 
 def line6(inst): # bra,bsr,bcc
     global pc
     disp = sign_extend(inst & 255, 1)
     if disp == 0: # word displacement
-        disp = struct.unpack_from('>h', mem, pc)[0]; pc += 2
+        disp = read(2, pc, signed=True); pc += 2
 
     cond = (inst >> 8) & 15
     if cond > 1 and not test_condition(cond): return # not taken
 
     if cond == 1: # is bsr
-        push(struct.pack('>L', pc))
+        push(4, pc)
 
     pc += disp - 2
 
@@ -459,7 +450,7 @@ def line7(inst): # moveq
     dn = (inst >> 9) & 7
     val = sign_extend(inst & 255, 1)
     n = (val < 0); z = (val == 0); v = c = 0
-    struct.pack_into('>l', mem, regs + dn * 4, val)
+    write(4, regs + dn * 4, val)
 
 def line8(inst): # divu,divs,sbcd,or
     global n, z, v, c
@@ -468,10 +459,10 @@ def line8(inst): # divu,divs,sbcd,or
     elif inst & 0x0C0 == 0x0C0: # divu,divs
         signed = bool(inst & 0x100)
         ea = address_by_mode(inst & 63, 2)
-        divisor = int.from_bytes(mem[ea:ea+2], 'big', signed=signed)
+        divisor = read(2, ea, signed)
         if divisor == 0: 1/0 # div0 error
         dn = (inst >> 9) & 7
-        dividend = int.from_bytes(mem[regs+dn*4:regs+dn*4+4], 'big', signed=signed)
+        dividend = read(4, regs + dn * 4, signed)
 
         quotient = dividend // divisor
         if dividend < 0: quotient = -quotient
@@ -490,7 +481,7 @@ def line8(inst): # divu,divs,sbcd,or
         v = False
         set_nz(quotient, 2)
 
-        struct.pack_into('>HH', mem, regs+dn*4, quotient & 0xFFFF, remainder & 0xFFFF)
+        write(4, regs + dn * 4, ((quotient & 0xFFFF) << 16) | (remainder & 0xFFFF))
 
     else: # or
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
@@ -500,9 +491,8 @@ def line8(inst): # divu,divs,sbcd,or
 
         if inst & 0x100: src, dest = dest, src
 
-        datum = int.from_bytes(mem[src:src+size], 'big')
-        datum |= int.from_bytes(mem[dest:dest+size], 'big')
-        mem[dest:dest+size] = datum.to_bytes(size, 'big')
+        datum = read(size, src) | read(size, dest)
+        write(size, dest, datum)
         set_nz(datum, size)
         v = c = False
 
@@ -513,7 +503,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         size = 4 if inst & 0x100 else 2
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = read_s(4, regs + 32 + an * 4) + sign * read_s(size, ea)
+        result = read(4, regs + 32 + an * 4, signed=True) + sign * read(size, ea, signed=True)
         write(4, regs + 32 + an * 4, result)
 
     elif inst & 0x130 == 0x100: # subx: only two addressing modes allowed
@@ -522,7 +512,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         src = address_by_mode(mode | (inst & 7), size)
         dest = address_by_mode(mode | ((inst >> 9) & 7), size)
 
-        result = add_then_set_vc(read_us(size, dest), sign * (read_us(size, src) + x), size)
+        result = add_then_set_vc(read(size, dest), sign * (read(size, src) + x), size)
         write(size, dest, result)
         c = not c
         x = c
@@ -535,7 +525,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src # direction bit does a swap
-        result = add_then_set_vc(read_us(size, dest), sign * (read_us(size, src) + x), size)
+        result = add_then_set_vc(read(size, dest), sign * (read(size, src) + x), size)
         x = c
         set_nz(result, size)
         write(size, dest, result)
@@ -549,7 +539,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         size = 4 if inst & 0x100 else 2 # size of ea but An is always .L
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = add_then_set_vc(read_s(4, regs + 32 + an * 4), -read_s(size, ea), 4)
+        result = add_then_set_vc(read(4, regs + 32 + an * 4, signed=True), -read(size, ea, signed=True), 4)
         set_nz(result, 4)
 
     elif inst & 0x100 == 0x000: # cmp
@@ -557,14 +547,14 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
-        result = add_then_set_vc(read_us(size, regs + dn * 4 + 4 - size), -read_us(size, ea), size)
+        result = add_then_set_vc(read(size, regs + dn * 4 + 4 - size), -read(size, ea), size)
         set_nz(result, size)
 
     elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
         src = address_by_mode(24 | (inst & 7)) # (An)+ mode
         dest = address_by_mode(24 | ((inst >> 9) & 7))
-        result = add_then_set_vc(read_us(size, dest), -read_us(size, src), size)
+        result = add_then_set_vc(read(size, dest), -read(size, src), size)
         set_nz(result, size)
 
     else: # eor
@@ -572,7 +562,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         dn = (inst >> 9) & 7; src = regs + 4 * dn + 4 - size
         dest = address_by_mode(inst & 63, size)
 
-        result = read_us(size, dest) ^ read_us(size, src)
+        result = read(size, dest) ^ read(size, src)
         v = c = False
         set_nz(result, size)
         write(size, dest, result)
@@ -593,8 +583,8 @@ def lineC(inst):
         rx = address_by_mode(rx, 4)
         ry = address_by_mode(ry, 4)
 
-        x = read_us(4, rx)
-        y = read_us(4, ry)
+        x = read(4, rx)
+        y = read(4, ry)
         write(4, rx, y)
         write(4, ry, x)
 
@@ -605,7 +595,7 @@ def lineC(inst):
 
         if inst & 0x100: src, dest = dest, src # direction bit
 
-        result = read_us(size, src) & read_us(size, dest)
+        result = read(size, src) & read(size, dest)
         set_nz(result, size)
         v = c = False
         write(size, dest, result)
@@ -625,7 +615,7 @@ def lineE(inst):
         kind = (inst >> 3) & 3
         dest = regs + ((inst >> 9) & 7) * 4 + 2 # dn
         if inst & 0x20:
-            by = read_us(1, regs + ((inst >> 9) & 7) * 4 + 3) % 64
+            by = read(1, regs + ((inst >> 9) & 7) * 4 + 3) % 64
         else:
             by = (inst >> 9) & 7
 
@@ -633,7 +623,7 @@ def lineE(inst):
 
     c = False # clear C if shift count is zero
 
-    result = read_us(size, dest)
+    result = read(size, dest)
     mask = (0x100 << size) - 1
     msb = 1 << (size * 8 - 1)
     numbits = size * 8
