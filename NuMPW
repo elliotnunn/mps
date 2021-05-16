@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 
+########################################################################
+# 68000 interpreter: minimal user-mode implementation
+#
+# Notes:
+# - all "sizes" are in bytes
+# - define read(), write() and lineA() somewhere outside this block
+########################################################################
 
-import struct
-
-# all sizes (widths) are in bytes
-
-
-mem = bytearray(0x1000000)
-# hell, let's just wire the registers into memory
-regs = 0xF00000
-pc = 0x1000
+# Emulator state: set to something better than this before running
+regs = 0
+pc = 0
 x = n = z = v = c = 0
 
-# test program: infinite loop
-struct.pack_into('>L', mem, regs + 15*4, regs) # stack under regs
-mem[pc:pc+4] = b'\x61\x00\xff\xfe'
+def push(size, data):
+    ptr = address_by_mode(39, size) # -(A7)
+    write(size, ptr, data)
+
+def pop(size):
+    ptr = address_by_mode(31, size) # (A7)+
+    return read(size, ptr)
 
 def sign_extend(n, size):
     bitsize = size * 8
@@ -22,13 +27,6 @@ def sign_extend(n, size):
     signbit = 1 << (bitsize - 1)
     if n & (1 << (bitsize - 1)): n -= (1 << bitsize)
     return n
-
-def read(numbytes, addr, signed=False):
-    return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
-
-def write(numbytes, addr, val):
-    val &= (1 << numbytes) - 1
-    mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
 
 def add_then_set_vc(a, b, size):
     global v, c
@@ -48,10 +46,8 @@ def set_nz(num, size):
     n = bool(num & (1 << (bitsize - 1)))
     z = (num == 0)
 
-
 def get_ccr():
     return (x << 4) | (n << 3) | (z << 2) | (v << 1) | c
-
 
 def set_ccr(to_byte):
     global x, n, z, v, c
@@ -60,7 +56,6 @@ def set_ccr(to_byte):
     z = bool(to_byte & 4)
     v = bool(to_byte & 2)
     c = bool(to_byte & 1)
-
 
 def address_by_mode(mode, size): # mode given by bottom 6 bits
     # side effects: predecrement/postincrement, advance pc to get extension word
@@ -121,7 +116,6 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
 
     return ptr
 
-
 def test_condition(cond):
     if cond == 0: # T true
         return True
@@ -155,18 +149,6 @@ def test_condition(cond):
         return n == v and not z
     elif cond == 15: # LE less than
         return n != v or z
-
-
-
-
-def push(size, data):
-    ptr = address_by_mode(39, size) # -(A7)
-    write(size, ptr, data)
-
-def pop(size):
-    ptr = address_by_mode(31, size) # (A7)+
-    return read(size, ptr)
-
 
 def line0(inst):
     global z
@@ -394,7 +376,6 @@ def line4(inst): # very,crowded,line
         ubound = read(2, ea, signed=True)
         if not 0 <= testee <= ubound: raise ValueError('chk failed') # raise exception
 
-
 def line5(inst): # addq,subq,scc,dbcc
     global x, n, z, v, c, pc
     if (inst >> 6) & 3 != 3: # addq,subq
@@ -530,9 +511,6 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         set_nz(result, size)
         write(size, dest, result)
 
-def lineA(inst): # macintosh os/toolbox
-    pass
-
 def lineB(inst): # cmpa,cmp,cmpm,eor
     global x, n, z, v, c
     if inst & 0x0C0 == 0x0C0: # cmpa
@@ -599,8 +577,6 @@ def lineC(inst):
         set_nz(result, size)
         v = c = False
         write(size, dest, result)
-
-
 
 def lineE(inst):
     global x, n, z, v, c
@@ -680,15 +656,163 @@ def lineE(inst):
     write(size, dest, result)
 
 def lineF(inst):
-    pass
+    1/0 # fail!
 
+def run_m68k_interpreter():
+    instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
+        line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
 
+    while True: # need a way to bust out of this loop
+        inst = read(2, pc); pc += 2
+        instruction_lines[inst >> 12](inst)
 
+########################################################################
+# Resources! At least we can be slow when dealing with them.
+########################################################################
 
-instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
-    line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
+import re # the below code could be turned into one giant regex if we were brave
 
-while 1:
-    inst = struct.unpack_from('>H', mem, pc)[0]; pc += 2
-    instruction_lines[inst >> 12](inst)
-    # that's it!
+rez_tokens = [
+    ((),         r'(\s|//.*?\n|/\*.*?\*/)+'),                                   # 0 whitespace/comment (gets ignored)
+    ((1,11),     r'\$"\s*((?:[0-9A-Fa-f]{2}\s*)*)"'),                           # 1 hex data
+    ((3,),       r'(data)'),                                                    # 2 start of raw resource
+    ((4,),       r"('(?:[^'\\]|\\0x[0-9A-Fa-f]{2}|\\[\\'\\?btrvfn])*')"),       # 3 type
+    ((5,),       r'(\()'),                                                      # 4 start of bracketed resource info
+    ((6,7,8,9),  r'(-?\d+)'),                                                   # 5 ID
+    ((7,8,9),    r',gap("(?:[^"\\]|\\0x[0-9A-Fa-f]{2}|\\[\\"\\?btrvfn])*")'),   # 6 name
+    ((9,),       r',gap\$([0-9a-fA-F]{1,2})'),                                  # 7 attribs (hex)
+    ((8,9),      r',gap(sysheap|purgeable|locked|protected|preload)'),          # 8 attribs (specific)
+    ((10,),      r'(\))'),                                                      # 9 end of bracketed resource info
+    ((1,11),     r'(\{)'),                                                      # 10 start of hex block
+    ((12,),      r'(\})'),                                                      # 11 end of hex block
+    ((2,-1),     r'(;)'),                                                       # 12 the end for real
+    ((),         r'(.)'),                                                       # 13 unexpected character (always errors)
+]
+
+allowed_to_follow_kind, token_regexen = zip(*rez_tokens)
+
+# The 'gap' hack turns ', sysheap' etc into a single token
+gap = r'(?:\s|//.*?\n|/\*.*?\*/)*'
+rez_tokenizer = '|'.join(token_regexen).replace('gap', gap).encode('ascii')
+rez_tokenizer = re.compile(rez_tokenizer)
+
+def string_surrogate(m):
+    m = m.group(0)
+
+    if len(m) == 5: # \0xFF is the most common
+        return bytes([int(m[3:], 16)])
+    elif m == b'\\"':
+        return b'"'
+    elif m == b"\\'":
+        return b"'"
+    elif m == b'\\b':
+        return b'\x08' # backspace
+    elif m == b'\\t':
+        return b'\t'
+    elif m == b'\\r':
+        return b'\n'
+    elif m == b'\\v':
+        return b'\x0b' # vertical tab
+    elif m == b'\\f':
+        return b'\x0c' # form feed
+    elif m == b'\\n':
+        return b'\r'
+    elif m == b'\\?':
+        return b'\x7f' # del
+
+def string_literal(string):
+    return re.sub(rb'(\\0x..|\\.)', string_surrogate, string[1:-1])
+
+def readrez(path):
+    # lifted from my macresources package, but a little bit 'nastier'
+    # returns a list of [type, id, name, flags, data]'s
+    retval = []
+
+    with open(path, 'rb') as f: from_rezcode = f.read()
+    from_rezcode = from_rezcode.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+
+    # Slightly faster than finditer
+    all_tokens = rez_tokenizer.findall(from_rezcode)
+    def line_no_for_error(token_idx):
+        # Redo all the lexing with finditer, which is slower but
+        # gives us Match objects with a byte offset
+        work_redoer = rez_tokenizer.finditer(from_rezcode)
+        match_obj = next(m for i, m in enumerate(work_redoer) if i == token_idx)
+        line_no = from_rezcode[:match_obj.start()].count(ord('\n')) + 1
+
+    allowed_token_kinds = (2,-1)
+    for token_idx, token_captures in enumerate(all_tokens):
+        # Which single capture is non-empty?
+        for token_kind, payload in enumerate(token_captures):
+            if payload: break
+
+        # Ignore whitespace
+        if not token_kind: continue
+
+        # Unexpected token!
+        if token_kind not in allowed_token_kinds:
+            raise ValueError('File %r, line %r' % (original_file, line_no_for_error(token_idx)))
+
+        elif token_kind == 1:
+            hex_accum.append(payload)
+
+        elif token_kind == 2:
+            res = [b'type', 9999, None, 0, b'']; retval.append(res)
+            hex_accum = []
+
+        elif token_kind == 3:
+            res[0] = string_literal(payload)
+            if len(res[0]) != 4:
+                raise ValueError('File %r, line %r, type not 4 chars' % (original_file, line_no_for_error(token_idx)))
+
+        elif token_kind == 5:
+            res[1] = int(payload)
+            if not (-32768 <= res[1] < 32767):
+                raise ValueError('File %r, line %r, ID out of 16-bit range' % (original_file, line_no_for_error(token_idx)))
+
+        elif token_kind == 6:
+            res[2] = string_literal(payload)
+            if len(res[2]) > 255:
+                raise ValueError('File %r, line %r, name > 255 chars' % (original_file, line_no_for_error(token_idx)))
+
+        elif token_kind == 7:
+            res[3] = int(payload, 16)
+
+        elif token_kind == 8:
+            if payload == b'sysheap':
+                res[3] |= 0x40
+            elif payload == b'purgeable':
+                res[3] |= 0x20
+            elif payload == b'locked':
+                res[3] |= 0x10
+            elif payload == b'protected':
+                res[3] |= 0x08
+            elif payload == b'preload':
+                res[3] |= 0x04
+
+        elif token_kind == 12:
+            res[4] = bytes.fromhex(b''.join(hex_accum).decode('ascii'))
+
+        allowed_token_kinds = allowed_to_follow_kind[token_kind]
+
+    # Premature EOF
+    if -1 not in allowed_token_kinds:
+        raise ValueError('File %r, unexpected end of file' % original_file)
+
+    return retval
+
+########################################################################
+# The Macintosh Toolbox. Wish me luck...
+########################################################################
+
+def lineA(inst):
+    raise ValueError('Elliot needs to write the OS before you can use it.')
+
+########################################################################
+# Initialise an MPW environment
+########################################################################
+
+import sys
+resource_chain = [[], readrez(sys.argv[1] + '.rdump')] # system and app
+
+print(resource_chain)
