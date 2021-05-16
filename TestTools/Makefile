@@ -1,0 +1,18 @@
+# Build very rudimentary single-segment MPW Tools
+
+all: $(patsubst %.a,%,$(wildcard *.a))
+
+clean:
+	rm -f $(patsubst %.a,%,$(wildcard *.a))
+	rm -f $(patsubst %.a,%.idump,$(wildcard *.a))
+	rm -f $(patsubst %.a,%.rdump,$(wildcard *.a))
+
+%: %.o
+	rm -rf $@ $@.rdump $@.idump
+	touch $@ $@.rdump $@.idump
+	printf 'MPSTMPS ' >$@.idump
+	echo 00000028 00008000 00000008 00000020 0004 3F3C 0001 A9F0 | xxd -r -p | rfx cp /dev/stdin $@//CODE/0
+	(echo 0000 0001 | xxd -r -p; cat $<) | rfx cp /dev/stdin $@//CODE/1
+
+%.o: %.a
+	vasmm68k_mot -quiet -Fbin -o $@ $<
