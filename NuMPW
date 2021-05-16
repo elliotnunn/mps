@@ -81,7 +81,7 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
         write(4, regptr, ptr)
     elif mode >> 3 == 5: # d16(An)
         regptr = regs + 32 + (mode & 7) * 4
-        ptr = (read(4, ptr) + read(2, pc, signed=True)); pc += 2
+        ptr = (read(4, regptr) + read(2, pc, signed=True)); pc += 2
     elif mode >> 3 == 6: # d8(An,Xn)
         ptr = regs + 32 + (mode & 7) * 4
         ptr = read(4, ptr) # get An
@@ -138,7 +138,7 @@ def test_condition(cond):
     elif cond == 8: # VC overflow clear
         return not v
     elif cond == 9: # VS overflow set
-        return not v
+        return v
     elif cond == 10: # PL plus
         return not n
     elif cond == 11: # MI minus
@@ -395,7 +395,7 @@ def line5(inst): # addq,subq,scc,dbcc
         write(size, dest, datum)
 
     elif (inst >> 3) & 7 == 1: # dbcc
-        disp = read(2, pc, signed=True); pc += 2
+        disp = read(2, pc, signed=True) - 2; pc += 2
 
         # decrement the counter (dn)
         dn = inst & 7
@@ -407,7 +407,7 @@ def line5(inst): # addq,subq,scc,dbcc
         cond = (inst >> 8) & 15 # if cond satisfied then DO NOT take loop
         if test_condition(cond): return
 
-        pc += disp - 2
+        pc += disp
 
     else: # scc
         dest = address_by_mode(inst & 63, 1)
@@ -418,7 +418,7 @@ def line6(inst): # bra,bsr,bcc
     global pc
     disp = sign_extend(inst & 255, 1)
     if disp == 0: # word displacement
-        disp = read(2, pc, signed=True); pc += 2
+        disp = read(2, pc, signed=True) - 2; pc += 2
 
     cond = (inst >> 8) & 15
     if cond > 1 and not test_condition(cond): return # not taken
@@ -426,7 +426,7 @@ def line6(inst): # bra,bsr,bcc
     if cond == 1: # is bsr
         push(4, pc)
 
-    pc += disp - 2
+    pc += disp
 
 def line7(inst): # moveq
     global n, z, v, c
@@ -527,7 +527,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
-        result = add_then_set_vc(read(size, regs + dn * 4 + 4 - size), -read(size, ea), size)
+        result = add_then_set_vc(read(size, dest), -read(size, src), size)
         set_nz(result, size)
 
     elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
@@ -667,8 +667,7 @@ def run_m68k_interpreter():
 
 #     import pdb; pdb.set_trace()
     while True: # need a way to bust out of this loop
-        inst = read(2, pc); pc += 2
-        instruction_lines[inst >> 12](inst)
+        inst = read(2, pc); pc += 2; instruction_lines[inst >> 12](inst)
 
 ########################################################################
 # Resources! At least we can be slow when dealing with them.
@@ -844,8 +843,20 @@ def lineA(inst):
     if inst == 0xABFF: # DebugStr
         strstart = pop(4)
         lenbyte = mem[strstart]
-        print('_DebugStr', mem[strstart+1:strstart+1+lenbyte].decode('mac_roman'),
-            flush=True, file=sys.stderr)
+        string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
+        print('_DebugStr', string, flush=True, file=sys.stderr)
+
+    elif inst == 0xA9FF: # Debugger
+        import pdb; pdb.set_trace()
+
+    elif inst == 0xA9F4: # ExitToShell
+        sys.exit() # wrong way to do it
+
+    elif inst == 0xAEEE: # RunPython
+        strstart = pop(4)
+        lenbyte = mem[strstart]
+        string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
+        eval(string)
 
     else:
         raise ValueError('Elliot needs to write %04X before you can use it.' % inst)
