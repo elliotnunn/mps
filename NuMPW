@@ -113,6 +113,8 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
             ptr = pc; pc += 2
         elif size == 4:
             ptr = pc; pc += 4
+    else:
+        raise ValueError(mode)
 
     return ptr
 
@@ -151,7 +153,7 @@ def test_condition(cond):
         return n != v or z
 
 def line0(inst):
-    global z
+    global pc, z
     if inst & 256 or inst >> 9 == 4: # btst,bchg,bclr,bset (or movep)
         if inst & 256: # bit numbered by data register
             if (inst >> 3) & 7 == 1: 1/0 # MOVEP instruction :(
@@ -242,7 +244,7 @@ def line123(inst): # move, and movea which is a special-ish case
     write(size, dest, datum)
 
 def line4(inst): # very,crowded,line
-    global x, n, z, v, c
+    global pc, x, n, z, v, c
     if (inst >> 6) & 63 == 3: # move from sr
         dest = address_by_mode(inst & 63, 2) # sr is 2 bytes
         write(2, dest, get_ccr())
@@ -377,7 +379,7 @@ def line4(inst): # very,crowded,line
         if not 0 <= testee <= ubound: raise ValueError('chk failed') # raise exception
 
 def line5(inst): # addq,subq,scc,dbcc
-    global x, n, z, v, c, pc
+    global pc, x, n, z, v, c
     if (inst >> 6) & 3 != 3: # addq,subq
         size = 1 << ((inst >> 6) & 3)
         if size == 2 and (inst >> 3) & 7 == 1: size = 4 # An.w is really An.l
@@ -659,6 +661,7 @@ def lineF(inst):
     1/0 # fail!
 
 def run_m68k_interpreter():
+    global pc
     instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
         line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
 
@@ -805,6 +808,37 @@ def readrez(path):
 # The Macintosh Toolbox. Wish me luck...
 ########################################################################
 
+heap_blocks = {} # addr: size
+def tbnewptr(size): # fixed 16b header before all "heap" blocks
+    while len(mem) % 16: mem.append(0)
+    mem.extend(bytes(16 + size))
+    retval = len(mem) - size
+    heap_blocks[retval] = size
+    return retval
+
+def tbnewhandle(size):
+    ptr = tbnewptr(size)
+    write(4, ptr - 4, ptr)
+    write(4, ptr - 8, 0xFA7B175) # FatBits
+    return ptr - 4 # a handle points to its owning pointer
+
+def tbgetresource(rtype, rid, one=False): # always load the resource
+    for file in reversed(resource_chain):
+        for resource in file:
+            thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
+            if thistype == rtype and thisid == rid:
+                if thishandle:
+                    return thishandle[0]
+                else:
+                    handle = tbnewhandle(len(thisdata))
+                    mem[handle+4:handle+4+len(thisdata)] = thisdata
+                    resource.append(handle)
+                    return handle
+
+        if one: break
+
+    return 0
+
 def lineA(inst):
     raise ValueError('Elliot needs to write the OS before you can use it.')
 
@@ -812,7 +846,45 @@ def lineA(inst):
 # Initialise an MPW environment
 ########################################################################
 
+import struct
+
+# A memory, and some memory-mapped registers
+mem = bytearray(0x100000) # plenty of room for globals
+regs = 0x80000
+
+def read(numbytes, addr, signed=False):
+    return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
+
+def write(numbytes, addr, val):
+    val &= (1 << numbytes) - 1
+    mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
+
+write(4, regs + 8 * 4 + 7 * 4, 0x80000) # stack growing down from registers
+
 import sys
 resource_chain = [[], readrez(sys.argv[1] + '.rdump')] # system and app
+code0 = next(r for r in resource_chain[1] if r[0] == b'CODE' and r[1] == 0)[-1]
 
-print(resource_chain)
+# Make an a5 world
+abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
+a5world = tbnewptr(belowa5 + abovea5) + belowa5
+write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
+pc = a5world + jtoffset + 2
+
+is_far_model = False
+for i in range(0, jtsize, 8):
+    words = struct.unpack_from('>HHHH', code0, 16 + i)
+    if words[1] == 0xFFFF:
+        is_far_model = True
+        continue
+
+    if is_far_model:
+        raise NotImplementedError('far model not written yet')
+
+    else:
+        segmenthandle = tbgetresource(b'CODE', words[2])
+        target = segmenthandle + 4 + words[0]
+
+    write(6, a5world + jtoffset + 2, (0x4EF9 << 32) | target) # jmp there
+
+run_m68k_interpreter()
