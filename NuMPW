@@ -482,14 +482,14 @@ def line8(inst): # divu,divs,sbcd,or
 def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
     global x, n, z, v, c
     sign = 1 if inst & 0x4000 else -1
-    if inst & 0x0C0 == 0x0C0: # suba
+    if inst & 0x0C0 == 0x0C0: # suba,adda
         size = 4 if inst & 0x100 else 2
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
         result = read(4, regs + 32 + an * 4, signed=True) + sign * read(size, ea, signed=True)
         write(4, regs + 32 + an * 4, result)
 
-    elif inst & 0x130 == 0x100: # subx: only two addressing modes allowed
+    elif inst & 0x130 == 0x100: # subx,addx: only two addressing modes allowed
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
         mode = 32 if inst & 8 else 0 # either -(Ax),-(Ay) or Dx,Dy
         src = address_by_mode(mode | (inst & 7), size)
@@ -501,14 +501,14 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         x = c
         old_z = z; set_nz(result, size); z |= old_z
 
-    else: # sub
+    else: # sub,add
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
         src = address_by_mode(inst & 63, size)
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src # direction bit does a swap
-        result = add_then_set_vc(read(size, dest), sign * (read(size, src) + x), size)
+        result = add_then_set_vc(read(size, dest), sign * (read(size, src)), size)
         x = c
         set_nz(result, size)
         write(size, dest, result)
