@@ -665,6 +665,7 @@ def run_m68k_interpreter():
     instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
         line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
 
+#     import pdb; pdb.set_trace()
     while True: # need a way to bust out of this loop
         inst = read(2, pc); pc += 2
         instruction_lines[inst >> 12](inst)
@@ -840,7 +841,7 @@ def tbgetresource(rtype, rid, one=False): # always load the resource
     return 0
 
 def lineA(inst):
-    raise ValueError('Elliot needs to write the OS before you can use it.')
+    raise ValueError('Elliot needs to write %04X before you can use it.' % inst)
 
 ########################################################################
 # Initialise an MPW environment
@@ -856,8 +857,9 @@ def read(numbytes, addr, signed=False):
     return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
 
 def write(numbytes, addr, val):
-    val &= (1 << numbytes) - 1
+    val &= (1 << (numbytes * 8)) - 1
     mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
+#     print('write', numbytes, hex(addr), val.to_bytes(numbytes, 'big').hex())
 
 write(4, regs + 8 * 4 + 7 * 4, 0x80000) # stack growing down from registers
 
@@ -885,6 +887,6 @@ for i in range(0, jtsize, 8):
         segmenthandle = tbgetresource(b'CODE', words[2])
         target = segmenthandle + 4 + words[0]
 
-    write(6, a5world + jtoffset + 2, (0x4EF9 << 32) | target) # jmp there
+    write(6, a5world + jtoffset + i + 2, (0x4EF9 << 32) | target) # jmp there
 
 run_m68k_interpreter()
