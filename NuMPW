@@ -453,10 +453,11 @@ def line8(inst): # divu,divs,sbcd,or
         dn = (inst >> 9) & 7
         dividend = read(4, regs + dn * 4, signed)
 
-        quotient = dividend // divisor
+        # remainder is 0 or has same sign as dividend
+        quotient = abs(dividend) // abs(divisor)
         if dividend < 0: quotient = -quotient
         if divisor < 0: quotient = -quotient
-        remainder = dividend % divisor
+        remainder = abs(dividend) % abs(divisor)
         if dividend < 0: remainder = -remainder
 
         if signed and not (-0x8000 <= quotient < 0x7FFF):
@@ -470,7 +471,7 @@ def line8(inst): # divu,divs,sbcd,or
         v = False
         set_nz(quotient, 2)
 
-        write(4, regs + dn * 4, ((quotient & 0xFFFF) << 16) | (remainder & 0xFFFF))
+        write(4, regs + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
 
     else: # or
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
