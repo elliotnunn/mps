@@ -153,7 +153,7 @@ def test_condition(cond):
         return n != v or z
 
 def line0(inst):
-    global pc, z
+    global pc, x, n, z, v, c
     if inst & 256 or inst >> 9 == 4: # btst,bchg,bclr,bset (or movep)
         if inst & 256: # bit numbered by data register
             if (inst >> 3) & 7 == 1: 1/0 # MOVEP instruction :(
@@ -384,13 +384,14 @@ def line5(inst): # addq,subq,scc,dbcc
         size = 1 << ((inst >> 6) & 3)
         if size == 2 and (inst >> 3) & 7 == 1: size = 4 # An.w is really An.l
 
-        imm = ((inst >> 9) & 7) + 1
+        imm = ((inst >> 9) & 7) or 8
         if inst & 256: imm = -imm # subq, not addq
 
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
-        datum = add_then_set_vc(x, imm, size); x = c
+        datum = add_then_set_vc(datum, imm, size)
         if inst & 256: c = not c # subq, not addq
+        x = c
         set_nz(datum, size)
         write(size, dest, datum)
 
