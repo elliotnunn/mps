@@ -15,4 +15,4 @@ clean:
 	(echo 0000 0001 | xxd -r -p; cat $<) | rfx cp /dev/stdin $@//CODE/1
 
 %.o: %.a
-	vasmm68k_mot -quiet -Fbin -o $@ $<
+	vasmm68k_mot -quiet -w -Fbin -o $@ $<
