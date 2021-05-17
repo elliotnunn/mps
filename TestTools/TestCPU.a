@@ -722,8 +722,68 @@ ApplScratch equ $A78
     cmp.l   #$736f0072,d4
     z1
 
+    DebugStr 'Test: jmp (d,pc,xn)'
+    move.l  #$1111fffc,a0
+    jmp     (pc,jmpx+4,a0.w)
+    DebugStr 'BAD: fell short'
+jmpx
+    bra.s   jmpy
+    DebugStr 'BAD: fell long'
+jmpy
+
+    DebugStr 'Test: jsr (d,pc)'
+    jsr     jsrx
+    bra.s   jsry
+jsrx
+    rts
+jsry
+
+    DebugStr 'Test: lea d(an),an'
+    move.l  #$00014000,a0
+    lea     -$8000(a0),a1
+    cmp.l   #$0000c000,a1
+    z1
+
+    DebugStr 'Test: link a6,#imm'
+    move.l  #$12345678,a6
+    lea     -4(sp),a0
+    move.l  a6,a1
+    lea     -14(sp),a2
+    link    a6,#-10
+    cmp.l   a6,a0
+    z1
+    cmp.l   (a6),a1
+    z1
+    cmp.l   sp,a2
+    z1
+    add.w   #14,sp
+
+    DebugStr 'Test: lsr dn'
+    move.w  #$8111,d0
+    move    #$02,ccr ; set v to see it cleared
+    lsr.w   d0
+    n0
+    z0
+    v0
+    c1
+    x1
+    cmp.w   #$4088,d0
+    z1
+
+    DebugStr 'Test: lsl dn'
+    move.w  #$c111,d0
+    move    #$02,ccr ; set v to see it cleared
+    lsl.w   d0
+    n1
+    z0
+    v0
+    c1
+    x1
+    cmp.w   #$8222,d0
+    z1
+
 ; Useful: prints data regs
-;    DebugStr 'python: print(mem[regs:regs+32].hex())'
+;    DebugStr 'python: print(mem[regs:][:32].hex())'
 
 
     DebugStr 'finished tests'
