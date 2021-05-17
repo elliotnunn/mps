@@ -594,11 +594,11 @@ def lineE(inst):
     if size is None: # single-bit shift on a memory address
         size = 2
         kind = (inst >> 9) & 3
-        dest = address_by_mode(inst & 63, 2)
+        dest = address_by_mode(inst & 63, size)
         by = 1
     else:
         kind = (inst >> 3) & 3
-        dest = regs + ((inst >> 9) & 7) * 4 + 2 # dn
+        dest = regs + (inst & 7) * 4 + 4 - size # dn
         if inst & 0x20:
             by = read(1, regs + ((inst >> 9) & 7) * 4 + 3) % 64
         else:
@@ -606,17 +606,18 @@ def lineE(inst):
 
     isleft = bool(inst & 0x100)
 
+    v = False # clear V if msb never changes
     c = False # clear C if shift count is zero
 
     result = read(size, dest)
-    mask = (0x100 << size) - 1
+    mask = (1 << (size * 8)) - 1
     msb = 1 << (size * 8 - 1)
     numbits = size * 8
     if kind == 0: # asl/asr
         if isleft:
             for i in range(by):
                 newresult = (result << 1) & mask
-                x = c = bool(newresult & (mask + 1)) # shifted-out bit
+                x = c = bool(result & msb) # shifted-out bit
                 if newresult & msb != result & msb: v = 1 # set V if sign ever changes
                 result = newresult
         else:

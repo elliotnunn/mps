@@ -275,6 +275,116 @@ ApplScratch equ $A78
     tst.l   d0
     z1
 
+    DebugStr 'Test: addx -(an),-(an)'
+    lea     ApplScratch+4,a2
+    lea     ApplScratch+8,a3
+    move.l  #$670ee7f1,-4(a2)
+    move.l  #$e800422a,-4(a3)
+    move    #$04,ccr ; x=0,z=1
+    addx.b  -(a2),-(a3)
+    addx.b  -(a2),-(a3)
+    addx.b  -(a2),-(a3)
+    addx.b  -(a2),-(a3)
+    n0
+    z0 ; gets cleared if any addx is nonzero
+    v0
+    c1
+    x1
+    cmp.l   #$4f0f2a1b,(a3)
+    z1
+
+    DebugStr 'Test: and abs.w,dn'
+    ori     #$1f,ccr
+    move.w  #$9288,d3
+    move.w  #$d878,ApplScratch
+    and.w   (ApplScratch).w,d3
+    n1
+    z0
+    v0
+    c0
+    x1 ; untouched
+    cmp.w   #$9008,d3
+    z1
+
+    DebugStr 'Test: and dn,abs.w'
+    andi    #0,ccr
+    move.w  #$a11f,d3
+    move.w  #$5ee0,ApplScratch ; its inverse
+    and.w   d3,(ApplScratch).w
+    n0
+    z1
+    v0
+    c0
+    x0 ; untouched
+
+    DebugStr 'Test: andi #imm,abs.w'
+    andi    #0,ccr
+    move.l  #$16dc3b11,ApplScratch
+    andi.l  #$3127441d,(ApplScratch).w
+    n0
+    z0
+    v0
+    c0
+    x0 ; untouched
+    cmp.l   #$10040011,ApplScratch
+    z1
+
+    DebugStr 'Test: asl dn,dn'
+    move.w  #$1003,d0
+    move.w  #$5555,d1
+    asl.w   d0,d1
+    n1
+    z0
+    v1 ; msb changed in any iteration
+    c0
+    x0
+    cmp.w   #$aaa8,d1
+    z1
+    asl.w   d0,d1
+    n0
+    z0
+    v1
+    c1
+    x1
+    move.w  #$0000,d1
+    asl.w   d0,d1
+    v0 ; msb never changed
+
+    DebugStr 'Test: asr dn,dn'
+    move    #$02,ccr ; set v only, to confirm it is cleared
+    move.w  #$0002,d0
+    move.w  #$8002,d1
+    asr.w   d0,d1
+    n1
+    z0
+    v0 ; msb changed in any iteration
+    c1
+    x1
+
+    DebugStr 'Test: asl #imm,dn'
+    move.l  #$695f0ebd,d0
+    asl.l   #5,d0
+    cmp.l   #$2be1d7a0,d0
+    z1
+
+    DebugStr 'Test: asr #imm,dn'
+    move.l  #$5d10831b,d0
+    asr.l   #2,d0
+    cmp.l   #$174420c6,d0 ; no sign extension, behold
+    z1
+
+    DebugStr 'Test: asr abs.w'
+    move.w  #$2244,ApplScratch
+    asr.w   (ApplScratch).w
+    cmp.w   #$1122,ApplScratch
+    z1
+
+    DebugStr 'Test: asl abs.w'
+    move.w  #$2244,ApplScratch
+    asl.w   (ApplScratch).w
+    cmp.w   #$4488,ApplScratch
+    z1
+
 ; Useful: prints data regs
 ;    DebugStr 'python: print(mem[regs:regs+32].hex())'
 
