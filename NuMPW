@@ -191,6 +191,7 @@ def line0(inst):
         # now, are we operating on a special mode?
         dest_mode = inst & 63
         if dest_mode == 60: # '#imm' actually means CCR/SR
+            # for addi/subi this would simply be invalid
             val = get_ccr()
         else:
             dest_ptr = address_by_mode(dest_mode, size)
@@ -207,9 +208,11 @@ def line0(inst):
         elif inst >> 9 == 2: # subi
             val = add_then_set_vc(val, -imm, size)
             c = not c
+            x = c
             set_nz(val, size)
         elif inst >> 9 == 3: # addi
             val = add_then_set_vc(val, -imm, size)
+            x = c
             set_nz(val, size)
         elif inst >> 9 == 5: # eori
             val ^= imm
@@ -217,7 +220,7 @@ def line0(inst):
             set_nz(val, size)
         elif inst >> 9 == 6: # cmpi: same as subi, but don't set
             fake_val = add_then_set_vc(val, -imm, size)
-            c = not c
+            c = not c # don't set x
             set_nz(fake_val, size)
 
         if dest_mode == 60:
@@ -389,10 +392,12 @@ def line5(inst): # addq,subq,scc,dbcc
 
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
+        save_ccr = x, n, z, v, c
         datum = add_then_set_vc(datum, imm, size)
         if inst & 256: c = not c # subq, not addq
         x = c
         set_nz(datum, size)
+        if (inst >> 3) & 7 == 1: x, n, z, v, c = save_ccr # touch not ccr if dest is An
         write(size, dest, datum)
 
     elif (inst >> 3) & 7 == 1: # dbcc
@@ -498,7 +503,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
 
         result = add_then_set_vc(read(size, dest), sign * (read(size, src) + x), size)
         write(size, dest, result)
-        c = not c
+        if sign == -1: c = not c
         x = c
         old_z = z; set_nz(result, size); z |= old_z
 
@@ -509,7 +514,8 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src # direction bit does a swap
-        result = add_then_set_vc(read(size, dest), sign * (read(size, src)), size)
+        result = add_then_set_vc(read(size, dest), sign * read(size, src), size)
+        if sign == -1: c = not c
         x = c
         set_nz(result, size)
         write(size, dest, result)
