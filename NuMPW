@@ -527,6 +527,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
         result = add_then_set_vc(read(4, regs + 32 + an * 4, signed=True), -read(size, ea, signed=True), 4)
+        c = not c
         set_nz(result, 4)
 
     elif inst & 0x100 == 0x000: # cmp
@@ -535,13 +536,15 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         dest = regs + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
         result = add_then_set_vc(read(size, dest), -read(size, src), size)
+        c = not c
         set_nz(result, size)
 
     elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
-        src = address_by_mode(24 | (inst & 7)) # (An)+ mode
-        dest = address_by_mode(24 | ((inst >> 9) & 7))
+        src = address_by_mode(24 | (inst & 7), size) # (An)+ mode
+        dest = address_by_mode(24 | ((inst >> 9) & 7), size)
         result = add_then_set_vc(read(size, dest), -read(size, src), size)
+        c = not c
         set_nz(result, size)
 
     else: # eor
