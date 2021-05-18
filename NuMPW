@@ -560,7 +560,16 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
 
 def lineC(inst):
     if inst & 0xC0 == 0xC0: # mulu,muls
-        pass
+        signed = bool(inst & 0x100)
+        src = address_by_mode(inst & 63, 2) # ea.w
+        dest = regs + ((inst >> 9) & 7) * 4 # dn.l
+
+        datum = read(2, dest+2, signed=signed) # read dn.w
+        datum *= read(2, src, signed=signed)
+        set_nz(datum, 4)
+        v = c = False
+        write(4, dest, datum) # write dn.l
+
     elif inst & 0x1F0 == 0x100: # abcd
         1/0 # I don't like BCD instructions
     elif inst & 0x1F8 in (0x140, 0x148, 0x188): # exg
