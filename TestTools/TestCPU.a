@@ -1,6 +1,7 @@
     opt     o-,a+ ; disable optimisations BUT keep pc-relative pea's etc
 
     macro   PrintStr
+    move    sr,-(sp)
     move.l  $316.w,a0
     move.l  4(a0),a0
     move.l  $1c(a0),a0 ; io table
@@ -21,6 +22,7 @@ StrStart\@
 StrEnd\@
     even
 Skip\@
+    move    (sp)+,sr
     endm
 
     macro   DebugStr
@@ -971,16 +973,17 @@ jsry
     cmp.l   #20000*30000,d0
     z1
 
-    PrintStr 'Test: neg dn'
+    PrintStr 'Test: neg dn 0'
     move.w  #0,d0
     neg     d0
     n0
     z1
     v0
-    c1
+    c0
     cmp.w   #0,d0
     z1
 
+    PrintStr 'Test: neg dn 1'
     move.w  #1,d0
     neg     d0
     n1
@@ -990,9 +993,10 @@ jsry
     cmp.w   #-1,d0
     z1
 
+    PrintStr 'Test: neg dn -1'
     move.w  #-1,d0
     neg     d0
-    n1
+    n0
     z0
     v0
     c1
@@ -2534,6 +2538,87 @@ jsry
     sle     d0
     tst.b   d0
     z0
+
+    PrintStr 'Test: subi #imm,d0 0-(-0x8000)'
+    move.w  #0,d0
+    subi    #-$8000,d0
+    n1
+    z0
+    v1
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-(-0x7fff)'
+    move.w  #0,d0
+    subi    #-$7fff,d0
+    n0
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-(-2)'
+    move.w  #0,d0
+    subi    #-2,d0
+    n0
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 -1'
+    move.w  #0,d0
+    subi    #-1,d0
+    n0
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-0'
+    move.w  #0,d0
+    subi    #0,d0
+    n0
+    z1
+    v0
+    c0
+    x0
+
+    PrintStr 'Test: subi #imm,d0 0-1'
+    move.w  #0,d0
+    subi    #1,d0
+    n1
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-2'
+    move.w  #0,d0
+    subi    #2,d0
+    n1
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-0x7ffe'
+    move.w  #0,d0
+    subi    #$7ffe,d0
+    n1
+    z0
+    v0
+    c1
+    x1
+
+    PrintStr 'Test: subi #imm,d0 0-0x7fff'
+    move.w  #0,d0
+    subi    #$7fff,d0
+    n1
+    z0
+    v0
+    c1
+    x1
 
 ; Useful: prints data regs
 ;    PrintStr 'python: print(mem[regs:][:32].hex())'

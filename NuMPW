@@ -40,6 +40,18 @@ def add_then_set_vc(a, b, size):
     c = result < a # could use result < b just as easily
     return result
 
+def sub_then_set_vc(a, b, size): # subtract b from a
+    global v, c
+    bitsize = size * 8
+    signbit = 1 << (bitsize - 1)
+    mask = (1 << bitsize) - 1
+    a &= mask
+    b &= mask
+    result = (a - b) & mask
+    v = (a & signbit) != (b & signbit) == (result & signbit)
+    c = a < b
+    return result
+
 def set_nz(num, size):
     global n, z
     bitsize = size * 8
@@ -206,8 +218,7 @@ def line0(inst):
             v = c = 0
             set_nz(val, size)
         elif inst >> 9 == 2: # subi
-            val = add_then_set_vc(val, -imm, size)
-            c = not c
+            val = sub_then_set_vc(val, imm, size)
             x = c
             set_nz(val, size)
         elif inst >> 9 == 3: # addi
@@ -219,8 +230,7 @@ def line0(inst):
             v = c = 0
             set_nz(val, size)
         elif inst >> 9 == 6: # cmpi: same as subi, but don't set
-            fake_val = add_then_set_vc(val, -imm, size)
-            c = not c # don't set x
+            fake_val = sub_then_set_vc(val, imm, size)
             set_nz(fake_val, size)
 
         if dest_mode == 60:
@@ -261,13 +271,11 @@ def line4(inst): # very,crowded,line
         datum = read(size, dest)
 
         if (inst >> 8) & 15 == 0: # negx
-            datum = add_then_set_vc(0, -datum-x, size)
-            c = not c # because subtraction
+            datum = sub_then_set_vc(0, datum+x, size)
             x = c
             set_nz(datum, size)
         elif (inst >> 8) & 15 == 4: # neg
-            datum = add_then_set_vc(0, -datum, size)
-            c = not c # because subtraction
+            datum = sub_then_set_vc(0, datum, size)
             x = c
             set_nz(datum, size)
         else: # not
@@ -394,7 +402,6 @@ def line5(inst): # addq,subq,scc,dbcc
         datum = read(size, dest)
         save_ccr = x, n, z, v, c
         datum = add_then_set_vc(datum, imm, size)
-        if inst & 256: c = not c # subq, not addq
         x = c
         set_nz(datum, size)
         if (inst >> 3) & 7 == 1: x, n, z, v, c = save_ccr # touch not ccr if dest is An
@@ -502,9 +509,11 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         src = address_by_mode(mode | (inst & 7), size)
         dest = address_by_mode(mode | ((inst >> 9) & 7), size)
 
-        result = add_then_set_vc(read(size, dest), sign * (read(size, src) + x), size)
+        if sign == 1:
+            result = add_then_set_vc(read(size, dest), read(size, src) + x, size)
+        else:
+            result = sub_then_set_vc(read(size, dest), read(size, src) + x, size)
         write(size, dest, result)
-        if sign == -1: c = not c
         x = c
         old_z = z; set_nz(result, size); z &= old_z
 
@@ -515,8 +524,10 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src # direction bit does a swap
-        result = add_then_set_vc(read(size, dest), sign * read(size, src), size)
-        if sign == -1: c = not c
+        if sign == 1:
+            result = add_then_set_vc(read(size, dest), read(size, src), size)
+        else:
+            result = sub_then_set_vc(read(size, dest), read(size, src), size)
         x = c
         set_nz(result, size)
         write(size, dest, result)
@@ -527,8 +538,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         size = 4 if inst & 0x100 else 2 # size of ea but An is always .L
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = add_then_set_vc(read(4, regs + 32 + an * 4, signed=True), -read(size, ea, signed=True), 4)
-        c = not c
+        result = sub_then_set_vc(read(4, regs + 32 + an * 4, signed=True), read(size, ea, signed=True), 4)
         set_nz(result, 4)
 
     elif inst & 0x100 == 0x000: # cmp
@@ -536,16 +546,14 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
-        result = add_then_set_vc(read(size, dest), -read(size, src), size)
-        c = not c
+        result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
     elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
         size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
         src = address_by_mode(24 | (inst & 7), size) # (An)+ mode
         dest = address_by_mode(24 | ((inst >> 9) & 7), size)
-        result = add_then_set_vc(read(size, dest), -read(size, src), size)
-        c = not c
+        result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
     else: # eor
