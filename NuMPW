@@ -697,6 +697,47 @@ def run_m68k_interpreter():
     while True: # need a way to bust out of this loop
         inst = read(2, pc); pc += 2; instruction_lines[inst >> 12](inst)
 
+def roughly_where_we_are(pc):
+    # This might be adapted to shell out to a disassembler?
+    is_after_NV = False
+    for i in reversed(range(pc-1000, pc+2, 2)):
+        if mem[i:i+2] == b'NV':
+            is_after_NV = True
+            break
+#         elif mem[i:i+2] in (b'Nu', b'\x4e\xd0'):
+#             is_after_NV = False
+#             break
+
+    is_before_rts = False
+    for j in range(pc+2, pc+1000, 2):
+        if mem[j:j+2] == b'NV':
+            is_before_rts = False
+            break
+        elif mem[j:j+2] in (b'Nu', b'\x4e\xd0'):
+            is_before_rts = True
+            break
+
+#     print(is_after_NV, is_before_rts)
+
+    if is_after_NV and is_before_rts and mem[j+2] & 0x80:
+        funcname = mem[j+3:j+3+(mem[j+2] & 0x7f)].decode('mac_roman')
+        funcname += '+' + hex(pc-i)
+    else:
+        funcname = '<unknownfunc>'
+
+    return funcname + ' ' + (mem[pc:pc+2].hex())
+
+    # search backwards and confirm we are after an 'NV'
+
+def print_state():
+#     global pc, x, n, z, v, c
+    for i in (regs, regs+32):
+        print(' '.join(mem[r:r+4].hex() for r in range(i, i+32, 4)))
+
+    sp = read(4, regs + 32 + 7 * 4)
+    print('sp:', ' '.join(mem[r:r+2].hex() for r in range(sp, sp+16, 2)),
+        'ccr:', 'xX'[x]+'nN'[n]+'zZ'[z]+'vV'[v]+'cC'[c])
+
 ########################################################################
 # Resources! At least we can be slow when dealing with them.
 ########################################################################
