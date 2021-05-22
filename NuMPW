@@ -922,15 +922,58 @@ def getresource(rtype, rid, one=False): # always load the resource
 
 def getresource_trap():
     rid = sign_extend(pop(2), 2)
-    rtype = pop(4).bytes(4, 'big')
+    rtype = pop(4).to_bytes(4, 'big')
     push(4, getresource(rtype, rid, one=False))
 toolbox_traps[0x1a0] = getresource_trap
 
 def get1resource_trap():
     rid = sign_extend(pop(2), 2)
-    rtype = pop(4).bytes(4, 'big')
+    rtype = pop(4).to_bytes(4, 'big')
     return getresource(rtype, rid, one=True)
 toolbox_traps[0x1f] = get1resource_trap
+
+def getnamedresource(rtype, rname, one=False): # always load the resource
+    for file in reversed(resource_chain):
+        for resource in file:
+            thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
+            if thistype == rtype and thisname == rname:
+                if thishandle:
+                    return thishandle[0]
+                else:
+                    handle = newhandle(len(thisdata))
+                    mem[handle+4:handle+4+len(thisdata)] = thisdata
+                    resource.append(handle)
+                    return handle
+
+        if one: break
+
+    return 0
+
+def getnamedresource_trap():
+    name = pop(4)
+    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
+    rtype = pop(4).to_bytes(4, 'big')
+    push(4, getnamedresource(rtype, name, one=False))
+toolbox_traps[0x1a1] = getnamedresource_trap
+
+def get1namedresource_trap():
+    name = pop(4)
+    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
+    rtype = pop(4).to_bytes(4, 'big')
+    push(4, getnamedresource(rtype, name, one=True))
+toolbox_traps[0x20] = get1namedresource_trap
+
+def setresload_trap():
+    pop(2) # trash the parameter
+toolbox_traps[0x19b] = setresload_trap
+
+def tickcount_trap():
+    pop(4); push(4, 0) # always zero
+toolbox_traps[0x175] = tickcount_trap
+
+def purgespace_trap(trap, d0, a0, a1):
+    return 0x7fffffff, 0x7fffffff # d0, a0
+os_traps[0x62] = purgespace_trap
 
 def debugstr_trap():
     strstart = pop(4)
