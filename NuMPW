@@ -395,12 +395,14 @@ def line5(inst): # addq,subq,scc,dbcc
         if size == 2 and (inst >> 3) & 7 == 1: size = 4 # An.w is really An.l
 
         imm = ((inst >> 9) & 7) or 8
-        if inst & 256: imm = -imm # subq, not addq
 
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
         save_ccr = x, n, z, v, c
-        datum = add_then_set_vc(datum, imm, size)
+        if inst & 256: # subq
+            datum = sub_then_set_vc(datum, imm, size)
+        else: # addq
+            datum = add_then_set_vc(datum, imm, size)
         x = c
         set_nz(datum, size)
         if (inst >> 3) & 7 == 1: x, n, z, v, c = save_ccr # touch not ccr if dest is An
