@@ -833,21 +833,33 @@ def readrez(path):
 # The Macintosh Toolbox. Wish me luck...
 ########################################################################
 
+os_traps = {}
+toolbox_traps = {}
+ftrap_table_addr = 0xc0000 # every permutation of f-trap
+
 heap_blocks = {} # addr: size
-def tbnewptr(size): # fixed 16b header before all "heap" blocks
+def newptr(size): # fixed 16b header before all "heap" blocks
     while len(mem) % 16: mem.append(0)
     mem.extend(bytes(16 + size))
     retval = len(mem) - size
     heap_blocks[retval] = size
     return retval
 
-def tbnewhandle(size):
-    ptr = tbnewptr(size)
+def newptr_trap(trap, d0, a0, a1):
+    return 0, newptr(d0) # a0,d0
+os_traps[0x1e] = newptr_trap
+
+def newhandle(size):
+    ptr = newptr(size)
     write(4, ptr - 4, ptr)
     write(4, ptr - 8, 0xFA7B175) # FatBits
     return ptr - 4 # a handle points to its owning pointer
 
-def tbgetresource(rtype, rid, one=False): # always load the resource
+def newhandle_trap(trap, d0, a0, a1):
+    return 0, newhandle(d0)
+os_traps[0x22] = newhandle_trap
+
+def getresource(rtype, rid, one=False): # always load the resource
     for file in reversed(resource_chain):
         for resource in file:
             thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
@@ -855,7 +867,7 @@ def tbgetresource(rtype, rid, one=False): # always load the resource
                 if thishandle:
                     return thishandle[0]
                 else:
-                    handle = tbnewhandle(len(thisdata))
+                    handle = newhandle(len(thisdata))
                     mem[handle+4:handle+4+len(thisdata)] = thisdata
                     resource.append(handle)
                     return handle
@@ -864,22 +876,178 @@ def tbgetresource(rtype, rid, one=False): # always load the resource
 
     return 0
 
-def lineA(inst):
-    if inst == 0xABFF: # DebugStr
-        strstart = pop(4)
-        lenbyte = mem[strstart]
-        string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
-        print('_DebugStr', string, flush=True, file=sys.stderr)
-        if string.startswith('python:'): eval(string[7:])
+def getresource_trap():
+    rid = sign_extend(pop(2), 2)
+    rtype = pop(4).bytes(4, 'big')
+    push(4, getresource(rtype, rid, one=False))
+toolbox_traps[0x1a0] = getresource_trap
 
-    elif inst == 0xA9FF: # Debugger
-        import pdb; pdb.set_trace()
+def get1resource_trap():
+    rid = sign_extend(pop(2), 2)
+    rtype = pop(4).bytes(4, 'big')
+    return getresource(rtype, rid, one=True)
+toolbox_traps[0x1f] = get1resource_trap
 
-    elif inst == 0xA9F4: # ExitToShell
-        sys.exit() # wrong way to do it
+def debugstr_trap():
+    strstart = pop(4)
+    lenbyte = mem[strstart]
+    string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
+    print('_DebugStr', string, flush=True, file=sys.stderr)
+    if string.startswith('python:'): eval(string[7:])
+toolbox_traps[0x3ff] = debugstr_trap
 
+def debugger_trap():
+    import pdb; pdb.set_trace()
+
+toolbox_traps[0x1ff] = debugger_trap
+
+def gettrapaddress(n, kind='auto'):
+    if kind == 'auto':
+        trapnum = n & 0x1f
+        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
+            kind = 'os'
+        else:
+            kind = 'toolbox'
+
+    if kind == 'os': n &= 0xff # 256 OS traps
+    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
+
+    if kind == 'os':
+        return os_trap_table[n]
+    elif kind == 'toolbox':
+        return toolbox_trap_table[n]
+
+def gettrapaddress_trap(trap, d0, a0, a1):
+    if trap & 0x200:
+        kind = 'auto'
     else:
-        raise ValueError('Elliot needs to write %04X before you can use it.' % inst)
+        if trap & 0x400:
+            kind = 'toolbox'
+        else:
+            kind = 'os'
+
+    # d0, a0
+    return 0, gettrapaddress(d0 & 0xffff, kind)
+
+os_traps[0x46] = gettrapaddress_trap
+
+def settrapaddress(n, addr, kind='auto'):
+    if kind == 'auto':
+        trapnum = n & 0x1f
+        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
+            kind = 'os'
+        else:
+            kind = 'toolbox'
+
+    if kind == 'os': n &= 0xff # 256 OS traps
+    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
+
+    if kind == 'os':
+        os_trap_table[n] = addr
+    elif kind == 'toolbox':
+        toolbox_trap_table[n] = addr
+
+def settrapaddress_trap(trap, d0, a0, a1):
+    if trap & 0x200:
+        kind = 'auto'
+    else:
+        if trap & 0x400:
+            kind = 'toolbox'
+        else:
+            kind = 'os'
+
+    settrapaddress(d0 & 0xffff, a0, kind)
+
+    return 0, 0 # d0, a0
+
+os_traps[0x47] = settrapaddress_trap
+
+# Populate the "classic" trap table, and also our list of implementations
+# The user-visible trap table initially points to _Unimplemented
+toolbox_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x400
+os_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x100
+
+for trapnum, traphandler in toolbox_traps.items():
+    ftrap_addr = ftrap_table_addr + (0x800 + trapnum) * 2
+    toolbox_trap_table[trapnum] = ftrap_addr
+
+for trapnum, traphandler in os_traps.items():
+    ftrap_addr = ftrap_table_addr + trapnum * 2
+    os_trap_table[trapnum] = ftrap_addr
+
+def lineA(inst):
+    global pc
+    if inst & 0x0800: # Toolbox trap
+        # Push return address, but not if autoPop bit set
+        if not inst & 0x400: push(4, pc)
+
+        # Look up the implementation in the classic trap table
+        pc = toolbox_trap_table[inst & 0x3ff]
+
+        if pc == ftrap_table_addr + 0x89f * 2:
+            sys.exit('Unimplemented trap %04X' % inst)
+
+    else: # OS trap
+        # Push return address
+        push(4, pc)
+
+        push(4, read(4, regs + 32 + 2 * 4)) # push a2
+        push(4, read(4, regs + 2 * 4))      # push d2
+        push(4, read(4, regs + 1 * 4))      # push d1
+        push(4, read(4, regs + 32 + 1 * 4)) # push a1
+        if not inst & 0x100: # only if trap word specifies
+            push(4, read(4, regs + 32 + 0 * 4)) # push a0
+
+        if inst & 0x100:
+            # Push address of four-register return f-trap
+            push(4, ftrap_table_addr + 0x300 * 2) # f300
+        else:
+            # Push address of five-register return f-trap
+            push(4, ftrap_table_addr + 0x301 * 2) # f301
+
+        # Set d1.w to trap word
+        write(2, regs + 1 * 4 + 2, inst)
+
+        # Look up the implementation in the classic trap table
+        pc = os_trap_table[inst & 0xff]
+
+        if pc == ftrap_table_addr + 0x89f * 2:
+            sys.exit('Unimplemented trap %04X' % inst)
+
+
+def lineF(inst):
+    global pc
+    if inst & 0x0800: # Call-through to our implementation of Toolbox trap
+        pc = pop(4)
+        toolbox_traps[inst & 0x3ff]()
+
+    elif inst & 0x0f00 == 0: # Call-through to our implementation of OS trap
+        pc = pop(4)
+        retval = os_traps[inst & 0xff](
+            read(2, regs      + 1 * 4 + 2), # d1.w = trap word
+            read(4, regs      + 0 * 4),     # d0.l
+            read(4, regs + 32 + 0 * 4),     # a0.l
+            read(4, regs + 32 + 1 * 4),     # a1.l
+        )
+
+        if isinstance(retval, tuple):
+            write(4, regs, retval[0]) # d0.l = return value
+            write(4, regs + 32, retval[1]) # a0.l = other return value
+        else:
+            write(4, regs, retval) # d0.l = only return value
+
+    elif inst in (0xf300, 0xf301): # OS trap return assistance code
+        if inst & 1: # was this a "save-a0" OS trap word?
+            write(4, regs + 32 + 0 * 4, pop(4)) # pop a0
+        write(4, regs + 32 + 1 * 4, pop(4)) # pop a1
+        write(4, regs      + 1 * 4, pop(4)) # pop d1
+        write(4, regs      + 2 * 4, pop(4)) # pop d2
+        write(4, regs + 32 + 2 * 4, pop(4)) # pop a2
+        set_nz(read(2, regs + 0 * 4), 2) # tst.w d0
+        pc = pop(4) # Return to the actual caller
+
+    else: # Special MPW call
+        mpw_ftrap(inst)
 
 ########################################################################
 # Initialise an MPW environment
@@ -891,10 +1059,10 @@ import struct
 mem = bytearray(0x100000) # plenty of room for globals
 regs = 0x80000
 
-def lineF(inst): # special breakout instructions, not for general use
-    if inst == 0xf000:
+def mpw_ftrap(inst): # special breakout instructions, not for general use
+    if inst == 0xf100:
         sys.exit()
-    elif inst == 0xf004:
+    elif inst == 0xf104:
         sp = read(4, regs + 32 + 7 * 4)
         fd = read(4, sp + 4) # ptr to io entry, don't pop it!
         write(2, fd+2, 0) # noErr
@@ -919,6 +1087,12 @@ def write(numbytes, addr, val):
 
 write(4, regs + 8 * 4 + 7 * 4, 0x80000) # stack growing down from registers
 
+
+# Big table of every permutation of f-trap at c0000
+for i in range(0x1000):
+    struct.pack_into('>H', mem, ftrap_table_addr + i * 2, 0xf000 + i)
+
+
 # Block of code for MPW callbacks
 # elements ending with '::' are labels, with '??' are ptrs
 bigblock = (
@@ -937,22 +1111,22 @@ bigblock = (
         bytes(12),
 
     'quit instruction',
-        b'\xf0\x00\x4e\x75',
+        b'\xf1\x00\x4e\x75',
 
     'access instruction',
-        b'\xf0\x01\x4e\x75',
+        b'\xf1\x01\x4e\x75',
 
     'close instruction',
-        b'\xf0\x02\x4e\x75',
+        b'\xf1\x02\x4e\x75',
 
     'read instruction',
-        b'\xf0\x03\x4e\x75',
+        b'\xf1\x03\x4e\x75',
 
     'write instruction',
-        b'\xf0\x04\x4e\x75',
+        b'\xf1\x04\x4e\x75',
 
     'ioctl instruction',
-        b'\xf0\x05\x4e\x75',
+        b'\xf1\x05\x4e\x75',
 
     'dev table',
         b'FSYS',
@@ -1013,7 +1187,7 @@ code0 = next(r for r in resource_chain[1] if r[0] == b'CODE' and r[1] == 0)[-1]
 
 # Make an a5 world
 abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
-a5world = tbnewptr(belowa5 + abovea5) + belowa5
+a5world = newptr(belowa5 + abovea5) + belowa5
 write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
 pc = a5world + jtoffset + 2
 
@@ -1028,7 +1202,7 @@ for i in range(0, jtsize, 8):
         raise NotImplementedError('far model not written yet')
 
     else:
-        segmenthandle = tbgetresource(b'CODE', words[2])
+        segmenthandle = getresource(b'CODE', words[2])
         target = segmenthandle + 4 + 4 + words[0]
 
     write(6, a5world + jtoffset + i + 2, (0x4EF9 << 32) | target) # jmp there
