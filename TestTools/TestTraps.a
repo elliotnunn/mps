@@ -1,0 +1,48 @@
+    macro   PrintStr
+    move    sr,-(sp)
+    move.l  $316.w,a0
+    move.l  4(a0),a0
+    move.l  $1c(a0),a0 ; io table
+    lea     20(a0),a0 ; point to stdout entry
+    move.l  #StrEnd\@-StrStart\@,12(a0)
+    pea     StrStart\@
+    move.l  (sp)+,16(a0)
+    move.l  a0,-(sp)
+    move.l  4(a0),a0 ; now point to fsys table
+    move.l  16(a0),a0 ; ftrap-table ptr for write
+    moveq   #-1,d0
+    jsr     (a0)
+    addq    #4,sp
+    bra.s   Skip\@
+StrStart\@
+    dc.b    \1
+    dc.b    13 ; carriage return
+StrEnd\@
+    even
+Skip\@
+    move    (sp)+,sr
+    endm
+
+    macro   DebugStr
+    pea     LengthByte\@
+    dc.w    $ABFF
+    bra.s   Skip\@
+LengthByte\@
+    dc.b    StrEnd\@-StrStart\@
+StrStart\@
+    dc.b    \1
+StrEnd\@
+    even
+Skip\@
+    endm
+
+    move.l  #$100,d0
+    dc.w    $a51e ; NewPtrSys
+
+    move.l  #$100,d0
+    dc.w    $a51e ; NewPtrSys
+
+    move.l  #$100,d0
+    dc.w    $a322 ; NewPtrSys
+
+    rts
