@@ -962,6 +962,51 @@ def settrapaddress_trap(trap, d0, a0, a1):
 
 os_traps[0x47] = settrapaddress_trap
 
+def syserror(n):
+    sys.exit('System error %d' % n)
+
+def syserror_trap():
+    # trap is in toolbox table but actually uses registers
+    err = read(2, regs + 2, signed=True)
+    if err == -491: # display string on stack
+        strstart = pop(4)
+        lenbyte = mem[strstart]
+        string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
+        print('SysErr -491 string:', string, flush=True, file=sys.stderr)
+    syserror(err)
+
+toolbox_traps[0x1c9] = syserror_trap
+
+def gestalt(selector):
+    if selector == b'sysv':
+        return 0x09228000 # highest possible
+
+def gestalt_trap(trap, d0, a0, a1):
+    print('gestalt', hex(d0))
+    selector = d0.to_bytes(4, 'big')
+
+    if trap & 0x600 == 0: # ab=00
+        # _Gestalt
+        val = gestalt(selector)
+        if val == None:
+            return -5551, 0 # d0, a0
+        else:
+            return 0, val
+
+    elif trap & 0x600 == 0x200: # ab=01
+        # _NewGestalt
+        sys.exit('NewGestalt %r' % selector)
+
+    elif trap & 0x600 == 0x400: # ab=10
+        # _ReplaceGestalt
+        sys.exit('ReplaceGestalt %r' % selector)
+
+    else: # ab=11
+        # _GetGestaltProcPtr
+        sys.exit('GetGestaltProcPtr %r' % selector)
+
+os_traps[0xad] = gestalt_trap
+
 # Populate the "classic" trap table, and also our list of implementations
 # The user-visible trap table initially points to _Unimplemented
 toolbox_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x400
