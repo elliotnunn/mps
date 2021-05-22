@@ -1143,6 +1143,8 @@ def lineF(inst):
 ########################################################################
 
 import struct
+import sys
+import os
 
 # A memory, and some memory-mapped registers
 mem = bytearray(0x100000) # plenty of room for globals
@@ -1182,17 +1184,25 @@ for i in range(0x1000):
     struct.pack_into('>H', mem, ftrap_table_addr + i * 2, 0xf000 + i)
 
 
+argv = sys.argv[1:]
+argv[0] = argv[0].rpartition('/')[2]
+
+env = []
+for key, val in sorted(os.environ.items()):
+    if key.lower().startswith('MPW_'):
+        env.append((key[4:] + '\0' + val + b'\0').encode('mac_roman'))
+
 # Block of code for MPW callbacks
 # elements ending with '::' are labels, with '??' are ptrs
-bigblock = (
+bigblock = [
     b'MPGM',
     'pointer to sh table',
 
     'sh table',
         b'SH',
-        b'argc', # todo
-        b'argv', # todo
-        b'env ', # todo
+        len(argv).to_bytes(4, 'big'),
+        'pointer to argument array',
+        'pointer to environment array',
         bytes(12),
         b'\x01\x90', # ?default fd table size
         'pointer to io table',
@@ -1250,7 +1260,22 @@ bigblock = (
         b'\x00\x00\x00\x03', # cookie = stderr
         b'\x00\x00\x00\x00', # transfer byte count (set by tool)
         b'\x00\x00\x00\x00', # buffer ptr (set by tool)
-)
+
+    'environment array',
+        *('pointer to environment %d' % i for i in range(len(env))),
+
+    'argument array',
+        *('pointer to argument %d' % i for i in range(len(argv))),
+]
+
+for i, arg in enumerate(argv):
+    bigblock.append('argument %d' % i)
+    bigblock.append(arg.encode('mac_roman') + b'\0')
+
+for i, e in enumerate(env):
+    bigblock.append('environment %d' % i)
+    bigblock.append(e)
+
 putwhere = 0x90000
 ctr = putwhere
 labels = {}
@@ -1265,12 +1290,12 @@ for item in bigblock:
     else: # plain bytes
         mem[ctr:ctr+len(item)] = item
         ctr += len(item)
+        ctr += ctr & 1 # pad to even
 for address, targetlabel in relocations:
     struct.pack_into('>L', mem, address, labels[targetlabel])
 struct.pack_into('>L', mem, 0x316, putwhere)
 push(4, labels['quit instruction'])
 
-import sys
 resource_chain = [[], readrez(sys.argv[1] + '.rdump')] # system and app
 code0 = next(r for r in resource_chain[1] if r[0] == b'CODE' and r[1] == 0)[-1]
 
