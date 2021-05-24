@@ -997,13 +997,17 @@ def macopen(fname, readable=False, writable=False, exclusive=False, create=False
     if not create and not path.exists(fname): raise FileNotFoundError(fname)
 
     if readable and writable:
-        mode = 'r+b'
+        mode = 'r+'
     elif readable:
-        mode = 'rb'
+        mode = 'r'
     elif writable:
-        mode = 'wb'
+        mode = 'w'
 
-    f = open(fname, mode)
+    if fname.startswith('/dev/'):
+        f = open(fname, mode, encoding='utf8')
+    else:
+        f = open(fname, mode + 'b')
+
     refnums.append(f)
 
     f.__mpw_mark = 0
@@ -1018,7 +1022,7 @@ def macopen(fname, readable=False, writable=False, exclusive=False, create=False
 
     return len(refnums) - 1
 
-macopen('Dev:StdIn', readable=True)
+macopen('Dev:StdIn', readable=True) # this is hacky but maybe can stay?
 macopen('Dev:StdOut', writable=True)
 macopen('Dev:StdErr', writable=True)
 
@@ -1036,8 +1040,11 @@ def macclose(refnum):
     file.close()
 
 def macwrite(refnum, writewhat):
-    print(writewhat)
     file = refnums[refnum]
+
+    if file.name.startswith('/dev/'):
+        file.write(writewhat.decode('mac_roman').replace('\r', '\n'))
+        return
 
     if file.__mpw_append: __mpw_mark = len(file.__mpw_contents)
     while len(file.__mpw_contents) < file.__mpw_mark: file.__mpw_contents.append(0)
@@ -1046,6 +1053,9 @@ def macwrite(refnum, writewhat):
 
 def macread(refnum, howmuch):
     file = refnums[refnum]
+
+    if file.name.startswith('/dev/'):
+        return file.read(howmuch).replace('\n', '\r').encode('mac_roman')
 
     retval = file.__mpw_contents[file.__mpw_mark:file.__mpw_mark+howmuch]
     file.__mpw_mark += len(retval)
@@ -1567,11 +1577,26 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
 
     elif inst == 0xf102:
         # close
-        raise NotImplementedError('close')
+        sp = read(4, regs + 64 - 4)
+        fptr = read(4, sp + 4)
+        fd = read(4, fptr + 8) # cookie
+        macclose(fd)
+        write(2, fptr + 2, 0) # file.err=0
+        write(4, regs, 0) # d0=0
 
     elif inst == 0xf103:
         # read
-        raise NotImplementedError('read')
+        sp = read(4, regs + 64 - 4)
+        fptr = read(4, sp + 4)
+        fd = read(4, fptr + 8) # cookie
+        cnt = read(4, fptr + 12)
+        buf = read(4, fptr + 16)
+        print('read', 'fd', hex(fd), 'cnt', cnt)
+        didread = macread(fd, cnt)
+        write(4, fptr + 12, cnt - len(didread))
+        mem[buf:buf+len(didread)] = didread
+        write(2, fptr + 2, 0) # file.err=0
+        write(4, regs, 0) # d0=0
 
     elif inst == 0xf104:
         # write
@@ -1581,6 +1606,8 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
         cnt = read(4, fptr + 12)
         buf = read(4, fptr + 16)
         macwrite(fd, mem[buf:buf+cnt])
+        write(2, fptr + 2, 0) # file.err=0
+        write(4, regs, 0) # d0=0
 
     elif inst == 0xf105:
         # ioctl
@@ -1727,21 +1754,21 @@ bigblock = [
         b'\x00\x01', # flags = read
         b'\x00\x00', # error code
         'pointer to dev table',
-        b'\x00\x00\x00\x01', # cookie = stdin
+        b'\x00\x00\x00\x00', # cookie = stdin
         b'\x00\x00\x00\x00', # transfer byte count (set by tool)
         b'\x00\x00\x00\x00', # buffer ptr (set by tool)
 
         b'\x00\x02', # flags = write
         b'\x00\x00', # error code
         'pointer to dev table',
-        b'\x00\x00\x00\x02', # cookie = stdout
+        b'\x00\x00\x00\x01', # cookie = stdout
         b'\x00\x00\x00\x00', # transfer byte count (set by tool)
         b'\x00\x00\x00\x00', # buffer ptr (set by tool)
 
         b'\x00\x02', # flags = write
         b'\x00\x00', # error code
         'pointer to dev table',
-        b'\x00\x00\x00\x03', # cookie = stderr
+        b'\x00\x00\x00\x02', # cookie = stderr
         b'\x00\x00\x00\x00', # transfer byte count (set by tool)
         b'\x00\x00\x00\x00', # buffer ptr (set by tool)
 
