@@ -368,11 +368,14 @@ def line4(inst): # very,crowded,line
         size = 4 if inst & 64 else 2
         dir_to_reg = bool(inst & 0x400)
         which = read(2, pc); pc += 2
+        mode = inst & 63
 
-        if dir_to_reg: which = [r for r in range(16) if which & (1 << r)]
-        else: which = [r for r in range(16) if which & (0x8000 >> r)]
+        if mode >> 3 == 4: # predecrement, reverse "which"
+            which = [r for r in range(16) if which & (0x8000 >> r)]
+        else:
+            which = [r for r in range(16) if which & (1 << r)]
 
-        ptr = address_by_mode(inst & 63, len(which) * size)
+        ptr = address_by_mode(mode, len(which) * size)
 
         for reg in which:
             if dir_to_reg:
