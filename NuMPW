@@ -1264,65 +1264,27 @@ os_traps[0x2e] = blockmove_trap
 
 # Trap Manager OS traps
 
-def gettrapaddress(n, kind='auto'):
-    if kind == 'auto':
-        trapnum = n & 0x1f
-        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
-            kind = 'os'
-        else:
-            kind = 'toolbox'
-
-    if kind == 'os': n &= 0xff # 256 OS traps
-    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
-
-    if kind == 'os':
-        return os_trap_table[n]
-    elif kind == 'toolbox':
-        return toolbox_trap_table[n]
+# For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
+def trap_kind(trapnum, flags):
+    if flags & 0x200: # newOS/newTool trap
+        if flags & 0x400: return trapnum & 0x3ff, 'toolbox'
+        else: return trapnum & 0xff, 'os'
+    else: # guess, using traditional trap numbering
+        trapnum &= 0x1ff # 64k ROM had a single 512-entry trap table
+        if trapnum <= 0x4f or trapnum in (0x54, 0x57): return trapnum, 'os'
+        else: return trapnum, 'toolbox'
 
 def gettrapaddress_trap(trap, d0, a0, a1):
-    if trap & 0x200:
-        kind = 'auto'
-    else:
-        if trap & 0x400:
-            kind = 'toolbox'
-        else:
-            kind = 'os'
-
-    # d0, a0
-    return 0, gettrapaddress(d0 & 0xffff, kind)
-
+    trapnum, trapkind = trap_kind(d0, trap)
+    traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
+    return 0, traplist[trapnum]
 os_traps[0x46] = gettrapaddress_trap
 
-def settrapaddress(n, addr, kind='auto'):
-    if kind == 'auto':
-        trapnum = n & 0x1f
-        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
-            kind = 'os'
-        else:
-            kind = 'toolbox'
-
-    if kind == 'os': n &= 0xff # 256 OS traps
-    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
-
-    if kind == 'os':
-        os_trap_table[n] = addr
-    elif kind == 'toolbox':
-        toolbox_trap_table[n] = addr
-
 def settrapaddress_trap(trap, d0, a0, a1):
-    if trap & 0x200:
-        kind = 'auto'
-    else:
-        if trap & 0x400:
-            kind = 'toolbox'
-        else:
-            kind = 'os'
-
-    settrapaddress(d0 & 0xffff, a0, kind)
-
-    return 0, 0 # d0, a0
-
+    trapnum, trapkind = trap_kind(d0, trap)
+    traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
+    traplist[trapnum] = a0
+    return 0, 0
 os_traps[0x47] = settrapaddress_trap
 
 # Resource Manager Toolbox traps
