@@ -874,6 +874,189 @@ def readrez(path):
     return retval
 
 ########################################################################
+# Filesystem access, used by both the Toolbox and MPW code
+########################################################################
+
+import sys
+import os
+from os import path
+
+def path_to_native(s):
+    try:
+        s = s.decode('mac_roman')
+    except AttributeError:
+        pass
+
+    if path.__name__ == 'posixpath': # gives faithful but quite verbose paths
+        # Expand repeated separators to ..
+        while '::' in s: s = s.replace('::', ':..:')
+
+        # Reverse the meaning of leading separator from 'relative' to 'absolute'
+        if s.startswith(':'): # explicitly relative, with leading :
+            s = '.' + s
+        elif ':' not in s: # implicitly relative, with no :
+            pass
+        else: # absolute, with : but no leading :
+            s = ':' + s
+
+        # Swap separators
+        s = ''.join((':' if c == path.sep else path.sep if c == ':' else c) for c in s)
+
+        return s
+
+    else:
+        raise NotImplementedError(path.__name__)
+
+def normcase(x): # only fail if path is ambiguous
+    elements = [] # make a list of separators and non-separator runs
+    for char in x:
+        if len(elements) == 0 or (elements[-1][-1] == path.sep) != (char == path.sep):
+            elements.append('')
+
+        elements[-1] += char
+
+    y = ''
+    for el in elements:
+        if el[0] == path.sep:
+            y += el
+        else:
+            if el in '..':
+                y += el
+                continue
+
+            possibles = os.listdir(y or '.')
+
+            if el in possibles:
+                y += el
+                continue
+
+            possibles = [p for p in possibles if p.lower() == el.lower()]
+
+            if len(possibles) == 0:
+                return y + x[len(y):] # bail out
+
+            if len(possibles) > 1:
+                raise FileNotFoundError('%r could refer to any of %r' % (y + el, possibles))
+
+            y += possibles[0]
+
+    return y
+
+# We do *not* pass through the nuances of system calls to the underlying OS.
+# Instead, use the well-tested Python technique of slurping a whole binary file,
+# and blatting it out when we are done.
+# This lets us do whole-file heuristics and avoid funky ioctl interfaces.
+# It might also be faster?
+# Remember that we need to do atexit stuff too.
+
+def get_typecreator(f):
+    try:
+        with open(f + '.idump', 'rb') as f:
+            t = f.read(4)
+            if len(t) != 4: t = b'????'
+            c = f.read(4)
+            if len(c) != 4: c = b'????'
+            return t, c
+    except FileNotFoundError:
+        return b'????', b'????'
+
+def set_typecreator(f, t=None, c=None):
+    try:
+        with open(f + '.idump', 'w+b') as f:
+            if t:
+                f.write(t)
+            if c:
+                f.seek(4)
+                f.write(c)
+    except FileNotFoundError:
+        pass
+
+refnums = []
+
+# Reimplement Unix io syscall interface atop Python
+# Slurp and blat all files wholesale
+
+def text_to_native(x):
+    return x.decode('mac_roman').encode('utf8').replace(b'\r', b'\n') # can't fail
+
+def text_to_mac(x):
+    try:
+        return x.decode('utf8').encode('mac_roman').replace(b'\n', b'\r')
+    except UnicodeError:
+        return x
+
+# MPW open() and OS PBOpen() call me
+def macopen(fname, readable=False, writable=False, exclusive=False, create=False, append=False, truncate=False, rsrcfork=False):
+    # Hack to allow resource forks to be copied wholesale
+    if rsrcfork: fname = path.readlink(fname) + '.rdump'
+
+    # Will error out if the path is ambiguous
+    fname = normcase(path_to_native(fname))
+
+    if exclusive and path.exists(fname): raise FileExistsError(fname)
+    if not create and not path.exists(fname): raise FileNotFoundError(fname)
+
+    if readable and writable:
+        mode = 'r+b'
+    elif readable:
+        mode = 'rb'
+    elif writable:
+        mode = 'wb'
+
+    f = open(fname, mode)
+    refnums.append(f)
+
+    f.__mpw_mark = 0
+    f.__mpw_append = append
+
+    f.__mpw_contents = bytearray() if (truncate or not readable or fname.startswith('/dev/')) else bytearray(f.read())
+
+    # Make our own decision about textfiles
+    ftype = get_typecreator(fname)[0]
+    if ftype in (b'TEXT', b'ttro') or (ftype == b'????' and not fname.endswith(('.o', '.x'))):
+        f.__mpw_contents[:] = text_to_mac(f.__mpw_contents)
+
+    return len(refnums) - 1
+
+macopen('Dev:StdIn', readable=True)
+macopen('Dev:StdOut', writable=True)
+macopen('Dev:StdErr', writable=True)
+
+def macclose(refnum):
+    file = refnums[refnum]
+    if file is None: return
+    refnums[refnum] = None
+    if file in refnums: return # rudimentary refcount
+
+    if file.writable():
+        file.seek(0)
+        file.write(f.__mpw_contents)
+        file.truncate()
+
+    file.close()
+
+def macwrite(refnum, writewhat):
+    print(writewhat)
+    file = refnums[refnum]
+
+    if file.__mpw_append: __mpw_mark = len(file.__mpw_contents)
+    while len(file.__mpw_contents) < file.__mpw_mark: file.__mpw_contents.append(0)
+    file.__mpw_contents[file.__mpw_mark:file.__mpw_mark+len(writewhat)] = writewhat
+    file.__mpw_mark += len(writewhat)
+
+def macread(refnum, howmuch):
+    file = refnums[refnum]
+
+    retval = file.__mpw_contents[file.__mpw_mark:file.__mpw_mark+howmuch]
+    file.__mpw_mark += len(retval)
+    return retval
+
+# def macdelete(f):
+#     import shutil
+#     for f in (f, f + '.idump', f + '.rdump'):
+#         shutil.rmtree(f)
+
+########################################################################
 # The Macintosh Toolbox. Wish me luck...
 ########################################################################
 
@@ -1186,8 +1369,6 @@ def lineF(inst):
 ########################################################################
 
 import struct
-import sys
-import os
 
 # A memory, and some memory-mapped registers
 mem = bytearray(0x100000) # plenty of room for globals
@@ -1195,18 +1376,128 @@ regs = 0x80000
 
 def mpw_ftrap(inst): # special breakout instructions, not for general use
     if inst == 0xf100:
+        # quit
         sys.exit()
-    elif inst == 0xf104:
-        sp = read(4, regs + 32 + 7 * 4)
-        fd = read(4, sp + 4) # ptr to io entry, don't pop it!
-        write(2, fd+2, 0) # noErr
-        z = True # set eq
 
-        if read(4, fd+8) == 2: # stdout
-            length = read(4, fd+12)
-            buffer = read(4, fd+16)
-            string = mem[buffer:buffer+length].decode('mac_roman').replace('\r', '\n')
-            print(string, end='', flush=True)
+    elif inst == 0xf101:
+        # access
+        sp = read(4, regs + 64 - 4)
+        arg1 = read(4, sp + 4)
+        arg2 = read(4, sp + 8)
+        arg3 = read(4, sp + 12)
+
+        if arg2 == 0x6400: # open
+            # No error handling, yet
+            flags = read(2, arg3)
+            name = mem[arg1+1:arg1+1+mem[arg1]]
+            fd = macopen(fname,
+                readable=flags & 3 in (0, 2),
+                writable=flags & 3 in (1, 2),
+                append=flags & 8,        # O_APPEND
+                rsrcfork=flags & 0x10,   # O_RSRC
+                create=flags & 0x100,    # O_CREAT
+                truncate=flags & 0x200,  # O_TRUNC
+                exclusive=flags & 0x400, # O_EXCL
+                # note that we ignore O_BINARY
+                )
+            write(4, regs, 0) # d0.l = 0
+            write(2, arg3 + 2, 0) # error code = 0
+            write(4, arg3 + 8, fd) # cookie = index into our array
+
+        elif arg2 == 0x6401: # delete
+            name = mem[arg1+1:arg1+1+mem[arg1]]
+            macdelete(name)
+            write(4, regs, 0) # d0.l = 0
+
+        elif arg2 == 0x6402: # rename
+            raise NotImplementedError('rename')
+
+        else: # something else not supported
+            pass
+
+    elif inst == 0xf102:
+        # close
+        raise NotImplementedError('close')
+
+    elif inst == 0xf103:
+        # read
+        raise NotImplementedError('read')
+
+    elif inst == 0xf104:
+        # write
+        sp = read(4, regs + 64 - 4)
+        fptr = read(4, sp + 4)
+        fd = read(4, fptr + 8) # cookie
+        cnt = read(4, fptr + 12)
+        buf = read(4, fptr + 16)
+        macwrite(fd, mem[buf:buf+cnt])
+
+    elif inst == 0xf105:
+        # ioctl
+        sp = read(4, regs + 64 - 4)
+        fptr = read(4, sp + 4)
+        request = read(4, sp + 8)
+        argp = read(4, sp + 12)
+
+        print('ioctl', hex(fptr), hex(request), hex(argp))
+        print(' fptr', mem[fptr:fptr+28].hex())
+        print(' argp', mem[argp:argp+16].hex())
+
+        fd = read(4, fptr + 8) # cookie
+        f = refnums[fd]
+
+        def err(n):
+            write(2, fptr + 2, n) # set in structure
+            write(4, regs, n) # set in d0
+
+        if request == 0x6600:
+            # seek
+            if fd <= 2: # standard stream
+                err(-1)
+                return
+
+            offset = read(4, argp + 4, signed=True)
+            whence = read(4, argp)
+            if whence == 2: # SEEK_END
+                f.__mpw_mark = len(f.__mpw_contents)
+            elif whence == 0: # SEEK_SET
+                f.__mpw_mark = 0
+            f.__mpw_mark += offset
+
+            if f.__mpw_mark > len(f.__mpw_contents):
+                f.__mpw_mark = len(f.__mpw_contents)
+                err(-1)
+
+            err(0)
+
+        elif request == 0x6601:
+            # duplicate fd, required for freopen
+            refnums.append(f)
+            err(0)
+        elif request == 0x6602:
+            # is interactive?
+            if fd <= 2:
+                err(0)
+            else:
+                err(23) # EINVAL
+        elif request == 0x6603:
+            # ideal buffer size
+            err(23) # use default 1k, that's fine
+        elif request == 0x6604:
+            # fname
+            err(0) # todo, implement
+        elif request == 0x6605:
+            # refnum
+            write(4, argp, fd)
+            err(0)
+        elif request == 0x6606:
+            # set eof
+            del f.__mpw_contents[argp:]
+            f.__mpw_contents.extend(bytes(argp - len(f.__mpw_contents)))
+        else:
+            raise NotImplementedError('ioctl 0x%x' % request)
+
+
 
     else:
         raise ValueError('%04X not implemented' % inst)
