@@ -8,6 +8,8 @@
 # - define read(), write() and lineA() somewhere outside this block
 ########################################################################
 
+class IllegalInstruction(Exception): pass
+
 # Emulator state: set to something better than this before running
 regs = 0
 pc = 0
@@ -126,7 +128,7 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
         elif size == 4:
             ptr = pc; pc += 4
     else:
-        raise ValueError(mode)
+        raise IllegalInstruction('reserved address mode %s' % bin(mode)[2:].zfill(3))
 
     return ptr
 
@@ -168,7 +170,7 @@ def line0(inst):
     global pc, x, n, z, v, c
     if inst & 256 or inst >> 9 == 4: # btst,bchg,bclr,bset (or movep)
         if inst & 256: # bit numbered by data register
-            if (inst >> 3) & 7 == 1: 1/0 # MOVEP instruction :(
+            if (inst >> 3) & 7 == 1: raise IllegalInstriction('movep')
             dn = inst >> 9
             bit = read(4, regs + dn * 4)
         else: # bit numbered by immediate
@@ -196,7 +198,8 @@ def line0(inst):
         write(size, ptr, val)
 
     else: #ori,andi,subi,addi,eori -- including to SR/CCR
-        size = (1,2,4,None)[(inst >> 6) & 3] or 1/0 # illegal %11 size!
+        size = (1,2,4,None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('ori/andi/subi/addi/eori size=%11')
         src_ptr = address_by_mode(60, size) # '#imm' mode, advances pc
         imm = read(size, src_ptr)
 
@@ -240,7 +243,8 @@ def line0(inst):
 
 def line123(inst): # move, and movea which is a special-ish case
     global v, c
-    size = (None, 1, 4, 2)[(inst >> 12) & 3] or 1/0
+    size = (None, 1, 4, 2)[(inst >> 12) & 3]
+    if size is None: raise IllegalInstruction('move size=%00')
     dest_mode = ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
     src_mode = inst & 63
 
@@ -266,7 +270,8 @@ def line4(inst): # very,crowded,line
         src = address_by_mode(inst & 63, size)
         set_ccr(read(size, src))
     elif (inst >> 8) & 15 in (0, 4, 6): # negx,neg,not
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('negx/neg/not size=%11')
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
 
@@ -286,7 +291,8 @@ def line4(inst): # very,crowded,line
         write(size, dest, datum)
 
     elif (inst >> 8) & 15 == 2: # clr
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('clr size=%11')
         dest = address_by_mode(inst & 63, size)
 
         n = False
@@ -452,7 +458,7 @@ def line7(inst): # moveq
 def line8(inst): # divu,divs,sbcd,or
     global n, z, v, c
     if inst & 0x1F0 == 0x100: # sbcd
-        1/0
+        raise IllegalInstruction('sbcd')
     elif inst & 0x0C0 == 0x0C0: # divu,divs
         signed = bool(inst & 0x100)
         ea = address_by_mode(inst & 63, 2)
@@ -482,7 +488,8 @@ def line8(inst): # divu,divs,sbcd,or
         write(4, regs + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
 
     else: # or
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('or size=%11')
         src = address_by_mode(inst & 63, size)
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
@@ -505,7 +512,8 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         write(4, regs + 32 + an * 4, result)
 
     elif inst & 0x130 == 0x100: # subx,addx: only two addressing modes allowed
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('subx/addx size=%11')
         mode = 32 if inst & 8 else 0 # either -(Ax),-(Ay) or Dx,Dy
         src = address_by_mode(mode | (inst & 7), size)
         dest = address_by_mode(mode | ((inst >> 9) & 7), size)
@@ -519,7 +527,8 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         old_z = z; set_nz(result, size); z &= old_z
 
     else: # sub,add
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('sub/add size=%11')
         src = address_by_mode(inst & 63, size)
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
@@ -543,7 +552,8 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         set_nz(result, 4)
 
     elif inst & 0x100 == 0x000: # cmp
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('cmp size=%11')
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
@@ -551,14 +561,16 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         set_nz(result, size)
 
     elif inst & 0x38 == 0x08: # cmpm (Ay)+,(Ax)+
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('cmpm size=%11')
         src = address_by_mode(24 | (inst & 7), size) # (An)+ mode
         dest = address_by_mode(24 | ((inst >> 9) & 7), size)
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
     else: # eor
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('eor size=%11')
         dn = (inst >> 9) & 7; src = regs + 4 * dn + 4 - size
         dest = address_by_mode(inst & 63, size)
 
@@ -580,7 +592,7 @@ def lineC(inst):
         write(4, dest, datum) # write dn.l
 
     elif inst & 0x1F0 == 0x100: # abcd
-        1/0 # I don't like BCD instructions
+        raise IllegalInstruction('abcd')
     elif inst & 0x1F8 in (0x140, 0x148, 0x188): # exg
         rx = (inst >> 9) & 7
         ry = inst & 7
@@ -598,7 +610,8 @@ def lineC(inst):
         write(4, ry, x)
 
     else: # and
-        size = (1, 2, 4, None)[(inst >> 6) & 3] or 1/0
+        size = (1, 2, 4, None)[(inst >> 6) & 3]
+        if size is None: raise IllegalInstruction('and size=%11')
         dn = (inst >> 9) & 7; dest = address_by_mode(dn, size)
         src = address_by_mode(inst & 63, size)
 
@@ -695,7 +708,13 @@ def run_m68k_interpreter():
 
 #     import pdb; pdb.set_trace()
     while True: # need a way to bust out of this loop
-        inst = read(2, pc); pc += 2; instruction_lines[inst >> 12](inst)
+        try:
+            inst = read(2, pc)
+            pc += 2
+            instruction_lines[inst >> 12](inst)
+        except IllegalInstruction as e:
+            print(e, hex(inst), file=sys.stderr)
+            sys.exit(1)
 
 def roughly_where_we_are(pc):
     # This might be adapted to shell out to a disassembler?
