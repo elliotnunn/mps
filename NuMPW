@@ -1327,11 +1327,11 @@ os_traps[0x47] = settrapaddress_trap
 
 # Resource Manager Toolbox traps
 
-def getresource(rtype, rid, one=False): # always load the resource
+def getresource(type, id='', name=-1, topmap=False): # defaults are chosen to NEVER match
     for file in reversed(resource_chain):
         for resource in file:
             thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
-            if thistype == rtype and thisid == rid:
+            if thistype == type and (thisid == id or thisname == name):
                 if thishandle:
                     return thishandle[0]
                 else:
@@ -1340,52 +1340,35 @@ def getresource(rtype, rid, one=False): # always load the resource
                     resource.append(handle)
                     return handle
 
-        if one: break
+        if topmap: break
 
     return 0
-
-def getresource_trap():
-    rid = sign_extend(pop(2), 2)
-    rtype = pop(4).to_bytes(4, 'big')
-    push(4, getresource(rtype, rid, one=False))
-toolbox_traps[0x1a0] = getresource_trap
 
 def get1resource_trap():
-    rid = sign_extend(pop(2), 2)
-    rtype = pop(4).to_bytes(4, 'big')
-    return getresource(rtype, rid, one=True)
+    id = sign_extend(pop(2), 2)
+    type = pop(4).to_bytes(4, 'big')
+    push(4, getresource(type=type, id=id, topmap=True))
 toolbox_traps[0x1f] = get1resource_trap
-
-def getnamedresource(rtype, rname, one=False): # always load the resource
-    for file in reversed(resource_chain):
-        for resource in file:
-            thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
-            if thistype == rtype and thisname == rname:
-                if thishandle:
-                    return thishandle[0]
-                else:
-                    handle = newhandle(len(thisdata))
-                    mem[handle+4:handle+4+len(thisdata)] = thisdata
-                    resource.append(handle)
-                    return handle
-
-        if one: break
-
-    return 0
-
-def getnamedresource_trap():
-    name = pop(4)
-    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
-    rtype = pop(4).to_bytes(4, 'big')
-    push(4, getnamedresource(rtype, name, one=False))
-toolbox_traps[0x1a1] = getnamedresource_trap
 
 def get1namedresource_trap():
     name = pop(4)
     name = mem[name+1:name+1+mem[name]].decode('mac_roman')
-    rtype = pop(4).to_bytes(4, 'big')
-    push(4, getnamedresource(rtype, name, one=True))
+    type = pop(4).to_bytes(4, 'big')
+    push(4, getresource(type=type, name=name, topmap=True))
 toolbox_traps[0x20] = get1namedresource_trap
+
+def getresource_trap():
+    id = sign_extend(pop(2), 2)
+    type = pop(4).to_bytes(4, 'big')
+    push(4, getresource(type=type, id=id, topmap=False))
+toolbox_traps[0x1a0] = getresource_trap
+
+def getnamedresource_trap():
+    name = pop(4)
+    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
+    type = pop(4).to_bytes(4, 'big')
+    push(4, getresource(type=type, name=name, topmap=False))
+toolbox_traps[0x1a1] = getnamedresource_trap
 
 def setresload_trap():
     pop(2) # trash the parameter
@@ -1878,7 +1861,7 @@ for i in range(0, jtsize, 8):
         raise NotImplementedError('far model not written yet')
 
     else:
-        segmenthandle = getresource(b'CODE', words[2])
+        segmenthandle = getresource(type=b'CODE', id=words[2])
         target = segmenthandle + 4 + 4 + words[0]
 
     write(6, a5world + jtoffset + i + 2, (0x4EF9 << 32) | target) # jmp there
