@@ -1550,11 +1550,32 @@ def lineF(inst):
 # Initialise an MPW environment
 ########################################################################
 
+# Memory map, mixes in parts belonging to emulator, toolbox and mpw
+#                 00000
+#             lowmem globals
+#             .............
+#                 stack
+#                 40000
+#               registers
+#             .............
+#         below-a5 tool globals
+#                 80000
+#         above-a5 tool globals
+#             .............
+#                 a0000
+#  'bigblock' of MPW globals <- $316.l
+#             .............
+#                 c0000
+#           huge f-trap table
+#             .............
+#                100000
+#                 heap
+
 import struct
 
 # A memory, and some memory-mapped registers
 mem = bytearray(0x100000) # plenty of room for globals
-regs = 0x80000
+regs = 0x40000
 
 def mpw_ftrap(inst): # special breakout instructions, not for general use
     if inst == 0xf100:
@@ -1709,7 +1730,7 @@ def write(numbytes, addr, val):
     mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
 #     print('write', numbytes, hex(addr), val.to_bytes(numbytes, 'big').hex())
 
-write(4, regs + 8 * 4 + 7 * 4, 0x80000) # stack growing down from registers
+write(4, regs + 8 * 4 + 7 * 4, 0x40000) # stack growing down from registers
 
 
 # Big table of every permutation of f-trap at c0000
@@ -1809,7 +1830,7 @@ for i, e in enumerate(env):
     bigblock.append('environment %d' % i)
     bigblock.append(e)
 
-putwhere = 0x90000
+putwhere = 0xa0000
 ctr = putwhere
 labels = {}
 relocations = []
@@ -1842,7 +1863,7 @@ mem[0x910:0x910+5] = b'\x04Sort'
 
 # Make an a5 world
 abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
-a5world = newptr(belowa5 + abovea5) + belowa5
+a5world = 0x80000
 write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
 pc = a5world + jtoffset + 2
 
