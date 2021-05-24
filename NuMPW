@@ -1064,7 +1064,25 @@ os_traps = {}
 toolbox_traps = {}
 ftrap_table_addr = 0xc0000 # every permutation of f-trap
 
+# Memory Manager OS traps
+
 heap_blocks = {} # addr: size
+master_ptrs = {}
+
+# os_traps[0x19] = initzone_trap
+
+def zone_nop_trap(trap, d0, a0, a1):
+    return 0, 0
+
+os_traps[0x1a] = zone_nop_trap # _GetZone
+os_traps[0x1b] = zone_nop_trap # _SetZone
+
+def freemem_trap(trap, d0, a0, a1):
+    return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
+
+os_traps[0x1c] = freemem_trap
+os_traps[0x1d] = freemem_trap
+
 def newptr(size): # fixed 16b header before all "heap" blocks
     while len(mem) % 16: mem.append(0)
     mem.extend(bytes(16 + size))
@@ -1076,15 +1094,206 @@ def newptr_trap(trap, d0, a0, a1):
     return 0, newptr(d0) # a0,d0
 os_traps[0x1e] = newptr_trap
 
+def disposptr(ptr):
+    try:
+        del heap_blocks[ptr]
+    except:
+        pass
+
+def disposptr_trap(trap, d0, a0, a1):
+    disposptr(a0)
+    return 0, 0
+os_traps[0x1f] = disposptr_trap
+
+def setptrsize(ptr, size):
+    if heap_blocks[ptr] >= size:
+        heap_blocks[ptr] = size
+        return True
+    else:
+        return False # failure
+
+def setptrsize_trap(trap, d0, a0, a1):
+    if setptrsize(a0, d0):
+        return 0, 0 # noErr
+    else:
+        return -108, 0 # memFullErr
+os_traps[0x20] = setptrsize_trap
+
+def getptrsize(ptr):
+    return heap_blocks[ptr]
+
+def getptrsize_trap(trap, d0, a0, a1):
+    return getptrsize(ptr), 0
+os_traps[0x21] = getptrsize_trap
+
 def newhandle(size):
     ptr = newptr(size)
     write(4, ptr - 4, ptr)
     write(4, ptr - 8, 0xFA7B175) # FatBits
+    master_ptrs[ptr] = ptr - 4
     return ptr - 4 # a handle points to its owning pointer
 
 def newhandle_trap(trap, d0, a0, a1):
     return 0, newhandle(d0)
 os_traps[0x22] = newhandle_trap
+
+def disposhandle(handle):
+    try:
+        ptr = read(4, handle)
+        if not ptr: return
+        disposptr(ptr)
+    except:
+        pass
+
+def disposhandle_trap(trap, d0, a0, a1):
+    return 0, disposhandle(a0)
+os_traps[0x23] = disposhandle_trap
+
+def sethandlesize(handle, size):
+    ptr = read(4, handle)
+    oldsize = heap_blocks[ptr] if ptr else 0
+    if oldsize >= size:
+        # can shrink the handle
+        heap_blocks[ptr] = size
+    else:
+        ptr2 = newptr(size)
+        del master_ptrs[ptr]
+        master_ptrs[ptr2] = handle
+        mem[ptr2:ptr2+oldsize] = mem[ptr:ptr+oldsize]
+        disposptr(ptr)
+        write(4, handle, ptr2)
+
+def sethandlesize_trap(trap, d0, a0, a1):
+    sethandlesize(a0, d0)
+    return 0, 0
+os_traps[0x24] = sethandlesize_trap
+
+def gethandlesize(handle):
+    ptr = read(4, handle)
+    return heap_blocks[ptr] if ptr else 0
+
+def gethandlesize_trap(trap, d0, a0, a1):
+    return gethandlesize(a0), 0
+os_traps[0x25] = gethandlesize_trap
+
+def handlezone_trap(trap, d0, a0, a1):
+    return 0, 0
+os_traps[0x26] = handlezone_trap
+
+def reallochandle(handle, size):
+    emptyhandle(handle)
+    sethandlesize(handle, size)
+
+def reallochandle_trap(trap, d0, a0, a1):
+    reallochandle(a0, d0)
+    return 0, 0
+os_traps[0x27] = reallochandle_trap
+
+def recoverhandle(ptr):
+    return master_ptrs[ptr]
+
+def recoverhandle_trap(trap, d0, a0, a1):
+    return 0, recoverhandle(a0)
+os_traps[0x28] = recoverhandle_trap
+
+def hlock_nop_trap(trap, d0, a0, a1):
+    return d0, a0
+os_traps[0x29] = hlock_nop_trap # _HLock
+os_traps[0x2a] = hlock_nop_trap # _HUnlock
+
+def emptyhandle(handle):
+    ptr = read(4, handle)
+    del master_ptrs[ptr]
+    disposptr(ptr)
+    write(4, handle, 0)
+
+def emptyhandle_trap(trap, d0, a0, a1):
+    emptyhandle(a0)
+    return 0, 0
+os_traps[0x2b] = emptyhandle_trap
+
+def initapplzone_trap(trap, d0, a0, a1):
+    return 0, 0
+os_traps[0x2c] = initapplzone_trap
+
+def setappllimit_trap(trap, d0, a0, a1):
+    return 0, 0
+os_traps[0x2d] = setappllimit_trap
+
+def blockmove(src, dest, size):
+    shouldbe = len(mem)
+    mem[dest:dest+size] = mem[src:src+size]
+    if len(mem) != shouldbe: raise ValueError('hopelessly corrupted memory')
+
+def blockmove_trap(trap, d0, a0, a1):
+    blockmove(a0, a1, d0)
+    return 0, 0
+os_traps[0x2e] = blockmove_trap
+
+# Trap Manager OS traps
+
+def gettrapaddress(n, kind='auto'):
+    if kind == 'auto':
+        trapnum = n & 0x1f
+        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
+            kind = 'os'
+        else:
+            kind = 'toolbox'
+
+    if kind == 'os': n &= 0xff # 256 OS traps
+    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
+
+    if kind == 'os':
+        return os_trap_table[n]
+    elif kind == 'toolbox':
+        return toolbox_trap_table[n]
+
+def gettrapaddress_trap(trap, d0, a0, a1):
+    if trap & 0x200:
+        kind = 'auto'
+    else:
+        if trap & 0x400:
+            kind = 'toolbox'
+        else:
+            kind = 'os'
+
+    # d0, a0
+    return 0, gettrapaddress(d0 & 0xffff, kind)
+
+os_traps[0x46] = gettrapaddress_trap
+
+def settrapaddress(n, addr, kind='auto'):
+    if kind == 'auto':
+        trapnum = n & 0x1f
+        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
+            kind = 'os'
+        else:
+            kind = 'toolbox'
+
+    if kind == 'os': n &= 0xff # 256 OS traps
+    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
+
+    if kind == 'os':
+        os_trap_table[n] = addr
+    elif kind == 'toolbox':
+        toolbox_trap_table[n] = addr
+
+def settrapaddress_trap(trap, d0, a0, a1):
+    if trap & 0x200:
+        kind = 'auto'
+    else:
+        if trap & 0x400:
+            kind = 'toolbox'
+        else:
+            kind = 'os'
+
+    settrapaddress(d0 & 0xffff, a0, kind)
+
+    return 0, 0 # d0, a0
+
+os_traps[0x47] = settrapaddress_trap
+
+# Resource Manager Toolbox traps
 
 def getresource(rtype, rid, one=False): # always load the resource
     for file in reversed(resource_chain):
@@ -1150,6 +1359,8 @@ def setresload_trap():
     pop(2) # trash the parameter
 toolbox_traps[0x19b] = setresload_trap
 
+# Misc traps
+
 def tickcount_trap():
     pop(4); push(4, 0) # always zero
 toolbox_traps[0x175] = tickcount_trap
@@ -1170,67 +1381,6 @@ def debugger_trap():
     import pdb; pdb.set_trace()
 
 toolbox_traps[0x1ff] = debugger_trap
-
-def gettrapaddress(n, kind='auto'):
-    if kind == 'auto':
-        trapnum = n & 0x1f
-        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
-            kind = 'os'
-        else:
-            kind = 'toolbox'
-
-    if kind == 'os': n &= 0xff # 256 OS traps
-    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
-
-    if kind == 'os':
-        return os_trap_table[n]
-    elif kind == 'toolbox':
-        return toolbox_trap_table[n]
-
-def gettrapaddress_trap(trap, d0, a0, a1):
-    if trap & 0x200:
-        kind = 'auto'
-    else:
-        if trap & 0x400:
-            kind = 'toolbox'
-        else:
-            kind = 'os'
-
-    # d0, a0
-    return 0, gettrapaddress(d0 & 0xffff, kind)
-
-os_traps[0x46] = gettrapaddress_trap
-
-def settrapaddress(n, addr, kind='auto'):
-    if kind == 'auto':
-        trapnum = n & 0x1f
-        if trapnum < 0x4f or trapnum == 0x54 or trapnum == 0x57:
-            kind = 'os'
-        else:
-            kind = 'toolbox'
-
-    if kind == 'os': n &= 0xff # 256 OS traps
-    elif kind == 'toolbox': n &= 0x3ff # 1024 Toolbox traps
-
-    if kind == 'os':
-        os_trap_table[n] = addr
-    elif kind == 'toolbox':
-        toolbox_trap_table[n] = addr
-
-def settrapaddress_trap(trap, d0, a0, a1):
-    if trap & 0x200:
-        kind = 'auto'
-    else:
-        if trap & 0x400:
-            kind = 'toolbox'
-        else:
-            kind = 'os'
-
-    settrapaddress(d0 & 0xffff, a0, kind)
-
-    return 0, 0 # d0, a0
-
-os_traps[0x47] = settrapaddress_trap
 
 def syserror(n):
     sys.exit('System error %d' % n)
