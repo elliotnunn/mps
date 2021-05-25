@@ -1,7 +1,28 @@
 #!/usr/bin/env python3
 
 bodge_code = '''
+    movem.l d0-d7/a0-a4,-(sp)
+    link    a6,#0
+
+    lea     origIoctlAddress,a1
+
+    move.l  $316,a0         ; a0 points to MPGM table
+    move.l  4(a0),a0        ; a0 points to SH table
+    move.l  $20(a0),a0      ; a0 points to FSYS table
+    move.l  $14(a0),(a1)    ; preserve ioctl procedure
+    lea     myIoctl,a1
+    move.l  a1,$14(a0)      ; point to new ioctl procedure
+
+    unlk    a6
+    movem.l (sp)+,d0-d7/a0-a4
     bra     realRoutine
+
+myIoctl
+    move.l  origIoctlAddress,-(sp)
+    rts
+
+origIoctlAddress
+    dc.l    0
 '''
 
 import argparse
