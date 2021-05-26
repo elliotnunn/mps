@@ -65,11 +65,11 @@ bodge_code = r'''
 
                             ; create our fake routine...
     move.w  #$2f3c,(a4)+    ; move.l #imm,-(sp)
+    move.l  d5,(a4)+            (#imm = mpw's routine address)
+    move.w  #$2f3c,(a4)+    ; move.l #imm,-(sp)
     move.l  d7,(a4)+        ;   (#imm = FSYS or similar)
     move.w  #$2f3c,(a4)+    ; move.l #imm,-(sp)
     move.l  d6,(a4)+        ;   (#imm = what kind of routine)
-    move.w  #$2f3c,(a4)+    ; move.l #imm,-(sp)
-    move.l  d5,(a4)+            (#imm = mpw's routine address)
     move.w  #$4ef9,(a4)+    ; jmp abs.l
     pea     preMpwOperation
     move.l  (sp)+,(a4)+     ;   (abs.l = our routine)
@@ -85,31 +85,63 @@ bodge_code = r'''
 ; This is our single interceptor routine
 
 ; On entry:
-;  0(sp).l  mpw's real routine address
-;  4(sp).l  4=access/3=close/2=read/1=write/0=ioctl
-;  8(sp).l  FSYS or similar
+;  0(sp).l  4=access/3=close/2=read/1=write/0=ioctl
+;  4(sp).l  FSYS or similar
+;  8(sp).l  mpw's real routine address
 ; 12(sp).l  return address in program, etc
 
 ; We can safely trash d0-d2/a0-a1, I think
 
+realReturnAddress   dc.l    0
+
 preMpwOperation
+    lea     realReturnAddress,a0    ; preserve return address, "just in case"
+    move.l  8(sp),a0
+
+    movem.l (sp)+,d0/d1/a0/a1   ; d0 = 4=access/3=close/2=read/1=write/0=ioctl
+                                ; d1 = FSYS or similar
+                                ; a0 = mpw's real routine address
+                                ; a1 = return address in program
+                                ; sp points to arguments
+
+    tst.l   d0
+    bne     not_ioctl
+; IOCTL
+
+    move.l  a1,-(sp)    ; return to program
+    jmp     (a0)        ; jump to mpw
+
+not_ioctl
+    subq    #1,d0
+    bne     not_write
+; WRITE
+
+    move.l  a1,-(sp)    ; return to program
+    jmp     (a0)        ; jump to mpw
+
+not_write
+    subq    #1,d0
+    bne     not_read
+; READ
+
+    move.l  a1,-(sp)    ; return to program
+    jmp     (a0)        ; jump to mpw
+
+not_read
+    subq    #1,d0
+    bne     not_close
+; CLOSE
+
+    move.l  a1,-(sp)    ; return to program
+    jmp     (a0)        ; jump to mpw
+
+not_close
+; ACCESS
+
+    move.l  a1,-(sp)    ; return to program
+    jmp     (a0)        ; jump to mpw
 
 
-
-
-    PushStrAndLength 'Call to: '
-    bsr     safelyWriteToStderr
-    pea     8(sp)
-    move.l  #4,-(sp)
-    bsr     tohex
-    bsr     safelyWriteToStderr
-    PushStrNewlineAndLength ''
-    bsr     safelyWriteToStderr
-
-
-    move.l  (sp),8(sp)
-    addq    #8,sp
-    rts ; should act like nothing happened!
 
 
 ; Hopefully safe function to write debug output, while bypassing our capture mechanism
@@ -139,8 +171,8 @@ safelyWriteToStderr
 
 ; Function to convert n bytes to hex, same input/output convention as safelyWriteToStderr
 ; But it uses a fixed hex buffer, so is not reentrant, and is limited in size
-hexTemplate         dc.b    '0123456789ABCDEF'
 fixedSizeHexBuffer  dcb.b   256
+hexTemplate         dc.b    '0123456789ABCDEF'
 tohex
     link    a6,#-$40
     movem.l d0-d7/a0-a4,-$40(a6)
