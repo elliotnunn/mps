@@ -743,7 +743,7 @@ def roughly_where_we_are(pc):
 
 #     print(is_after_NV, is_before_rts)
 
-    if is_after_NV and is_before_rts and mem[j+2] & 0x80:
+    if is_after_NV and is_before_rts and j+2 < len(mem) and mem[j+2] & 0x80:
         funcname = mem[j+3:j+3+(mem[j+2] & 0x7f)].decode('mac_roman')
         funcname += '+' + hex(pc-i)
     else:
@@ -1566,6 +1566,43 @@ def getpicture_trap():
     push(4, getresource(b'PICT', id))
 toolbox_traps[0x1bc] = getpicture_trap
 
+# Segment Loader Toolbox traps
+
+def loadseg_trap():
+    global pc
+
+    seg_num = pop(2)
+
+    jumptable = read(4, regs + 32 + 20) + 32 # $20(a5)
+
+    seg_handle = getresource(b'CODE', seg_num)
+    seg_ptr = read(4, seg_handle)
+
+    first = read(2, seg_ptr) # index of first entry within jump table
+    count = read(2, seg_ptr + 2) # number of jump table entries
+
+    for i in range(count):
+        jt_entry = jumptable + first + 8 * i
+        code_offset = read(2, jt_entry)
+
+#         magic = read(2, jt_entry + 2) # move.w #imm,-(sp) instruction
+#         if magic != 0x3f3c: sys.exit('corrupt jump table %04x' % magic)
+#         magic = read(2, jt_entry + 4) # move.w #imm,-(sp) instruction
+#         if magic != seg_num: sys.exit('corrupt jump table sn %04x' % seg_num)
+
+        write(2, jt_entry, seg_num)
+        write(2, jt_entry + 2, 0x4ef9) # jmp
+        write(4, jt_entry + 4, seg_ptr + 4 + code_offset)
+
+    pc -= 6 # re-execute the jump table instruction
+
+toolbox_traps[0x1f0] = loadseg_trap
+
+def unloadseg_trap():
+    pop(4) # ignore
+
+toolbox_traps[0x1f1] = unloadseg_trap
+
 # Package Toolbox traps
 
 def pack7_trap():
@@ -1614,7 +1651,7 @@ def debugger_trap():
 toolbox_traps[0x1ff] = debugger_trap
 
 def unimplemented_trap(*args):
-    sys.exit('Unimplemented trap: %04X' % read(2, pc - 2))
+    raise NotImplementedError('Unimplemented trap: %04X' % read(2, pc - 2))
 
 toolbox_traps[0x9f] = unimplemented_trap
 
@@ -2132,22 +2169,7 @@ mem[0x910:0x910+5] = b'\x04Sort'
 abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
 a5world = 0x80000
 write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
+mem[a5world+jtoffset:a5world+jtoffset+jtsize] = code0[16:16+jtsize]
 pc = a5world + jtoffset + 2
-
-is_far_model = False
-for i in range(0, jtsize, 8):
-    words = struct.unpack_from('>HHHH', code0, 16 + i)
-    if words[1] == 0xFFFF:
-        is_far_model = True
-        continue
-
-    if is_far_model:
-        raise NotImplementedError('far model not written yet')
-
-    else:
-        segmenthandle = getresource(type=b'CODE', id=words[2])
-        target = segmenthandle + 4 + 4 + words[0]
-
-    write(6, a5world + jtoffset + i + 2, (0x4EF9 << 32) | target) # jmp there
 
 run_m68k_interpreter()
