@@ -713,6 +713,8 @@ def run_m68k_interpreter():
     while True: # need a way to bust out of this loop
         try:
             inst = read(2, pc)
+            print_state()
+            print(roughly_where_we_are(pc))
             pc += 2
             instruction_lines[inst >> 12](inst)
         except IllegalInstruction as e:
@@ -747,7 +749,18 @@ def roughly_where_we_are(pc):
     else:
         funcname = '<unknownfunc>'
 
-    return funcname + ' ' + (mem[pc:pc+2].hex())
+    # Find out which segment this is:
+    found = '<unknownseg>'
+    for segment in resource_chain[1]:
+        if len(segment) == 6:
+            ptr = read(4, segment[5])
+            endptr = ptr + len(segment[4])
+            if ptr <= pc < endptr:
+                found = segment[2].decode('mac_roman') if segment[2] else 'CODE' + str(segment[1])
+                found += '+' + hex(pc - ptr)
+                break
+
+    return funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
 
     # search backwards and confirm we are after an 'NV'
 
@@ -1008,7 +1021,9 @@ def text_to_mac(x):
         return x
 
 # MPW open() and OS PBOpen() call me
-def macopen(fname, readable=False, writable=False, exclusive=False, create=False, append=False, truncate=False, rsrcfork=False):
+def macopen(macname, readable=False, writable=False, exclusive=False, create=False, append=False, truncate=False, rsrcfork=False):
+    fname = macname
+
     # Hack to allow resource forks to be copied wholesale
     if rsrcfork: fname = path.readlink(fname) + '.rdump'
 
@@ -1032,6 +1047,7 @@ def macopen(fname, readable=False, writable=False, exclusive=False, create=False
 
     refnums.append(f)
 
+    f.__mpw_name = macname
     f.__mpw_mark = 0
     f.__mpw_append = append
 
@@ -1095,6 +1111,41 @@ def macread(refnum, howmuch):
 os_traps = {}
 toolbox_traps = {}
 ftrap_table_addr = 0xc0000 # every permutation of f-trap
+
+# File Manager OS traps
+
+def completion(addr):
+    push(4, pc) # return to user code
+    push(4, read(4, regs + 32)) # save a0
+    push(4, read(4, regs)) # save d0
+    push(4, ftrap_table_addr + 0x302 * 2) # completion return assist code
+    pc = ioCompletion
+
+def open_trap(trap, d0, a0, a1):
+    ioCompletion = read(4, a0 + 12)
+    ioNamePtr = read(4, a0 + 18)
+    ioVRefNum = read(2, a0 + 22)
+    ioPermssn = read(1, a0 + 27)
+
+    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+
+    try:
+        if name.startswith('.'): raise FileNotFoundError # driver open
+        refnum = macopen(name,
+            readable=ioPermssn in (0, 1, 3, 4),
+            writable=ioPermssn in (0, 2, 3, 4),
+            )
+    except FileNotFoundError:
+        retval = -37, a0 # bdNamErr
+    else:
+        retval = 0, a0
+
+    if ioCompletion and trap & 0x400: # async call with completion routine
+        completion(ioCompletion)
+
+    return retval
+
+os_traps[0] = open_trap
 
 # Memory Manager OS traps
 
@@ -1178,7 +1229,8 @@ def disposhandle(handle):
         pass
 
 def disposhandle_trap(trap, d0, a0, a1):
-    return 0, disposhandle(a0)
+    disposhandle(a0)
+    return 0, 0
 os_traps[0x23] = disposhandle_trap
 
 def sethandlesize(handle, size):
@@ -1262,6 +1314,16 @@ def blockmove_trap(trap, d0, a0, a1):
     return 0, 0
 os_traps[0x2e] = blockmove_trap
 
+def stripaddress_trap(trap, d0, a0, a1):
+    if len(mem) <= 0x1000000:
+        d0 &= 0xffffff
+    return d0, 0
+os_traps[0x55] = stripaddress_trap
+
+def movehhi_trap(trap, d0, a0, a1):
+    return 0, 0
+os_traps[0x64] = movehhi_trap
+
 # Trap Manager OS traps
 
 # For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
@@ -1316,12 +1378,14 @@ def get1namedresource_trap():
     name = pop(4)
     name = mem[name+1:name+1+mem[name]].decode('mac_roman')
     type = pop(4).to_bytes(4, 'big')
+    pop(4)
     push(4, getresource(type=type, name=name, topmap=True))
 toolbox_traps[0x20] = get1namedresource_trap
 
 def getresource_trap():
     id = sign_extend(pop(2), 2)
     type = pop(4).to_bytes(4, 'big')
+    pop(4)
     push(4, getresource(type=type, id=id, topmap=False))
 toolbox_traps[0x1a0] = getresource_trap
 
@@ -1329,12 +1393,67 @@ def getnamedresource_trap():
     name = pop(4)
     name = mem[name+1:name+1+mem[name]].decode('mac_roman')
     type = pop(4).to_bytes(4, 'big')
+    pop(4)
     push(4, getresource(type=type, name=name, topmap=False))
 toolbox_traps[0x1a1] = getnamedresource_trap
 
 def setresload_trap():
     pop(2) # trash the parameter
 toolbox_traps[0x19b] = setresload_trap
+
+def getpattern_trap():
+    id = pop(2)
+    pop(4)
+    push(4, getresource(b'PAT ', id))
+toolbox_traps[0x1b8] = getpattern_trap
+
+def getcursor_trap():
+    id = pop(2)
+    pop(4)
+    push(4, getresource(b'CURS', id))
+toolbox_traps[0x1b9] = getcursor_trap
+
+def getstring_trap():
+    id = pop(2)
+    pop(4)
+    push(4, getresource(b'STR ', id))
+toolbox_traps[0x1ba] = getstring_trap
+
+def geticon_trap():
+    id = pop(2)
+    pop(4)
+    push(4, getresource(b'ICON', id))
+toolbox_traps[0x1bb] = geticon_trap
+
+def getpicture_trap():
+    id = pop(2)
+    pop(4)
+    push(4, getresource(b'PICT', id))
+toolbox_traps[0x1bc] = getpicture_trap
+
+# Package Toolbox traps
+
+def pack7_trap():
+    a0 = read(4, regs + 32)
+    if pop(2): # stringToNum
+        s = mem[a0+1:a0+1+mem[a0]]
+        sign = -1
+        if s.startswith(b'-'):
+            sign = -1
+            s = s[1:]
+        elif s.startswith(b'+'):
+            s = s[1:]
+        n = 0
+        for chr in s:
+            n *= 10
+            n += chr % 16
+        write(4, regs, sign * n)
+    else: # numToString
+        s = str(read(4, regs, signed=True))
+        s = s.encode('ascii')
+        s = bytes([len(s)]) + s
+        mem[a0:a0+len(s)] = s
+toolbox_traps[0x1ee] = pack7_trap
 
 # Misc traps
 
@@ -1488,6 +1607,11 @@ def lineF(inst):
         set_nz(read(2, regs + 0 * 4), 2) # tst.w d0
         pc = pop(4) # Return to the actual caller
 
+    elif inst == 0xf302: # Completion routine return assistance code
+        write(4, regs,      pop(4)) # pop d0 (result code)
+        write(4, regs + 32, pop(4)) # pop a0 (iopb pointer)
+        pc = pop(4)
+
     else: # Special MPW call
         mpw_ftrap(inst)
 
@@ -1536,20 +1660,29 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
 
         if arg2 == 0x6400: # open
             # No error handling, yet
+            name = mem[arg1:mem.index(b'\0', arg1)].decode('mac_roman')
             flags = read(2, arg3)
-            name = mem[arg1+1:arg1+1+mem[arg1]]
-            fd = macopen(fname,
-                readable=flags & 3 in (0, 2),
-                writable=flags & 3 in (1, 2),
-                append=flags & 8,        # O_APPEND
-                rsrcfork=flags & 0x10,   # O_RSRC
-                create=flags & 0x100,    # O_CREAT
-                truncate=flags & 0x200,  # O_TRUNC
-                exclusive=flags & 0x400, # O_EXCL
-                # note that we ignore O_BINARY
-                )
-            write(4, regs, 0) # d0.l = 0
-            write(2, arg3 + 2, 0) # error code = 0
+            try:
+                fd = macopen(name,
+                    readable=flags & 3 in (0, 2),
+                    writable=flags & 3 in (1, 2),
+                    append=flags & 8,        # O_APPEND
+                    rsrcfork=flags & 0x10,   # O_RSRC
+                    create=flags & 0x100,    # O_CREAT
+                    truncate=flags & 0x200,  # O_TRUNC
+                    exclusive=flags & 0x400, # O_EXCL
+                    # note that we ignore O_BINARY
+                    )
+            except FileNotFoundError:
+                fd = -1
+                err = 2, 0 # ENOENT
+            except FileExistsError:
+                fd = -1
+                err = 17,0 # EEXIST
+            else:
+                err = 0, 0
+            write(4, regs, err[0]) # d0.l
+            write(2, arg3 + 2, err[1]) # error code
             write(4, arg3 + 8, fd) # cookie = index into our array
 
         elif arg2 == 0x6401: # delete
@@ -1579,7 +1712,7 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
         fd = read(4, fptr + 8) # cookie
         cnt = read(4, fptr + 12)
         buf = read(4, fptr + 16)
-        print('read', 'fd', hex(fd), 'cnt', cnt)
+#         print('read', 'fd', hex(fd), 'cnt', cnt)
         didread = macread(fd, cnt)
         write(4, fptr + 12, cnt - len(didread))
         mem[buf:buf+len(didread)] = didread
@@ -1594,6 +1727,7 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
         cnt = read(4, fptr + 12)
         buf = read(4, fptr + 16)
         macwrite(fd, mem[buf:buf+cnt])
+        write(4, fptr + 12, 0) # 0 bytes left to write
         write(2, fptr + 2, 0) # file.err=0
         write(4, regs, 0) # d0=0
 
@@ -1604,65 +1738,72 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
         request = read(4, sp + 8)
         argp = read(4, sp + 12)
 
-        print('ioctl', hex(fptr), hex(request), hex(argp))
-        print(' fptr', mem[fptr:fptr+28].hex())
-        print(' argp', mem[argp:argp+16].hex())
+#         print('ioctl', hex(fptr), hex(request), hex(argp))
+#         print(' fptr', mem[fptr:fptr+28].hex())
+#         print(' argp', mem[argp:argp+16].hex())
 
         fd = read(4, fptr + 8) # cookie
         f = refnums[fd]
 
-        def err(n):
-            write(2, fptr + 2, n) # set in structure
-            write(4, regs, n) # set in d0
-
-        if request == 0x6600:
-            # seek
-            if fd <= 2: # standard stream
-                err(-1)
-                return
-
-            offset = read(4, argp + 4, signed=True)
+        if request == 0x6600: # FIOLSEEK
             whence = read(4, argp)
-            if whence == 2: # SEEK_END
-                f.__mpw_mark = len(f.__mpw_contents)
-            elif whence == 0: # SEEK_SET
-                f.__mpw_mark = 0
-            f.__mpw_mark += offset
+            offset = read(4, argp + 4, signed=True)
 
-            if f.__mpw_mark > len(f.__mpw_contents):
-                f.__mpw_mark = len(f.__mpw_contents)
-                err(-1)
+            oldmark = f.__mpw_mark
 
-            err(0)
+            if whence == 0: # SEEK_SET
+                f.__mpw_mark = offset
+            elif whence == 1: # SEEK_CUR
+                f.__mpw_mark += offset
+            elif whence == 2: # SEEK_END
+                f.__mpw_mark = len(f.__mpw_contents) + offset
 
-        elif request == 0x6601:
-            # duplicate fd, required for freopen
+            write(4, regs, 0) # d0 = 0
+            write(2, fptr + 2, 0) # noErr
+
+            # It is legal to seek on a stream in order to ftell() it
+            if f.name.startswith('/dev/'):
+                write(2, fptr + 2, -50) # paramErr... not sure why?
+                if f.__mpw_mark != oldmark:
+                    f.__mpw_mark = oldmark
+                    write(4, regs, 22) # d0 = EINVAL
+
+            write(4, argp + 2, f.__mpw_mark)
+
+        elif request == 0x6601: # FIODUPFD
+            # confirmed that this prevents closure, but does nothing else!
             refnums.append(f)
-            err(0)
-        elif request == 0x6602:
-            # is interactive?
-            if fd <= 2:
-                err(0)
-            else:
-                err(23) # EINVAL
-        elif request == 0x6603:
-            # ideal buffer size
-            err(23) # use default 1k, that's fine
-        elif request == 0x6604:
-            # fname
-            err(0) # todo, implement
-        elif request == 0x6605:
-            # refnum
+            write(4, regs, 0) # d0 = 0
+            write(2, fptr + 2, 0) # noErr
+
+        elif request == 0x6602: # FIOINTERACTIVE
+            write(4, regs, 22) # d0 = EINVAL
+            write(2, fptr + 2, -50) # paramErr
+
+        elif request == 0x6603: # FIOBUFSIZE
+            write(4, regs, 22) # d0 = EINVAL
+            write(2, fptr + 2, 0) # noErr
+
+        elif request == 0x6604: # FIOFNAME
+            name = f.__mpw_name[:255].encode('mac_roman') + b'\0'
+            mem[argp:argp+len(name)] = name
+            write(4, regs, 0) # d0 = 0
+            write(2, fptr + 2, 0) # noErr
+
+        elif request == 0x6605: # FIOREFNUM
             write(4, argp, fd)
-            err(0)
-        elif request == 0x6606:
-            # set eof
+            write(4, regs, 0) # d0 = 0
+            write(2, fptr + 2, 0) # noErr
+
+        elif request == 0x6606: # FIOSETEOF
             del f.__mpw_contents[argp:]
             f.__mpw_contents.extend(bytes(argp - len(f.__mpw_contents)))
+            write(4, regs, 0) # d0 = 0
+            write(2, fptr + 2, 0) # noErr
+
         else:
-            raise NotImplementedError('ioctl 0x%x' % request)
-
-
+            write(4, regs, 25) # d0 = ENOTTY
+            write(2, fptr + 2, -50) # paramErr
 
     else:
         raise ValueError('%04X not implemented' % inst)
@@ -1795,7 +1936,12 @@ for address, targetlabel in relocations:
 struct.pack_into('>L', mem, 0x316, putwhere)
 push(4, labels['quit instruction'])
 
-resource_chain = [[], readrez(sys.argv[1] + '.rdump')] # system and app
+resource_chain = [ # system and app
+    [
+        [b'STR ', -16096, None, 0x40, b'\x06drongo'],
+    ],
+    readrez(sys.argv[1] + '.rdump')
+]
 code0 = next(r for r in resource_chain[1] if r[0] == b'CODE' and r[1] == 0)[-1]
 
 # Some misc globals
