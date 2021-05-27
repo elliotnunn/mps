@@ -92,54 +92,163 @@ bodge_code = r'''
 
 ; We can safely trash d0-d2/a0-a1, I think
 
-realReturnAddress   dc.l    0
+tableName           dc.l    0
+realRoutineAddress  dc.l    0
+returnAddress       dc.l    0
 
 preMpwOperation
-    lea     realReturnAddress,a0    ; preserve return address, "just in case"
-    move.l  8(sp),a0
+    movem.l (sp)+,d0 ; operation
+    lea     tableName,a0
+    move.l  (sp)+,(a0)
+    lea     realRoutineAddress,a0
+    move.l  (sp)+,(a0)
+    lea     returnAddress,a0
+    move.l  (sp)+,(a0)
 
-    movem.l (sp)+,d0/d1/a0/a1   ; d0 = 4=access/3=close/2=read/1=write/0=ioctl
-                                ; d1 = FSYS or similar
-                                ; a0 = mpw's real routine address
-                                ; a1 = return address in program
-                                ; sp points to arguments
 
     tst.l   d0
     bne     not_ioctl
 ; IOCTL
 
-    move.l  a1,-(sp)    ; return to program
-    jmp     (a0)        ; jump to mpw
+    PushStrAndLength '#### > '
+    bsr     safelyWriteToStderr
+
+    move.l  (sp),a1 ; file struct
+    pea     tableName
+    move.l  #4,-(sp)
+    bsr     safelyWriteToStderr
+
+    PushStrAndLength '.ioctl(fd='
+    bsr     safelyWriteToStderr
+
+    move.l  (sp),a1 ; file struct
+    pea     8(a1) ; push ptr to fd
+    move.l  #4,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+
+    PushStrAndLength ', request='
+    bsr     safelyWriteToStderr
+
+    pea     4(sp)
+    move.l  #4,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+
+    PushStrAndLength ', argp='
+    bsr     safelyWriteToStderr
+
+    pea     8(sp)
+    move.l  #4,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+
+    tst.l   8(sp)
+    beq.s   dontPrintArgp
+
+    PushStrAndLength ' pointing to '
+    bsr     safelyWriteToStderr
+
+    move.l  8(sp),-(sp)
+    move.l  #10,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+dontPrintArgp
+    PushStrNewlineAndLength ')'
+    bsr     safelyWriteToStderr
+
+;    move.l  returnAddress,-(sp)
+    pea     returnToMyIoctlCode
+    move.l  realRoutineAddress,-(sp)
+    rts
+returnToMyIoctlCode
+
+    PushStrAndLength '#### < d0='
+    bsr     safelyWriteToStderr
+
+    move.l  d0,-(sp)
+    pea     (sp)
+    move.l  #4,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+    addq    #4,sp ; pop d0 from the stack
+
+    PushStrAndLength ', err='
+    bsr     safelyWriteToStderr
+
+    move.l  (sp),a1 ; file struct
+    pea     2(a1) ; push ptr to error code
+    move.l  #2,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+
+    PushStrAndLength ', argp='
+    bsr     safelyWriteToStderr
+
+    pea     8(sp)
+    move.l  #4,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+
+    tst.l   8(sp)
+    beq.s   dontPrintArgp2
+
+    PushStrAndLength ' pointing to '
+    bsr     safelyWriteToStderr
+
+    move.l  8(sp),-(sp)
+    move.l  #10,-(sp)
+    bsr     tohex
+    bsr     safelyWriteToStderr
+dontPrintArgp2
+    PushStrNewlineAndLength ')'
+    bsr     safelyWriteToStderr
+
+    move.l  returnAddress,-(sp)
+    tst.l   d0
+    rts
+
+
+
+
+
+
+
+
 
 not_ioctl
     subq    #1,d0
     bne     not_write
 ; WRITE
 
-    move.l  a1,-(sp)    ; return to program
-    jmp     (a0)        ; jump to mpw
+    move.l  returnAddress,-(sp)
+    move.l  realRoutineAddress,-(sp)
+    rts
 
 not_write
     subq    #1,d0
     bne     not_read
 ; READ
 
-    move.l  a1,-(sp)    ; return to program
-    jmp     (a0)        ; jump to mpw
+    move.l  returnAddress,-(sp)
+    move.l  realRoutineAddress,-(sp)
+    rts
 
 not_read
     subq    #1,d0
     bne     not_close
 ; CLOSE
 
-    move.l  a1,-(sp)    ; return to program
-    jmp     (a0)        ; jump to mpw
+    move.l  returnAddress,-(sp)
+    move.l  realRoutineAddress,-(sp)
+    rts
 
 not_close
 ; ACCESS
 
-    move.l  a1,-(sp)    ; return to program
-    jmp     (a0)        ; jump to mpw
+    move.l  returnAddress,-(sp)
+    move.l  realRoutineAddress,-(sp)
+    rts
 
 
 
@@ -164,9 +273,9 @@ safelyWriteToStderr
     move.l  (sp)+,$c(a0)    ; restore previous count
     movem.l -$40(a6),d0-d7/a0-a4
     unlk    a6
-    move.l  (sp)+,a0
+    move.l  (sp),8(sp)
     addq    #8,sp
-    jmp     (a0)            ; return the ugly way
+    rts
 
 
 ; Function to convert n bytes to hex, same input/output convention as safelyWriteToStderr
@@ -177,13 +286,13 @@ tohex
     link    a6,#-$40
     movem.l d0-d7/a0-a4,-$40(a6)
 
-    move.l  8(sp),d0
-    move.l  12(sp),a0
+    move.l  8(a6),d0
+    move.l  12(a6),a0
     move.l  d0,d1
     asl.l   #1,d1
-    move.l  d1,8(sp)        ; double the number of bytes
+    move.l  d1,8(a6)        ; double the number of bytes
     lea     fixedSizeHexBuffer,a1
-    move.l  a1,12(sp)
+    move.l  a1,12(a6)
 
 .loop
     tst.l   d0
