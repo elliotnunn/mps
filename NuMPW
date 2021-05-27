@@ -760,7 +760,7 @@ def roughly_where_we_are(pc):
                 found += '+' + hex(pc - ptr)
                 break
 
-    return funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
+    return hex(pc) + funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
 
     # search backwards and confirm we are after an 'NV'
 
@@ -1114,15 +1114,7 @@ ftrap_table_addr = 0xc0000 # every permutation of f-trap
 
 # File Manager OS traps
 
-def completion(addr):
-    push(4, pc) # return to user code
-    push(4, read(4, regs + 32)) # save a0
-    push(4, read(4, regs)) # save d0
-    push(4, ftrap_table_addr + 0x302 * 2) # completion return assist code
-    pc = ioCompletion
-
 def open_trap(trap, d0, a0, a1):
-    ioCompletion = read(4, a0 + 12)
     ioNamePtr = read(4, a0 + 18)
     ioVRefNum = read(2, a0 + 22)
     ioPermssn = read(1, a0 + 27)
@@ -1135,17 +1127,157 @@ def open_trap(trap, d0, a0, a1):
             readable=ioPermssn in (0, 1, 3, 4),
             writable=ioPermssn in (0, 2, 3, 4),
             )
+        write(2, a0 + 24, refnum) # ioRefNum
     except FileNotFoundError:
-        retval = -37, a0 # bdNamErr
+        retval = -43 # fnfErr
     else:
-        retval = 0, a0
+        retval = 0
 
-    if ioCompletion and trap & 0x400: # async call with completion routine
-        completion(ioCompletion)
-
-    return retval
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
 
 os_traps[0] = open_trap
+
+def create_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioVRefNum = read(2, a0 + 22)
+
+    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    name = normcase(path_to_native(name))
+    try:
+        with open(name, 'xb') as f: pass
+        retval = 0
+    except FileNotFoundError:
+        retval = -35 # nsvErr
+    except FileExistsError:
+        retval = -48 # dupFNErr
+
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
+
+os_traps[8] = create_trap
+
+def getfinfo_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioVRefNum = read(2, a0 + 22) # ignore, until I implement WD refnums
+    ioFDirIndex = read(2, a0 + 28, signed=True) # also probably ignore?
+
+    if ioFDirIndex >= 1: raise NotImplementedError('_GetFInfo with ioFDirIndex')
+
+    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    name = normcase(path_to_native(name))
+
+    write(50, a0 + 30, 0) # zero out all those fields
+
+    if path.exists(name):
+        t, c = get_typecreator(name)
+        mem[a0+32:a0+40] = t + c
+        # should probably get some other info
+        retval = 0
+    else:
+        retval = -43 # fnfErr
+
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
+
+os_traps[0xc] = getfinfo_trap
+
+def setfinfo_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioVRefNum = read(2, a0 + 22) # ignore, until I implement WD refnums
+
+    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    name = normcase(path_to_native(name))
+
+    write(50, a0 + 30, 0) # zero out all those fields
+
+    if path.exists(name):
+        set_typecreator(name, mem[a0+32:a0+36], mem[a0+36:a0+40])
+        retval = 0
+    else:
+        retval = -43 # fnfErr
+
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
+
+os_traps[0xd] = setfinfo_trap
+
+def seteof_trap(trap, d0, a0, a1):
+    refnum = read(2, a0 + 24)
+    try:
+        f = refnums[refnum]
+        f.__mpw_mark
+        f.__mpw_mark = read(4, a0 + 28)
+        del f.__mpw_contents[f.__mpw_mark:] # shorten
+        f.__mpw_contents.extend(bytes(f.__mpw_mark - len(f.__mpw_contents))) # lengthen
+        retval = 0
+    except (IndexError, AttributeError):
+        retval = -51 # rfNumErr
+
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
+
+os_traps[0x12] = seteof_trap
+
+def flushvol_trap(trap, d0, a0, a1):
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'completionroutine'
+
+os_traps[0x13] = flushvol_trap
+
+def fsdispatch_trap(trap, d0, a0, a1):
+    d0 &= 0xffff # word-size selector
+    if d0 == 0: # FSControl
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 1: # OpenWD
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 2: # CloseWD
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 5: # CatMove
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 6: # DirCreate
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 7: # GetWDInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 8: # GetFCBInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 9: # GetCatInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 10: # SetCatInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 11: # SetVolInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 12: # SetPMSP
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 13: # SetupWDCB
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 14: # SetupDef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 15: # ReadWDCB
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 16: # LockRng
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 17: # UnlockRng
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 20: # CreateFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 21: # DeleteFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 22: # ResolveFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 23: # ExchangeFiles
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 26: # OpenDF
+        return open_trap(trap, d0, a0, a1)
+    elif d0 == 27: # MakeFSSpec
+        raise NotImplementedError('fsdispatch', d0)
+    else: # probably Desktop Manager stuff, ignore for now
+        raise NotImplementedError('fsdispatch', d0)
+
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'completionroutine'
+
+os_traps[0x60] = fsdispatch_trap
 
 # Memory Manager OS traps
 
@@ -1345,7 +1477,6 @@ os_traps[0x46] = gettrapaddress_trap
 def settrapaddress_trap(trap, d0, a0, a1):
     trapnum, trapkind = trap_kind(d0, trap)
     traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
-    traplist[trapnum] = a0
     return 0, 0
 os_traps[0x47] = settrapaddress_trap
 
@@ -1376,7 +1507,7 @@ toolbox_traps[0x1f] = get1resource_trap
 
 def get1namedresource_trap():
     name = pop(4)
-    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
+    name = mem[name+1:name+1+mem[name]]
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=True))
@@ -1391,7 +1522,7 @@ toolbox_traps[0x1a0] = getresource_trap
 
 def getnamedresource_trap():
     name = pop(4)
-    name = mem[name+1:name+1+mem[name]].decode('mac_roman')
+    name = mem[name+1:name+1+mem[name]]
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=False))
@@ -1400,6 +1531,10 @@ toolbox_traps[0x1a1] = getnamedresource_trap
 def setresload_trap():
     pop(2) # trash the parameter
 toolbox_traps[0x19b] = setresload_trap
+
+def releaseresource_trap():
+    pop(4) # trash the parameter
+toolbox_traps[0x1a3] = releaseresource_trap
 
 def getpattern_trap():
     id = pop(2)
@@ -1478,6 +1613,11 @@ def debugger_trap():
 
 toolbox_traps[0x1ff] = debugger_trap
 
+def unimplemented_trap(*args):
+    sys.exit('Unimplemented trap: %04X' % read(2, pc - 2))
+
+toolbox_traps[0x9f] = unimplemented_trap
+
 def syserror(n):
     sys.exit('System error %d' % n)
 
@@ -1523,6 +1663,31 @@ def gestalt_trap(trap, d0, a0, a1):
 
 os_traps[0xad] = gestalt_trap
 
+def cmpstring_trap(trap, d0, a0, a1):
+    l0 = d0 >> 16       # corresponds with a0 ptr
+    l1 = d0 & 0xffff    # corresponds with a1 ptr
+    both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode('mac_roman')
+
+    if trap & 0x200: # ignore diacritics
+        import unicodedata
+        both = unicodedata.normalize('NFKD', both)
+        both = ''.join(c for c in both if not unicodedata.combining(c))
+
+    if trap & 0x400: # ignore case
+        both = both.lower()
+
+    return int(bool(both[:len(both)//2] != both[len(both)//2:]))
+
+os_traps[0x3c] = cmpstring_trap
+
+
+
+
+
+
+
+
+
 # Populate the "classic" trap table, and also our list of implementations
 # The user-visible trap table initially points to _Unimplemented
 toolbox_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x400
@@ -1536,75 +1701,84 @@ for trapnum, traphandler in os_traps.items():
     ftrap_addr = ftrap_table_addr + trapnum * 2
     os_trap_table[trapnum] = ftrap_addr
 
-def lineA(inst):
+toolbox_traps = [toolbox_traps.get(i, unimplemented_trap) for i in range(1024)]
+os_traps = [os_traps.get(i, unimplemented_trap) for i in range(256)]
+
+def lineAF(inst):
     global pc
-    if inst & 0x0800: # Toolbox trap
-        # Push return address, but not if autoPop bit set
-        if not inst & 0x400: push(4, pc)
+    if inst & 0x800: # Toolbox trap
+        trapnum = inst & 0x3ff
+        implementation_68k = toolbox_trap_table[trapnum]
 
-        # Look up the implementation in the classic trap table
-        pc = toolbox_trap_table[inst & 0x3ff]
+#         if inst & 0xf000 == 0xf000: # for stress-testing traps
+        if inst & 0xf000 == 0xf000 or implementation_68k == ftrap_table_addr + (0x800 + trapnum) * 2:
+            # Non-SetTrapAddress'd A-trap OR direct F-trap
+            if inst & 0x400 or inst & 0xf000 == 0xf000: pc = pop(4) # autoPop
 
-        if pc == ftrap_table_addr + 0x89f * 2:
-            sys.exit('Unimplemented trap %04X' % inst)
+            implementation_python = toolbox_traps[trapnum]
+            implementation_python()
 
-    else: # OS trap
-        # Push return address
-        push(4, pc)
-
-        push(4, read(4, regs + 32 + 2 * 4)) # push a2
-        push(4, read(4, regs + 2 * 4))      # push d2
-        push(4, read(4, regs + 1 * 4))      # push d1
-        push(4, read(4, regs + 32 + 1 * 4)) # push a1
-        if not inst & 0x100: # only if trap word specifies
-            push(4, read(4, regs + 32 + 0 * 4)) # push a0
-
-        if inst & 0x100:
-            # Push address of four-register return f-trap
-            push(4, ftrap_table_addr + 0x300 * 2) # f300
         else:
-            # Push address of five-register return f-trap
-            push(4, ftrap_table_addr + 0x301 * 2) # f301
+            # SetTrapAddress'd A-trap: dispatch to custom 68k routine
+            if not inst & 0x400: push(4, pc) # autoPop
+            pc = implementation_68k
 
-        # Set d1.w to trap word
-        write(2, regs + 1 * 4 + 2, inst)
+    elif inst & 0xf000 == 0xa000 or inst & 0x0f00 == 0: # OS trap
+        # note on the condition above!!!
+        trapnum = inst & 0xff
+        implementation_68k = os_trap_table[trapnum]
 
-        # Look up the implementation in the classic trap table
-        pc = os_trap_table[inst & 0xff]
+#         if inst & 0xf000 == 0xf000: # for stress-testing traps
+        if inst & 0xf000 == 0xf000 or implementation_68k == ftrap_table_addr + trapnum * 2:
+            # Non-SetTrapAddress'd A-trap OR direct F-trap
+            if inst & 0xf000 == 0xf000: pc = pop(4) # return address
 
-        if pc == ftrap_table_addr + 0x89f * 2:
-            sys.exit('Unimplemented trap %04X' % inst)
+            implementation_python = os_traps[trapnum]
+            trapword = read(2, regs + 6) if inst & 0x1000 else inst # d1.w
+            retval = implementation_python(trapword,
+                read(4, regs), read(4, regs + 32), read(4, regs + 36)) # d0,a0,a1
 
+            # returned a0 or (a0, d0) or (a0, d0, 'completionroutine')
+            if not isinstance(retval, tuple): retval = (retval,)
+            completionroutine = (retval[-1] == 'completionroutine')
+            if completionroutine: retval = retval[:-1]
 
-def lineF(inst):
-    global pc
-    if inst & 0x0800: # Call-through to our implementation of Toolbox trap
-        pc = pop(4)
-        toolbox_traps[inst & 0x3ff]()
+            if len(retval) > 0 and retval[0] != None:
+                write(4, regs, retval[0]) # result in d0.l
+            if len(retval) > 1 and retval[1] != None:
+                write(4, regs + 32, retval[1]) # result in a0.l
+            set_nz(read(2, regs + 2), 2) # tst.w d0
 
-    elif inst & 0x0f00 == 0: # Call-through to our implementation of OS trap
-        pc = pop(4)
-        retval = os_traps[inst & 0xff](
-            read(2, regs      + 1 * 4 + 2), # d1.w = trap word
-            read(4, regs      + 0 * 4),     # d0.l
-            read(4, regs + 32 + 0 * 4),     # a0.l
-            read(4, regs + 32 + 1 * 4),     # a1.l
-        )
+            if completionroutine and trapword & 0x400:
+                raise NotImplementedError('completion routine')
 
-        if isinstance(retval, tuple):
-            write(4, regs, retval[0]) # d0.l = return value
-            write(4, regs + 32, retval[1]) # a0.l = other return value
         else:
-            write(4, regs, retval) # d0.l = only return value
+            # SetTrapAddress'd A-trap: dispatch to custom 68k routine
+            write(2, regs + 1 * 4 + 2, inst)    # d1.w = trap word
+
+            push(4, pc)                         # Push return address
+
+            # Push the registers that the Trap Dispatcher saves around OS traps
+            push(4, read(4, regs + 32 + 8))     # push a2
+            push(4, read(4, regs + 8))          # push d2
+            push(4, read(4, regs + 4))          # push d1
+            push(4, read(4, regs + 32 + 4))     # push a1
+            if not inst & 0x100: # only if trap word specifies
+                push(4, read(4, regs + 32)) # push a0
+
+            # Push f300 or f301, depending on how many registers need restoring
+            push(4, ftrap_table_addr + (0x300 if inst & 0x100 else 0x301) * 2) # f300
+
+            pc = implementation_68k
 
     elif inst in (0xf300, 0xf301): # OS trap return assistance code
         if inst & 1: # was this a "save-a0" OS trap word?
             write(4, regs + 32 + 0 * 4, pop(4)) # pop a0
-        write(4, regs + 32 + 1 * 4, pop(4)) # pop a1
-        write(4, regs      + 1 * 4, pop(4)) # pop d1
-        write(4, regs      + 2 * 4, pop(4)) # pop d2
-        write(4, regs + 32 + 2 * 4, pop(4)) # pop a2
-        set_nz(read(2, regs + 0 * 4), 2) # tst.w d0
+        write(4, regs + 32 + 4, pop(4))         # pop a1
+        write(4, regs + 4, pop(4))              # pop d1
+        write(4, regs + 8, pop(4))              # pop d2
+        write(4, regs + 32 + 8, pop(4))         # pop a2
+        set_nz(read(2, regs + 2), 2)        # tst.w d0
         pc = pop(4) # Return to the actual caller
 
     elif inst == 0xf302: # Completion routine return assistance code
@@ -1614,6 +1788,8 @@ def lineF(inst):
 
     else: # Special MPW call
         mpw_ftrap(inst)
+
+lineA = lineF = lineAF # cheating cleverly
 
 ########################################################################
 # Initialise an MPW environment
