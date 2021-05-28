@@ -710,11 +710,17 @@ def run_m68k_interpreter():
         line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
 
 #     import pdb; pdb.set_trace()
+    wse = None
+    watched = 0x14885c
     while True: # need a way to bust out of this loop
         try:
             inst = read(2, pc)
-            print_state()
-            print(roughly_where_we_are(pc))
+#             wse2 = mem[watched:watched+4]
+#             if wse2 != wse: print('CHANGED! ', end='')
+#             print(hex(watched), '=', wse2.hex() if wse2 else 'nonexistent')
+#             wse = wse2
+#             print_state(); print()
+#             print(roughly_where_we_are(pc)); print()
             pc += 2
             instruction_lines[inst >> 12](inst)
         except IllegalInstruction as e:
@@ -756,11 +762,12 @@ def roughly_where_we_are(pc):
             ptr = read(4, segment[5])
             endptr = ptr + len(segment[4])
             if ptr <= pc < endptr:
-                found = segment[2].decode('mac_roman') if segment[2] else 'CODE' + str(segment[1])
+                found = 'seg-' + str(segment[1])
+                if segment[2]: found += '-' + segment[2].decode('mac_roman')
                 found += '+' + hex(pc - ptr)
                 break
 
-    return hex(pc) + funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
+    return hex(pc) + ' ' + funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
 
     # search backwards and confirm we are after an 'NV'
 
@@ -770,8 +777,19 @@ def print_state():
         print(' '.join(mem[r:r+4].hex() for r in range(i, i+32, 4)))
 
     sp = read(4, regs + 32 + 7 * 4)
-    print('sp:', ' '.join(mem[r:r+2].hex() for r in range(sp, sp+16, 2)),
+    print('sp:', ' '.join(mem[r:r+2].hex() for r in range(sp, sp+20, 2)),
         'ccr:', 'xX'[x]+'nN'[n]+'zZ'[z]+'vV'[v]+'cC'[c])
+
+def where_string_is(string):
+    locs = []
+    i = -1
+    while (i := mem.find(string, i+1)) != -1:
+        locs.append(i)
+    retval = []
+    for i in locs:
+        retval.append('%r at %08x, preceded by %s, followed by %s' %
+        (string, i, mem[i-2:i].hex(), mem[i+len(string):i+len(string)+2].hex()))
+    return '\n'.join(retval)
 
 ########################################################################
 # Resources! At least we can be slow when dealing with them.
@@ -1072,7 +1090,7 @@ def macclose(refnum):
 
     if file.writable():
         file.seek(0)
-        file.write(f.__mpw_contents)
+        file.write(file.__mpw_contents)
         file.truncate()
 
     file.close()
@@ -1120,6 +1138,7 @@ def open_trap(trap, d0, a0, a1):
     ioPermssn = read(1, a0 + 27)
 
     name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+#     print('PBOpen', hex(ioNamePtr), mem[ioNamePtr:ioNamePtr+32].hex(), mem[ioNamePtr:ioNamePtr+32])
 
     try:
         if name.startswith('.'): raise FileNotFoundError # driver open
@@ -1137,6 +1156,71 @@ def open_trap(trap, d0, a0, a1):
     return retval, 'completionroutine'
 
 os_traps[0] = open_trap
+
+def close_trap(trap, d0, a0, a1):
+    ioRefNum = read(2, a0 + 24)
+    macclose(ioRefNum)
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'completionroutine'
+
+os_traps[1] = close_trap
+
+def seek_refnum(ioRefNum, ioPosMode, ioPosOffset):
+    f = refnums[ioRefNum]
+
+    if ioPosMode == 0: # fsAtMark
+        pass
+    elif ioPosMode == 1: # fsFromStart
+        f.__mpw_mark = ioPosOffset
+    elif ioPosMode == 2: # fsFromLEOF
+        f.__mpw_mark = len(fs.__mpw_contents) + ioPosOffset
+    elif ioPosMode == 3: # fsFromMark
+        f.__mpw_mark += ioPosOffset
+
+    f.__mpw_mark = min(f.__mpw_mark, len(f.__mpw_contents))
+    f.__mpw_mark = max(f.__mpw_mark, 0)
+
+def read_trap(trap, d0, a0, a1):
+    ioRefNum = read(2, a0 + 24)
+    ioBuffer = read(4, a0 + 32)
+    ioReqCount = read(4, a0 + 36)
+    ioPosMode = read(2, a0 + 44)
+    ioPosOffset = read(2, a0 + 44, signed=True)
+
+    f = refnums[ioRefNum]
+    seek_refnum(ioRefNum, ioPosMode, ioPosOffset)
+
+    data = macread(ioRefNum, ioReqCount)
+
+    mem[ioBuffer:ioBuffer+len(data)] = data
+    write(4, a0 + 40, len(data)) # ioActCount
+    write(4, a0 + 46, f.__mpw_mark) # ioPosOffset
+
+    retval = -39 if len(data) < ioReqCount else 0 # eofErr or noErr
+    write(2, a0 + 16, retval) # ioResult
+    return retval, 'completionroutine'
+
+os_traps[2] = read_trap
+
+def write_trap(trap, d0, a0, a1):
+    ioRefNum = read(2, a0 + 24)
+    ioBuffer = read(4, a0 + 32)
+    ioReqCount = read(4, a0 + 36)
+    ioPosMode = read(2, a0 + 44)
+    ioPosOffset = read(2, a0 + 44, signed=True)
+
+    f = refnums[ioRefNum]
+    seek_refnum(ioRefNum, ioPosMode, ioPosOffset)
+
+    macwrite(ioRefNum, mem[ioBuffer:ioBuffer+ioReqCount])
+
+    write(4, a0 + 40, ioReqCount) # ioActCount
+    write(4, a0 + 46, f.__mpw_mark) # ioPosOffset
+
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'completionroutine'
+
+os_traps[3] = write_trap
 
 def create_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
@@ -1156,6 +1240,22 @@ def create_trap(trap, d0, a0, a1):
     return retval, 'completionroutine'
 
 os_traps[8] = create_trap
+
+def delete_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+
+    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    name = normcase(path_to_native(name))
+    try:
+        for ext in ('', '.idump', '.rdump'):
+            os.remove(name + ext)
+    except FileNotFoundError:
+        pass
+
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'completionroutine'
+
+os_traps[9] = delete_trap
 
 def getfinfo_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
@@ -1299,6 +1399,7 @@ os_traps[0x1c] = freemem_trap
 os_traps[0x1d] = freemem_trap
 
 def newptr(size): # fixed 16b header before all "heap" blocks
+    mem.extend(bytes(0x20000))
     while len(mem) % 16: mem.append(0)
     mem.extend(bytes(16 + size))
     retval = len(mem) - size
@@ -1651,7 +1752,7 @@ def debugger_trap():
 toolbox_traps[0x1ff] = debugger_trap
 
 def unimplemented_trap(*args):
-    raise NotImplementedError('Unimplemented trap: %04X' % read(2, pc - 2))
+    raise NotImplementedError('trap, not sure which')
 
 toolbox_traps[0x9f] = unimplemented_trap
 
@@ -1755,6 +1856,9 @@ def lineAF(inst):
             implementation_python = toolbox_traps[trapnum]
             implementation_python()
 
+        elif implementation_68k == ftrap_table_addr + 0x89f * 2:
+            raise NotImplementedError(hex(inst))
+
         else:
             # SetTrapAddress'd A-trap: dispatch to custom 68k routine
             if not inst & 0x400: push(4, pc) # autoPop
@@ -1788,6 +1892,9 @@ def lineAF(inst):
 
             if completionroutine and trapword & 0x400:
                 raise NotImplementedError('completion routine')
+
+        elif implementation_68k == ftrap_table_addr + 0x89f * 2:
+            raise NotImplementedError(hex(inst))
 
         else:
             # SetTrapAddress'd A-trap: dispatch to custom 68k routine
@@ -2022,6 +2129,7 @@ def mpw_ftrap(inst): # special breakout instructions, not for general use
         raise ValueError('%04X not implemented' % inst)
 
 def read(numbytes, addr, signed=False):
+#     if addr < 0x1000: print('read lowmem', hex(addr))
     return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
 
 def write(numbytes, addr, val):
@@ -2116,14 +2224,18 @@ bigblock = [
 
     'environment array',
         *('pointer to environment %d' % i for i in range(len(env))),
+        bytes(4),
 
     'argument array',
         *('pointer to argument %d' % i for i in range(len(argv))),
+        bytes(4),
 ]
 
 for i, arg in enumerate(argv):
+    bigblock.append(bytes(16))
     bigblock.append('argument %d' % i)
     bigblock.append(arg.encode('mac_roman') + b'\0')
+    bigblock.append(bytes(16))
 
 for i, e in enumerate(env):
     bigblock.append('environment %d' % i)
