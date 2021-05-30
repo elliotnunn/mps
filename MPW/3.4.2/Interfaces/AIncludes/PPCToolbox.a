@@ -1,0 +1,701 @@
+;
+;	File:		PPCToolbox.a
+;
+;	Contains:	Program-Program Communications Toolbox Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__PPCTOOLBOX__') = 'UNDEFINED' THEN
+__PPCTOOLBOX__ SET 1
+
+
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+	include 'AppleTalk.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'OSUtils.a'										;
+;			include 'MixedMode.a'									;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+; typedef unsigned char 	PPCServiceType
+
+ppcServiceRealTime				EQU		1
+
+; typedef short 			PPCLocationKind
+
+ppcNoLocation					EQU		0					; There is no PPCLocName 
+ppcNBPLocation					EQU		1					; Use AppleTalk NBP      
+ppcNBPTypeLocation				EQU		2					; Used for specifying a location name type during PPCOpen only 
+
+; typedef short 			PPCPortKinds
+
+ppcByCreatorAndType				EQU		1					; Port type is specified as colloquial Mac creator and type 
+ppcByString						EQU		2					; Port type is in pascal string format 
+
+; Values returned for request field in PPCInform call 
+; typedef unsigned char 	PPCSessionOrigin
+
+; Values returned for requestType field in PPCInform call 
+ppcLocalOrigin					EQU		1					; session originated from this machine 
+ppcRemoteOrigin					EQU		2					; session originated from remote machine 
+
+; typedef short 			PPCPortRefNum
+; typedef long 				PPCSessRefNum
+PPCPortRec 				RECORD	0
+nameScript				 ds.w   1		; offset: $0 (0)		; script of name 
+name					 ds.b   33		; offset: $2 (2)		; name of port as seen in browser 
+						 ORG 36
+portKindSelector		 ds.w   1		; offset: $24 (36)		; which variant 
+portTypeStr				 ds.b   33		; offset: $26 (38)		; pascal type string 
+						 ORG 38
+portCreator				 ds.l   1		; offset: $26 (38)
+portType				 ds.l   1		; offset: $2A (42)
+						 ORG 72
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct PPCPortRec  PPCPortRec, *PPCPortPtr
+LocationNameRec 		RECORD	0
+locationKindSelector	 ds.w   1		; offset: $0 (0)		; which variant 
+nbpEntity				 ds     EntityName ; offset: $2 (2)		; NBP name entity 
+						 ORG 2
+nbpType					 ds.b   33		; offset: $2 (2)		; just the NBP type string, for PPCOpen 
+						 ORG 104
+sizeof					 EQU *			; size:   $68 (104)
+						ENDR
+
+; typedef struct LocationNameRec  LocationNameRec, *LocationNamePtr
+PortInfoRec 			RECORD	0
+filler1					 ds.b   1		; offset: $0 (0)
+authRequired			 ds.b   1		; offset: $1 (1)
+name					 ds.l   18		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4A (74)
+						ENDR
+
+; typedef struct PortInfoRec  PortInfoRec, *PortInfoPtr
+; typedef PortInfoRec 		*PortInfoArrayPtr
+; typedef union PPCParamBlockRec  PPCParamBlockRec, *PPCParamBlockPtr
+PPCOpenPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+portRefNum				 ds.w   1		; offset: $26 (38)		; 38 <--   Port Reference 
+filler1					 ds.l   1		; offset: $28 (40)
+serviceType				 ds.b   1		; offset: $2C (44)		; 44 -->    Bit field describing the requested port service 
+resFlag					 ds.b   1		; offset: $2D (45)		; Must be set to 0 
+portName				 ds.l   1		; offset: $2E (46)		; 46 -->   PortName for PPC 
+locationName			 ds.l   1		; offset: $32 (50)		; 50 -->   If NBP Registration is required 
+networkVisible			 ds.b   1		; offset: $36 (54)		; 54 -->   make this network visible on network 
+nbpRegistered			 ds.b   1		; offset: $37 (55)		; 55 <--   The given location name was registered on the network 
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct PPCOpenPBRec  PPCOpenPBRec, *PPCOpenPBPtr
+PPCInformPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+portRefNum				 ds.w   1		; offset: $26 (38)		; 38 -->   Port Identifier 
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 <--   Session Reference 
+serviceType				 ds.b   1		; offset: $2C (44)		; 44 <--   Status Flags for type of session, local, remote 
+autoAccept				 ds.b   1		; offset: $2D (45)		; 45 -->   if true session will be accepted automatically 
+portName				 ds.l   1		; offset: $2E (46)		; 46 -->   Buffer for Source PPCPortRec 
+locationName			 ds.l   1		; offset: $32 (50)		; 50 -->   Buffer for Source LocationNameRec 
+userName				 ds.l   1		; offset: $36 (54)		; 54 -->   Buffer for Soure user's name trying to link. 
+userData				 ds.l   1		; offset: $3A (58)		; 58 <--   value included in PPCStart's userData 
+requestType				 ds.b   1		; offset: $3E (62)		; 62 <--   Local or Network 
+filler					 ds.b   1		; offset: $3F (63)
+sizeof					 EQU *			; size:   $40 (64)
+						ENDR
+
+; typedef struct PPCInformPBRec  PPCInformPBRec, *PPCInformPBPtr
+PPCStartPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+portRefNum				 ds.w   1		; offset: $26 (38)		; 38 -->   Port Identifier 
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 <--   Session Reference 
+serviceType				 ds.b   1		; offset: $2C (44)		; 44 <--   Actual service method (realTime) 
+resFlag					 ds.b   1		; offset: $2D (45)		; 45 -->   Must be set to 0  
+portName				 ds.l   1		; offset: $2E (46)		; 46 -->   Destination portName 
+locationName			 ds.l   1		; offset: $32 (50)		; 50 -->   NBP or NAS style service location name 
+rejectInfo				 ds.l   1		; offset: $36 (54)		; 54 <--   reason for rejecting the session request 
+userData				 ds.l   1		; offset: $3A (58)		; 58 -->   Copied to destination PPCInform parameter block 
+userRefNum				 ds.l   1		; offset: $3E (62)		; 62 -->   userRefNum (obtained during login process)  
+sizeof					 EQU *			; size:   $42 (66)
+						ENDR
+
+; typedef struct PPCStartPBRec  PPCStartPBRec, *PPCStartPBPtr
+PPCAcceptPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 -->   Session Reference 
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct PPCAcceptPBRec  PPCAcceptPBRec, *PPCAcceptPBPtr
+PPCRejectPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 -->   Session Reference 
+filler2					 ds.w   1		; offset: $2C (44)
+filler3					 ds.l   1		; offset: $2E (46)
+filler4					 ds.l   1		; offset: $32 (50)
+rejectInfo				 ds.l   1		; offset: $36 (54)		; 54 -->   reason for rejecting the session request  
+sizeof					 EQU *			; size:   $3A (58)
+						ENDR
+
+; typedef struct PPCRejectPBRec  PPCRejectPBRec, *PPCRejectPBPtr
+PPCWritePBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 -->   Session Reference 
+bufferLength			 ds.l   1		; offset: $2C (44)		; 44 -->   Length of the message buffer 
+actualLength			 ds.l   1		; offset: $30 (48)		; 48 <--   Actual Length Written 
+bufferPtr				 ds.l   1		; offset: $34 (52)		; 52 -->   Pointer to message buffer 
+more					 ds.b   1		; offset: $38 (56)		; 56 -->   if more data in this block will be written 
+filler2					 ds.b   1		; offset: $39 (57)
+userData				 ds.l   1		; offset: $3A (58)		; 58 -->   Message block userData Uninterpreted by PPC 
+blockCreator			 ds.l   1		; offset: $3E (62)		; 62 -->   Message block creator Uninterpreted by PPC 
+blockType				 ds.l   1		; offset: $42 (66)		; 66 -->   Message block type Uninterpreted by PPC 
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct PPCWritePBRec  PPCWritePBRec, *PPCWritePBPtr
+PPCReadPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 -->   Session Reference 
+bufferLength			 ds.l   1		; offset: $2C (44)		; 44 -->   Length of the message buffer 
+actualLength			 ds.l   1		; offset: $30 (48)		; 48 <--   Actual length read 
+bufferPtr				 ds.l   1		; offset: $34 (52)		; 52 -->   Pointer to message buffer 
+more					 ds.b   1		; offset: $38 (56)		; 56 <--   if true more data in this block to be read 
+filler2					 ds.b   1		; offset: $39 (57)
+userData				 ds.l   1		; offset: $3A (58)		; 58 <--   Message block userData Uninterpreted by PPC 
+blockCreator			 ds.l   1		; offset: $3E (62)		; 62 <--   Message block creator Uninterpreted by PPC 
+blockType				 ds.l   1		; offset: $42 (66)		; 66 <--   Message block type Uninterpreted by PPC 
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct PPCReadPBRec  PPCReadPBRec, *PPCReadPBPtr
+PPCEndPBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+sessRefNum				 ds.l   1		; offset: $28 (40)		; 40 -->   Session Reference 
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct PPCEndPBRec  PPCEndPBRec, *PPCEndPBPtr
+PPCClosePBRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+portRefNum				 ds.w   1		; offset: $26 (38)		; 38 -->   Port Identifier 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct PPCClosePBRec  PPCClosePBRec, *PPCClosePBPtr
+IPCListPortsPBRec 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+csCode					 ds.w   1		; offset: $4 (4)
+intUse					 ds.w   1		; offset: $6 (6)
+intUsePtr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+Reserved				 ds.l   5		; offset: $12 (18)
+filler1					 ds.w   1		; offset: $26 (38)
+startIndex				 ds.w   1		; offset: $28 (40)		; 40 -->   Start Index 
+requestCount			 ds.w   1		; offset: $2A (42)		; 42 -->   Number of entries to be returned 
+actualCount				 ds.w   1		; offset: $2C (44)		; 44 <--   Actual Number of entries to be returned 
+portName				 ds.l   1		; offset: $2E (46)		; 46 -->   PortName Match 
+locationName			 ds.l   1		; offset: $32 (50)		; 50 -->   NBP or NAS type name to locate the Port Location 
+bufferPtr				 ds.l   1		; offset: $36 (54)		; 54 -->   Pointer to a buffer requestCount*sizeof(PortInfo) bytes big 
+sizeof					 EQU *			; size:   $3A (58)
+						ENDR
+
+; typedef struct IPCListPortsPBRec  IPCListPortsPBRec, *IPCListPortsPBPtr
+PPCParamBlockRec 		RECORD	0
+openParam				 ds     PPCOpenPBRec ; offset: $0 (0)
+						 ORG 0
+informParam				 ds     PPCInformPBRec ; offset: $0 (0)
+						 ORG 0
+startParam				 ds     PPCStartPBRec ; offset: $0 (0)
+						 ORG 0
+acceptParam				 ds     PPCAcceptPBRec ; offset: $0 (0)
+						 ORG 0
+rejectParam				 ds     PPCRejectPBRec ; offset: $0 (0)
+						 ORG 0
+writeParam				 ds     PPCWritePBRec ; offset: $0 (0)
+						 ORG 0
+readParam				 ds     PPCReadPBRec ; offset: $0 (0)
+						 ORG 0
+endParam				 ds     PPCEndPBRec ; offset: $0 (0)
+						 ORG 0
+closeParam				 ds     PPCClosePBRec ; offset: $0 (0)
+						 ORG 0
+listPortsParam			 ds     IPCListPortsPBRec ; offset: $0 (0)
+						 ORG 70
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+;
+; pascal OSErr PPCInit(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCInit
+			moveq	#0,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCInit
+	ENDIF
+
+;
+; pascal OSErr PPCOpenSync(PPCOpenPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCOpenSync
+			moveq	#1,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCOpenSync
+	ENDIF
+
+;
+; pascal OSErr PPCOpenAsync(PPCOpenPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCOpenAsync
+			moveq	#1,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCOpenAsync
+	ENDIF
+
+;
+; pascal OSErr PPCInformSync(PPCInformPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCInformSync
+			moveq	#3,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCInformSync
+	ENDIF
+
+;
+; pascal OSErr PPCInformAsync(PPCInformPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCInformAsync
+			moveq	#3,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCInformAsync
+	ENDIF
+
+;
+; pascal OSErr PPCStartSync(PPCStartPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCStartSync
+			moveq	#2,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCStartSync
+	ENDIF
+
+;
+; pascal OSErr PPCStartAsync(PPCStartPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCStartAsync
+			moveq	#2,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCStartAsync
+	ENDIF
+
+;
+; pascal OSErr PPCAcceptSync(PPCAcceptPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCAcceptSync
+			moveq	#4,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCAcceptSync
+	ENDIF
+
+;
+; pascal OSErr PPCAcceptAsync(PPCAcceptPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCAcceptAsync
+			moveq	#4,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCAcceptAsync
+	ENDIF
+
+;
+; pascal OSErr PPCRejectSync(PPCRejectPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCRejectSync
+			moveq	#5,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCRejectSync
+	ENDIF
+
+;
+; pascal OSErr PPCRejectAsync(PPCRejectPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCRejectAsync
+			moveq	#5,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCRejectAsync
+	ENDIF
+
+;
+; pascal OSErr PPCWriteSync(PPCWritePBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCWriteSync
+			moveq	#6,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCWriteSync
+	ENDIF
+
+;
+; pascal OSErr PPCWriteAsync(PPCWritePBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCWriteAsync
+			moveq	#6,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCWriteAsync
+	ENDIF
+
+;
+; pascal OSErr PPCReadSync(PPCReadPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCReadSync
+			moveq	#7,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCReadSync
+	ENDIF
+
+;
+; pascal OSErr PPCReadAsync(PPCReadPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCReadAsync
+			moveq	#7,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCReadAsync
+	ENDIF
+
+;
+; pascal OSErr PPCEndSync(PPCEndPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCEndSync
+			moveq	#8,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCEndSync
+	ENDIF
+
+;
+; pascal OSErr PPCEndAsync(PPCEndPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCEndAsync
+			moveq	#8,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCEndAsync
+	ENDIF
+
+;
+; pascal OSErr PPCCloseSync(PPCClosePBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCCloseSync
+			moveq	#9,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCCloseSync
+	ENDIF
+
+;
+; pascal OSErr PPCCloseAsync(PPCClosePBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PPCCloseAsync
+			moveq	#9,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCCloseAsync
+	ENDIF
+
+;
+; pascal OSErr IPCListPortsSync(IPCListPortsPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_IPCListPortsSync
+			moveq	#10,d0
+			dc.w 	$A0DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPCListPortsSync
+	ENDIF
+
+;
+; pascal OSErr IPCListPortsAsync(IPCListPortsPBPtr pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 pb            	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_IPCListPortsAsync
+			moveq	#10,d0
+			dc.w 	$A4DD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPCListPortsAsync
+	ENDIF
+
+;
+; pascal OSErr DeleteUserIdentity(unsigned long userRef)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DeleteUserIdentity
+	ENDIF
+
+;
+; pascal OSErr GetDefaultUser(unsigned long *userRef, Str32 userName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetDefaultUser
+	ENDIF
+
+;
+; pascal OSErr StartSecureSession(PPCStartPBPtr pb, Str32 userName, Boolean useDefault, Boolean allowGuest, Boolean *guestSelected, ConstStr255Param prompt)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	StartSecureSession
+	ENDIF
+
+;
+; pascal OSErr PPCBrowser(ConstStr255Param prompt, ConstStr255Param applListLabel, Boolean defaultSpecified, LocationNameRec *theLocation, PortInfoRec *thePortInfo, PPCFilterUPP portFilter, ConstStr32Param theLocNBPType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PPCBrowser
+			move.w	#$0D00,d0
+			dc.w 	$A82B
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PPCBrowser
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+;
+;  The ParamBlock calls with the "Sync" or "Async" suffix are being phased out.
+;
+	ENDIF
+	ENDIF ; __PPCTOOLBOX__

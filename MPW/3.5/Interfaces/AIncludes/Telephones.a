@@ -1,0 +1,2682 @@
+;
+;    File:       Telephones.a
+;
+;    Contains:   Telephone Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TELEPHONES__') = 'UNDEFINED' THEN
+__TELEPHONES__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__CTBUTILITIES__') = 'UNDEFINED' THEN
+	include 'CTBUtilities.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+curTELVersion					EQU		3					; current Telephone Manager version 
+															;    the chooseXXX symbols are defined in CTBUtilities.(pah) 
+telChooseDisaster				EQU		-2
+telChooseFailed					EQU		-1
+telChooseAborted				EQU		0
+telChooseOKMinor				EQU		1
+telChooseOKMajor				EQU		2
+telChooseCancel					EQU		3
+telChooseOKTermChanged			EQU		4
+	IF &TYPE('classTEL') = 'UNDEFINED' THEN
+
+															; telephone tool file type 
+classTEL						EQU		'vbnd'
+	ENDIF
+;  PHYSICAL TERMINAL CONSTANTS 
+;  INDEPENDENT HANDSET CONSTANTS 
+
+telIndHSOnHook					EQU		0					; independent handset on hook 
+telIndHSOffHook					EQU		1					; independent handset off hook 
+
+telIndHSDisconnected			EQU		0					; handset disconnected from the line 
+telIndHSConnected				EQU		1					; handset connected to the line 
+
+;  HOOK STATE CONSTANTS 
+
+telHandset						EQU		1					; handset hookswitch 
+telSpeakerphone					EQU		2					; speakerphone 'on' switch 
+
+telDeviceOffHook				EQU		1					; device off hook 
+telDeviceOnHook					EQU		0					; device on hook 
+
+;  VOLUME CONTROL CONSTANTS 
+
+telHandsetSpeakerVol			EQU		1					; volume of the handset speaker 
+telHandsetMicVol				EQU		2					; sensitivity of the handset mic 
+telSpeakerphoneVol				EQU		3					; speakerphone volume 
+telSpeakerphoneMicVol			EQU		4					; sensitivity of the spkrphone mic 
+telRingerVol					EQU		5					; volume of the ringer 
+telBuiltinSPVol					EQU		6					; volume of the built-in speakerphone 
+telBuiltinSPMicVol				EQU		7					; sensitivity of the built-in speakerphone mic 
+
+telVolSame						EQU		0					; leaves the volume at previous level 
+telVolMin						EQU		1					; turns volume down to minimum level, but not off 
+telVolMax						EQU		100					; highest level allowed by the Telephone Manager 
+
+telVolStateSame					EQU		0					; leaves device in same state 
+telVolStateOff					EQU		1					; turns the device off, but doesn't change the volume setting. Use for mute functions. 
+telVolStateOn					EQU		2					; turns the device on.  Volume setting is the same as previously set. 
+;  DISPLAY CONSTANTS 
+
+telNormalDisplayMode			EQU		1					; normal display mode 
+telInspectMode					EQU		2					; inspect display mode 
+telMiscMode						EQU		3					; miscellaneous display mode 
+telRetrieveMode					EQU		4					; message retrieval mode 
+telDirectoryQueryMode			EQU		5					; electronic directory mode 
+telEntireDisplay				EQU		0					; entire Display 
+
+;  KEY PRESS CONSTANTS 
+
+telHangupKey					EQU		1					; drop, or release, key pressed 
+telHoldKey						EQU		2					; hold key pressed 
+telConferenceKey				EQU		3					; conference key pressed 
+telTransferKey					EQU		4					; transfer key pressed 
+telForwardKey					EQU		5					; call forward key pressed 
+telCallbackKey					EQU		6					; call back key pressed 
+telDNDKey						EQU		7					; do not disturb key pressed 
+telCallPickupKey				EQU		8					; call Pickup key pressed 
+telCallParkKey					EQU		9					; call Park key pressed 
+telCallDeflectKey				EQU		10					; call Deflect key pressed 
+telVoiceMailAccessKey			EQU		11					; voice Mail Access key pressed 
+telCallRejectKey				EQU		12					; call Reject key pressed 
+telOtherKey						EQU		16					; other key pressed 
+
+
+telKeyPadPress					EQU		1					; key pressed on 12 digit keypad
+telFeatureKeyPress				EQU		2					; feature Key Pressed 
+
+telTerminalEnabled				EQU		0
+telTerminalDisabled				EQU		1
+
+telUnknown						EQU		0					; unknown error 
+telTerminalHWDisconnected		EQU		1					; terminal hardware is disconnected 
+telDeviceDriverClosed			EQU		2					; device driver is closed 
+
+;  ALERT PATTERN 
+
+telPattern0						EQU		0
+telPattern1						EQU		1
+telPattern2						EQU		2
+telPattern3						EQU		3
+telPattern4						EQU		4
+telPattern5						EQU		5
+telPattern6						EQU		6
+telPattern7						EQU		7
+telPatternOff					EQU		8
+telPatternUndefined				EQU		15
+
+;  DN TYPES 
+
+telAllDNs						EQU		0					; counts all types of DNs 
+telInternalDNs					EQU		1					; connected to PBX or other non-public switch 
+telInternalDNsOnly				EQU		2					; connected to PBX or other non-public switch 
+															; and able to place internal calls only 
+telExternalDNs					EQU		3					; connected to public network 
+telDNTypeUnknown				EQU		4					; DN type unknown 
+
+;  DN USAGE 
+
+telDNNotUsed					EQU		0					; DN is not used - onhook 
+telDNPOTSCall					EQU		1					; DN used for POTs call 
+telDNFaxCall					EQU		2					; DN used for fax call 
+telDNDataCall					EQU		3					; DN used for data call 
+telDNAlerting					EQU		4					; Incoming call at DN 
+telDNUnknownState				EQU		5					; DN is in unknown state 
+
+;  CALL FORWARDING TYPES 
+
+telForwardImmediate				EQU		1					; immediately forward calls 
+telForwardBusy					EQU		2					; forward on Busy 
+telForwardNoAnswer				EQU		3					; forward on No answer 
+telForwardBusyNA				EQU		4					; forwarding for busy and no answer
+telForwardTypeUnknown			EQU		5					; type of forwarding is unknown 
+
+;  CALL FORWARDING MESSAGES 
+
+telForwardCleared				EQU		0					; forwarding has been cleared 
+telForwardEst					EQU		1					; forwarding has been established
+telForwardFailed				EQU		2					; attempt to setup forwarding has failed
+
+;  DO NOT DISTURB TYPES 
+
+telDNDIntExt					EQU		0					; do not disturb for all internal and external calls
+telDNDExternal					EQU		1					; do not disturb for external calls only 
+telDNDInternal					EQU		2					; do not disturb for internal calls only 
+telDNDNonIntercom				EQU		3					; do not disturb for all calls except intercom 
+
+;  DO NOT DISTURB MESSAGES 
+
+telDNDCleared					EQU		0					; do not disturb has been cleared 
+telDNDEst						EQU		1					; do not disturb has been established 
+telDNDFailed					EQU		2					; attempt to setup do not disturb has failed 
+
+;  VOICE MAIL MESSAGES 
+
+telAllVoiceMessagesRead			EQU		0					; all messages have been read, none are  waiting 
+															; to be read 
+telNewVoiceMessage				EQU		1					; a new message has arrived or messages are waiting for this DN 
+
+;  DNSELECT MESSAGE 
+
+telDNDeselected					EQU		0					; DN has been deselected 
+telDNSelected					EQU		1					; DN has been selected 
+
+;  CALL ORIGINATORS 
+
+telInternalCall					EQU		0					; return nth internal CA 
+telExternalCall					EQU		1					; return nth external CA 
+telUnknownCallOrigin			EQU		2					; unknown call type 
+telAllCallOrigins				EQU		2					; return nth CA internal or external 
+
+;  CALL TYPES 
+
+telVoiceMailAccessOut			EQU		-7
+telPageOut						EQU		-6
+telIntercomOut					EQU		-5
+telCallbackOut					EQU		-4
+telPickup						EQU		-3
+telParkRetrieve					EQU		-2
+telNormalOut					EQU		-1
+telUnknownCallType				EQU		0
+telNormalIn						EQU		1
+telForwardedImmediate			EQU		2
+telForwardedBusy				EQU		3
+telForwardedNoAnswer			EQU		4
+telTransfer						EQU		5
+telDeflected					EQU		6
+telIntercepted					EQU		7
+telDeflectRecall				EQU		8
+telParkRecall					EQU		9
+telTransferredRecall			EQU		10
+telIntercomIn					EQU		11
+telCallbackIn					EQU		12
+
+;  DIAL TYPES 
+
+telDNDialable					EQU		0					; this DN could be dialed via TELSetupCall 
+telDNNorthAmerican				EQU		1					; rmtDN is standard North America 10 digit number 
+telDNInternational				EQU		2					; rmtDN is an international number 
+telDNAlmostDialable				EQU		3					; rmtDN is almost dialable, missing prefix such as 9 or 1 
+telDNUnknown					EQU		15					; unknown whether DN is dialable 
+
+;  CALL PROGRESS MESSAGES 
+
+telCAPDialTone					EQU		1					; dial tone 
+telCAPRinging					EQU		2					; destination CA is alerting 
+telCAPDialing					EQU		3					; dialing the other end 
+telCAPReorder					EQU		4					; reorder 
+telCAPBusy						EQU		5					; busy 
+telCAPRouted					EQU		6					; call routed; rmtDN will hold the routing directory number routeDN and routePartyName have been updated 
+telCAPRoutedOff					EQU		7					; call routed off-network; no further progress will be available 
+telCAPTimeout					EQU		8					; call timed out 
+telCAPUpdate					EQU		9					; name and rmtDN information has been updated 
+telCAPPrompt					EQU		10					; the network is prompting for more information 
+telCAPWaiting					EQU		11					; call is proceeding, but there is no response yet from the destination 
+telCAPCPC						EQU		12					; telephone tool detected CPC signal 
+telCAPNoDialTone				EQU		13					; dial tone not detected 
+telCAPUnknown					EQU		15					; call progress state unknown 
+telCAPDialDisabled				EQU		16					; Blacklisting: Dial Disabled 
+telCAPBlacklistedNumber			EQU		17					; Blacklisting: Blacklisted Number 
+telCAPForbiddenNumber			EQU		18					; Blacklisting: Forbidden Number 
+telCAPModemGuardTime			EQU		19					; Modem Guard Timein force, unable to dial 
+telCAPLCDetected				EQU		20					; trying to dial a number while the handset is offhook 
+telCAPLostLC					EQU		21					; trying manual dial or answer while handset not off hook or also lost line current during dialing. 
+
+;  OUTGOING CALL MESSAGES 
+
+telPhysical						EQU		0					; user lifted handset and initiated call 
+telProgrammatic					EQU		1					; programmatic initiation of outgoing call 
+
+;  DISCONNECT MESSAGES 
+
+telLocalDisconnect				EQU		0					; local party, this user, responsible for disconnect 
+telRemoteDisconnect				EQU		1					; remote party responsible for disconnect 
+
+;  DISCONNECT TYPES 
+
+telCADNormal					EQU		1					; normal disconnect 
+telCADBusy						EQU		2					; remote user busy 
+telCADNoResponse				EQU		3					; remote not responding 
+telCADRejected					EQU		4					; call rejected 
+telCADNumberChanged				EQU		5					; number changed 
+telCADInvalidDest				EQU		6					; invalid destination address 
+telCADFacilityRejected			EQU		7					; requested facility rejected 
+telCADUnobtainableDest			EQU		9					; destination not obtainable 
+telCADCongested					EQU		10					; network congestion 
+telCADIncompatibleDest			EQU		11					; incompatible destination 
+telCADTimeout					EQU		12					; call timed out 
+telCADUnknown					EQU		15					; reason unknown 
+
+;  CONFERENCE MESSAGES 
+
+telConferencePrepFailed			EQU		0					; conference could not be prepared 
+telConferencePending			EQU		1					; conference prepared successfully 
+telConferenceEstFailed			EQU		2					; conference could not be established 
+telConferenceEst				EQU		3					; conference established 
+
+;  TRANSFER MESSAGES 
+
+telTransferPrepFailed			EQU		0					; transfer could not be prepared 
+telTransferPending				EQU		1					; transfer prepared successfully 
+telTransferEst					EQU		2					; consult or blind xfer successful 
+telTransferFailed				EQU		3					; consult or blind xfer failed 
+telTransferred					EQU		4					; message to originator of CA specifying that call was transferred to rmtDN 
+
+;  HOLD MESSAGES 
+
+telHoldCleared					EQU		0
+telHoldEst						EQU		1
+telHoldFailed					EQU		2
+
+;  RECEIVE DIGIT MESSAGES 
+
+telDigitAudible					EQU		0
+telDigitNotAudible				EQU		1
+
+;  CALL PARK MESSAGES 
+
+telCallParkEst					EQU		1					; call has been successfully parked 
+telCallParkRetrieveEst			EQU		2					; parked Call has been successfully retrieved 
+telCallParkFailed				EQU		3					; attempt to setup call park has failed 
+telCallParkRetrieveFailed		EQU		4					; attempt to retrieve parked call failed 
+telCallParkRecall				EQU		5					; call park has been recalled 
+
+;  CALL BACK MESSAGES 
+
+telCallbackCleared				EQU		0					; call back has been cleared 
+telCallbackEst					EQU		1					; call back has been established 
+telCallbackNowAvail				EQU		2					; call can be called back with TELCallBackNow if CA is zero, else call IS calling back on CA 
+telCallbackFailed				EQU		3					; attempt to setup callback has failed 
+telCallbackDesired				EQU		4					; a user has called this terminal, received no answer and desires this terminal to call it back 
+telCallbackDesiredCleared		EQU		5					; call back for no answer no longer desired 
+telCalledback					EQU		6					; callback has occurred successfully 
+
+;  CALL REJECT MESSAGES 
+
+telCallRejectFailed				EQU		0					; attempt to reject call has failed 
+telCallRejectEst				EQU		1					; call successfully rejected 
+telCallRejected					EQU		2					; message to originator that call was rejected 
+
+;  CALL DEFLECT MESSAGES 
+
+telCallDeflectFailed			EQU		0					; attempt to deflect call has failed 
+telCallDeflectEst				EQU		1					; call successfully deflected 
+telCallDeflectRecall			EQU		2					; deflected call has been recalled 
+telCallDeflected				EQU		3					; message to originator that call was deflected to rmtDN 
+telAutoDeflectImmediate			EQU		4					; a call was automatically deflected from this terminal as a result of immediate call forwarding 
+telAutoDeflectBusy				EQU		5					; a call was automatically deflected from this terminal as a result of call forwarding on busy 
+telAutoDeflectNoAnswer			EQU		6					; a call was automatically deflected from this terminal as a result of call forwarding on no answer 
+
+;  CONFERENCE SPLIT MESSAGES 
+
+telConferenceSplitFailed		EQU		0					; CA could not be split 
+telConferenceSplitEst			EQU		1					; CA split successfully 
+
+;  CONFERENCE DROP MESSAGES 
+
+telConferenceDropFailed			EQU		0					; CA could not be dropped 
+telConferenceDropped			EQU		1					; CA dropped successfully 
+
+;  CALL PICKUP MESSAGES 
+
+telCallPickupEst				EQU		0					; call pickup was successful 
+telCallPickupFailed				EQU		1					; call pickup failed 
+telCallPickedUp					EQU		2					; message to originator that call was picked up at a different DN 
+
+;  PAGING MESSAGES 
+
+telPageEst						EQU		0					; paging was successful 
+telPageComplete					EQU		1					; paging activity completed 
+telPageFailed					EQU		2					; paging failed 
+
+;  INTERCOM MESSAGES 
+
+telIntercomEst					EQU		0					; intercom was successful 
+telIntercomComplete				EQU		1					; intercom activity completed 
+telIntercomFailed				EQU		2					; intercom failed 
+
+;  MODEM TONE MESSAGES 
+
+telModemToneDetected			EQU		0					; modem tone was detected 
+telModemToneCleared				EQU		1					; modem tone went away 
+
+;  FAX TONE MESSAGES 
+
+telFaxToneDetected				EQU		0					; fax tone was detected 
+telFaxToneCleared				EQU		1					; fax tone went away 
+
+;  IN USE MESSAGES 
+
+telInUsePrivate					EQU		0					; MADN is in use and can't be accessed 
+telInUseCanAccess				EQU		1					; MADN is in use, and others can access it and join in 
+telInUseCanMakePrivate			EQU		2					; MADN is in use, but available for any one person to access 
+telInUseCleared					EQU		3					; MADN is no longer in use 
+
+;  CALL APPEARANCE STATES 
+
+telCAIdleState					EQU		0					; a call doesn't exist at this time 
+telCAInUseState					EQU		1					; the call is active but at another terminal 
+telCAOfferState					EQU		2					; a call is being offered to the terminal 
+telCAQueuedState				EQU		3					; a call is being queued at this terminal 
+telCAAlertingState				EQU		4					; a call is alerting at the terminal 
+telCADialToneState				EQU		5					; initiated outgoing call has dialtone 
+telCADialingState				EQU		6					; initiated outgoing call is dialing 
+telCAWaitingState				EQU		7					; initiated outgoing call is waiting for response from destination 
+telCARingingState				EQU		8					; the outgoing call is ringing. 
+telCABusyState					EQU		9					; destination is busy or can't be reached 
+telCAHeldState					EQU		10					; call has been put on hold by this terminal 
+telCAConferencedState			EQU		11					; this CA is part of a conference now 
+telCAActiveState				EQU		12					; the call is active and parties are free to exchange data
+telCAReorderState				EQU		13					; CA is in a reorder state 
+telCAConferencedHeldState		EQU		14					; CA is a conference call in a held state 
+telCAUnknownState				EQU		15					; the call state is unknown 
+
+;  TERMINAL MESSAGE EVENTMASKS 
+
+telTermHookMsg					EQU		$00000001			; the hookswitch state has changed 
+telTermKeyMsg					EQU		$00000002			; a phone pad key has been depressed 
+telTermVolMsg					EQU		$00000004			; volume setting has changed 
+telTermDisplayMsg				EQU		$00000008			; display has changed 
+telTermEnableMsg				EQU		$00000010			; terminal has become enabled 
+telTermOpenMsg					EQU		$00000020			; terminal has been opened 
+telTermCloseMsg					EQU		$00000040			; terminal is shutting down 
+telTermResetMsg					EQU		$00000080			; terminal has been reset 
+telTermErrorMsg					EQU		$00000100			; hard equipment error 
+telTermIndHSStateChgMsg			EQU		$00000200			; change in handset state from inacive to active or vice versa 
+telTermIndHSConnectMsg			EQU		$00000400			; independent handset connection has been changed 
+telTermKeyImmMsg				EQU		$00000800			; immidiate arrival of phone pad key 
+telTermVolStateMsg				EQU		$00001000			; volume state has changed 
+telTermOtherMsg					EQU		$80000000			; vendor defined error 
+telAllTermMsgs					EQU		$00001FFF			; mask to all non tool specific terminal events 
+
+;  DN MESSAGE EVENTMASK CONSTANTS 
+
+telDNForwardMsg					EQU		$00000001			; forward feature activity 
+telDNDNDMsg						EQU		$00000002			; do not disturb feature activity 
+telDNVoiceMailMsg				EQU		$00000004			; message has arrived for this DN 
+telDNSelectedMsg				EQU		$00000008			; DN has been selected or deselected 
+telDNOtherMsg					EQU		$80000000			; a custom message for use by tools 
+telAllDNMsgs					EQU		$0000000F			; mask to all non tool specific dn events 
+
+;  CA MESSAGE EVENTMASK CONSTANTS 
+
+telCAAlertingMsg				EQU		$00000001			; CA is alerting  
+telCAOfferMsg					EQU		$00000002			; CA is being offered a call 
+telCAProgressMsg				EQU		$00000004			; call progress info for this CA 
+telCAOutgoingMsg				EQU		$00000008			; CA is initiating an outgoing call 
+telCADisconnectMsg				EQU		$00000010			; CA disconnected (dropped or rmt disc 
+telCAActiveMsg					EQU		$00000020			; CA is active and voice/data is free to flow end to end 
+telCAConferenceMsg				EQU		$00000040			; conference activity on CA 
+telCATransferMsg				EQU		$00000080			; transfer feature activity 
+telCAHoldMsg					EQU		$00000100			; hold feature activity 
+telCADigitsMsg					EQU		$00000200			; remote signaling digits arrived 
+telCACallParkMsg				EQU		$00000400			; CA call park feature activity 
+telCACallbackMsg				EQU		$00000800			; CA call back feature activity  
+telCARejectMsg					EQU		$00001000			; CA is rejected 
+telCADeflectMsg					EQU		$00002000			; CA is deflected 
+telCAForwardMsg					EQU		$00004000			; CA is forwarded to this DN  
+telCAConferenceSplitMsg			EQU		$00008000			; conference split activity  
+telCAConferenceDropMsg			EQU		$00010000			; conference drop activity  
+telCAQueuedMsg					EQU		$00020000			; CA has been queued  
+telCAInUseMsg					EQU		$00040000			; CA is in use  
+telCACallPickupMsg				EQU		$00080000			; CA pickup activity 
+telCAPagingMsg					EQU		$00100000			; CA paging activity 
+telCAIntercomMsg				EQU		$00200000			; CA intercom activity 
+telCAModemToneMsg				EQU		$00400000			; modem tones detected 
+telCAFaxToneMsg					EQU		$00800000			; fax tones detected 
+telCAIdleMsg					EQU		$01000000			; CA is in idle state 
+telCASuccessiveAlertMsg			EQU		$02000000			; phone is alerting, one per ring 
+telCAUserUserInfoMsg			EQU		$04000000			; user to user information has arrrived for this CA 
+telCAHandOffMsg					EQU		$08000000			; CA is ready for hand-off 
+telCAVoiceDetectedMsg			EQU		$10000000			; voice Detect related event 
+telCASilenceDetectedMsg			EQU		$20000000			; silence Detect related event 
+telCADigitsImmMsg				EQU		$40000000			; immidiate arrival of remote signaling digits 
+telCAOtherMsg					EQU		$80000000			; tool specific CA message 
+telAllCAMsgs					EQU		$7FFFFFFF			; mask to all non tool specific CA events 
+; typedef OSErr 						TELErr
+
+
+; typedef UInt32						TELFlags
+telNoMenus						EQU		$00010000			; tells tool not to display any custom menus 
+telQuiet						EQU		$00020000			; tells tool not to display any dialog boxes or alerts 
+telConfigChanged				EQU		$00040000			; notifies application that the config has changed 
+
+
+; typedef UInt32						TELFeatureFlags
+pcmAvail						EQU		$00000001			; true if PCM voice data accessible 
+hasHandset						EQU		$00000002			; true if a phone handset is attached  
+hasSpeakerphone					EQU		$00000004			; true if a 2 way speakerphone is attached 
+canOnHookDial					EQU		$00000008			; can on-hook dial 
+hasRinger						EQU		$00000010			; terminal has its own ringer 
+canSetDisplay					EQU		$00000020			; application can write to the display 
+hasKeypad						EQU		$00000040			; attached phone has standard 12 key pad 
+hasVideo						EQU		$00000080			; terminal has a videophone 
+hasOther						EQU		$00000100			; reserved for future use 
+crossDNConference				EQU		$00000200			; can perform cross-DN conferences 
+hasSubaddress					EQU		$00000400			; attached network supports subaddressing 
+hasUserUserInfo					EQU		$00000800			; network supports user-to-user info 
+hasHandsetSoundStreams			EQU		$00001000			; sound streams are supported on the handset 
+hasIndHandset					EQU		$00002000			; handset can be accessed independently of the phone line 
+hasBuiltinSpeakerphone			EQU		$00004000			; speaker and microphone of the Mac can be used 
+
+TELTermRecord			RECORD 0
+tRef					 ds.w	1				; offset: $0 (0)
+featureFlags			 ds.l	1				; offset: $2 (2)
+handsetSpeakerVol		 ds.w	1				; offset: $6 (6)
+handsetMicVol			 ds.w	1				; offset: $8 (8)
+speakerphoneVol			 ds.w	1				; offset: $A (10)
+speakerphoneMicVol		 ds.w	1				; offset: $C (12)
+ringerVol				 ds.w	1				; offset: $E (14)
+otherVol				 ds.w	1				; offset: $10 (16)
+ringerTypes				 ds.w	1				; offset: $12 (18)
+hasDisplay				 ds.w	1				; offset: $14 (20)
+displayRows				 ds.w	1				; offset: $16 (22)
+numDNs					 ds.w	1				; offset: $18 (24)
+maxAllocCA				 ds.w	1				; offset: $1A (26)
+curAllocCA				 ds.w	1				; offset: $1C (28)
+builtinSpeakerVol		 ds.w	1				; offset: $1E (30)
+builtinSpeakerMicVol	 ds.w	1				; offset: $20 (32)
+reserved				 ds.l	1				; offset: $22 (34)
+sizeof					 EQU *					; size:   $26 (38)
+						ENDR
+; typedef struct TELTermRecord *		TELTermPtr
+
+TELRecord				RECORD 0
+procID					 ds.w	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $2 (2)
+reserved				 ds.w	1				; offset: $6 (6)
+refCon					 ds.l	1				; offset: $8 (8)
+userData				 ds.l	1				; offset: $C (12)
+defproc					 ds.l	1				; offset: $10 (16)
+config					 ds.l	1				; offset: $14 (20)
+oldConfig				 ds.l	1				; offset: $18 (24)
+pTELTerm				 ds.l	1				; offset: $1C (28)
+telPrivate				 ds.l	1				; offset: $20 (32)
+reserved1				 ds.l	1				; offset: $24 (36)
+reserved2				 ds.l	1				; offset: $28 (40)
+pTELTermSize			 ds.l	1				; offset: $2C (44)
+version					 ds.w	1				; offset: $30 (48)
+sizeof					 EQU *					; size:   $32 (50)
+						ENDR
+; typedef struct TELRecord *			TELPtr
+
+; typedef TELPtr *						TELHandle
+
+
+
+; typedef UInt32						TELDNFeatureFlags
+dndSub							EQU		$00000001			; do not disturb subscribed 
+dndAvail						EQU		$00000002			; do not disturb available 
+dndActive						EQU		$00000004			; do not disturb active 
+voiceMailAccessSub				EQU		$00000008			; message waiting subscribed 
+voiceMailAccessAvail			EQU		$00000010			; message waiting available 
+voiceMailAccessActive			EQU		$00000020			; message waiting active 
+pagingSub						EQU		$00000040			; paging is subscribed 
+pagingAvail						EQU		$00000080			; paging is available 
+pagingActive					EQU		$00000100			; paging is active 
+intercomSub						EQU		$00000200			; intercom is subscribed 
+intercomAvail					EQU		$00000400			; intercom is available 
+intercomActive					EQU		$00000800			; intercom is active 
+dnSelectSub						EQU		$00001000			; DN select is subscribed 
+dnSelectAvail					EQU		$00002000			; DN select is available 
+dnSelectActive					EQU		$00004000			; DN is selected 
+callPickupSub					EQU		$00008000			; call pickup is subscribed 
+callPickupAvail					EQU		$00010000			; call pickup is available 
+dnInUse							EQU		$00020000			; a CA is allocated for this DN 
+logicalDN						EQU		$00040000			; this DN is not on this terminal 
+dnAccessible					EQU		$00080000			; commands can be sent to this DN 
+canInitiate						EQU		$00100000			; an outgoing CA can be initiated 
+voiceMessageWaiting				EQU		$00200000			; voice mail waiting for this dn 
+hasDNSoundStreams				EQU		$00400000			; sound streams are supported on this DN 
+autoAnswerAvail					EQU		$00800000			; AutoAnswer is set for this DN 
+autoAnswerActive				EQU		$01000000			; AutoAnswer is currently applied to CA on this DN 
+tollSaverAvail					EQU		$02000000			; tollSaver is set for this DN 
+tollSaverActive					EQU		$04000000			; tollSaver is currently applied to CA on this DN 
+
+
+; typedef UInt32						TELDNForwardFlags
+immediateForwardSub				EQU		$00000001			; immediate call forward subscribed 
+immediateForwardAvail			EQU		$00000002			; immediate call forward available 
+immediateForwardActive			EQU		$00000004			; immediate call forward active 
+busyForwardSub					EQU		$00000008			; forward on busy subscribed 
+busyForwardAvail				EQU		$00000010			; forward on busy available 
+busyForwardActive				EQU		$00000020			; forward on busy active 
+noAnswerForwardSub				EQU		$00000040			; no answer call forward subscribed 
+noAnswerForwardAvail			EQU		$00000080			; no answer call forward available 
+noAnswerForwardActive			EQU		$00000100			; no answer call forward active 
+busyNAForwardSub				EQU		$00000200			; busy & no answer call forward subscribed 
+busyNAForwardAvail				EQU		$00000400			; busy & no answer call forward available 
+busyNAForwardActive				EQU		$00000800			; busy & no answer call forward active 
+
+TELDNRecord				RECORD 0
+dnRef					 ds.w	1				; offset: $0 (0)
+dn						 ds.l	1				; offset: $2 (2)
+dnPartyName				 ds.l	1				; offset: $6 (6)
+dnSubaddress			 ds.l	1				; offset: $A (10)
+hTEL					 ds.l	1				; offset: $E (14)
+maxAllocCA				 ds.w	1				; offset: $12 (18)
+curAllocCA				 ds.w	1				; offset: $14 (20)
+dnType					 ds.w	1				; offset: $16 (22)
+featureFlags			 ds.l	1				; offset: $18 (24)
+numPageIDs				 ds.w	1				; offset: $1C (28)
+numIntercomIDs			 ds.w	1				; offset: $1E (30)
+numPickupIDs			 ds.w	1				; offset: $20 (32)
+forwardFlags			 ds.l	1				; offset: $22 (34)
+iForwardDN				 ds.l	1				; offset: $26 (38)
+iForwardSubaddress		 ds.l	1				; offset: $2A (42)
+iForwardPartyName		 ds.l	1				; offset: $2E (46)
+bForwardDN				 ds.l	1				; offset: $32 (50)
+bForwardSubaddress		 ds.l	1				; offset: $36 (54)
+bForwardPartyName		 ds.l	1				; offset: $3A (58)
+naForwardDN				 ds.l	1				; offset: $3E (62)
+naForwardSubaddress		 ds.l	1				; offset: $42 (66)
+naForwardPartyName		 ds.l	1				; offset: $46 (70)
+naForwardRings			 ds.w	1				; offset: $4A (74)
+telDNPrivate			 ds.l	1				; offset: $4C (76)
+refCon					 ds.l	1				; offset: $50 (80)
+userData				 ds.l	1				; offset: $54 (84)
+reserved				 ds.l	1				; offset: $58 (88)
+sizeof					 EQU *					; size:   $5C (92)
+						ENDR
+; typedef struct TELDNRecord *			TELDNPtr
+
+; typedef TELDNPtr *					TELDNHandle
+
+
+; typedef UInt32						TELCAFeatureFlags
+holdSub							EQU		$00000001			; hold subscribed  
+holdAvail						EQU		$00000002			; hold available  
+holdActive						EQU		$00000004			; hold active  
+conferenceSub					EQU		$00000008			; conference subscribed 
+conferenceAvail					EQU		$00000010			; conference available 
+conferenceActive				EQU		$00000020			; conference active  
+conferenceDropSub				EQU		$00000040			; conference drop subscribed  
+conferenceDropAvail				EQU		$00000080			; a call to TELDrop will drop this CA only from a conference 
+conferenceSplitSub				EQU		$00000100			; conference split subscribed  
+conferenceSplitAvail			EQU		$00000200			; conference split available for this CA 
+numToConferenceRequired			EQU		$00000400			; the number of CAs to be conferenced is required in TELConfPrep 
+transferSub						EQU		$00000800			; transfer subscribed  
+transferAvail					EQU		$00001000			; transfer available  
+transferActive					EQU		$00002000			; transfer active 
+caRelated						EQU		$00004000			; this CA is the specified in some other CA's relatedCA field
+
+; typedef UInt32						TELCAOtherFeatures
+callbackSub						EQU		$00000001			; call back subscribed 
+callbackAvail					EQU		$00000002			; call back available 
+callbackActive					EQU		$00000004			; call back active  
+callbackClearSub				EQU		$00000008			; call back clearing subscribed 
+callbackNowSub					EQU		$00000010			; call back now subscribed 
+callbackNowAvail				EQU		$00000020			; call back now available  
+callbackBusy					EQU		$00000040			; call back on busy 
+callbackNoAnswer				EQU		$00000080			; call back on no answer 
+callbackReturnsRef				EQU		$00000100			; call back returns a reference 
+parkSub							EQU		$00000200			; call park subscribed 
+parkAvail						EQU		$00000400			; call park available 
+parkActive						EQU		$00000800			; call park active 
+parkRetrieveSub					EQU		$00001000			; call park retrieve subscribed 
+parkRetrieveWithID				EQU		$00002000			; retrieve parked calls with IDs 
+parkWithReturnedID				EQU		$00004000			; park call to a specific remote ID 
+parkWithGivenID					EQU		$00040000			; for switch that requires ID for parking 
+rejectable						EQU		$00008000			; CA is rejectable  
+deflectable						EQU		$00010000			; CA is deflectable  
+acceptable						EQU		$00020000			; CA is acceptable 
+voiceDetected					EQU		$00080000			; voice has been detected on this CA incase of an incoming call
+callAnswdTSRings				EQU		$00100000			; incoimng call was answered on TollSaver rings 
+
+
+; typedef TELCARecord *					TELCAPtr
+
+; typedef TELCAPtr *					TELCAHandle
+
+TELCARecord				RECORD 0
+caRef					 ds.w	1				; offset: $0 (0)
+hTELDN					 ds.l	1				; offset: $2 (2)
+hTEL					 ds.l	1				; offset: $6 (6)
+caState					 ds.w	1				; offset: $A (10)
+relatedCA				 ds.l	1				; offset: $C (12)
+connectTime				 ds.l	1				; offset: $10 (16)		;  can be used by application to keep track of connect time 
+intExt					 ds.w	1				; offset: $14 (20)
+callType				 ds.w	1				; offset: $16 (22)
+dialType				 ds.w	1				; offset: $18 (24)
+bearerType				 ds.w	1				; offset: $1A (26)
+rate					 ds.w	1				; offset: $1C (28)
+rmtDN					 ds.l	1				; offset: $1E (30)
+rmtPartyName			 ds.l	1				; offset: $22 (34)
+rmtSubaddress			 ds.l	1				; offset: $26 (38)
+routeDN					 ds.l	1				; offset: $2A (42)
+routePartyName			 ds.l	1				; offset: $2E (46)
+routeSubaddress			 ds.l	1				; offset: $32 (50)
+priority				 ds.w	1				; offset: $36 (54)
+conferenceLimit			 ds.w	1				; offset: $38 (56)
+featureFlags			 ds.l	1				; offset: $3A (58)
+otherFeatures			 ds.l	1				; offset: $3E (62)
+telCAPrivate			 ds.l	1				; offset: $42 (66)
+refCon					 ds.l	1				; offset: $46 (70)
+userData				 ds.l	1				; offset: $4A (74)
+reserved				 ds.l	1				; offset: $4E (78)
+sizeof					 EQU *					; size:   $52 (82)
+						ENDR
+;  Constants for HandleType in structure above 
+
+telHandleType					EQU		0					; feature requires a terminal handle 
+telDNHandleType					EQU		1					; feature requires a DN handle 
+telCAHandleType					EQU		2					; feature requires a CA handle 
+FeatureList				RECORD 0
+featureID				 ds.w	1				; offset: $0 (0)
+featureName				 ds.l	1				; offset: $2 (2)
+handleType				 ds.w	1				; offset: $6 (6)
+nextFeature				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct FeatureList *			FeatureListPtr
+
+;  CA MESSAGE STRUCTURES FOR MSGINFO 
+CAGenericMsgRec			RECORD 0
+rmtDN					 ds.l	1				; offset: $0 (0)
+rmtName					 ds.l	1				; offset: $4 (4)
+rmtSubaddress			 ds.l	1				; offset: $8 (8)
+dialType				 ds.w	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+CAUserUserInfoMsgRec	RECORD 0
+userUserInfo			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CAConfMsgRec			RECORD 0
+relatedCA				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CATransfMsgRec			RECORD 0
+rmtDN					 ds.l	1				; offset: $0 (0)
+rmtName					 ds.l	1				; offset: $4 (4)
+rmtSubaddress			 ds.l	1				; offset: $8 (8)
+dialType				 ds.w	1				; offset: $C (12)
+prepCA					 ds.l	1				; offset: $E (14)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewTelephoneTermMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTelephoneDNMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTelephoneCAMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTelephoneChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTelephoneTermMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTelephoneDNMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTelephoneCAMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTelephoneChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTelephoneTermMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTelephoneDNMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTelephoneCAMsgUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTelephoneChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitTEL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr InitTEL(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitTEL
+	ENDIF
+
+
+; *  TELGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetInfo(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetInfo
+	ENDIF
+
+
+; *  TELOpenTerm()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELOpenTerm(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELOpenTerm
+	ENDIF
+
+
+; *  TELResetTerm()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELResetTerm(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELResetTerm
+	ENDIF
+
+
+; *  TELCloseTerm()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCloseTerm(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCloseTerm
+	ENDIF
+
+
+; *  TELTermMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELTermMsgHand(TELHandle hTEL, long eventMask, TelephoneTermMsgUPP msgProc, long globals)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELTermMsgHand
+	ENDIF
+
+
+; *  TELClrTermMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELClrTermMsgHand(TELHandle hTEL, TelephoneTermMsgUPP msgProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELClrTermMsgHand
+	ENDIF
+
+
+; *  TELTermEventsSupp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELTermEventsSupp(TELHandle hTEL, long *eventMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELTermEventsSupp
+	ENDIF
+
+
+; *  TELGetProcID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TELGetProcID(Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetProcID
+	ENDIF
+
+
+; *  TELNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELHandle TELNew(short procID, TELFlags flags, long refCon, long userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELNew
+	ENDIF
+
+
+; *  TELNewWithResult()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELHandle TELNewWithResult(short procID, TELFlags flags, long refCon, long userData, TELErr *error)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELNewWithResult
+	ENDIF
+
+
+; *  TELDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDefault(Ptr *theConfig, short procID, Boolean allocate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDefault
+	ENDIF
+
+
+; *  TELValidate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TELValidate(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELValidate
+	ENDIF
+
+
+; *  TELGetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Ptr TELGetConfig(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetConfig
+	ENDIF
+
+
+; *  TELSetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TELSetConfig(TELHandle hTEL, Ptr thePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetConfig
+	ENDIF
+
+
+; *  TELChoose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELChoose(TELHandle *hTEL, Point where, TelephoneChooseIdleUPP idleProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELChoose
+	ENDIF
+
+
+; *  TELSetupPreflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle TELSetupPreflight(short procID, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupPreflight
+	ENDIF
+
+
+; *  TELSetupSetup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELSetupSetup(short procID, Ptr theConfig, short count, DialogRef theDialog, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupSetup
+	ENDIF
+
+
+; *  TELSetupFilter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TELSetupFilter(short procID, Ptr theConfig, short count, DialogRef theDialog, EventRecord *theEvent, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupFilter
+	ENDIF
+
+
+; *  TELSetupItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELSetupItem(short procID, Ptr theConfig, short count, DialogRef theDialog, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupItem
+	ENDIF
+
+
+; *  TELSetupCleanup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELSetupCleanup(short procID, Ptr theConfig, short count, DialogRef theDialog, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupCleanup
+	ENDIF
+
+
+; *  TELSetupXCleanup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELSetupXCleanup(short procID, Ptr theConfig, short count, DialogRef theDialog, Boolean OKed, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupXCleanup
+	ENDIF
+
+
+; *  TELSetupPostflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELSetupPostflight(short procID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupPostflight
+	ENDIF
+
+
+; *  TELDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDispose(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDispose
+	ENDIF
+
+
+; *  TELCountDNs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TELCountDNs(TELHandle hTEL, short dnType, Boolean physical)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCountDNs
+	ENDIF
+
+
+; *  TELDNLookupByIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNLookupByIndex(TELHandle hTEL, short dnType, Boolean physical, short index, TELDNHandle *hTELDN)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNLookupByIndex
+	ENDIF
+
+
+; *  TELDNLookupByName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNLookupByName(TELHandle hTEL, ConstStr255Param DN, TELDNHandle *hTELDN)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNLookupByName
+	ENDIF
+
+
+; *  TELDNSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNSelect(TELDNHandle hTELDN, Boolean select)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNSelect
+	ENDIF
+
+
+; *  TELDNDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNDispose(TELDNHandle hTELDN)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNDispose
+	ENDIF
+
+
+; *  TELGetDNInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNInfo(TELDNHandle hTELDN)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNInfo
+	ENDIF
+
+
+; *  TELGetDNFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNFlags(TELDNHandle hTELDN, long *dnFeatureFlags, long *dnForwardFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNFlags
+	ENDIF
+
+
+; *  TELDNMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNMsgHand(TELDNHandle hTELDN, Boolean allDNs, long eventMask, TelephoneDNMsgUPP msgProc, long globals)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNMsgHand
+	ENDIF
+
+
+; *  TELClrDNMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELClrDNMsgHand(TELDNHandle hTELDN, TelephoneDNMsgUPP msgProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELClrDNMsgHand
+	ENDIF
+
+
+; *  TELDNEventsSupp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNEventsSupp(TELDNHandle hTELDN, long *eventMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNEventsSupp
+	ENDIF
+
+
+; *  TELCountCAs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TELCountCAs(TELDNHandle hTELDN, short internalExternal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCountCAs
+	ENDIF
+
+
+; *  TELCALookup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCALookup(TELDNHandle hTELDN, short internalExternal, short index, TELCAHandle *hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCALookup
+	ENDIF
+
+
+; *  TELCADispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCADispose(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCADispose
+	ENDIF
+
+
+; *  TELGetCAState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetCAState(TELCAHandle hTELCA, short *state)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetCAState
+	ENDIF
+
+
+; *  TELGetCAFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetCAFlags(TELCAHandle hTELCA, long *caFeatureFlags, long *caOtherFeatures)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetCAFlags
+	ENDIF
+
+
+; *  TELGetCAInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetCAInfo(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetCAInfo
+	ENDIF
+
+
+; *  TELCAMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCAMsgHand(TELDNHandle hTELDN, long eventMask, TelephoneCAMsgUPP msgProc, long globals)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCAMsgHand
+	ENDIF
+
+
+; *  TELClrCAMsgHand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELClrCAMsgHand(TELDNHandle hTELDN, TelephoneCAMsgUPP msgProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELClrCAMsgHand
+	ENDIF
+
+
+; *  TELCAEventsSupp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCAEventsSupp(TELDNHandle hTELDN, long *eventMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCAEventsSupp
+	ENDIF
+
+
+; *  TELSetupCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetupCall(TELDNHandle hTELDN, TELCAHandle *hTELCA, ConstStr255Param destDN, ConstStr255Param destName, ConstStr255Param destSubaddress, ConstStr255Param userUserInfo, short bearerType, short rate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetupCall
+	ENDIF
+
+
+; *  TELConnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELConnect(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELConnect
+	ENDIF
+
+
+; *  TELDialDigits()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDialDigits(TELCAHandle hTELCA, ConstStr255Param digits)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDialDigits
+	ENDIF
+
+
+; *  TELAcceptCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELAcceptCall(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELAcceptCall
+	ENDIF
+
+
+; *  TELRejectCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELRejectCall(TELCAHandle hTELCA, short reason)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELRejectCall
+	ENDIF
+
+
+; *  TELDeflectCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDeflectCall(TELCAHandle hTELCA, ConstStr255Param rmtDN, ConstStr255Param rmtName, ConstStr255Param rmtSubaddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDeflectCall
+	ENDIF
+
+
+; *  TELAnswerCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELAnswerCall(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELAnswerCall
+	ENDIF
+
+
+; *  TELDrop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDrop(TELCAHandle hTELCA, ConstStr255Param userUserInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDrop
+	ENDIF
+
+
+; *  TELHold()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELHold(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELHold
+	ENDIF
+
+
+; *  TELRetrieve()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELRetrieve(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELRetrieve
+	ENDIF
+
+
+; *  TELConferencePrep()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELConferencePrep(TELCAHandle hTELCA1, TELCAHandle hTELCA2, short numToConference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELConferencePrep
+	ENDIF
+
+
+; *  TELConferenceEstablish()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELConferenceEstablish(TELCAHandle hTELCA1, TELCAHandle hTELCA2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELConferenceEstablish
+	ENDIF
+
+
+; *  TELConferenceSplit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELConferenceSplit(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELConferenceSplit
+	ENDIF
+
+
+; *  TELTransferPrep()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELTransferPrep(TELCAHandle hTELCA1, TELCAHandle hTELCA2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELTransferPrep
+	ENDIF
+
+
+; *  TELTransferEstablish()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELTransferEstablish(TELCAHandle hTELCA1, TELCAHandle hTELCA2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELTransferEstablish
+	ENDIF
+
+
+; *  TELTransferBlind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELTransferBlind(TELCAHandle hTELCA, ConstStr255Param rmtDN, ConstStr255Param rmtName, ConstStr255Param rmtSubaddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELTransferBlind
+	ENDIF
+
+
+; *  TELForwardSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELForwardSet(TELDNHandle hTELDN, ConstStr255Param forwardDN, ConstStr255Param forwardName, ConstStr255Param forwardSubaddress, short forwardType, short numrings)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELForwardSet
+	ENDIF
+
+
+; *  TELForwardClear()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELForwardClear(TELDNHandle hTELDN, short forwardType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELForwardClear
+	ENDIF
+
+
+; *  TELCallbackSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCallbackSet(TELCAHandle hTELCA, short *callbackRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCallbackSet
+	ENDIF
+
+
+; *  TELCallbackClear()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCallbackClear(TELHandle hTEL, short callbackRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCallbackClear
+	ENDIF
+
+
+; *  TELCallbackNow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCallbackNow(TELCAHandle hTELCA, short callbackRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCallbackNow
+	ENDIF
+
+
+; *  TELDNDSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNDSet(TELDNHandle hTELDN, short dndType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNDSet
+	ENDIF
+
+
+; *  TELDNDClear()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNDClear(TELDNHandle hTELDN, short dndType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNDClear
+	ENDIF
+
+
+; *  TELCallPickup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCallPickup(TELCAHandle hTELCA, ConstStr255Param pickupDN, short pickupGroupID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCallPickup
+	ENDIF
+
+
+; *  TELParkCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELParkCall(TELCAHandle hTELCA, StringPtr *parkRetrieveID, ConstStr255Param parkID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELParkCall
+	ENDIF
+
+
+; *  TELRetrieveParkedCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELRetrieveParkedCall(TELCAHandle hTELCA, ConstStr255Param parkRetrieveID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELRetrieveParkedCall
+	ENDIF
+
+
+; *  TELVoiceMailAccess()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELVoiceMailAccess(TELCAHandle hTELCA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELVoiceMailAccess
+	ENDIF
+
+
+; *  TELPaging()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELPaging(TELCAHandle hTELCA, short pageID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELPaging
+	ENDIF
+
+
+; *  TELIntercom()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELIntercom(TELCAHandle hTELCA, short intercomID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELIntercom
+	ENDIF
+
+
+; *  TELOtherFeatureList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELOtherFeatureList(TELHandle hTEL, FeatureListPtr *fList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELOtherFeatureList
+	ENDIF
+
+
+; *  TELOtherFeatureImplement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELOtherFeatureImplement(TELHandle hTEL, Handle theHandle, short featureID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELOtherFeatureImplement
+	ENDIF
+
+
+; *  TELToolFunctions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELToolFunctions(TELHandle hTEL, short msgcode, Boolean *supportsIt)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELToolFunctions
+	ENDIF
+
+
+; *  TELOtherFunction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELOtherFunction(TELHandle hTEL, Ptr paramblock, long size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELOtherFunction
+	ENDIF
+
+
+; *  TELGetHooksw()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetHooksw(TELHandle hTEL, short hookType, Boolean *offHook)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetHooksw
+	ENDIF
+
+
+; *  TELSetHooksw()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetHooksw(TELHandle hTEL, short hookType, Boolean offHook)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetHooksw
+	ENDIF
+
+
+; *  TELGetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetVolume(TELHandle hTEL, short volType, short *level, short *volState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetVolume
+	ENDIF
+
+
+; *  TELSetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetVolume(TELHandle hTEL, short volType, short *level, short volState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetVolume
+	ENDIF
+
+
+; *  TELAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELAlert(TELHandle hTEL, short *level, short alertPattern)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELAlert
+	ENDIF
+
+
+; *  TELGetDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDisplay(TELHandle hTEL, short index, short *displayMode, StringPtr *text)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDisplay
+	ENDIF
+
+
+; *  TELSetDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetDisplay(TELHandle hTEL, short index, short displayMode, ConstStr255Param text)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetDisplay
+	ENDIF
+
+
+; *  TELIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELIdle(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELIdle
+	ENDIF
+
+
+; *  TELActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELActivate(TELHandle hTEL, Boolean activate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELActivate
+	ENDIF
+
+
+; *  TELResume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELResume(TELHandle hTEL, Boolean resume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELResume
+	ENDIF
+
+
+; *  TELMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TELMenu(TELHandle hTEL, short menuID, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELMenu
+	ENDIF
+
+
+; *  TELEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELEvent(TELHandle hTEL, const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELEvent
+	ENDIF
+
+
+; *  TELGetToolName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TELGetToolName(short procID, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetToolName
+	ENDIF
+
+
+; *  TELGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle TELGetVersion(TELHandle hTEL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetVersion
+	ENDIF
+
+
+; *  TELGetTELVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TELGetTELVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetTELVersion
+	ENDIF
+
+
+; *  TELIntlToEnglish()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELIntlToEnglish(TELHandle hTEL, Ptr inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELIntlToEnglish
+	ENDIF
+
+
+; *  TELEnglishToIntl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELEnglishToIntl(TELHandle hTEL, Ptr inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELEnglishToIntl
+	ENDIF
+
+
+; *  TELGetDNSoundInput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNSoundInput(TELDNHandle hTELDN, Str255 deviceName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNSoundInput
+	ENDIF
+
+
+; *  TELDisposeDNSoundInput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDisposeDNSoundInput(TELDNHandle hTELDN, ConstStr255Param deviceName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDisposeDNSoundInput
+	ENDIF
+
+
+; *  TELGetDNSoundOutput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNSoundOutput(TELDNHandle hTELDN, Component *SndOut)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNSoundOutput
+	ENDIF
+
+
+; *  TELDisposeDNSoundOutput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDisposeDNSoundOutput(TELDNHandle hTELDN, Component SndOut)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDisposeDNSoundOutput
+	ENDIF
+
+
+; *  TELGetHSSoundInput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetHSSoundInput(TELHandle termHand, Str255 deviceName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetHSSoundInput
+	ENDIF
+
+
+; *  TELDisposeHSSoundInput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDisposeHSSoundInput(TELHandle termHand, ConstStr255Param deviceName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDisposeHSSoundInput
+	ENDIF
+
+
+; *  TELGetHSSoundOutput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetHSSoundOutput(TELHandle termHand, Component *SndOut)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetHSSoundOutput
+	ENDIF
+
+
+; *  TELDisposeHSSoundOutput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDisposeHSSoundOutput(TELHandle termHand, Component SndOut)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDisposeHSSoundOutput
+	ENDIF
+
+
+; *  TELDNSetAutoAnswer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNSetAutoAnswer(TELDNHandle hTELDN, Boolean AutoAnswerOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNSetAutoAnswer
+	ENDIF
+
+
+; *  TELDNTollSaverControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNTollSaverControl(TELDNHandle hTELDN, Boolean QuickAnswer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNTollSaverControl
+	ENDIF
+
+
+; *  TELSetIndHSConnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetIndHSConnect(TELHandle termHand, Boolean Connect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetIndHSConnect
+	ENDIF
+
+
+; *  TELGetIndHSConnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetIndHSConnect(TELHandle termHand, Boolean *Connect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetIndHSConnect
+	ENDIF
+
+
+; *  TELCAVoiceDetect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCAVoiceDetect(TELCAHandle hTELCA, Boolean VoiceDetectOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCAVoiceDetect
+	ENDIF
+
+
+; *  TELCASilenceDetect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELCASilenceDetect(TELCAHandle hTELCA, Boolean DetectOn, long Period)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELCASilenceDetect
+	ENDIF
+
+
+; *  TELGetTelNewErr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetTelNewErr(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetTelNewErr
+	ENDIF
+
+
+; *  TELDNSetDTMF()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNSetDTMF(TELDNHandle hTELDN, Boolean dtmfOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNSetDTMF
+	ENDIF
+
+
+; *  TELDNGetDTMF()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELDNGetDTMF(TELDNHandle hTELDN, Boolean *dtmfOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELDNGetDTMF
+	ENDIF
+
+
+; *  TELHSSetDTMF()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELHSSetDTMF(TELHandle termHand, Boolean dtmfOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELHSSetDTMF
+	ENDIF
+
+
+; *  TELHSGetDTMF()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELHSGetDTMF(TELHandle termHand, Boolean *dtmfOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELHSGetDTMF
+	ENDIF
+
+
+; *  TELGetDNStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNStatus(TELDNHandle hTELDN, long *inUse)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNStatus
+	ENDIF
+
+
+; *  TELGetDNProgressDet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELGetDNProgressDet(TELDNHandle hTELDN, long selector, Boolean *prgDetOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELGetDNProgressDet
+	ENDIF
+
+
+; *  TELSetDNProgressDet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TELErr TELSetDNProgressDet(TELDNHandle hTELDN, long selector, Boolean prgDetOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TELSetDNProgressDet
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __TELEPHONES__ 
+

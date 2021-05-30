@@ -1,0 +1,327 @@
+
+; File: HardwareEqu.a
+;
+; Version 2.0
+;
+; Copyright Apple Computer, Inc. 1984, 1985, 1986
+; All Rights Reserved
+;
+
+
+;--------------------------------------------------------------------
+;
+; The following information was formerly in "private" files that were
+; not released to the general developer community.
+;
+; The information in this file is not needed for normal application
+; development. These equates and macros were necessary for development
+; of the Macintosh ToolBox and Operating System, and are likely to be
+; dependent on their current implementation. Use of any information
+; in this file is likely to cause your software to fail on future
+; versions of Macintosh system software or hardware.
+;
+; Apple Developer Support will not support any use of the following
+; information.
+;
+; In order to prevent any "accidental" use of this information, it has
+; been disabled using the conditional-assembly variable defined below.
+; If you change this to a non-zero value, you're on your own.
+
+	IF (&TYPE('HWNonPortable') = 'UNDEFINED') THEN
+HWNonPortable EQU 0
+	ENDIF
+
+	IF HWNonPortable THEN
+
+
+; Hardware Equates -- This file defines the low-level equates for the
+;	Macintosh hardware interface.
+
+onMac		EQU 1	; set for Mac
+onMacXL 	EQU 0
+
+ovlyRAM 		EQU  $600000 ; low RAM address when overlay is on
+ovlyScreen		EQU  $67A700 ; top of screen with overlay
+
+DiagROM 		EQU    $F80000			; Alternate ROM - initial vector	
+DiagROM1		EQU    $F80080			; Alternate ROM - memory sizing vector
+DiagROM2		EQU    $F80088			; Alternate ROM - init I/O vector	
+PhaseRead		EQU    $F00000			; Phase read address (StartMain)
+
+				IF	onMac=1 THEN			;					
+HiIntMask		EQU    $0300
+LoIntMask		EQU    $0100
+VIAIntMask		EQU    $0100			; mask for VIA (and VBL) interrupts 
+SCCEnblMask 	EQU    $F9FF			; mask to enable SCC interrupts 
+				ENDIF				;						
+
+				IF	 onMacXL=1 THEN
+HiIntMask		EQU    $0600			; mask for all interrupts (except NMI)
+LoIntMask		EQU    $0100			;					
+				ENDIF
+
+;________________________________;
+;
+; Screen, Sound, ROM, RAM addresses
+;________________________________;
+
+				IF	 onMac=1 THEN			;					
+SoundLow		EQU  $3FFD00		; sound buffer start address		
+pwmBuffer		EQU  $3FFD01		; PWM bytes are low bytes	
+romStart		EQU  $400000		; starting address of ROM code
+ScreenLow		EQU  $3FA700		; top of screen screen address
+;SEOvlyRegs 	EQU  $7FFC80		; Sys Error Regs w. Overlay 		
+SERegs			EQU  $3FFC80		; Sys Error Regs w/o Overlay
+
+SEScrnNum		EQU  $3FD3DD		; Sys Error Number Screen address =$7CB5E+64*34 - 1
+											; "vaguely centered" plus 34 scanlines -1 for extra digit
+SEScrnInc		EQU  $3FD5DF		; address to diddle below death number
+SEScrnIcon		EQU  $3FCB5E		; centered screen addr for Mac icons
+SEScrnFace		EQU  $3FCCDF		; screen addr for face		
+SEScrnI2		EQU  $3FCF1F		; screen addr for boot icon overlay 
+				ENDIF				;						
+
+
+; New system error equates						
+
+SEVars			EQU    SERegs			; start of system error data space (wrap city)
+SEVSize 		EQU    128			; # of bytes in space
+
+SED0			EQU    SEVars			; loc of saved reg D0
+SEA0			EQU    SED0+32			; loc of saved reg A0
+SEA7			EQU    SEA0+28			; loc of saved reg A7
+SEPC			EQU    SEA7+4			; loc of saved PC
+SESR			EQU    SEPC+4			; loc of saved SR
+SEAccess		EQU    SESR+2			; PC address during bus/address error
+SECmdSize		EQU    SEAccess+4		; # of bytes of parameters passed in _debugger call
+SE000BE 		EQU    SECmdSize+2		; 8 bytes of bus error info for 68000		
+SELastVar		EQU    SE000BE+8		; last var in System Error data space		
+
+; Rom-based debugger nub equates							
+
+RDport			EQU    SELastVar	   ; Number of port currently in use (0 => no link, 1 => A, 2 => B)
+RDcode			EQU    RDport+2 	   ; Ptr to code download buffer.
+RDAtrap 		EQU    RDcode+4 	   ; Saved Rom Atrap handler
+RDlowTrap		EQU    RDAtrap+4	   ; low value for trap handling
+RDhiTrap		EQU    RDlowTrap+2	   ; high value for trap handling
+RDresult		EQU    RDhiTrap+2	   ; result of executing down-loaded code, etc. (16 bytes)
+RDend			EQU    RDresult+16	   ; end of vars
+
+; MicroBug Equates								
+; NOTE: Keep MBdotAddr immediately before MBlocAddr
+
+MBbufSize		EQU    34
+
+MBbuffer		EQU    SELastVar		; buffer for input
+MBSign			EQU    MBbuffer+MBbufSize  ; ST => negative sign during conversion
+MBdotAddr		EQU    MBSign+2 	; saved address
+MBlocAddr		EQU    MBdotAddr+4		; saved location
+
+				IF	onMac=1 THEN			;					
+DSrectTL		EQU    $00400020		; top left = 64,32
+DSrectBR		EQU    $00BE01E0		; bottom right = 190,480
+				ENDIF				;						
+
+; Screen, Sound, ROM, RAM  Constants
+
+PWM2MemTop		EQU    $2FF 	; PWMBuffer to MemTop
+Snd2MemTop		EQU    $300 	; SoundLow to Memtop
+
+				IF	onMac=1 THEN		;					
+Scrn2MemTop 	EQU    $5900		; ScreenBase to Memtop
+
+scrnRowB		EQU    64
+maxX			EQU    512
+maxY			EQU    342
+scrnBytes		EQU    21888		; scrnRowB*maxY
+				ENDIF			;							
+
+romWSize		EQU    $10000		; 64K words in present ROM
+romBSize		EQU    $20000		; 128K bytes in present ROM
+
+screenWidth 	EQU    maxX 	; screen width				
+screenHeight	EQU    maxY 	; screen height 			
+
+;________________________________;
+;
+; VIA (6522) interface chip
+;________________________________;
+
+
+				IF	onMac=1 THEN		;					
+VBase			EQU  $EFE1FE	; base address
+AVBufB			EQU  $EFE1FE	; buffer B
+AVBufA			EQU  $EFFFFE	; buffer A
+AVBufM			EQU  $EFE1FE	; buffer with mouse button bit
+AVIFR			EQU  $EFFBFE	; interrupt flag register
+AVIER			EQU  $EFFDFE	; interrupt enable register
+				ENDIF			;							
+
+; timing constants								
+
+				IF	onMac=1 THEN		;						
+TicksPr100		EQU    78		; timer 1 setting for 100 usec intervals
+OneSecConst 	EQU    2		; gets converted to $20000 for onesec constant
+				ENDIF			;							
+
+
+;________________________________;
+;
+; SCC Serial Chip Addresses
+;________________________________;
+
+				IF	onMac=1 THEN		;						
+SCCRBase		EQU  $9FFFF8	; SCC base read address
+SCCWBase		EQU  $BFFFF9	; SCC base write address
+				ENDIF			;							
+
+; SCC Offsets
+
+				IF	onMac=1 THEN		;						
+sccWrite		EQU  $200001	; general offset for write from read
+				ENDIF			;							
+
+; SCC clock rates			;						
+
+MacClock		EQU    36707		; in Hz * 100				
+MidMacClock 	EQU    39168		;						
+LisaAClock		EQU    40000		; port A clock			
+LisaBCLock		EQU    36864		; port B clock				
+
+; SCC baud rate constants
+
+MacConst		EQU    114709		; in Hz/32				
+MidMacConst 	EQU    122400		;						
+LisaAConst		EQU    125000		;						
+LisaBConst		EQU    115200		;						
+
+;________________________________;
+;
+; IWM Chip Addresses
+;________________________________;
+
+
+				IF	onMac=1 THEN		;						
+DBase			EQU  $DFE1FF	; disk address base
+DPh0L			EQU  $DFE1FF	; phase 0 low
+DPh0H			EQU  $DFE3FF	; phase 0 high
+DMtrOff 		EQU  $DFF1FF	; IWM Motor off
+DMtrOn			EQU  $DFF3FF	; IWM Motor on
+DiskQ6L 		EQU  $DFF9FF	; shift register
+DiskQ6H 		EQU  $DFFBFF
+DiskQ7L 		EQU  $DFFDFF
+DiskQ7H 		EQU  $DFFFFF
+				ENDIF			;							
+
+			IF		onMac=1 THEN			; SCSI addresses			
+;
+;	base address for SCSI Port for MAC+
+;
+scsiRd	EQU 	$580000 		; base address of SCSI interface - READ
+scsiWr	EQU 	$580001 		; base address of SCSI interface - WRITE
+			ENDIF				;				
+
+;
+;	5380 Register Defs - Offsets
+;
+			IF		onMac=1 THEN			; address offsets			
+DACKRd		EQU 	   $200 		; offset of psuedo-DMA - READ
+DACKWr		EQU 	   $200 		; offset of psuedo-DMA - WRITE
+			ENDIF				;					
+
+sCDR		EQU 	$00 		; Current SCSI Read Data
+sODR		EQU 	$00 		; Output data register
+
+sICR		EQU 	$10 		; Initiator Command Register - READ/WRITE
+iRST		EQU 	$80 		; *RST asserted
+iAIP		EQU 	$40 		; arbitration in progress (read)
+bAIP		EQU 	6			;	bit test for arbitration in progress
+aTMD		EQU 	$40 		; assert Test Mode (write)
+iLA 		EQU 	$20 		; Lost arbitration (read)
+bLA 		EQU 	5			;	bit test for Lost Arbitration
+aDIFF		EQU 	$20 	   ; assert Differential enable (write)
+iACK		EQU 	$10 	   ; *ACK is asserted
+iBSY		EQU 	$08 	   ; *BSY is asserted
+iSEL		EQU 	$04 	   ; *SEL is asserted
+iATN		EQU 	$02 	   ; *ATN is asserted
+iDB 		EQU 	$01 	   ; Data bus is asserted
+
+sMR 		EQU 	$20 			; Mode Register - READ/WRITE
+iBDMA		EQU 	$80 	   ; Block Mode DMA
+iTGT		EQU 	$40 	   ; Target Mode
+iPTY		EQU 	$20 	   ; Enable Parity Checking
+iIPTY		EQU 	$10 	   ; Enable Parity interrupt
+iIEOP		EQU 	$08 	   ; Enable EOP interrupt
+iMBSY		EQU 	$04 	   ; Monitor BSY
+iDMA		EQU 	$02 	   ; DMA Mode
+iARB		EQU 	$01 	   ; Arbitration
+
+sTCR		EQU 	$30 	   ; Target Command Register - READ/WRITE
+iREQ		EQU 	$08 	   ; Assert *REQ
+iMSG		EQU 	$04 	   ; Assert *MSG
+iCD 		EQU 	$02 	   ; Assert C/*D
+iIO 		EQU 	$01 	   ; Assert I/*O
+
+sCSR		EQU 	$40 			; Current SCSI Bus Status (READ)
+aRST		EQU 	$80 	   ; *RST
+aBSY		EQU 	$40 	   ; *BSY
+bBSY		EQU 	6		   ;  bit test for *BSY
+aREQ		EQU 	$20 	   ; *REQ
+bREQ		EQU 	5		   ;  bit test for *REQ
+aMSG		EQU 	$10 	   ; *MSG
+bMSG		EQU 	4		   ;  bit test for *MSG
+aCD 		EQU 	$08 	   ; C/*D
+bCD 		EQU 	3		   ;  bit test for C/*D
+aIO 		EQU 	$04 	   ; I/*O
+bIO 		EQU 	2		   ;  bit test for I/*O
+aSEL		EQU 	$02 	   ; *SEL
+bSEL		EQU 	1		   ;  bit test for *SEL
+aDBP		EQU 	$01 	   ; *DBP
+
+sSER		EQU 	$40 	   ; Select Enable Register (WRITE)
+
+sBSR		EQU 	$50 	   ; Bus & Status Register (READ)
+iEDMA		EQU 	$80 	   ; End of DMA
+bEDMA		EQU 	7		   ; bit test for end of DMA	
+iDMAR		EQU 	$40 	   ; DMA Request
+bDMAR		EQU 	6		   ; bit test for DMA Req
+iPERR		EQU 	$20 	   ; Parity Error
+iIREQ		EQU 	$10 	   ; Interrupt Request
+bIREQ		EQU 	4		   ; bit test for interrupt
+iPM 		EQU 	$08 	   ; Phase Match
+bPM 		EQU 	3		   ;  bit test for Phase Match
+iBERR		EQU 	$04 	   ; Bus Error
+ATN 		EQU 	$02 	   ; *ATN
+ACK 		EQU 	$01 	   ; *ACK
+bACK		EQU 	0		   ; bit test for ACK			
+
+sDMAtx		EQU 	$50 			; DMA Transmit Start (WRITE)
+sIDR		EQU 	$60 			; Data input register (READ)
+sTDMArx 	EQU 	$60 			; Start Target DMA receive (WRITE)
+sRESET		EQU 	$70 			; Reset Parity/Interrupt (READ)
+sIDMArx 	EQU 	$70 			; Start Initiator DMA receive (WRITE)
+
+			IF	 onMac=1 THEN				;					
+onesec		EQU    95528			; looptimes
+halfsec 	EQU    onesec/2
+OneSecTicks EQU    60				; ticks, of course
+StlDelay	EQU    $30				; default bus settle delay			
+			ENDIF				;					
+
+
+;  Interrupt Auto-vector and Exception Definitions
+
+Line1010		EQU  $28	 ; 1010 emulator trap (system routines)
+Line1111		EQU  $2C	 ; 1111 emulator trap (reserved)
+AutoInt1		EQU  $64	 ; level 1 auto-vector
+AutoInt2		EQU  $68	 ; level 2 auto-vector
+AutoInt3		EQU  $6C	 ; level 3 auto-vector
+AutoInt4		EQU  $70	 ; level 4 auto-vector
+AutoInt5		EQU  $74	 ; level 5 auto-vector
+AutoInt6		EQU  $78	 ; level 6 auto-vector
+AutoInt7		EQU  $7C	 ; level 7 auto-vector
+FmtErrVect		EQU  $38	 ; format error vector for 68010/68020
+
+
+		ENDIF  ;end exclusion of private information
+	

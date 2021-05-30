@@ -1,0 +1,685 @@
+;
+;	File:		Printing.a
+;
+;	Contains:	Print Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+__PRINTING__ SET 1
+
+
+	IF &TYPE('__ERRORS__') = 'UNDEFINED' THEN
+	include 'Errors.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'Types.a'											;
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Memory.a'											;
+;		include 'Menus.a'											;
+;		include 'Controls.a'										;
+;		include 'Windows.a'										;
+;			include 'Events.a'										;
+;				include 'OSUtils.a'								;
+;		include 'TextEdit.a'										;
+
+iPFMaxPgs						EQU		128
+iPrPgFract						EQU		120					;Page scale factor. ptPgSize (below) is in units of 1/iPrPgFract
+iPrPgFst						EQU		1					;Page range constants
+iPrPgMax						EQU		9999
+iPrRelease						EQU		3					;Current version number of the code.
+iPrSavPFil						EQU		-1
+iPrAbort						EQU		$0080
+iPrDevCtl						EQU		7					;The PrDevCtl Proc's ctl number
+lPrReset						EQU		$00010000			;The PrDevCtl Proc's CParam for reset
+lPrLineFeed						EQU		$00030000
+lPrLFStd						EQU		$0003FFFF			;The PrDevCtl Proc's CParam for std paper advance
+lPrLFSixth						EQU		$0003FFFF
+lPrPageEnd						EQU		$00020000			;The PrDevCtl Proc's CParam for end page
+lPrDocOpen						EQU		$00010000
+lPrPageOpen						EQU		$00040000
+lPrPageClose					EQU		$00020000
+lPrDocClose						EQU		$00050000
+iFMgrCtl						EQU		8					;The FMgr's Tail-hook Proc's ctl number
+iMscCtl							EQU		9					;The FMgr's Tail-hook Proc's ctl number
+iPvtCtl							EQU		10					;The FMgr's Tail-hook Proc's ctl number
+
+pPrGlobals						EQU		$00000944			;The PrVars lo mem area:
+bDraftLoop						EQU		0
+bSpoolLoop						EQU		1
+bUser1Loop						EQU		2
+bUser2Loop						EQU		3
+fNewRunBit						EQU		2
+fHiResOK						EQU		3
+fWeOpenedRF						EQU		4
+;Driver constants 
+iPrBitsCtl						EQU		4
+lScreenBits						EQU		0
+lPaintBits						EQU		1
+lHiScreenBits					EQU		$00000002			;The Bitmap Print Proc's Screen Bitmap param
+lHiPaintBits					EQU		$00000003			;The Bitmap Print Proc's Paint [sq pix] param
+iPrIOCtl						EQU		5
+iPrEvtCtl						EQU		6					;The PrEvent Proc's ctl number
+lPrEvtAll						EQU		$0002FFFD			;The PrEvent Proc's CParam for the entire screen
+lPrEvtTop						EQU		$0001FFFD			;The PrEvent Proc's CParam for the top folder
+iPrDrvrRef						EQU		-3
+
+getRslDataOp					EQU		4
+setRslOp						EQU		5
+draftBitsOp						EQU		6
+noDraftBitsOp					EQU		7
+getRotnOp						EQU		8
+NoSuchRsl						EQU		1
+OpNotImpl						EQU		2					;the driver doesn't support this opcode
+RgType1							EQU		1
+
+feedCut							EQU		0
+feedFanfold						EQU		1
+feedMechCut						EQU		2
+feedOther						EQU		3
+
+; typedef SInt8 			TFeed
+
+scanTB							EQU		0
+scanBT							EQU		1
+scanLR							EQU		2
+scanRL							EQU		3
+
+; typedef SInt8 			TScan
+; A Rect Ptr 
+; typedef Rect 				*TPRect
+TPrPort 				RECORD	0
+gPort					 ds     GrafPort ; offset: $0 (0)		;The Printer's graf port.
+gProcs					 ds     QDProcs	; offset: $6C (108)		;..and its procs
+lGParam1				 ds.l   1		; offset: $A0 (160)		;16 bytes for private parameter storage.
+lGParam2				 ds.l   1		; offset: $A4 (164)
+lGParam3				 ds.l   1		; offset: $A8 (168)
+lGParam4				 ds.l   1		; offset: $AC (172)
+fOurPtr					 ds.b   1		; offset: $B0 (176)		;Whether the PrPort allocation was done by us.
+fOurBits				 ds.b   1		; offset: $B1 (177)		;Whether the BitMap allocation was done by us.
+sizeof					 EQU *			; size:   $B2 (178)
+						ENDR
+
+; typedef struct TPrPort 	TPrPort, *TPPrPort
+; Printing Graf Port. All printer imaging, whether spooling, banding, etc, happens "thru" a GrafPort.
+;  This is the "PrPeek" record. 
+TPrInfo 				RECORD	0
+iDev					 ds.w   1		; offset: $0 (0)		;Font mgr/QuickDraw device code
+iVRes					 ds.w   1		; offset: $2 (2)		;Resolution of device, in device coordinates
+iHRes					 ds.w   1		; offset: $4 (4)		;..note: V before H => compatable with Point.
+rPage					 ds     Rect	; offset: $6 (6)		;The page (printable) rectangle in device coordinates.
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct TPrInfo 	TPrInfo, *TPPrInfo
+; Print Info Record: The parameters needed for page composition. 
+TPrStl 					RECORD	0
+wDev					 ds.w   1		; offset: $0 (0)
+iPageV					 ds.w   1		; offset: $2 (2)
+iPageH					 ds.w   1		; offset: $4 (4)
+bPort					 ds.b   1		; offset: $6 (6)
+feed					 ds.b   1		; offset: $7 (7)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct TPrStl 	TPrStl, *TPPrStl
+TPrXInfo 				RECORD	0
+iRowBytes				 ds.w   1		; offset: $0 (0)
+iBandV					 ds.w   1		; offset: $2 (2)
+iBandH					 ds.w   1		; offset: $4 (4)
+iDevBytes				 ds.w   1		; offset: $6 (6)
+iBands					 ds.w   1		; offset: $8 (8)
+bPatScale				 ds.b   1		; offset: $A (10)
+bUlThick				 ds.b   1		; offset: $B (11)
+bUlOffset				 ds.b   1		; offset: $C (12)
+bUlShadow				 ds.b   1		; offset: $D (13)
+scan					 ds.b   1		; offset: $E (14)
+bXInfoX					 ds.b   1		; offset: $F (15)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct TPrXInfo 	TPrXInfo, *TPPrXInfo
+TPrJob 					RECORD	0
+iFstPage				 ds.w   1		; offset: $0 (0)		;Page Range.
+iLstPage				 ds.w   1		; offset: $2 (2)
+iCopies					 ds.w   1		; offset: $4 (4)		;No. copies.
+bJDocLoop				 ds.b   1		; offset: $6 (6)		;The Doc style: Draft, Spool, .., and ..
+fFromUsr				 ds.b   1		; offset: $7 (7)		;Printing from an User's App (not PrApp) flag
+pIdleProc				 ds.l   1		; offset: $8 (8)		;The Proc called while waiting on IO etc.
+pFileName				 ds.l   1		; offset: $C (12)		;Spool File Name: NIL for default.
+iFileVol				 ds.w   1		; offset: $10 (16)		;Spool File vol, set to 0 initially
+bFileVers				 ds.b   1		; offset: $12 (18)		;Spool File version, set to 0 initially
+bJobX					 ds.b   1		; offset: $13 (19)		;An eXtra byte.
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct TPrJob 	TPrJob, *TPPrJob
+; Print Job: Print "form" for a single print request. 
+; typedef struct TPrint 	TPrint, *TPPrint, **THPrint
+; The universal 120 byte printing record 
+TPrStatus 				RECORD	0
+iTotPages				 ds.w   1		; offset: $0 (0)		;Total pages in Print File.
+iCurPage				 ds.w   1		; offset: $2 (2)		;Current page number
+iTotCopies				 ds.w   1		; offset: $4 (4)		;Total copies requested
+iCurCopy				 ds.w   1		; offset: $6 (6)		;Current copy number
+iTotBands				 ds.w   1		; offset: $8 (8)		;Total bands per page.
+iCurBand				 ds.w   1		; offset: $A (10)		;Current band number
+fPgDirty				 ds.b   1		; offset: $C (12)		;True if current page has been written to.
+fImaging				 ds.b   1		; offset: $D (13)		;Set while in band's DrawPic call.
+hPrint					 ds.l   1		; offset: $E (14)		;Handle to the active Printer record
+pPrPort					 ds.l   1		; offset: $12 (18)		;Ptr to the active PrPort
+hPic					 ds.l   1		; offset: $16 (22)		;Handle to the active Picture
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct TPrStatus 	TPrStatus, *TPPrStatus
+; Print Status: Print information during printing. 
+TPfPgDir 				RECORD	0
+iPages					 ds.w   1		; offset: $0 (0)
+iPgPos					 ds.l   129		; offset: $2 (2)		;ARRAY [0..iPfMaxPgs] OF LONGINT
+sizeof					 EQU *			; size:   $206 (518)
+						ENDR
+
+; typedef struct TPfPgDir 	TPfPgDir, *TPPfPgDir, **THPfPgDir
+; PicFile = a TPfHeader followed by n QuickDraw Pics (whose PicSize is invalid!) 
+; This is the Printing Dialog Record. Only used by folks appending their own
+;   DITLs to the print dialogs.	Print Dialog: The Dialog Stream object. 
+	IF STRICT_WINDOWS  THEN
+; typedef Ptr 				TPPrDlgRef
+	ELSE
+TPrDlg 					RECORD	0
+Dlg						 ds     DialogRecord ; offset: $0 (0)	;The Dialog window
+pFltrProc				 ds.l   1		; offset: $AA (170)		;The Filter Proc.
+pItemProc				 ds.l   1		; offset: $AE (174)		;The Item evaluating proc.
+hPrintUsr				 ds.l   1		; offset: $B2 (178)		;The user's print record.
+fDoIt					 ds.b   1		; offset: $B6 (182)
+fDone					 ds.b   1		; offset: $B7 (183)
+lUser1					 ds.l   1		; offset: $B8 (184)		;Four longs for apps to hang global data.
+lUser2					 ds.l   1		; offset: $BC (188)		;Plus more stuff needed by the particular
+lUser3					 ds.l   1		; offset: $C0 (192)		;printing dialog.
+lUser4					 ds.l   1		; offset: $C4 (196)
+sizeof					 EQU *			; size:   $C8 (200)
+						ENDR
+
+; typedef struct TPrDlg 	TPrDlg
+; typedef TPrDlg 			*TPPrDlg
+; typedef TPrDlg 			*TPPrDlgRef
+	ENDIF
+TGnlData 				RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)		;more fields here depending on call
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct TGnlData 	TGnlData
+TRslRg 					RECORD	0
+iMin					 ds.w   1		; offset: $0 (0)
+iMax					 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TRslRg 	TRslRg
+TRslRec 				RECORD	0
+iXRsl					 ds.w   1		; offset: $0 (0)
+iYRsl					 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TRslRec 	TRslRec
+TGetRslBlk 				RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+iRgType					 ds.w   1		; offset: $8 (8)
+xRslRg					 ds     TRslRg	; offset: $A (10)
+yRslRg					 ds     TRslRg	; offset: $E (14)
+iRslRecCnt				 ds.w   1		; offset: $12 (18)
+rgRslRec				 ds.b   27 * TRslRec.sizeof ; offset: $14 (20)
+sizeof					 EQU *			; size:   $80 (128)
+						ENDR
+
+; typedef struct TGetRslBlk  TGetRslBlk
+TSetRslBlk 				RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+hPrint					 ds.l   1		; offset: $8 (8)
+iXRsl					 ds.w   1		; offset: $C (12)
+iYRsl					 ds.w   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct TSetRslBlk  TSetRslBlk
+TDftBitsBlk 			RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+hPrint					 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct TDftBitsBlk  TDftBitsBlk
+TGetRotnBlk 			RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+hPrint					 ds.l   1		; offset: $8 (8)
+fLandscape				 ds.b   1		; offset: $C (12)
+bXtra					 ds.b   1		; offset: $D (13)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct TGetRotnBlk  TGetRotnBlk
+;
+; pascal void PrPurge(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrPurge
+			dc.w 	$2F3C
+			dc.w 	$A800
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrPurge
+	ENDIF
+
+;
+; pascal void PrNoPurge(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrNoPurge
+			dc.w 	$2F3C
+			dc.w 	$B000
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrNoPurge
+	ENDIF
+
+;
+; pascal void PrOpen(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrOpen
+			dc.w 	$2F3C
+			dc.w 	$C800
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrOpen
+	ENDIF
+
+;
+; pascal void PrClose(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrClose
+			dc.w 	$2F3C
+			dc.w 	$D000
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrClose
+	ENDIF
+
+;
+; pascal void PrintDefault(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrintDefault
+			dc.w 	$2F3C
+			dc.w 	$2004
+			dc.w 	$0480
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrintDefault
+	ENDIF
+
+;
+; pascal Boolean PrValidate(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrValidate
+			dc.w 	$2F3C
+			dc.w 	$5204
+			dc.w 	$0498
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrValidate
+	ENDIF
+
+;
+; pascal Boolean PrStlDialog(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrStlDialog
+			dc.w 	$2F3C
+			dc.w 	$2A04
+			dc.w 	$0484
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrStlDialog
+	ENDIF
+
+;
+; pascal Boolean PrJobDialog(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrJobDialog
+			dc.w 	$2F3C
+			dc.w 	$3204
+			dc.w 	$0488
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrJobDialog
+	ENDIF
+
+;
+; pascal TPPrDlgRef PrStlInit(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrStlInit
+			dc.w 	$2F3C
+			dc.w 	$3C04
+			dc.w 	$040C
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrStlInit
+	ENDIF
+
+;
+; pascal TPPrDlgRef PrJobInit(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrJobInit
+			dc.w 	$2F3C
+			dc.w 	$4404
+			dc.w 	$0410
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrJobInit
+	ENDIF
+
+;
+; pascal void PrJobMerge(THPrint hPrintSrc, THPrint hPrintDst)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrJobMerge
+			dc.w 	$2F3C
+			dc.w 	$5804
+			dc.w 	$089C
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrJobMerge
+	ENDIF
+
+;
+; pascal Boolean PrDlgMain(THPrint hPrint, PDlgInitUPP pDlgInit)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrDlgMain
+			dc.w 	$2F3C
+			dc.w 	$4A04
+			dc.w 	$0894
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrDlgMain
+	ENDIF
+
+;
+; pascal TPPrPort PrOpenDoc(THPrint hPrint, TPPrPort pPrPort, Ptr pIOBuf)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrOpenDoc
+			dc.w 	$2F3C
+			dc.w 	$0400
+			dc.w 	$0C00
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrOpenDoc
+	ENDIF
+
+;
+; pascal void PrCloseDoc(TPPrPort pPrPort)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrCloseDoc
+			dc.w 	$2F3C
+			dc.w 	$0800
+			dc.w 	$0484
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrCloseDoc
+	ENDIF
+
+;
+; pascal void PrOpenPage(TPPrPort pPrPort, TPRect pPageFrame)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrOpenPage
+			dc.w 	$2F3C
+			dc.w 	$1000
+			dc.w 	$0808
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrOpenPage
+	ENDIF
+
+;
+; pascal void PrClosePage(TPPrPort pPrPort)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrClosePage
+			dc.w 	$2F3C
+			dc.w 	$1800
+			dc.w 	$040C
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrClosePage
+	ENDIF
+
+;
+; pascal void PrPicFile(THPrint hPrint, TPPrPort pPrPort, Ptr pIOBuf, Ptr pDevBuf, TPrStatus *prStatus)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrPicFile
+			dc.w 	$2F3C
+			dc.w 	$6005
+			dc.w 	$1480
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrPicFile
+	ENDIF
+
+;
+; pascal short PrError(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrError
+			dc.w 	$2F3C
+			dc.w 	$BA00
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrError
+	ENDIF
+
+;
+; pascal void PrSetError(short iErr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrSetError
+			dc.w 	$2F3C
+			dc.w 	$C000
+			dc.w 	$0200
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrSetError
+	ENDIF
+
+;
+; pascal void PrGeneral(Ptr pData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrGeneral
+			dc.w 	$2F3C
+			moveq	#7,d0
+			dc.w 	$0480
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrGeneral
+	ENDIF
+
+;
+; pascal void PrDrvrOpen(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrDrvrOpen
+			dc.w 	$2F3C
+			dc.w 	$8000
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrDrvrOpen
+	ENDIF
+
+;
+; pascal void PrDrvrClose(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrDrvrClose
+			dc.w 	$2F3C
+			dc.w 	$8800
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrDrvrClose
+	ENDIF
+
+;
+; pascal void PrCtlCall(short iWhichCtl, long lParam1, long lParam2, long lParam3)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrCtlCall
+			dc.w 	$2F3C
+			dc.w 	$A000
+			dc.w 	$0E00
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrCtlCall
+	ENDIF
+
+;
+; pascal Handle PrDrvrDCE(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrDrvrDCE
+			dc.w 	$2F3C
+			dc.w 	$9400
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrDrvrDCE
+	ENDIF
+
+;
+; pascal short PrDrvrVers(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrDrvrVers
+			dc.w 	$2F3C
+			dc.w 	$9A00
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrDrvrVers
+	ENDIF
+
+;
+; pascal short PrLoadDriver(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrLoadDriver
+			dc.w 	$2F3C
+			dc.w 	$D800
+			dc.w 	$0000
+			dc.w 	$A8FD
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrLoadDriver
+	ENDIF
+
+	ENDIF ; __PRINTING__

@@ -1,0 +1,2437 @@
+;
+;    File:       ATSUnicode.a
+;
+;    Contains:   Public interfaces for Apple Type Services for Unicode Imaging
+;
+;    Version:    Technology: Mac OS 9 / Carbon
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1997-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__ATSUNICODE__') = 'UNDEFINED' THEN
+__ATSUNICODE__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__MACMEMORY__') = 'UNDEFINED' THEN
+	include 'MacMemory.a'
+	ENDIF
+	IF &TYPE('__ATSLAYOUTTYPES__') = 'UNDEFINED' THEN
+	include 'ATSLayoutTypes.a'
+	ENDIF
+	IF &TYPE('__FONTS__') = 'UNDEFINED' THEN
+	include 'Fonts.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__SFNTTYPES__') = 'UNDEFINED' THEN
+	include 'SFNTTypes.a'
+	ENDIF
+	IF &TYPE('__SFNTLAYOUTTYPES__') = 'UNDEFINED' THEN
+	include 'SFNTLayoutTypes.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__ATSTYPES__') = 'UNDEFINED' THEN
+	include 'ATSTypes.a'
+	ENDIF
+
+; *******************************
+;   Types and related constants 
+; *******************************
+
+;   UniCharArrayHandle and UniCharArrayOffset are defined in the
+;   TextCommon interface file.
+
+
+
+
+;    ATSUTextMeasurement is specific to ATSUI in that measurement
+;    quantities are in fractional Fixed format instead of shorts
+;    used in QuickDraw Text.  This provides exact outline metrics and
+;    line specifications such as line width, ascent, descent, and so on.  
+
+
+; typedef Fixed 						ATSUTextMeasurement
+
+
+;    ATSUFontID indicates a particular font family and face.  
+;    ATSUFontID's are not guaranteed to remain constant across 
+;    reboots.  Clients should use the font's unique name to 
+;    get a font token to store in documents which is 
+;    guaranteed to remain constant across reboots. 
+
+
+; typedef FMFont 						ATSUFontID
+
+
+;    ATSUFontFeatureType and ATSUFontFeatureSelector are used 
+;    to identify font features.  
+
+
+; typedef UInt16 						ATSUFontFeatureType
+
+; typedef UInt16 						ATSUFontFeatureSelector
+
+
+;    ATSUFontVariationAxis and ATSUFontVariationValue are used 
+;    in connection with font variations.  
+
+
+; typedef FourCharCode 					ATSUFontVariationAxis
+
+; typedef Fixed 						ATSUFontVariationValue
+
+
+;    ATSUTextLayout is used to store the attribute information 
+;    associated with a contiguous block of UniChar's (UInt16's) 
+;    in memory.  It's typed to be an opaque structure.  
+
+
+
+
+
+;    ATSUStyle is used to store a set of individual attributes, 
+;    font features, and font variations.  It's typed to be 
+;    an opaque structure.  
+
+
+
+
+
+;    ATSUAttributeTag is used to indicate the particular type 
+;    of attribute under consideration:  font, size, color, 
+;    and so on.  
+;    Each style run may have at most one attribute with a 
+;    given ATSUAttributeTag (i.e., a style run can't have 
+;    more than one font or size) but may have none.  
+;    Note: Apple reserves values 0 to 65,535 (0 to 0x0000FFFF).
+;    ATSUI clients may create their own tags with any other value.
+
+
+
+; typedef UInt32						ATSUAttributeTag
+															;    Layout and Line Control Attribute Tags
+kATSULineWidthTag				EQU		1					;    Type:       ATSUTextMeasurement
+															;    Default value: 0
+kATSULineRotationTag			EQU		2					;    Type:       Fixed (fixed value in degrees in right-handed coordinate system)
+															;    Default value: 0
+kATSULineDirectionTag			EQU		3					;    Type:       Boolean; values 0 or 1 (see below for value identities)
+															;    Default value: GetSysDirection() ? kATSURightToLeftBaseDirection : kATSULeftToRightBaseDirection
+kATSULineJustificationFactorTag	EQU		4					;    Type:       Fract between 0 and 1
+															;    Default value: kATSUNoJustification
+kATSULineFlushFactorTag			EQU		5					;    Type:       Fract between 0 and 1 
+															;    Default value: kATSUStartAlignment
+kATSULineBaselineValuesTag		EQU		6					;    Type:       BslnBaselineRecord
+															;    Default value: All zeros.  Calculated from other style attributes (e.g., font and point size)
+kATSULineLayoutOptionsTag		EQU		7					;    Type:       ATSLineLayoutOptions (see ATSLayoutTypes.h)
+															;    Default value: kATSLineNoLayoutOptions - other options listed in ATSLayoutTypes.h
+kATSULineAscentTag				EQU		8					;    Type:       ATSUTextMeasurement
+															;    Default value: kATSUseLineHeight
+kATSULineDescentTag				EQU		9					;    Type:       ATSUTextMeasurement
+															;    Default value: kATSUseLineHeight
+kATSULineLangRegionTag			EQU		10					;    Type:       RegionCode - region values listed in script.h interface file
+															;    Default value: kTextRegionDontCare
+kATSULineTextLocatorTag			EQU		11					;    Type:       TextBreakLocatorRef
+															;    Default value: NULL - set Region derived locator or the default Text Utilities locator
+kATSULineTruncationTag			EQU		12					;    Type:       ATSULineTruncation
+															;    Default value: kATSUTruncateNone                                                       
+kATSULineFontFallbacksTag		EQU		13					;    Type:       ATSUFontFallbacks
+															;    Default value: globally set font fallbacks using the ATSUSetFontFallbacks                                                     
+kATSUMaxLineTag					EQU		14					;    This is just for convenience - the upper limit of the ATSUTextLayout attribute tags
+															; obsolete layout tags 
+kATSULineLanguageTag			EQU		10					;    Use kATSULineLangRegionTag           
+															;    Run Style Attribute Tags
+															; QuickDraw compatibility tags 
+kATSUQDBoldfaceTag				EQU		256					;    Type:       Boolean    
+															;    Default value: false
+kATSUQDItalicTag				EQU		257					;    Type:       Boolean       
+															;    Default value: false
+kATSUQDUnderlineTag				EQU		258					;    Type:       Boolean    
+															;    Default value: false
+kATSUQDCondensedTag				EQU		259					;    Type:       Boolean    
+															;    Default value: false
+kATSUQDExtendedTag				EQU		260					;    Type:       Boolean    
+															;    Default value: false
+															; Common run tags 
+kATSUFontTag					EQU		261					;    Type:       ATSUFontID 
+															;    Default value: GetScriptVariable( smSystemScript, smScriptAppFond )
+kATSUSizeTag					EQU		262					;    Type:       Fixed  
+															;    Default value: GetScriptVariable( smSystemScript, smScriptAppFondSize )    
+kATSUColorTag					EQU		263					;    Type:       RGBColor   
+															;    Default value: (0, 0, 0)
+															;    Less common run tags 
+kATSULangRegionTag				EQU		264					;    Type:       RegionCode - region values listed in script.h interface file
+															;    Default value: GetScriptManagerVariable( smRegionCode )
+kATSUVerticalCharacterTag		EQU		265					;    Type:       ATSUVerticalCharacterType  
+															;    Default value: kATSUStronglyHorizontal
+kATSUImposeWidthTag				EQU		266					;    Type:       ATSUTextMeasurement
+															;    Default value: 0 - all glyphs use their own font defined advance widths
+kATSUBeforeWithStreamShiftTag	EQU		267					;    Type:       Fixed
+															;    Default value: 0
+kATSUAfterWithStreamShiftTag	EQU		268					;    Type:       Fixed
+															;    Default value: 0
+kATSUCrossStreamShiftTag		EQU		269					;    Type:       Fixed
+															;    Default value: 0
+kATSUTrackingTag				EQU		270					;    Type:       Fixed
+															;    Default value: kATSNoTracking
+kATSUHangingInhibitFactorTag	EQU		271					;    Type:       Fract between 0 and 1
+															;    Default value: 0
+kATSUKerningInhibitFactorTag	EQU		272					;    Type:       Fract between 0 and 1
+															;    Default value: 0
+kATSUDecompositionFactorTag		EQU		273					;    Type:       Fixed (-1.0 -> 1.0)
+															;    Default value: 0
+kATSUBaselineClassTag			EQU		274					;    Type:       BslnBaselineClass  (see SFNTLayoutTypes.h)
+															;    Default value: kBSLNRomanBaseline - set to kBSLNNoBaselineOverride to use intrinsic baselines
+kATSUPriorityJustOverrideTag	EQU		275					;    Type:       ATSJustPriorityWidthDeltaOverrides (see ATSLayoutTypes.h)
+															;    Default value: all zeros
+kATSUNoLigatureSplitTag			EQU		276					;    Type:       Boolean
+															;    Default value: false - ligatures and compound characters have divisable components.
+kATSUNoCaretAngleTag			EQU		277					;    Type:       Boolean
+															;    Default value: false - use the character's angularity to determine its boundaries
+kATSUSuppressCrossKerningTag	EQU		278					;    Type:       Boolean
+															;    Default value: false - do not suppress automatic cross kerning (defined by font)
+kATSUNoOpticalAlignmentTag		EQU		279					;    Type:       Boolean
+															;    Default value: false - do not suppress character's automatic optical positional alignment
+kATSUForceHangingTag			EQU		280					;    Type:       Boolean
+															;    Default value: false - do not force the character's to hang beyond the line boundaries
+kATSUNoSpecialJustificationTag	EQU		281					;    Type:       Boolean
+															;    Default value: false - perform post-compensation justification if needed
+kATSUStyleTextLocatorTag		EQU		282					;    Type:       TextBreakLocatorRef
+															;    Default value: NULL - region derived locator or the default Text Utilities locator
+kATSUStyleRenderingOptionsTag	EQU		283					;    Type:       ATSStyleRenderingOptions (see ATSLayoutTypes.h)
+															;    Default value: kATSStyleApplyHints - ATS glyph rendering uses hinting
+kATSUMaxStyleTag				EQU		284					;    This is just for convenience - the upper limit of the ATSUStyle attribute tags 
+															; obsolete style tags 
+kATSULanguageTag				EQU		264					;    use kATSULangRegionTag               
+															; special layout tag for Mac OS X 
+kATSUCGContextTag				EQU		32767				;  Type:          CGContext, Default value:    NULL   
+															; max 
+kATSUMaxATSUITagValue			EQU		65535				;    This is the maximum Apple ATSUI reserved tag value.  Client defined tags must be larger.
+
+;    ATSUAttributeValuePtr is used to provide generic access to
+;    storage of attribute values, which vary in size.
+;    ConstATSUAttributeValuePtr is a pointer to a const attribute value.
+
+
+; typedef void *						ATSUAttributeValuePtr
+
+; typedef const void *					ConstATSUAttributeValuePtr
+
+
+;    ATSUAttributeInfo is used to provide a tag/size pairing.  
+;    This makes it possible to provide the client information   
+;    about all the attributes for a given range of text.  This   
+;    structure is only used to return to the client information   
+;    about a complete set of attributes.  An array of   
+;    ATSUAttributeInfos is passed as a parameter so that the   
+;    client can find out what attributes are set and what their   
+;    individual sizes are; with that information, they can then   
+;    query about the values of the attributes they're interested   
+;    in.  Because arrays of ATSUAttributeInfos are used as parameters   
+;    to functions, they have to be of a fixed size, hence the   
+;    value is not included in the structure.  
+
+
+ATSUAttributeInfo		RECORD 0
+fTag					 ds.l	1				; offset: $0 (0)
+fValueSize				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;    ATSUCaret contains the complete information needed to render a
+;    caret.  fX and fY is the position of one of the caret's ends
+;    relative to the origin position of the line the caret belongs.
+;    fDeltaX and fDeltaY is the position of the caret's other end.
+;    Hence, to draw a caret, simply call MoveTo(fX, fY) followed by
+;    LineTo(fDeltaX, fDeltaY) or equivalent.  The ATSUCaret will
+;    contain the positions needed to draw carets on angled lines
+;    and reflect angled carets and leading/trailing split caret
+;    appearances.
+
+
+ATSUCaret				RECORD 0
+fX						 ds.l	1				; offset: $0 (0)
+fY						 ds.l	1				; offset: $4 (4)
+fDeltaX					 ds.l	1				; offset: $8 (8)
+fDeltaY					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;    ATSUCursorMovementType is used to indicate how much to move
+;    the cursor when using the ATSUI cusor movement routines. 
+;    Note that kATSUByCharacterCluster is only available in Mac OS X
+;    and in CarbonLib versions 1.3 and later.
+
+
+
+; typedef UInt16						ATSUCursorMovementType
+kATSUByCharacter				EQU		0
+kATSUByTypographicCluster		EQU		1					; clusters based on characters or ligatures
+kATSUByWord						EQU		2
+kATSUByCharacterCluster			EQU		3					; clusters based on characters only
+kATSUByCluster					EQU		1					; obsolete name for kATSUByTypographicCluster
+
+;    ATSULineTruncation is for identifying where truncation will occur when
+;    using a ATSUTextLayout with the ATSULineTruncation layout attribute.
+
+
+
+; typedef UInt32						ATSULineTruncation
+kATSUTruncateNone				EQU		0
+kATSUTruncateStart				EQU		1
+kATSUTruncateEnd				EQU		2
+kATSUTruncateMiddle				EQU		3
+
+;    ATSUVerticalCharacterType currently can take two values 
+;    and is used to indicate whether text is to be laid out 
+;    as vertical glyphs or horizontal glyphs.  
+
+
+
+; typedef UInt16						ATSUVerticalCharacterType
+kATSUStronglyHorizontal			EQU		0
+kATSUStronglyVertical			EQU		1
+
+
+;    ATSUStyleComparison is an enumeration with four values, 
+;    and is used by ATSUCompareStyles() to indicate if the
+;    first style parameter contains as a proper subset, is
+;    equal to, or is contained by the second style parameter.
+
+
+
+; typedef UInt16						ATSUStyleComparison
+kATSUStyleUnequal				EQU		0
+kATSUStyleContains				EQU		1
+kATSUStyleEquals				EQU		2
+kATSUStyleContainedBy			EQU		3
+
+
+;    ATSUFontFallbackMethod type defines the method by which ATSUI will try to
+;    find an appropriate font for a character if the assigned font does not
+;    contain the needed glyph(s) to represent it.  This affects ATSUMatchFontsToText
+;    and font selection during layout and drawing when ATSUSetTransientFontMatching
+;    is set ON.
+
+
+
+; typedef UInt16						ATSUFontFallbackMethod
+kATSUDefaultFontFallbacks		EQU		0
+kATSULastResortOnlyFallback		EQU		1
+kATSUSequentialFallbacksPreferred EQU	2
+kATSUSequentialFallbacksExclusive EQU	3
+
+	IF CALL_NOT_IN_CARBON THEN
+
+;    ATSUMemoryCallbacks is a union struct that allows the ATSUI 
+;    client to specify a specific heap for ATSUI use or allocation
+;    callbacks of which ATSUI is to use each time ATSUI performs a
+;    memory operation (alloc, grow, free).
+
+
+ATSUMemoryCallbacks		RECORD 0
+Alloc					 ds.l	1				; offset: $0 (0)
+Free					 ds.l	1				; offset: $4 (4)
+Grow					 ds.l	1				; offset: $8 (8)
+memoryRefCon			 ds.l	1				; offset: $C (12)
+						 ORG 0
+heapToUse				 ds.l	1				; offset: $0 (0)
+						 ORG 16
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;    ATSUHeapSpec provides the ATSUI client a means of specifying the heap
+;    from which ATSUI should allocate its dynamic memory or specifying
+;    that ATSUI should use the memory callback provided by the client.
+
+
+
+; typedef UInt16						ATSUHeapSpec
+kATSUUseCurrentHeap				EQU		0
+kATSUUseAppHeap					EQU		1
+kATSUUseSpecificHeap			EQU		2
+kATSUUseCallbacks				EQU		3
+
+
+;    ATSUMemorySetting is used to store the results from a ATSUSetMemoryAlloc
+;    or a ATSUGetCurrentMemorySetting call.  It can also be used to change the
+;    current ATSUMemorySetting by passing it into the ATSUSetCurrentMemorySetting
+;    call.
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  Types for ATSUI Low Level API 
+ATSUGlyphInfo			RECORD 0
+glyphID					 ds.w	1				; offset: $0 (0)
+reserved				 ds.w	1				; offset: $2 (2)
+layoutFlags				 ds.l	1				; offset: $4 (4)
+charIndex				 ds.l	1				; offset: $8 (8)
+style					 ds.l	1				; offset: $C (12)
+deltaY					 ds		Float32			; offset: $10 (16)
+idealX					 ds		Float32			; offset: $14 (20)
+screenX					 ds.w	1				; offset: $18 (24)
+caretX					 ds.w	1				; offset: $1A (26)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+ATSUGlyphInfoArray		RECORD 0
+layout					 ds.l	1				; offset: $0 (0)
+numGlyphs				 ds.l	1				; offset: $4 (4)
+glyphs					 ds		ATSUGlyphInfo	; offset: $8 (8) <-- really an array of length one
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; *******************
+;   Other constants 
+; *******************
+;  Line direction types (used for kATSULineDirectionTag values) 
+
+kATSULeftToRightBaseDirection	EQU		0					;    Impose left-to-right or top-to-bottom dominant direction 
+kATSURightToLeftBaseDirection	EQU		1					;    Impose right-to-left or bottom-to-top dominant direction 
+;  LineFlushFactor convenience defined values 
+
+kATSUStartAlignment				EQU		$00000000
+kATSUEndAlignment				EQU		$40000000
+kATSUCenterAlignment			EQU		$20000000
+;  LineJustificationFactor convenience defined values 
+
+kATSUNoJustification			EQU		$00000000
+kATSUFullJustification			EQU		$40000000
+;  Other constants  
+
+kATSUInvalidFontID				EQU		0
+
+
+kATSUUseLineControlWidth		EQU		$7FFFFFFF
+
+
+kATSUNoSelector					EQU		$0000FFFF
+
+
+kATSUUseGrafPortPenLoc			EQU		$FFFFFFFF
+kATSUClearAll					EQU		$FFFFFFFF
+
+
+kATSUFromTextBeginning			EQU		$FFFFFFFF
+kATSUToTextEnd					EQU		$FFFFFFFF
+
+; ***************
+;   Functions   
+; ***************
+
+;   Clipboard support, flattened style version 0 (it is advised to not use these routines and perform your own flattening)  
+
+; *  ATSUCopyToHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCopyToHandle(ATSUStyle iStyle, Handle oStyleHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCopyToHandle
+	ENDIF
+
+
+; *  ATSUPasteFromHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUPasteFromHandle(ATSUStyle iStyle, Handle iStyleHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUPasteFromHandle
+	ENDIF
+
+;   Memory allocation specification functions (not in Carbon)   
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ATSUCreateMemorySetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus ATSUCreateMemorySetting(ATSUHeapSpec iHeapSpec, ATSUMemoryCallbacks *iMemoryCallbacks, ATSUMemorySetting *oMemorySetting)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateMemorySetting
+	ENDIF
+
+
+; *  ATSUSetCurrentMemorySetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus ATSUSetCurrentMemorySetting(ATSUMemorySetting iMemorySetting)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetCurrentMemorySetting
+	ENDIF
+
+
+; *  ATSUGetCurrentMemorySetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern ATSUMemorySetting ATSUGetCurrentMemorySetting(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetCurrentMemorySetting
+	ENDIF
+
+
+; *  ATSUDisposeMemorySetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus ATSUDisposeMemorySetting(ATSUMemorySetting iMemorySetting)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUDisposeMemorySetting
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;   Basic style functions   
+
+; *  ATSUCreateStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateStyle(ATSUStyle *oStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateStyle
+	ENDIF
+
+
+; *  ATSUCreateAndCopyStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateAndCopyStyle(ATSUStyle iStyle, ATSUStyle *oStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateAndCopyStyle
+	ENDIF
+
+
+; *  ATSUDisposeStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUDisposeStyle(ATSUStyle iStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUDisposeStyle
+	ENDIF
+
+
+; *  ATSUSetStyleRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetStyleRefCon(ATSUStyle iStyle, UInt32 iRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetStyleRefCon
+	ENDIF
+
+
+; *  ATSUGetStyleRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetStyleRefCon(ATSUStyle iStyle, UInt32 *oRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetStyleRefCon
+	ENDIF
+
+;   Style comparison        
+
+; *  ATSUCompareStyles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCompareStyles(ATSUStyle iFirstStyle, ATSUStyle iSecondStyle, ATSUStyleComparison *oComparison)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCompareStyles
+	ENDIF
+
+;   Attribute manipulations 
+
+; *  ATSUCopyAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCopyAttributes(ATSUStyle iSourceStyle, ATSUStyle iDestinationStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCopyAttributes
+	ENDIF
+
+
+; *  ATSUOverwriteAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUOverwriteAttributes(ATSUStyle iSourceStyle, ATSUStyle iDestinationStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUOverwriteAttributes
+	ENDIF
+
+
+; *  ATSUUnderwriteAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUUnderwriteAttributes(ATSUStyle iSourceStyle, ATSUStyle iDestinationStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUUnderwriteAttributes
+	ENDIF
+
+;   Empty styles    
+
+; *  ATSUClearStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearStyle(ATSUStyle iStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearStyle
+	ENDIF
+
+
+; *  ATSUStyleIsEmpty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUStyleIsEmpty(ATSUStyle iStyle, Boolean *oIsClear)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUStyleIsEmpty
+	ENDIF
+
+;   Get and set attributes 
+
+; *  ATSUCalculateBaselineDeltas()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCalculateBaselineDeltas(ATSUStyle iStyle, BslnBaselineClass iBaselineClass, BslnBaselineRecord oBaselineDeltas)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCalculateBaselineDeltas
+	ENDIF
+
+
+; *  ATSUSetAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetAttributes(ATSUStyle iStyle, ItemCount iAttributeCount, const ATSUAttributeTag iTag[], const ByteCount iValueSize[], const ATSUAttributeValuePtr iValue[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetAttributes
+	ENDIF
+
+
+; *  ATSUGetAttribute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAttribute(ATSUStyle iStyle, ATSUAttributeTag iTag, ByteCount iExpectedValueSize, ATSUAttributeValuePtr oValue, ByteCount *oActualValueSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAttribute
+	ENDIF
+
+
+; *  ATSUGetAllAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAllAttributes(ATSUStyle iStyle, ATSUAttributeInfo oAttributeInfoArray[], ItemCount iTagValuePairArraySize, ItemCount *oTagValuePairCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAllAttributes
+	ENDIF
+
+
+; *  ATSUClearAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearAttributes(ATSUStyle iStyle, ItemCount iTagCount, const ATSUAttributeTag iTag[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearAttributes
+	ENDIF
+
+;   Font features   
+
+; *  ATSUSetFontFeatures()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetFontFeatures(ATSUStyle iStyle, ItemCount iFeatureCount, const ATSUFontFeatureType iType[], const ATSUFontFeatureSelector iSelector[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetFontFeatures
+	ENDIF
+
+
+; *  ATSUGetFontFeature()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontFeature(ATSUStyle iStyle, ItemCount iFeatureIndex, ATSUFontFeatureType *oFeatureType, ATSUFontFeatureSelector *oFeatureSelector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontFeature
+	ENDIF
+
+
+; *  ATSUGetAllFontFeatures()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAllFontFeatures(ATSUStyle iStyle, ItemCount iMaximumFeatureCount, ATSUFontFeatureType oFeatureType[], ATSUFontFeatureSelector oFeatureSelector[], ItemCount *oActualFeatureCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAllFontFeatures
+	ENDIF
+
+
+; *  ATSUClearFontFeatures()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearFontFeatures(ATSUStyle iStyle, ItemCount iFeatureCount, const ATSUFontFeatureType iType[], const ATSUFontFeatureSelector iSelector[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearFontFeatures
+	ENDIF
+
+;   Font variations 
+
+; *  ATSUSetVariations()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetVariations(ATSUStyle iStyle, ItemCount iVariationCount, const ATSUFontVariationAxis iAxes[], const ATSUFontVariationValue iValue[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetVariations
+	ENDIF
+
+
+; *  ATSUGetFontVariationValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontVariationValue(ATSUStyle iStyle, ATSUFontVariationAxis iFontVariationAxis, ATSUFontVariationValue *oFontVariationValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontVariationValue
+	ENDIF
+
+
+; *  ATSUGetAllFontVariations()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAllFontVariations(ATSUStyle iStyle, ItemCount iVariationCount, ATSUFontVariationAxis oVariationAxes[], ATSUFontVariationValue oFontVariationValues[], ItemCount *oActualVariationCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAllFontVariations
+	ENDIF
+
+
+; *  ATSUClearFontVariations()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearFontVariations(ATSUStyle iStyle, ItemCount iAxisCount, const ATSUFontVariationAxis iAxis[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearFontVariations
+	ENDIF
+
+;   Basic text-layout functions 
+
+; *  ATSUCreateTextLayout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateTextLayout(ATSUTextLayout *oTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateTextLayout
+	ENDIF
+
+
+; *  ATSUCreateAndCopyTextLayout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateAndCopyTextLayout(ATSUTextLayout iTextLayout, ATSUTextLayout *oTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateAndCopyTextLayout
+	ENDIF
+
+
+; *  ATSUCreateTextLayoutWithTextPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateTextLayoutWithTextPtr(ConstUniCharArrayPtr iText, UniCharArrayOffset iTextOffset, UniCharCount iTextLength, UniCharCount iTextTotalLength, ItemCount iNumberOfRuns, const UniCharCount iRunLengths[], ATSUStyle iStyles[], ATSUTextLayout *oTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateTextLayoutWithTextPtr
+	ENDIF
+
+
+; *  ATSUCreateTextLayoutWithTextHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCreateTextLayoutWithTextHandle(UniCharArrayHandle iText, UniCharArrayOffset iTextOffset, UniCharCount iTextLength, UniCharCount iTextTotalLength, ItemCount iNumberOfRuns, const UniCharCount iRunLengths[], ATSUStyle iStyles[], ATSUTextLayout *oTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCreateTextLayoutWithTextHandle
+	ENDIF
+
+
+; *  ATSUClearLayoutCache()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearLayoutCache(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearLayoutCache
+	ENDIF
+
+
+; *  ATSUDisposeTextLayout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUDisposeTextLayout(ATSUTextLayout iTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUDisposeTextLayout
+	ENDIF
+
+
+; *  ATSUSetTextLayoutRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetTextLayoutRefCon(ATSUTextLayout iTextLayout, UInt32 iRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetTextLayoutRefCon
+	ENDIF
+
+
+; *  ATSUGetTextLayoutRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetTextLayoutRefCon(ATSUTextLayout iTextLayout, UInt32 *oRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetTextLayoutRefCon
+	ENDIF
+
+;   Glyph bounds retrieval  
+
+; *  ATSUGetGlyphBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetGlyphBounds(ATSUTextLayout iTextLayout, ATSUTextMeasurement iTextBasePointX, ATSUTextMeasurement iTextBasePointY, UniCharArrayOffset iBoundsCharStart, UniCharCount iBoundsCharLength, UInt16 iTypeOfBounds, ItemCount iMaxNumberOfBounds, ATSTrapezoid oGlyphBounds[], ItemCount *oActualNumberOfBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetGlyphBounds
+	ENDIF
+
+;   Idle processing 
+
+; *  ATSUIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUIdle(ATSUTextLayout iTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUIdle
+	ENDIF
+
+;   Text location   
+
+; *  ATSUSetTextPointerLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetTextPointerLocation(ATSUTextLayout iTextLayout, ConstUniCharArrayPtr iText, UniCharArrayOffset iTextOffset, UniCharCount iTextLength, UniCharCount iTextTotalLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetTextPointerLocation
+	ENDIF
+
+
+; *  ATSUSetTextHandleLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetTextHandleLocation(ATSUTextLayout iTextLayout, UniCharArrayHandle iText, UniCharArrayOffset iTextOffset, UniCharCount iTextLength, UniCharCount iTextTotalLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetTextHandleLocation
+	ENDIF
+
+
+; *  ATSUGetTextLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetTextLocation(ATSUTextLayout iTextLayout, void **oText, Boolean *oTextIsStoredInHandle, UniCharArrayOffset *oOffset, UniCharCount *oTextLength, UniCharCount *oTextTotalLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetTextLocation
+	ENDIF
+
+;   Text manipulation   
+
+; *  ATSUTextDeleted()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUTextDeleted(ATSUTextLayout iTextLayout, UniCharArrayOffset iDeletedRangeStart, UniCharCount iDeletedRangeLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUTextDeleted
+	ENDIF
+
+
+; *  ATSUTextInserted()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUTextInserted(ATSUTextLayout iTextLayout, UniCharArrayOffset iInsertionLocation, UniCharCount iInsertionLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUTextInserted
+	ENDIF
+
+
+; *  ATSUTextMoved()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUTextMoved(ATSUTextLayout iTextLayout, ConstUniCharArrayPtr iNewLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUTextMoved
+	ENDIF
+
+;   Layout controls 
+
+; *  ATSUCopyLayoutControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCopyLayoutControls(ATSUTextLayout iSourceTextLayout, ATSUTextLayout iDestTextLayout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCopyLayoutControls
+	ENDIF
+
+
+; *  ATSUSetLayoutControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetLayoutControls(ATSUTextLayout iTextLayout, ItemCount iAttributeCount, const ATSUAttributeTag iTag[], const ByteCount iValueSize[], const ATSUAttributeValuePtr iValue[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetLayoutControls
+	ENDIF
+
+
+; *  ATSUGetLayoutControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetLayoutControl(ATSUTextLayout iTextLayout, ATSUAttributeTag iTag, ByteCount iExpectedValueSize, ATSUAttributeValuePtr oValue, ByteCount *oActualValueSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetLayoutControl
+	ENDIF
+
+
+; *  ATSUGetAllLayoutControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAllLayoutControls(ATSUTextLayout iTextLayout, ATSUAttributeInfo oAttributeInfoArray[], ItemCount iTagValuePairArraySize, ItemCount *oTagValuePairCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAllLayoutControls
+	ENDIF
+
+
+; *  ATSUClearLayoutControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearLayoutControls(ATSUTextLayout iTextLayout, ItemCount iTagCount, const ATSUAttributeTag iTag[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearLayoutControls
+	ENDIF
+
+;   Single line layout controls 
+
+; *  ATSUCopyLineControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCopyLineControls(ATSUTextLayout iSourceTextLayout, UniCharArrayOffset iSourceLineStart, ATSUTextLayout iDestTextLayout, UniCharArrayOffset iDestLineStart)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCopyLineControls
+	ENDIF
+
+
+; *  ATSUSetLineControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetLineControls(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, ItemCount iAttributeCount, const ATSUAttributeTag iTag[], const ByteCount iValueSize[], const ATSUAttributeValuePtr iValue[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetLineControls
+	ENDIF
+
+
+; *  ATSUGetLineControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetLineControl(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, ATSUAttributeTag iTag, ByteCount iExpectedValueSize, ATSUAttributeValuePtr oValue, ByteCount *oActualValueSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetLineControl
+	ENDIF
+
+
+; *  ATSUGetAllLineControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetAllLineControls(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, ATSUAttributeInfo oAttributeInfoArray[], ItemCount iTagValuePairArraySize, ItemCount *oTagValuePairCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetAllLineControls
+	ENDIF
+
+
+; *  ATSUClearLineControls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearLineControls(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, ItemCount iTagCount, const ATSUAttributeTag iTag[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearLineControls
+	ENDIF
+
+;   Style run processing    
+
+; *  ATSUSetRunStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetRunStyle(ATSUTextLayout iTextLayout, ATSUStyle iStyle, UniCharArrayOffset iRunStart, UniCharCount iRunLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetRunStyle
+	ENDIF
+
+
+; *  ATSUGetRunStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetRunStyle(ATSUTextLayout iTextLayout, UniCharArrayOffset iOffset, ATSUStyle *oStyle, UniCharArrayOffset *oRunStart, UniCharCount *oRunLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetRunStyle
+	ENDIF
+
+
+; *  ATSUGetContinuousAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetContinuousAttributes(ATSUTextLayout iTextLayout, UniCharArrayOffset iOffset, UniCharCount iLength, ATSUStyle oStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetContinuousAttributes
+	ENDIF
+
+;   Drawing and measuring   
+
+; *  ATSUDrawText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUDrawText(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineOffset, UniCharCount iLineLength, ATSUTextMeasurement iLocationX, ATSUTextMeasurement iLocationY)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUDrawText
+	ENDIF
+
+
+; *  ATSUMeasureText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUMeasureText(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, UniCharCount iLineLength, ATSUTextMeasurement *oTextBefore, ATSUTextMeasurement *oTextAfter, ATSUTextMeasurement *oAscent, ATSUTextMeasurement *oDescent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUMeasureText
+	ENDIF
+
+
+; *  ATSUMeasureTextImage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUMeasureTextImage(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineOffset, UniCharCount iLineLength, ATSUTextMeasurement iLocationX, ATSUTextMeasurement iLocationY, Rect *oTextImageRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUMeasureTextImage
+	ENDIF
+
+;   Highlighting    
+
+; *  ATSUHighlightText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUHighlightText(ATSUTextLayout iTextLayout, ATSUTextMeasurement iTextBasePointX, ATSUTextMeasurement iTextBasePointY, UniCharArrayOffset iHighlightStart, UniCharCount iHighlightLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUHighlightText
+	ENDIF
+
+
+; *  ATSUUnhighlightText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUUnhighlightText(ATSUTextLayout iTextLayout, ATSUTextMeasurement iTextBasePointX, ATSUTextMeasurement iTextBasePointY, UniCharArrayOffset iHighlightStart, UniCharCount iHighlightLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUUnhighlightText
+	ENDIF
+
+
+; *  ATSUGetTextHighlight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetTextHighlight(ATSUTextLayout iTextLayout, ATSUTextMeasurement iTextBasePointX, ATSUTextMeasurement iTextBasePointY, UniCharArrayOffset iHighlightStart, UniCharCount iHighlightLength, RgnHandle oHighlightRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetTextHighlight
+	ENDIF
+
+;   Hit-testing 
+
+; *  ATSUPositionToOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUPositionToOffset(ATSUTextLayout iTextLayout, ATSUTextMeasurement iLocationX, ATSUTextMeasurement iLocationY, UniCharArrayOffset *ioPrimaryOffset, Boolean *oIsLeading, UniCharArrayOffset *oSecondaryOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUPositionToOffset
+	ENDIF
+
+
+; *  ATSUOffsetToPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUOffsetToPosition(ATSUTextLayout iTextLayout, UniCharArrayOffset iOffset, Boolean iIsLeading, ATSUCaret *oMainCaret, ATSUCaret *oSecondCaret, Boolean *oCaretIsSplit)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUOffsetToPosition
+	ENDIF
+
+;   Cursor movement 
+
+; *  ATSUNextCursorPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUNextCursorPosition(ATSUTextLayout iTextLayout, UniCharArrayOffset iOldOffset, ATSUCursorMovementType iMovementType, UniCharArrayOffset *oNewOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUNextCursorPosition
+	ENDIF
+
+
+; *  ATSUPreviousCursorPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUPreviousCursorPosition(ATSUTextLayout iTextLayout, UniCharArrayOffset iOldOffset, ATSUCursorMovementType iMovementType, UniCharArrayOffset *oNewOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUPreviousCursorPosition
+	ENDIF
+
+
+; *  ATSURightwardCursorPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSURightwardCursorPosition(ATSUTextLayout iTextLayout, UniCharArrayOffset iOldOffset, ATSUCursorMovementType iMovementType, UniCharArrayOffset *oNewOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSURightwardCursorPosition
+	ENDIF
+
+
+; *  ATSULeftwardCursorPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSULeftwardCursorPosition(ATSUTextLayout iTextLayout, UniCharArrayOffset iOldOffset, ATSUCursorMovementType iMovementType, UniCharArrayOffset *oNewOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSULeftwardCursorPosition
+	ENDIF
+
+;   Line breaking   
+
+; *  ATSUBreakLine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUBreakLine(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, ATSUTextMeasurement iLineWidth, Boolean iUseAsSoftLineBreak, UniCharArrayOffset *oLineBreak)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUBreakLine
+	ENDIF
+
+
+; *  ATSUSetSoftLineBreak()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetSoftLineBreak(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineBreak)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetSoftLineBreak
+	ENDIF
+
+
+; *  ATSUGetSoftLineBreaks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetSoftLineBreaks(ATSUTextLayout iTextLayout, UniCharArrayOffset iRangeStart, UniCharCount iRangeLength, ItemCount iMaximumBreaks, UniCharArrayOffset oBreaks[], ItemCount *oBreakCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetSoftLineBreaks
+	ENDIF
+
+
+; *  ATSUClearSoftLineBreaks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUClearSoftLineBreaks(ATSUTextLayout iTextLayout, UniCharArrayOffset iRangeStart, UniCharCount iRangeLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUClearSoftLineBreaks
+	ENDIF
+
+;   Font matching   
+
+; *  ATSUSetFontFallbacks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetFontFallbacks(ItemCount iFontFallbacksCount, const ATSUFontID iFontIDs[], ATSUFontFallbackMethod iFontFallbackMethod)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetFontFallbacks
+	ENDIF
+
+
+; *  ATSUGetFontFallbacks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontFallbacks(ItemCount iMaxFontFallbacksCount, ATSUFontID oFontIDs[], ATSUFontFallbackMethod *oFontFallbackMethod, ItemCount *oActualFallbacksCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontFallbacks
+	ENDIF
+
+
+; *  ATSUMatchFontsToText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUMatchFontsToText(ATSUTextLayout iTextLayout, UniCharArrayOffset iTextStart, UniCharCount iTextLength, ATSUFontID *oFontID, UniCharArrayOffset *oChangedOffset, UniCharCount *oChangedLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUMatchFontsToText
+	ENDIF
+
+
+; *  ATSUSetTransientFontMatching()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUSetTransientFontMatching(ATSUTextLayout iTextLayout, Boolean iTransientFontMatching)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUSetTransientFontMatching
+	ENDIF
+
+
+; *  ATSUGetTransientFontMatching()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetTransientFontMatching(ATSUTextLayout iTextLayout, Boolean *oTransientFontMatching)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetTransientFontMatching
+	ENDIF
+
+;   Font ID's   
+
+; *  ATSUFontCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUFontCount(ItemCount *oFontCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUFontCount
+	ENDIF
+
+
+; *  ATSUGetFontIDs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontIDs(ATSUFontID oFontIDs[], ItemCount iArraySize, ItemCount *oFontCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontIDs
+	ENDIF
+
+
+; *  ATSUFONDtoFontID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUFONDtoFontID(short iFONDNumber, Style iFONDStyle, ATSUFontID *oFontID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUFONDtoFontID
+	ENDIF
+
+
+; *  ATSUFontIDtoFOND()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUFontIDtoFOND(ATSUFontID iFontID, short *oFONDNumber, Style *oFONDStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUFontIDtoFOND
+	ENDIF
+
+;   Font names  
+
+; *  ATSUCountFontNames()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontNames(ATSUFontID iFontID, ItemCount *oFontNameCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontNames
+	ENDIF
+
+
+; *  ATSUGetIndFontName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetIndFontName(ATSUFontID iFontID, ItemCount iFontNameIndex, ByteCount iMaximumNameLength, Ptr oName, ByteCount *oActualNameLength, FontNameCode *oFontNameCode, FontPlatformCode *oFontNamePlatform, FontScriptCode *oFontNameScript, FontLanguageCode *oFontNameLanguage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetIndFontName
+	ENDIF
+
+
+; *  ATSUFindFontName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUFindFontName(ATSUFontID iFontID, FontNameCode iFontNameCode, FontPlatformCode iFontNamePlatform, FontScriptCode iFontNameScript, FontLanguageCode iFontNameLanguage, ByteCount iMaximumNameLength, Ptr oName, ByteCount *oActualNameLength, ItemCount *oFontNameIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUFindFontName
+	ENDIF
+
+
+; *  ATSUFindFontFromName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUFindFontFromName(Ptr iName, ByteCount iNameLength, FontNameCode iFontNameCode, FontPlatformCode iFontNamePlatform, FontScriptCode iFontNameScript, FontLanguageCode iFontNameLanguage, ATSUFontID *oFontID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUFindFontFromName
+	ENDIF
+
+;   Font features   
+
+; *  ATSUCountFontFeatureTypes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontFeatureTypes(ATSUFontID iFontID, ItemCount *oTypeCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontFeatureTypes
+	ENDIF
+
+
+; *  ATSUCountFontFeatureSelectors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontFeatureSelectors(ATSUFontID iFontID, ATSUFontFeatureType iType, ItemCount *oSelectorCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontFeatureSelectors
+	ENDIF
+
+
+; *  ATSUGetFontFeatureTypes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontFeatureTypes(ATSUFontID iFontID, ItemCount iMaximumTypes, ATSUFontFeatureType oTypes[], ItemCount *oActualTypeCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontFeatureTypes
+	ENDIF
+
+
+; *  ATSUGetFontFeatureSelectors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontFeatureSelectors(ATSUFontID iFontID, ATSUFontFeatureType iType, ItemCount iMaximumSelectors, ATSUFontFeatureSelector oSelectors[], Boolean oSelectorIsOnByDefault[], ItemCount *oActualSelectorCount, Boolean *oIsMutuallyExclusive)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontFeatureSelectors
+	ENDIF
+
+
+; *  ATSUGetFontFeatureNameCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontFeatureNameCode(ATSUFontID iFontID, ATSUFontFeatureType iType, ATSUFontFeatureSelector iSelector, FontNameCode *oNameCode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontFeatureNameCode
+	ENDIF
+
+;   Font tracking value & names 
+
+; *  ATSUCountFontTracking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontTracking(ATSUFontID iFontID, ATSUVerticalCharacterType iCharacterOrientation, ItemCount *oTrackingCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontTracking
+	ENDIF
+
+
+; *  ATSUGetIndFontTracking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetIndFontTracking(ATSUFontID iFontID, ATSUVerticalCharacterType iCharacterOrientation, ItemCount iTrackIndex, Fixed *oFontTrackingValue, FontNameCode *oNameCode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetIndFontTracking
+	ENDIF
+
+;   Font variations 
+
+; *  ATSUCountFontVariations()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontVariations(ATSUFontID iFontID, ItemCount *oVariationCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontVariations
+	ENDIF
+
+
+; *  ATSUGetIndFontVariation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetIndFontVariation(ATSUFontID iFontID, ItemCount iVariationIndex, ATSUFontVariationAxis *oATSUFontVariationAxis, ATSUFontVariationValue *oMinimumValue, ATSUFontVariationValue *oMaximumValue, ATSUFontVariationValue *oDefaultValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetIndFontVariation
+	ENDIF
+
+
+; *  ATSUGetFontVariationNameCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontVariationNameCode(ATSUFontID iFontID, ATSUFontVariationAxis iAxis, FontNameCode *oNameCode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontVariationNameCode
+	ENDIF
+
+;   Font Instances  
+
+; *  ATSUCountFontInstances()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUCountFontInstances(ATSUFontID iFontID, ItemCount *oInstances)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUCountFontInstances
+	ENDIF
+
+
+; *  ATSUGetFontInstance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontInstance(ATSUFontID iFontID, ItemCount iFontInstanceIndex, ItemCount iMaximumVariations, ATSUFontVariationAxis oAxes[], ATSUFontVariationValue oValues[], ItemCount *oActualVariationCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontInstance
+	ENDIF
+
+
+; *  ATSUGetFontInstanceNameCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetFontInstanceNameCode(ATSUFontID iFontID, ItemCount iInstanceIndex, FontNameCode *oNameCode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetFontInstanceNameCode
+	ENDIF
+
+
+; ******************************************************************************
+;  ATSUI Low-Level API                                                         
+; ******************************************************************************
+;  GlyphInfo access 
+
+; *  ATSUGetGlyphInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetGlyphInfo(ATSUTextLayout iTextLayout, UniCharArrayOffset iLineStart, UniCharCount iLineLength, ByteCount *ioBufferSize, ATSUGlyphInfoArray *oGlyphInfoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetGlyphInfo
+	ENDIF
+
+
+; *  ATSUDrawGlyphInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUDrawGlyphInfo(ATSUGlyphInfoArray *iGlyphInfoArray, Float32Point iLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUDrawGlyphInfo
+	ENDIF
+
+;  Font Data Access 
+
+; *  ATSUGlyphGetIdealMetrics()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGlyphGetIdealMetrics(ATSUStyle iATSUStyle, ItemCount iNumOfGlyphs, GlyphID iGlyphIDs[], ByteOffset iInputOffset, ATSGlyphIdealMetrics oIdealMetrics[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGlyphGetIdealMetrics
+	ENDIF
+
+
+; *  ATSUGetNativeCurveType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGetNativeCurveType(ATSUStyle iATSUStyle, ATSCurveType *oCurveType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGetNativeCurveType
+	ENDIF
+
+;  Device specific routines 
+
+; *  ATSUGlyphGetScreenMetrics()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGlyphGetScreenMetrics(ATSUStyle iATSUStyle, ItemCount iNumOfGlyphs, GlyphID iGlyphIDs[], ByteOffset iInputOffset, Boolean iForcingAntiAlias, Boolean iAntiAliasSwitch, ATSGlyphScreenMetrics oScreenMetrics[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGlyphGetScreenMetrics
+	ENDIF
+
+;  ATSUGlyphGetQuadraticPaths callbacks 
+
+; *  NewATSQuadraticLineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSQuadraticCurveUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSQuadraticNewPathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSQuadraticClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSQuadraticLineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSQuadraticCurveUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSQuadraticNewPathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSQuadraticClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSQuadraticLineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSQuadraticCurveUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSQuadraticNewPathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSQuadraticClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  ATSUGlyphGetQuadraticPaths()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGlyphGetQuadraticPaths(ATSUStyle iATSUStyle, GlyphID iGlyphID, ATSQuadraticNewPathUPP iNewPathProc, ATSQuadraticLineUPP iLineProc, ATSQuadraticCurveUPP iCurveProc, ATSQuadraticClosePathUPP iClosePathProc, void *iCallbackDataPtr, OSStatus *oCallbackResult)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGlyphGetQuadraticPaths
+	ENDIF
+
+;  ATSUGlyphGetCubicPaths callbacks 
+
+; *  NewATSCubicMoveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSCubicLineToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSCubicCurveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewATSCubicClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSCubicMoveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSCubicLineToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSCubicCurveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeATSCubicClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSCubicMoveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSCubicLineToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSCubicCurveToUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeATSCubicClosePathUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  ATSUGlyphGetCubicPaths()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGlyphGetCubicPaths(ATSUStyle iATSUStyle, GlyphID iGlyphID, ATSCubicMoveToUPP iMoveToProc, ATSCubicLineToUPP iLineToProc, ATSCubicCurveToUPP iCurveToProc, ATSCubicClosePathUPP iClosePathProc, void *iCallbackDataPtr, OSStatus *oCallbackResult)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGlyphGetCubicPaths
+	ENDIF
+
+
+; *  ATSUGlyphGetCurvePaths()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATSUnicodeLib 9.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ATSUGlyphGetCurvePaths(ATSUStyle iATSUStyle, GlyphID iGlyphID, ByteCount *ioBufferSize, ATSUCurvePaths *oPaths)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATSUGlyphGetCurvePaths
+	ENDIF
+
+
+	ENDIF ; __ATSUNICODE__ 
+

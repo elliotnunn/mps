@@ -1,0 +1,596 @@
+;
+;    File:       MoviesFormat.a
+;
+;    Contains:   QuickTime Interfaces.
+;
+;    Version:    Technology: QuickTime 5.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MOVIESFORMAT__') = 'UNDEFINED' THEN
+__MOVIESFORMAT__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+
+
+kMovieVersion					EQU		0					; version number of the format here described 
+; ****************************************
+;*
+;*   General Types -
+;*       These types are used in more than one of the
+;*       directory types.
+;*
+;***************************************
+
+;  MoviesUserData is the type used for user data in movie and track directories 
+MoviesUserData			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of this user data 
+udType					 ds.l	1				; offset: $4 (4)		;  type of user data 
+data					 ds.b	1				; offset: $8 (8) <-- really an array of length one ;  the user data 
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+UserDataAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+userData				 ds		MoviesUserData ; offset: $8 (8) <-- really an array of length one
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+;  MoviesDataDescription tells us where the data for the movie or track lives.
+;   The data can follow the directory, be in the datafork of the same file as the directory resource,
+;   be in the resource fork of the same file as the directory resource, be in another file in the
+;   data fork or resource fork, or require a specific bottleneck to fetch the data. 
+
+; ****************************************
+;*
+;*   MediaDirectory information -
+;*       The MediaDirectory is tightly coupled to the data.
+;*
+;***************************************
+
+
+SampleDescriptionAtom	RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stsd' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+sampleDescTable			 ds		SampleDescription ; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  TimeToSampleNum maps physical sample time to physical sample number. 
+TimeToSampleNum			RECORD 0
+sampleCount				 ds.l	1				; offset: $0 (0)
+sampleDuration			 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TimeToSampleNumAtom		RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stts' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+timeToSampleNumTable	 ds		TimeToSampleNum ; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  SyncSamples is a list of the physical samples which are self contained. 
+SyncSampleAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stss' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+syncSampleTable			 ds.l	1				; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  SampleToChunk maps physical sample number to chunk number. 
+;  same as SampleToChunk, but redundant first sample is removed 
+SampleToChunk			RECORD 0
+firstChunk				 ds.l	1				; offset: $0 (0)
+samplesPerChunk			 ds.l	1				; offset: $4 (4)
+sampleDescriptionID		 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+SampleToChunkAtom		RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stsc' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+sampleToChunkTable		 ds		SampleToChunk	; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+ChunkOffsetAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stco' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+chunkOffsetTable		 ds.l	1				; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+SampleSizeAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stsz' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+sampleSize				 ds.l	1				; offset: $C (12)
+numEntries				 ds.l	1				; offset: $10 (16)
+sampleSizeTable			 ds.l	1				; offset: $14 (20) <-- really an array of length one
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+ShadowSync				RECORD 0
+fdSampleNum				 ds.l	1				; offset: $0 (0)
+syncSampleNum			 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ShadowSyncAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stsz' 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+shadowSyncTable			 ds		ShadowSync		; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+SampleTableAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'stbl' 
+sampleDescription		 ds		SampleDescriptionAtom ; offset: $8 (8)
+timeToSampleNum			 ds		TimeToSampleNumAtom ; offset: $28 (40)
+sampleToChunk			 ds		SampleToChunkAtom ; offset: $40 (64)
+syncSample				 ds		SyncSampleAtom ; offset: $5C (92)
+sampleSize				 ds		SampleSizeAtom ; offset: $70 (112)
+chunkOffset				 ds		ChunkOffsetAtom ; offset: $88 (136)
+shadowSync				 ds		ShadowSyncAtom ; offset: $9C (156)
+sizeof					 EQU *					; size:   $B4 (180)
+						ENDR
+PublicHandlerInfo		RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+componentType			 ds.l	1				; offset: $4 (4)
+componentSubType		 ds.l	1				; offset: $8 (8)
+componentManufacturer	 ds.l	1				; offset: $C (12)
+componentFlags			 ds.l	1				; offset: $10 (16)
+componentFlagsMask		 ds.l	1				; offset: $14 (20)
+componentName			 ds.b	1				; offset: $18 (24) <-- really an array of length one
+						 ORG 26
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+HandlerAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'hdlr' 
+hInfo					 ds		PublicHandlerInfo ; offset: $8 (8)
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+;  a data reference is a private structure 
+; typedef long 							DataRefAtom
+
+DataInfoAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'dinf' 
+dataRef					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+RgnAtom					RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+rgnSize					 ds.w	1				; offset: $8 (8)
+rgnBBox					 ds		Rect			; offset: $A (10)
+data					 ds.b	1				; offset: $12 (18) <-- really an array of length one
+						 ORG 20
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+MatteCompressedAtom		RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+matteImageDescription	 ds		ImageDescription ; offset: $C (12)
+matteData				 ds.b	1				; offset: $62 (98) <-- really an array of length one
+						 ORG 100
+sizeof					 EQU *					; size:   $64 (100)
+						ENDR
+MatteAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+aCompressedMatte		 ds		MatteCompressedAtom ; offset: $8 (8)
+sizeof					 EQU *					; size:   $6C (108)
+						ENDR
+ClippingAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+aRgnClip				 ds		RgnAtom			; offset: $8 (8)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; ***********************
+;* Media Info Example Structures
+;**********************
+
+
+VideoMediaInfoHeader	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+graphicsMode			 ds.w	1				; offset: $4 (4)		;  for QD - transfer mode 
+opColorRed				 ds.w	1				; offset: $6 (6)		;  opcolor for transfer mode 
+opColorGreen			 ds.w	1				; offset: $8 (8)
+opColorBlue				 ds.w	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+VideoMediaInfoHeaderAtom RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of Media info 
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'vmhd' 
+vmiHeader				 ds		VideoMediaInfoHeader ; offset: $8 (8)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+VideoMediaInfo			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of Media info 
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'minf' 
+header					 ds		VideoMediaInfoHeaderAtom ; offset: $8 (8)
+dataHandler				 ds		HandlerAtom		; offset: $1C (28)
+dataInfo				 ds		DataInfoAtom	; offset: $3E (62)
+sampleTable				 ds		SampleTableAtom ; offset: $4A (74)
+sizeof					 EQU *					; size:   $FE (254)
+						ENDR
+SoundMediaInfoHeader	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+balance					 ds.w	1				; offset: $4 (4)
+rsrvd					 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+SoundMediaInfoHeaderAtom RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of Media info 
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'vmhd' 
+smiHeader				 ds		SoundMediaInfoHeader ; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+SoundMediaInfo			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of Media info 
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'minf' 
+header					 ds		SoundMediaInfoHeaderAtom ; offset: $8 (8)
+dataHandler				 ds		HandlerAtom		; offset: $18 (24)
+dataReference			 ds.l	1				; offset: $3A (58)
+sampleTable				 ds		SampleTableAtom ; offset: $3E (62)
+sizeof					 EQU *					; size:   $F2 (242)
+						ENDR
+;  whatever data the media handler needs goes after the atomType 
+MediaInfo				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; ***********************
+;* Media Directory Structures
+;**********************
+
+MediaHeader				RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+creationTime			 ds.l	1				; offset: $4 (4)		;  seconds since Jan 1904 when directory was created 
+modificationTime		 ds.l	1				; offset: $8 (8)		;  seconds since Jan 1904 when directory was appended 
+timeScale				 ds.l	1				; offset: $C (12)		;  start time for Media (Media time) 
+duration				 ds.l	1				; offset: $10 (16)		;  length of Media (Media time) 
+language				 ds.w	1				; offset: $14 (20)
+quality					 ds.w	1				; offset: $16 (22)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+MediaHeaderAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)
+header					 ds		MediaHeader		; offset: $8 (8)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+MediaDirectory			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'mdia' 
+mediaHeader				 ds		MediaHeaderAtom ; offset: $8 (8)		;  standard Media information 
+mediaHandler			 ds		HandlerAtom		; offset: $28 (40)
+mediaInfo				 ds		MediaInfo		; offset: $4A (74)
+sizeof					 EQU *					; size:   $52 (82)
+						ENDR
+; ***********************
+;* Track Structures
+;**********************
+
+
+TrackEnable						EQU		$01
+TrackInMovie					EQU		$02
+TrackInPreview					EQU		$04
+TrackInPoster					EQU		$08
+TrackHeader				RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+creationTime			 ds.l	1				; offset: $4 (4)		;  seconds since Jan 1904 when directory was created 
+modificationTime		 ds.l	1				; offset: $8 (8)		;  seconds since Jan 1904 when directory was appended 
+trackID					 ds.l	1				; offset: $C (12)
+reserved1				 ds.l	1				; offset: $10 (16)
+duration				 ds.l	1				; offset: $14 (20)		;  length of track (track time) 
+reserved2				 ds.l	1				; offset: $18 (24)
+reserved3				 ds.l	1				; offset: $1C (28)
+layer					 ds.w	1				; offset: $20 (32)
+alternateGroup			 ds.w	1				; offset: $22 (34)
+volume					 ds.w	1				; offset: $24 (36)
+reserved4				 ds.w	1				; offset: $26 (38)
+matrix					 ds		MatrixRecord	; offset: $28 (40)
+trackWidth				 ds.l	1				; offset: $4C (76)
+trackHeight				 ds.l	1				; offset: $50 (80)
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+TrackHeaderAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  size of track header 
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'tkhd' 
+header					 ds		TrackHeader		; offset: $8 (8)
+sizeof					 EQU *					; size:   $5C (92)
+						ENDR
+EditListType			RECORD 0
+trackDuration			 ds.l	1				; offset: $0 (0)
+mediaTime				 ds.l	1				; offset: $4 (4)
+mediaRate				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+EditListAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = elst 
+flags					 ds.l	1				; offset: $8 (8)		;  1 byte of version / 3 bytes of flags 
+numEntries				 ds.l	1				; offset: $C (12)
+editListTable			 ds		EditListType	; offset: $10 (16) <-- really an array of length one
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+EditsAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = edts 
+editList				 ds		EditListAtom	; offset: $8 (8)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+TrackLoadSettings		RECORD 0
+preloadStartTime		 ds.l	1				; offset: $0 (0)
+preloadDuration			 ds.l	1				; offset: $4 (4)
+preloadFlags			 ds.l	1				; offset: $8 (8)
+defaultHints			 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TrackLoadSettingsAtom	RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = load 
+settings				 ds		TrackLoadSettings ; offset: $8 (8)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+TrackDirectory			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'trak' 
+trackHeader				 ds		TrackHeaderAtom ; offset: $8 (8)		;  standard track information 
+trackClip				 ds		ClippingAtom	; offset: $64 (100)
+edits					 ds		EditsAtom		; offset: $80 (128)
+media					 ds		MediaDirectory ; offset: $A4 (164)
+userData				 ds		UserDataAtom	; offset: $F6 (246)		;  space for extending with new data types 
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+; ****************************************
+;*
+;*   MovieDirectory -
+;*       The MovieDirectory is the top level structure which
+;*       holds the TrackInstance describing where the
+;*       TrackDirectories are.
+;*
+;***************************************
+
+MovieHeader				RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  1 byte of version / 3 bytes of flags 
+creationTime			 ds.l	1				; offset: $4 (4)		;  seconds since Jan 1904 when directory was created 
+modificationTime		 ds.l	1				; offset: $8 (8)		;  seconds since Jan 1904 when directory was appended 
+timeScale				 ds.l	1				; offset: $C (12)		;  Time specifications 
+duration				 ds.l	1				; offset: $10 (16)
+preferredRate			 ds.l	1				; offset: $14 (20)		;  rate at which to play this movie 
+preferredVolume			 ds.w	1				; offset: $18 (24)		;  volume to play movie at 
+reserved1				 ds.w	1				; offset: $1A (26)
+preferredLong1			 ds.l	1				; offset: $1C (28)
+preferredLong2			 ds.l	1				; offset: $20 (32)
+matrix					 ds		MatrixRecord	; offset: $24 (36)
+previewTime				 ds.l	1				; offset: $48 (72)		;  time in track the proxy begins (track time) 
+previewDuration			 ds.l	1				; offset: $4C (76)		;  how long the proxy lasts (track time) 
+posterTime				 ds.l	1				; offset: $50 (80)		;  time in track the proxy begins (track time) 
+selectionTime			 ds.l	1				; offset: $54 (84)		;  time in track the proxy begins (track time) 
+selectionDuration		 ds.l	1				; offset: $58 (88)		;  time in track the proxy begins (track time) 
+currentTime				 ds.l	1				; offset: $5C (92)		;  time in track the proxy begins (track time) 
+nextTrackID				 ds.l	1				; offset: $60 (96)		;  next value to use for a TrackID 
+sizeof					 EQU *					; size:   $64 (100)
+						ENDR
+MovieHeaderAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'mvhd' 
+header					 ds		MovieHeader		; offset: $8 (8)
+sizeof					 EQU *					; size:   $6C (108)
+						ENDR
+TrackDirectoryEntry		RECORD 0
+trackDirectory			 ds		TrackDirectory ; offset: $0 (0)			;  Track directory information 
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+MovieDirectory			RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'moov' 
+header					 ds		MovieHeaderAtom ; offset: $8 (8)
+movieClip				 ds		ClippingAtom	; offset: $74 (116)
+;  Track Directories 
+track					 ds		TrackDirectoryEntry ; offset: $90 (144) <-- really an array of length one ;  Track directory information 
+;  User data for Movie 
+userData				 ds		UserDataAtom	; offset: $198 (408)	;  space for user extensions 
+sizeof					 EQU *					; size:   $1AA (426)
+						ENDR
+; ****************************************
+;***************************************
+
+;  Movie formats and tags 
+
+															; some system defined format IDs 
+MOVIE_TYPE						EQU		'moov'
+TRACK_TYPE						EQU		'trak'
+MEDIA_TYPE						EQU		'mdia'
+VIDEO_TYPE						EQU		'vide'
+SOUND_TYPE						EQU		'soun'
+;  atom id's 
+
+MovieAID						EQU		'moov'
+MovieHeaderAID					EQU		'mvhd'
+ClipAID							EQU		'clip'
+RgnClipAID						EQU		'crgn'
+MatteAID						EQU		'matt'
+MatteCompAID					EQU		'kmat'
+TrackAID						EQU		'trak'
+UserDataAID						EQU		'udta'
+TrackHeaderAID					EQU		'tkhd'
+EditsAID						EQU		'edts'
+EditListAID						EQU		'elst'
+MediaAID						EQU		'mdia'
+MediaHeaderAID					EQU		'mdhd'
+MediaInfoAID					EQU		'minf'
+VideoMediaInfoHeaderAID			EQU		'vmhd'
+SoundMediaInfoHeaderAID			EQU		'smhd'
+GenericMediaInfoHeaderAID		EQU		'gmhd'
+GenericMediaInfoAID				EQU		'gmin'
+DataInfoAID						EQU		'dinf'
+DataRefAID						EQU		'dref'
+SampleTableAID					EQU		'stbl'
+STSampleDescAID					EQU		'stsd'
+STTimeToSampAID					EQU		'stts'
+STSyncSampleAID					EQU		'stss'
+STSampleToChunkAID				EQU		'stsc'
+STShadowSyncAID					EQU		'stsh'
+HandlerAID						EQU		'hdlr'
+STSampleSizeAID					EQU		'stsz'
+STChunkOffsetAID				EQU		'stco'
+STChunkOffset64AID				EQU		'co64'
+STSampleIDAID					EQU		'stid'
+DataRefContainerAID				EQU		'drfc'
+TrackReferenceAID				EQU		'tref'
+ColorTableAID					EQU		'ctab'
+LoadSettingsAID					EQU		'load'
+PropertyAtomAID					EQU		'code'
+InputMapAID						EQU		'imap'
+MovieBufferHintsAID				EQU		'mbfh'
+MovieDataRefAliasAID			EQU		'mdra'
+SoundLocalizationAID			EQU		'sloc'
+CompressedMovieAID				EQU		'cmov'
+CompressedMovieDataAID			EQU		'cmvd'
+DataCompressionAtomAID			EQU		'dcom'
+ReferenceMovieRecordAID			EQU		'rmra'
+ReferenceMovieDescriptorAID		EQU		'rmda'
+ReferenceMovieDataRefAID		EQU		'rdrf'
+ReferenceMovieVersionCheckAID	EQU		'rmvc'
+ReferenceMovieDataRateAID		EQU		'rmdr'
+ReferenceMovieComponentCheckAID	EQU		'rmcd'
+ReferenceMovieQualityAID		EQU		'rmqu'
+ReferenceMovieLanguageAID		EQU		'rmla'
+ReferenceMovieCPURatingAID		EQU		'rmcs'
+ReferenceMovieAlternateGroupAID	EQU		'rmag'
+ReferenceMovieNetworkStatusAID	EQU		'rnet'
+CloneMediaAID					EQU		'clon'
+;  Text ATOM definitions
+
+TextBoxAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'tbox' 
+textBox					 ds		Rect			; offset: $8 (8)		;  New text box (overrides defaultTextBox)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+HiliteAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = 'hlit' 
+selStart				 ds.l	1				; offset: $8 (8)		;  hilite selection start character
+selEnd					 ds.l	1				; offset: $C (12)		;  hilite selection end character
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+KaraokeRec				RECORD 0
+timeVal					 ds.l	1				; offset: $0 (0)
+beginHilite				 ds.w	1				; offset: $4 (4)
+endHilite				 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+KaraokeAtom				RECORD 0
+numEntries				 ds.l	1				; offset: $0 (0)
+karaokeEntries			 ds		KaraokeRec		; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  for ReferenceMovieDataRefRecord.flags
+
+kDataRefIsSelfContained			EQU		$01
+ReferenceMovieDataRefRecord RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+dataRefType				 ds.l	1				; offset: $4 (4)
+dataRefSize				 ds.l	1				; offset: $8 (8)
+dataRef					 ds.b	1				; offset: $C (12) <-- really an array of length one
+						 ORG 14
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+;  for VersionCheckRecord.checkType
+
+kVersionCheckMin				EQU		0					; val1 is the min. version required
+kVersionCheckMask				EQU		1					; (gestalt return value & val2) must == val1
+QTAltVersionCheckRecord	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0
+gestaltTag				 ds.l	1				; offset: $4 (4)
+val1					 ds.l	1				; offset: $8 (8)
+val2					 ds.l	1				; offset: $C (12)
+checkType				 ds.w	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+;  some helpful constants for DataRateRecord.dataRate 
+
+kDataRate144ModemRate			EQU		1400
+kDataRate288ModemRate			EQU		2800
+kDataRateISDNRate				EQU		5600
+kDataRateDualISDNRate			EQU		11200
+kDataRate256kbpsRate			EQU		25600
+kDataRate384kbpsRate			EQU		38400
+kDataRate512kbpsRate			EQU		51200
+kDataRate768kbpsRate			EQU		76800
+kDataRate1MbpsRate				EQU		100000
+kDataRateT1Rate					EQU		150000
+kDataRateInfiniteRate			EQU		$7FFFFFFF
+kDataRateDefaultIfNotSet		EQU		5600
+QTAltDataRateRecord		RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0
+dataRate				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTAltComponentCheckRecord RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0 
+cd						 ds		ComponentDescription ; offset: $4 (4)
+minVersion				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+QTAltLanguageRecord		RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0
+language				 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+
+kQTCPUSpeed1Rating				EQU		100					; slowest
+kQTCPUSpeed2Rating				EQU		200
+kQTCPUSpeed3Rating				EQU		300
+kQTCPUSpeed4Rating				EQU		400
+kQTCPUSpeed5Rating				EQU		500					; fastest
+QTAltCPURatingRecord	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0
+speed					 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+ReferenceMovieNetworkStatusRecord RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  currently always 0
+valueCount				 ds.l	1				; offset: $4 (4)		;  how many status values are in array
+netStatusValues			 ds.l	1				; offset: $8 (8) <-- really an array of length one ;  a value from kQTNetworkStatus... constants
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+CloneRecord				RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+masterTrackID			 ds.l	1				; offset: $4 (4)		;  track ID of the track we're cloning 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CloneAtom				RECORD 0
+size					 ds.l	1				; offset: $0 (0)
+atomType				 ds.l	1				; offset: $4 (4)		;  = clon 
+cloneInfo				 ds		CloneRecord		; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+	ENDIF ; __MOVIESFORMAT__ 
+

@@ -1,0 +1,852 @@
+;
+;    File:       QD3DCamera.a
+;
+;    Contains:   Generic camera routines
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QD3DCAMERA__') = 'UNDEFINED' THEN
+__QD3DCAMERA__ SET 1
+
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+	include 'QD3D.a'
+	ENDIF
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Data Structure Definitions                       **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; *  The placement of the camera.
+; 
+
+TQ3CameraPlacement		RECORD 0
+cameraLocation			 ds		TQ3Point3D		; offset: $0 (0)		;   Location point of the camera  
+pointOfInterest			 ds		TQ3Point3D		; offset: $C (12)		;   Point of interest           
+upVector				 ds		TQ3Vector3D		; offset: $18 (24)		;   "up" vector             
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; 
+; *  The range of the camera.
+; 
+
+TQ3CameraRange			RECORD 0
+hither					 ds		Float32			; offset: $0 (0)		;   Hither plane, measured from "from" towards "to"   
+yon						 ds		Float32			; offset: $4 (4)		;   Yon  plane, measured from "from" towards "to"     
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+; *  Viewport specification.  Origin is (-1, 1), and corresponds to the 
+; *  upper left-hand corner; width and height maximum is (2.0, 2.0),
+; *  corresponding to the lower left-hand corner of the window.  The
+; *  TQ3Viewport specifies a part of the viewPlane that gets displayed 
+; *  on the window that is to be drawn.
+; *  Normally, it is set with an origin of (-1.0, 1.0), and a width and
+; *  height of both 2.0, specifying that the entire window is to be
+; *  drawn.  If, for example, an exposure event of the window exposed
+; *  the right half of the window, you would set the origin to (0, 1),
+; *  and the width and height to (1.0) and (2.0), respectively.
+; *
+; 
+
+TQ3CameraViewPort		RECORD 0
+origin					 ds		TQ3Point2D		; offset: $0 (0)
+width					 ds		Float32			; offset: $8 (8)
+height					 ds		Float32			; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TQ3CameraData			RECORD 0
+placement				 ds		TQ3CameraPlacement ; offset: $0 (0)
+range					 ds		TQ3CameraRange ; offset: $24 (36)
+viewPort				 ds		TQ3CameraViewPort ; offset: $2C (44)
+sizeof					 EQU *					; size:   $3C (60)
+						ENDR
+; 
+; *  An orthographic camera.
+; *
+; *  The lens characteristics are set with the dimensions of a
+; *  rectangular viewPort in the frame of the camera.
+; 
+
+TQ3OrthographicCameraData RECORD 0
+cameraData				 ds		TQ3CameraData	; offset: $0 (0)
+left					 ds		Float32			; offset: $3C (60)
+top						 ds		Float32			; offset: $40 (64)
+right					 ds		Float32			; offset: $44 (68)
+bottom					 ds		Float32			; offset: $48 (72)
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+; 
+; *  A perspective camera specified in terms of an arbitrary view plane.
+; *
+; *  This is most useful when setting the camera to look at a particular
+; *  object.  The viewPlane is set to distance from the camera to the object.
+; *  The halfWidth is set to half the width of the cross section of the object,
+; *  and the halfHeight equal to the halfWidth divided by the aspect ratio
+; *  of the viewPort.
+; * 
+; *  This is the only perspective camera with specifications for off-axis
+; *  viewing, which is desirable for scrolling.
+; 
+
+TQ3ViewPlaneCameraData	RECORD 0
+cameraData				 ds		TQ3CameraData	; offset: $0 (0)
+viewPlane				 ds		Float32			; offset: $3C (60)
+halfWidthAtViewPlane	 ds		Float32			; offset: $40 (64)
+halfHeightAtViewPlane	 ds		Float32			; offset: $44 (68)
+centerXOnViewPlane		 ds		Float32			; offset: $48 (72)
+centerYOnViewPlane		 ds		Float32			; offset: $4C (76)
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+; 
+; *  A view angle aspect camera is a perspective camera specified in 
+; *  terms of the minimum view angle and the aspect ratio of X to Y.
+; *
+; 
+
+TQ3ViewAngleAspectCameraData RECORD 0
+cameraData				 ds		TQ3CameraData	; offset: $0 (0)
+fov						 ds		Float32			; offset: $3C (60)
+aspectRatioXToY			 ds		Float32			; offset: $40 (64)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                         Generic Camera routines                          **
+; **                                                                          **
+; ****************************************************************************
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3Camera_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Camera_GetType(TQ3CameraObject camera)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetType
+	ENDIF
+
+
+; *  Q3Camera_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_SetData(TQ3CameraObject camera, const TQ3CameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_SetData
+	ENDIF
+
+
+; *  Q3Camera_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetData(TQ3CameraObject camera, TQ3CameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetData
+	ENDIF
+
+
+; *  Q3Camera_SetPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_SetPlacement(TQ3CameraObject camera, const TQ3CameraPlacement *placement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_SetPlacement
+	ENDIF
+
+
+; *  Q3Camera_GetPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetPlacement(TQ3CameraObject camera, TQ3CameraPlacement *placement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetPlacement
+	ENDIF
+
+
+; *  Q3Camera_SetRange()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_SetRange(TQ3CameraObject camera, const TQ3CameraRange *range)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_SetRange
+	ENDIF
+
+
+; *  Q3Camera_GetRange()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetRange(TQ3CameraObject camera, TQ3CameraRange *range)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetRange
+	ENDIF
+
+
+; *  Q3Camera_SetViewPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_SetViewPort(TQ3CameraObject camera, const TQ3CameraViewPort *viewPort)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_SetViewPort
+	ENDIF
+
+
+; *  Q3Camera_GetViewPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetViewPort(TQ3CameraObject camera, TQ3CameraViewPort *viewPort)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetViewPort
+	ENDIF
+
+
+; *  Q3Camera_GetWorldToView()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetWorldToView(TQ3CameraObject camera, TQ3Matrix4x4 *worldToView)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetWorldToView
+	ENDIF
+
+
+; *  Q3Camera_GetWorldToFrustum()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetWorldToFrustum(TQ3CameraObject camera, TQ3Matrix4x4 *worldToFrustum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetWorldToFrustum
+	ENDIF
+
+
+; *  Q3Camera_GetViewToFrustum()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Camera_GetViewToFrustum(TQ3CameraObject camera, TQ3Matrix4x4 *viewToFrustum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Camera_GetViewToFrustum
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Specific Camera Routines                         **
+; **                                                                          **
+; ****************************************************************************
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Orthographic Camera                              **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3OrthographicCamera_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3CameraObject Q3OrthographicCamera_New(const TQ3OrthographicCameraData *orthographicData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_New
+	ENDIF
+
+
+; *  Q3OrthographicCamera_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_GetData(TQ3CameraObject camera, TQ3OrthographicCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_GetData
+	ENDIF
+
+
+; *  Q3OrthographicCamera_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_SetData(TQ3CameraObject camera, const TQ3OrthographicCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_SetData
+	ENDIF
+
+
+; *  Q3OrthographicCamera_SetLeft()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_SetLeft(TQ3CameraObject camera, float left)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_SetLeft
+	ENDIF
+
+
+; *  Q3OrthographicCamera_GetLeft()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_GetLeft(TQ3CameraObject camera, float *left)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_GetLeft
+	ENDIF
+
+
+; *  Q3OrthographicCamera_SetTop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_SetTop(TQ3CameraObject camera, float top)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_SetTop
+	ENDIF
+
+
+; *  Q3OrthographicCamera_GetTop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_GetTop(TQ3CameraObject camera, float *top)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_GetTop
+	ENDIF
+
+
+; *  Q3OrthographicCamera_SetRight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_SetRight(TQ3CameraObject camera, float right)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_SetRight
+	ENDIF
+
+
+; *  Q3OrthographicCamera_GetRight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_GetRight(TQ3CameraObject camera, float *right)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_GetRight
+	ENDIF
+
+
+; *  Q3OrthographicCamera_SetBottom()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_SetBottom(TQ3CameraObject camera, float bottom)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_SetBottom
+	ENDIF
+
+
+; *  Q3OrthographicCamera_GetBottom()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3OrthographicCamera_GetBottom(TQ3CameraObject camera, float *bottom)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3OrthographicCamera_GetBottom
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         ViewPlane Camera                                 **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3ViewPlaneCamera_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3CameraObject Q3ViewPlaneCamera_New(const TQ3ViewPlaneCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_New
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetData(TQ3CameraObject camera, TQ3ViewPlaneCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetData
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetData(TQ3CameraObject camera, const TQ3ViewPlaneCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetData
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetViewPlane()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetViewPlane(TQ3CameraObject camera, float viewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetViewPlane
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetViewPlane()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetViewPlane(TQ3CameraObject camera, float *viewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetViewPlane
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetHalfWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetHalfWidth(TQ3CameraObject camera, float halfWidthAtViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetHalfWidth
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetHalfWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetHalfWidth(TQ3CameraObject camera, float *halfWidthAtViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetHalfWidth
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetHalfHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetHalfHeight(TQ3CameraObject camera, float halfHeightAtViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetHalfHeight
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetHalfHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetHalfHeight(TQ3CameraObject camera, float *halfHeightAtViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetHalfHeight
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetCenterX()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetCenterX(TQ3CameraObject camera, float centerXOnViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetCenterX
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetCenterX()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetCenterX(TQ3CameraObject camera, float *centerXOnViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetCenterX
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_SetCenterY()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_SetCenterY(TQ3CameraObject camera, float centerYOnViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_SetCenterY
+	ENDIF
+
+
+; *  Q3ViewPlaneCamera_GetCenterY()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewPlaneCamera_GetCenterY(TQ3CameraObject camera, float *centerYOnViewPlane)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewPlaneCamera_GetCenterY
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         View Angle Aspect Camera                         **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3ViewAngleAspectCamera_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3CameraObject Q3ViewAngleAspectCamera_New(const TQ3ViewAngleAspectCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_New
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_SetData(TQ3CameraObject camera, const TQ3ViewAngleAspectCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_SetData
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_GetData(TQ3CameraObject camera, TQ3ViewAngleAspectCameraData *cameraData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_GetData
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_SetFOV()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_SetFOV(TQ3CameraObject camera, float fov)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_SetFOV
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_GetFOV()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_GetFOV(TQ3CameraObject camera, float *fov)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_GetFOV
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_SetAspectRatio()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_SetAspectRatio(TQ3CameraObject camera, float aspectRatioXToY)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_SetAspectRatio
+	ENDIF
+
+
+; *  Q3ViewAngleAspectCamera_GetAspectRatio()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewAngleAspectCamera_GetAspectRatio(TQ3CameraObject camera, float *aspectRatioXToY)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewAngleAspectCamera_GetAspectRatio
+	ENDIF
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __QD3DCAMERA__ 
+

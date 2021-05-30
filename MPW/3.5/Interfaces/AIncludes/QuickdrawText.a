@@ -1,0 +1,792 @@
+;
+;    File:       QuickdrawText.a
+;
+;    Contains:   Quickdraw Text Interfaces.
+;
+;    Version:    Technology: Mac OS 8.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1983-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QUICKDRAWTEXT__') = 'UNDEFINED' THEN
+__QUICKDRAWTEXT__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__INTLRESOURCES__') = 'UNDEFINED' THEN
+	include 'IntlResources.a'
+	ENDIF
+
+;  new CGrafPort bottleneck ("newProc2") function, used in Unicode Text drawing 
+
+; *  StandardGlyphs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickDrawText 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus StandardGlyphs(void *dataStream, ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StandardGlyphs
+	ENDIF
+
+
+
+															; CharToPixel directions 
+leftCaret						EQU		0					;Place caret for left block
+rightCaret						EQU		-1					;Place caret for right block
+kHilite							EQU		1					;Direction is SysDirection
+
+smLeftCaret						EQU		0					;Place caret for left block - obsolete 
+smRightCaret					EQU		-1					;Place caret for right block - obsolete 
+smHilite						EQU		1					;Direction is TESysJust - obsolete 
+
+															;Constants for styleRunPosition argument in PortionLine, DrawJustified, MeasureJustified, CharToPixel, and PixelToChar.
+onlyStyleRun					EQU		0					; This is the only style run on the line 
+leftStyleRun					EQU		1					; This is leftmost of multiple style runs on the line 
+rightStyleRun					EQU		2					; This is rightmost of multiple style runs on the line 
+middleStyleRun					EQU		3					; There are multiple style runs on the line and this is neither the leftmost nor the rightmost. 
+smOnlyStyleRun					EQU		0					; obsolete 
+smLeftStyleRun					EQU		1					; obsolete 
+smRightStyleRun					EQU		2					; obsolete 
+smMiddleStyleRun				EQU		3					; obsolete 
+;  type for styleRunPosition parameter in PixelToChar etc. 
+; typedef short 						JustStyleCode
+
+;  Type for truncWhere parameter in TruncString, TruncText 
+; typedef short 						TruncCode
+
+
+															; Constants for truncWhere argument in TruncString and TruncText 
+truncEnd						EQU		0					; Truncate at end 
+truncMiddle						EQU		$4000				; Truncate in middle 
+smTruncEnd						EQU		0					; Truncate at end - obsolete 
+smTruncMiddle					EQU		$4000				; Truncate in middle - obsolete 
+
+															; Constants for TruncString and TruncText results 
+notTruncated					EQU		0					; No truncation was necessary 
+truncated						EQU		1					; Truncation performed 
+truncErr						EQU		-1					; General error 
+smNotTruncated					EQU		0					; No truncation was necessary - obsolete 
+smTruncated						EQU		1					; Truncation performed   - obsolete 
+smTruncErr						EQU		-1					; General error - obsolete 
+; typedef SInt8 						StyledLineBreakCode
+
+
+smBreakWord						EQU		0
+smBreakChar						EQU		1
+smBreakOverflow					EQU		2
+; QuickTime3.0
+
+															; Constants for txFlags (which used to be the pad field after txFace) 
+tfAntiAlias						EQU		$01
+tfUnicode						EQU		$02
+
+FontInfo				RECORD 0
+ascent					 ds.w	1				; offset: $0 (0)
+descent					 ds.w	1				; offset: $2 (2)
+widMax					 ds.w	1				; offset: $4 (4)
+leading					 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+FormatOrder				RECORD 0
+elements				 ds.w	1
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+
+
+; typedef FormatOrder *					FormatOrderPtr
+
+;  FormatStatus was moved to TextUtils.i 
+;  OffsetTable moved to IntlResources.i 
+
+
+; *  NewStyleRunDirectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeStyleRunDirectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeStyleRunDirectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Pixel2Char()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short Pixel2Char(Ptr textBuf, short textLen, short slop, short pixelWidth, Boolean *leadingEdge)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Pixel2Char
+			move.l              #$820E0014,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Pixel2Char
+	ENDIF
+
+
+; *  Char2Pixel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short Char2Pixel(Ptr textBuf, short textLen, short slop, short offset, short direction)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Char2Pixel
+			move.l              #$820C0016,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Char2Pixel
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PixelToChar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short PixelToChar(Ptr textBuf, long textLength, Fixed slop, Fixed pixelWidth, Boolean *leadingEdge, Fixed *widthRemaining, JustStyleCode styleRunPosition, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PixelToChar
+			move.l              #$8222002E,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PixelToChar
+	ENDIF
+
+
+; *  CharToPixel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short CharToPixel(Ptr textBuf, long textLength, Fixed slop, long offset, short direction, JustStyleCode styleRunPosition, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CharToPixel
+			move.l              #$821C0030,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CharToPixel
+	ENDIF
+
+
+; *  DrawJustified()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawJustified(Ptr textPtr, long textLength, Fixed slop, JustStyleCode styleRunPosition, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DrawJustified
+			move.l              #$80160032,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawJustified
+	ENDIF
+
+
+; *  MeasureJustified()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void MeasureJustified(Ptr textPtr, long textLength, Fixed slop, Ptr charLocs, JustStyleCode styleRunPosition, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MeasureJustified
+			move.l              #$801A0034,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MeasureJustified
+	ENDIF
+
+
+; *  PortionLine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Fixed PortionLine(Ptr textPtr, long textLen, JustStyleCode styleRunPosition, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PortionLine
+			move.l              #$84120036,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PortionLine
+	ENDIF
+
+
+; *  HiliteText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HiliteText(Ptr textPtr, short textLength, short firstOffset, short secondOffset, OffsetTable offsets)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HiliteText
+			move.l              #$800E001C,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HiliteText
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DrawJust()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void DrawJust(Ptr textPtr, short textLength, short slop)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DrawJust
+			move.l              #$8008001E,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawJust
+	ENDIF
+
+
+; *  MeasureJust()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MeasureJust(Ptr textPtr, short textLength, short slop, Ptr charLocs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MeasureJust
+			move.l              #$800C0020,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MeasureJust
+	ENDIF
+
+
+; *  PortionText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Fixed PortionText(Ptr textPtr, long textLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PortionText
+			move.l              #$84080024,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PortionText
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  VisibleLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long VisibleLength(Ptr textPtr, long textLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_VisibleLength
+			move.l              #$84080028,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION VisibleLength
+	ENDIF
+
+
+; *  GetFormatOrder()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetFormatOrder(FormatOrderPtr ordering, short firstFormat, short lastFormat, Boolean lineRight, StyleRunDirectionUPP rlDirProc, Ptr dirParam)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFormatOrder
+			move.l              #$8012FFFC,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFormatOrder
+	ENDIF
+
+
+; *  TextFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TextFont(short font)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TextFont:	OPWORD	$A887
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextFont
+	ENDIF
+
+
+; *  TextFace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TextFace(StyleParameter face)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TextFace:	OPWORD	$A888
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextFace
+	ENDIF
+
+
+; *  TextMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TextMode(short mode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TextMode:	OPWORD	$A889
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextMode
+	ENDIF
+
+
+; *  TextSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TextSize(short size)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TextSize:	OPWORD	$A88A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextSize
+	ENDIF
+
+
+; *  SpaceExtra()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SpaceExtra(Fixed extra)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SpaceExtra:	OPWORD	$A88E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpaceExtra
+	ENDIF
+
+
+; *  DrawChar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawChar(CharParameter ch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawChar:	OPWORD	$A883
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawChar
+	ENDIF
+
+
+; *  DrawString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawString(ConstStr255Param s)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawString:	OPWORD	$A884
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawString
+	ENDIF
+
+
+; *  [Mac]DrawText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawText(const void *textBuf, short firstByte, short byteCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawText:	OPWORD	$A885
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawText
+	ENDIF
+
+
+; *  CharWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short CharWidth(CharParameter ch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CharWidth:	OPWORD	$A88D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CharWidth
+	ENDIF
+
+
+; *  StringWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short StringWidth(ConstStr255Param s)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_StringWidth:	OPWORD	$A88C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringWidth
+	ENDIF
+
+
+; *  TextWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short TextWidth(const void *textBuf, short firstByte, short byteCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TextWidth:	OPWORD	$A886
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextWidth
+	ENDIF
+
+
+; *  MeasureText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void MeasureText(short count, const void *textAddr, void *charLocs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_MeasureText:	OPWORD	$A837
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MeasureText
+	ENDIF
+
+
+; *  GetFontInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetFontInfo(FontInfo *info)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetFontInfo:	OPWORD	$A88B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFontInfo
+	ENDIF
+
+
+; *  CharExtra()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CharExtra(Fixed extra)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CharExtra:	OPWORD	$AA23
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CharExtra
+	ENDIF
+
+
+; *  StdText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void StdText(short count, const void *textAddr, Point numer, Point denom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_StdText:	OPWORD	$A882
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StdText
+	ENDIF
+
+
+; *  StdTxMeas()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short StdTxMeas(short byteCount, const void *textAddr, Point *numer, Point *denom, FontInfo *info)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_StdTxMeas:	OPWORD	$A8ED
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StdTxMeas
+	ENDIF
+
+
+; *  StyledLineBreak()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StyledLineBreakCode StyledLineBreak(Ptr textPtr, long textLen, long textStart, long textEnd, long flags, Fixed *textWidth, long *textOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StyledLineBreak
+			move.l              #$821CFFFE,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StyledLineBreak
+	ENDIF
+
+
+; *  TruncString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short TruncString(short width, Str255 theString, TruncCode truncWhere)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TruncString
+			move.l              #$8208FFE0,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TruncString
+	ENDIF
+
+
+; *  TruncText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short TruncText(short width, Ptr textPtr, short *length, TruncCode truncWhere)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TruncText
+			move.l              #$820CFFDE,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TruncText
+	ENDIF
+
+
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+	ENDIF ; __QUICKDRAWTEXT__ 
+

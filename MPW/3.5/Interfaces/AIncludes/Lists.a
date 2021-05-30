@@ -1,0 +1,1425 @@
+;
+;    File:       Lists.a
+;
+;    Contains:   List Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__LISTS__') = 'UNDEFINED' THEN
+__LISTS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__CONTROLS__') = 'UNDEFINED' THEN
+	include 'Controls.a'
+	ENDIF
+
+Cell					RECORD 0
+v						 ds.w	1				; offset: $0 (0)
+h						 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+ListBounds				RECORD 0
+top						 ds.w	1				; offset: $0 (0)
+left					 ds.w	1				; offset: $2 (2)
+bottom					 ds.w	1				; offset: $4 (4)
+right					 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+DataArray				RECORD 0
+elements				 ds.b	32001
+						 ORG 32002
+sizeof					 EQU *					; size:   $7D02 (32002)
+						ENDR
+
+
+; typedef DataArray *					DataPtr
+
+; typedef DataPtr *						DataHandle
+
+	IF ¬ TARGET_OS_MAC THEN
+;  QuickTime 3.0 
+; typedef long 							ListNotification
+
+
+listNotifyNothing				EQU		'nada'				; No (null) notification
+listNotifyClick					EQU		'clik'				; Control was clicked
+listNotifyDoubleClick			EQU		'dblc'				; Control was double-clicked
+listNotifyPreClick				EQU		'pclk'				; Control about to be clicked
+	ENDIF
+ListRec					RECORD 0
+rView					 ds		Rect			; offset: $0 (0)		;  in Carbon use Get/SetListViewBounds
+port					 ds.l	1				; offset: $8 (8)		;  in Carbon use Get/SetListPort
+indent					 ds		Point			; offset: $C (12)		;  in Carbon use Get/SetListCellIndent
+cellSize				 ds		Point			; offset: $10 (16)		;  in Carbon use Get/SetListCellSize
+visible					 ds		ListBounds		; offset: $14 (20)		;  in Carbon use GetListVisibleCells
+vScroll					 ds.l	1				; offset: $1C (28)		;  in Carbon use GetListVerticalScrollBar
+hScroll					 ds.l	1				; offset: $20 (32)		;  in Carbon use GetListHorizontalScrollBar
+selFlags				 ds.b	1				; offset: $24 (36)		;  in Carbon use Get/SetListSelectionFlags
+lActive					 ds.b	1				; offset: $25 (37)		;  in Carbon use LActivate, GetListActive
+lReserved				 ds.b	1				; offset: $26 (38)		;  not supported in Carbon 
+listFlags				 ds.b	1				; offset: $27 (39)		;  in Carbon use Get/SetListFlags 
+clikTime				 ds.l	1				; offset: $28 (40)		;  in Carbon use Get/SetListClickTime
+clikLoc					 ds		Point			; offset: $2C (44)		;  in Carbon use GetListClickLocation
+mouseLoc				 ds		Point			; offset: $30 (48)		;  in Carbon use GetListMouseLocation
+lClickLoop				 ds.l	1				; offset: $34 (52)		;  in Carbon use Get/SetListClickLoop
+lastClick				 ds		Cell			; offset: $38 (56)		;  in Carbon use SetListLastClick
+refCon					 ds.l	1				; offset: $3C (60)		;  in Carbon use Get/SetListRefCon
+listDefProc				 ds.l	1				; offset: $40 (64)		;  not supported in Carbon 
+userHandle				 ds.l	1				; offset: $44 (68)		;  in Carbon use Get/SetListUserHandle
+dataBounds				 ds		ListBounds		; offset: $48 (72)		;  in Carbon use GetListDataBounds
+cells					 ds.l	1				; offset: $50 (80)		;  in Carbon use LGet/SetCell
+maxIndex				 ds.w	1				; offset: $54 (84)		;  in Carbon use LGet/SetCell
+cellArray				 ds.w	1				; offset: $56 (86) <-- really an array of length one ;  in Carbon use LGet/SetCell
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+; typedef struct ListRec *				ListPtr
+
+; typedef ListPtr *						ListHandle
+
+;  ListRef is obsolete.  Use ListHandle. 
+; typedef ListHandle 					ListRef
+
+
+
+
+															; ListRec.listFlags bits
+lDrawingModeOffBit				EQU		3
+lDoVAutoscrollBit				EQU		1
+lDoHAutoscrollBit				EQU		0
+
+															; ListRec.listFlags masks
+lDrawingModeOff					EQU		8
+lDoVAutoscroll					EQU		2
+lDoHAutoscroll					EQU		1
+
+
+															; ListRec.selFlags bits
+lOnlyOneBit						EQU		7
+lExtendDragBit					EQU		6
+lNoDisjointBit					EQU		5
+lNoExtendBit					EQU		4
+lNoRectBit						EQU		3
+lUseSenseBit					EQU		2
+lNoNilHiliteBit					EQU		1
+
+
+															; ListRec.selFlags masks
+lOnlyOne						EQU		-128
+lExtendDrag						EQU		64
+lNoDisjoint						EQU		32
+lNoExtend						EQU		16
+lNoRect							EQU		8
+lUseSense						EQU		4
+lNoNilHilite					EQU		2
+
+
+															; LDEF messages
+lInitMsg						EQU		0
+lDrawMsg						EQU		1
+lHiliteMsg						EQU		2
+lCloseMsg						EQU		3
+
+;   StandardIconListCellDataRec is the cell data format for
+;   use with the standard icon list (kListDefStandardIconType).
+
+
+StandardIconListCellDataRec RECORD 0
+iconHandle				 ds.l	1				; offset: $0 (0)
+font					 ds.w	1				; offset: $4 (4)
+face					 ds.w	1				; offset: $6 (6)
+size					 ds.w	1				; offset: $8 (8)
+name					 ds		Str255			; offset: $A (10)
+sizeof					 EQU *					; size:   $10A (266)
+						ENDR
+; typedef struct StandardIconListCellDataRec * StandardIconListCellDataPtr
+
+
+
+
+; *  NewListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewListClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewListDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeListClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeListDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeListClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeListDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+kListDefProcPtr					EQU		0
+kListDefUserProcType			EQU		0
+kListDefStandardTextType		EQU		1
+kListDefStandardIconType		EQU		2
+; typedef UInt32 						ListDefType
+
+ListDefSpec				RECORD 0
+defType					 ds.l	1				; offset: $0 (0)
+userProc				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct ListDefSpec *			ListDefSpecPtr
+
+
+; *  CreateCustomList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateCustomList(const Rect *rView, const ListBounds *dataBounds, Point cellSize, const ListDefSpec *theSpec, WindowRef theWindow, Boolean drawIt, Boolean hasGrow, Boolean scrollHoriz, Boolean scrollVert, ListHandle *outList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateCustomList
+	ENDIF
+
+
+	IF ¬ TARGET_OS_MAC THEN
+;  QuickTime 3.0 
+; typedef ListNotificationProcPtr 		ListNotificationUPP
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  LSetNotificationCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void LSetNotificationCallback(ListNotificationProcPtr callBack, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSetNotificationCallback
+	ENDIF
+
+
+; *  GetListVisibleBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GetListVisibleBounds(ListHandle theList, Rect *visibleBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListVisibleBounds
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+; *  LNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ListHandle LNew(const Rect *rView, const ListBounds *dataBounds, Point cSize, short theProc, WindowRef theWindow, Boolean drawIt, Boolean hasGrow, Boolean scrollHoriz, Boolean scrollVert)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LNew
+			move.w              #$0044,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LNew
+	ENDIF
+
+
+; *  LDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LDispose(ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LDispose
+			move.w              #$0028,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LDispose
+	ENDIF
+
+
+; *  LAddColumn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short LAddColumn(short count, short colNum, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LAddColumn
+			move.w              #$0004,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAddColumn
+	ENDIF
+
+
+; *  LAddRow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short LAddRow(short count, short rowNum, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LAddRow
+			move.w              #$0008,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAddRow
+	ENDIF
+
+
+; *  LDelColumn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LDelColumn(short count, short colNum, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LDelColumn
+			move.w              #$0020,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LDelColumn
+	ENDIF
+
+
+; *  LDelRow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LDelRow(short count, short rowNum, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LDelRow
+			move.w              #$0024,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LDelRow
+	ENDIF
+
+
+; *  LGetSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean LGetSelect(Boolean next, Cell *theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LGetSelect
+			move.w              #$003C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LGetSelect
+	ENDIF
+
+
+; *  LLastClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Cell LLastClick(ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LLastClick
+			move.w              #$0040,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LLastClick
+	ENDIF
+
+
+; *  LNextCell()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean LNextCell(Boolean hNext, Boolean vNext, Cell *theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LNextCell
+			move.w              #$0048,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LNextCell
+	ENDIF
+
+
+; *  LSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean LSearch(const void *dataPtr, short dataLen, ListSearchUPP searchProc, Cell *theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LSearch
+			move.w              #$0054,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSearch
+	ENDIF
+
+
+; *  LSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LSize(short listWidth, short listHeight, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LSize
+			move.w              #$0060,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSize
+	ENDIF
+
+
+; *  LSetDrawingMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LSetDrawingMode(Boolean drawIt, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LSetDrawingMode
+			move.w              #$002C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSetDrawingMode
+	ENDIF
+
+
+; *  LScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LScroll(short dCols, short dRows, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LScroll
+			move.w              #$0050,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LScroll
+	ENDIF
+
+
+; *  LAutoScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LAutoScroll(ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LAutoScroll
+			move.w              #$0010,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAutoScroll
+	ENDIF
+
+
+; *  LUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LUpdate(RgnHandle theRgn, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LUpdate
+			move.w              #$0064,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LUpdate
+	ENDIF
+
+
+; *  LActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LActivate(Boolean act, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LActivate
+			clr.w               -(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LActivate
+	ENDIF
+
+
+; *  LCellSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LCellSize(Point cSize, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LCellSize
+			move.w              #$0014,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LCellSize
+	ENDIF
+
+
+; *  LClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean LClick(Point pt, EventModifiers modifiers, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LClick
+			move.w              #$0018,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LClick
+	ENDIF
+
+
+; *  LAddToCell()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LAddToCell(const void *dataPtr, short dataLen, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LAddToCell
+			move.w              #$000C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAddToCell
+	ENDIF
+
+
+; *  LClrCell()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LClrCell(Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LClrCell
+			move.w              #$001C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LClrCell
+	ENDIF
+
+
+; *  LGetCell()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LGetCell(void *dataPtr, short *dataLen, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LGetCell
+			move.w              #$0038,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LGetCell
+	ENDIF
+
+
+; *  LRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LRect(Rect *cellRect, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LRect
+			move.w              #$004C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LRect
+	ENDIF
+
+
+; *  LSetCell()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LSetCell(const void *dataPtr, short dataLen, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LSetCell
+			move.w              #$0058,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSetCell
+	ENDIF
+
+
+; *  LSetSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LSetSelect(Boolean setIt, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LSetSelect
+			move.w              #$005C,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSetSelect
+	ENDIF
+
+
+; *  LDraw()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LDraw(Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LDraw
+			move.w              #$0030,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LDraw
+	ENDIF
+
+
+; *  LGetCellDataLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LGetCellDataLocation(short *offset, short *len, Cell theCell, ListHandle lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LGetCellDataLocation
+			move.w              #$0034,-(sp)
+			dc.w            	$A9E7
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LGetCellDataLocation
+	ENDIF
+
+;  Routines available in Carbon only
+
+
+; *  RegisterListDefinition()
+; *  
+; *  Summary:
+; *    Registers a binding between a resource ID and a list definition
+; *    function.
+; *  
+; *  Discussion:
+; *    In the Mac OS 8.x List Manager, a 'ldes' resource can contain an
+; *    embedded LDEF procID that is used by the List Manager as the
+; *    resource ID of an 'LDEF' resource to measure and draw the list.
+; *    Since LDEFs can no longer be packaged as code resources on
+; *    Carbon, the procID can no longer refer directly to an LDEF
+; *    resource. However, using RegisterListDefinition you can instead
+; *    specify a UniversalProcPtr pointing to code in your application
+; *    code fragment.
+; *  
+; *  Parameters:
+; *    
+; *    inResID:
+; *      An LDEF proc ID, as used in a 'ldes' resource.
+; *    
+; *    inDefSpec:
+; *      Specifies the ListDefUPP that should be used for lists with the
+; *      given LDEF procID.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RegisterListDefinition(SInt16 inResID, ListDefSpecPtr inDefSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterListDefinition
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetListDefinitionProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SetListDefinitionProc(SInt16 resID, ListDefUPP defProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListDefinitionProc
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF ¬ TARGET_OS_MAC THEN
+;  QuickTime 3.0 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  LSetLDEF()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void LSetLDEF(ListDefProcPtr proc, ListRef lHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LSetLDEF
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+	IF ACCESSOR_CALLS_ARE_FUNCTIONS THEN
+;  Getters 
+
+; *  GetListViewBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Rect *GetListViewBounds(ListRef list, Rect *view)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListViewBounds
+	ENDIF
+
+
+; *  GetListPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal CGrafPtr GetListPort(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListPort
+	ENDIF
+
+
+; *  GetListCellIndent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Point *GetListCellIndent(ListRef list, Point *indent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListCellIndent
+	ENDIF
+
+
+; *  GetListCellSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Point *GetListCellSize(ListRef list, Point *size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListCellSize
+	ENDIF
+
+
+; *  GetListVisibleCells()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ListBounds *GetListVisibleCells(ListRef list, ListBounds *visible)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListVisibleCells
+	ENDIF
+
+
+; *  GetListVerticalScrollBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ControlRef GetListVerticalScrollBar(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListVerticalScrollBar
+	ENDIF
+
+
+; *  GetListHorizontalScrollBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ControlRef GetListHorizontalScrollBar(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListHorizontalScrollBar
+	ENDIF
+
+
+; *  GetListActive()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean GetListActive(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListActive
+	ENDIF
+
+
+; *  GetListClickTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt32 GetListClickTime(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListClickTime
+	ENDIF
+
+
+; *  GetListClickLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Point *GetListClickLocation(ListRef list, Point *click)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListClickLocation
+	ENDIF
+
+
+; *  GetListMouseLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Point *GetListMouseLocation(ListRef list, Point *mouse)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListMouseLocation
+	ENDIF
+
+
+; *  GetListClickLoop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ListClickLoopUPP GetListClickLoop(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListClickLoop
+	ENDIF
+
+
+; *  GetListRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt32 GetListRefCon(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListRefCon
+	ENDIF
+
+
+; *  GetListDefinition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Handle GetListDefinition(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListDefinition
+	ENDIF
+
+
+; *  GetListUserHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Handle GetListUserHandle(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListUserHandle
+	ENDIF
+
+
+; *  GetListDataBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ListBounds *GetListDataBounds(ListRef list, ListBounds *bounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListDataBounds
+	ENDIF
+
+
+; *  GetListDataHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DataHandle GetListDataHandle(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListDataHandle
+	ENDIF
+
+
+; *  GetListFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OptionBits GetListFlags(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListFlags
+	ENDIF
+
+
+; *  GetListSelectionFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OptionBits GetListSelectionFlags(ListRef list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetListSelectionFlags
+	ENDIF
+
+;  Setters 
+
+; *  SetListViewBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListViewBounds(ListRef list, const Rect *view)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListViewBounds
+	ENDIF
+
+
+; *  SetListPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListPort(ListRef list, CGrafPtr port)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListPort
+	ENDIF
+
+
+; *  SetListCellIndent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListCellIndent(ListRef list, Point *indent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListCellIndent
+	ENDIF
+
+
+; *  SetListClickTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListClickTime(ListRef list, SInt32 time)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListClickTime
+	ENDIF
+
+
+; *  SetListClickLoop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListClickLoop(ListRef list, ListClickLoopUPP clickLoop)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListClickLoop
+	ENDIF
+
+
+; *  SetListLastClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListLastClick(ListRef list, Cell *lastClick)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListLastClick
+	ENDIF
+
+
+; *  SetListRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListRefCon(ListRef list, SInt32 refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListRefCon
+	ENDIF
+
+
+; *  SetListUserHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListUserHandle(ListRef list, Handle userHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListUserHandle
+	ENDIF
+
+
+; *  SetListFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListFlags(ListRef list, OptionBits listFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListFlags
+	ENDIF
+
+
+; *  SetListSelectionFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetListSelectionFlags(ListRef list, OptionBits selectionFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetListSelectionFlags
+	ENDIF
+
+	ENDIF	; ACCESSOR_CALLS_ARE_FUNCTIONS
+	ENDIF ; __LISTS__ 
+

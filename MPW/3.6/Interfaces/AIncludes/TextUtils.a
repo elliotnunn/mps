@@ -1,0 +1,708 @@
+;
+;    File:       TextUtils.a
+;
+;    Contains:   Text Utilities Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TEXTUTILS__') = 'UNDEFINED' THEN
+__TEXTUTILS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NUMBERFORMATTING__') = 'UNDEFINED' THEN
+	include 'NumberFormatting.a'
+	ENDIF
+	IF &TYPE('__STRINGCOMPARE__') = 'UNDEFINED' THEN
+	include 'StringCompare.a'
+	ENDIF
+	IF &TYPE('__DATETIMEUTILS__') = 'UNDEFINED' THEN
+	include 'DateTimeUtils.a'
+	ENDIF
+
+; 
+;
+;    Here are the current System 7 routine names and the translations to the older forms.
+;    Please use the newer forms in all new code and migrate the older names out of existing
+;    code as maintainance permits.
+;    
+;    NEW NAME                    OLD NAMEs                   OBSOLETE FORM (no script code)
+;
+;    FindScriptRun
+;    FindWordBreaks                                          NFindWord, FindWord
+;    GetIndString            
+;    GetString
+;    Munger
+;    NewString               
+;    SetString               
+;    StyledLineBreak
+;    TruncString
+;    TruncText
+;
+;    UpperString ($A054)         UprString, UprText
+;    UppercaseText               SCUpperText (a only)        UpperText ($A456)
+;    LowercaseText                                           LwrString, LowerText, LwrText ($A056)
+;    StripDiacritics                                         StripText ($A256)
+;    UppercaseStripDiacritics                                StripUpperText ($A656)
+;
+;
+;
+
+
+;  TruncCode, StyledLineBreakCode, and truncation constants moved to QuickDrawText.i 
+ScriptRunStatus			RECORD 0
+script					 ds.b	1				; offset: $0 (0)
+runVariant				 ds.b	1				; offset: $1 (1)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+BreakTable				RECORD 0
+charTypes				 ds.b	256				; offset: $0 (0)
+tripleLength			 ds.w	1				; offset: $100 (256)
+triples					 ds.w	1				; offset: $102 (258) <-- really an array of length one
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+; typedef struct BreakTable *			BreakTablePtr
+
+NBreakTable				RECORD 0
+flags1					 ds.b	1				; offset: $0 (0)
+flags2					 ds.b	1				; offset: $1 (1)
+version					 ds.w	1				; offset: $2 (2)
+classTableOff			 ds.w	1				; offset: $4 (4)
+auxCTableOff			 ds.w	1				; offset: $6 (6)
+backwdTableOff			 ds.w	1				; offset: $8 (8)
+forwdTableOff			 ds.w	1				; offset: $A (10)
+doBackup				 ds.w	1				; offset: $C (12)
+length					 ds.w	1				; offset: $E (14)		;  length of NBreakTable 
+charTypes				 ds.b	256				; offset: $10 (16)
+tables					 ds.w	1				; offset: $110 (272) <-- really an array of length one
+sizeof					 EQU *					; size:   $112 (274)
+						ENDR
+; typedef struct NBreakTable *			NBreakTablePtr
+
+;  The following functions are new names that work on 68k and PowerPC
+
+; *  Munger()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long Munger(Handle h, long offset, const void *ptr1, long len1, const void *ptr2, long len2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_Munger:	OPWORD	$A9E0
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Munger
+	ENDIF
+
+
+; *  NewString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StringHandle NewString(ConstStr255Param theString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewString:	OPWORD	$A906
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewString
+	ENDIF
+
+
+; *  SetString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetString(StringHandle theString, ConstStr255Param strNew)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetString:	OPWORD	$A907
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetString
+	ENDIF
+
+
+; *  GetString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StringHandle GetString(short stringID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetString:	OPWORD	$A9BA
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetString
+	ENDIF
+
+
+; *  FindWordBreaks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void FindWordBreaks(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, BreakTablePtr breaks, OffsetTable offsets, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindWordBreaks
+			move.l              #$C012001A,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindWordBreaks
+	ENDIF
+
+
+; *  LowercaseText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LowercaseText(Ptr textPtr, short len, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LowercaseText
+			move.w              #$0000,-(sp)
+			move.l              #$800AFFB6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LowercaseText
+	ENDIF
+
+
+; *  UppercaseText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void UppercaseText(Ptr textPtr, short len, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UppercaseText
+			move.w              #$0400,-(sp)
+			move.l              #$800AFFB6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UppercaseText
+	ENDIF
+
+
+; *  StripDiacritics()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void StripDiacritics(Ptr textPtr, short len, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StripDiacritics
+			move.w              #$0200,-(sp)
+			move.l              #$800AFFB6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StripDiacritics
+	ENDIF
+
+
+; *  UppercaseStripDiacritics()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void UppercaseStripDiacritics(Ptr textPtr, short len, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UppercaseStripDiacritics
+			move.w              #$0600,-(sp)
+			move.l              #$800AFFB6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UppercaseStripDiacritics
+	ENDIF
+
+
+; *  FindScriptRun()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ScriptRunStatus FindScriptRun(Ptr textPtr, long textLen, long *lenUsed)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindScriptRun
+			move.l              #$820C0026,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindScriptRun
+	ENDIF
+
+
+;    The following functions are old names, but are required for PowerPC builds
+;    because InterfaceLib exports these names, instead of the new ones.
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  FindWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void FindWord(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, BreakTablePtr breaks, OffsetTable offsets)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindWord
+			move.l              #$8012001A,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindWord
+	ENDIF
+
+
+; *  NFindWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void NFindWord(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, NBreakTablePtr nbreaks, OffsetTable offsets)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NFindWord
+			move.l              #$8012FFE2,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NFindWord
+	ENDIF
+
+
+;   On 68K machines, LwrText, LowerText, StripText, UpperText and StripUpperText
+;   return an error code in register D0, but System 7 PowerMacs do not emulate
+;   this properly, so checking D0 is unreliable.
+
+
+
+
+; *  LwrText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void LwrText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_LwrText:	OPWORD	$A056
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LwrText
+	ENDIF
+
+
+; *  LowerText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void LowerText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_LowerText:	OPWORD	$A056
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LowerText
+	ENDIF
+
+
+; *  StripText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void StripText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_StripText:	OPWORD	$A256
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StripText
+	ENDIF
+
+
+; *  UpperText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void UpperText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_UpperText:	OPWORD	$A456
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpperText
+	ENDIF
+
+
+; *  StripUpperText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void StripUpperText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_StripUpperText:	OPWORD	$A656
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StripUpperText
+	ENDIF
+
+
+;  The following are new names which are exported by InterfaceLib
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  UpperString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void UpperString(BytePtr textPtr, UInt16 length)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	length          => D0
+		_UpperString:	OPWORD	$A054
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpperString
+	ENDIF
+
+
+; *  UpperStringMarks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void UpperStringMarks(BytePtr textPtr, UInt16 length)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	length          => D0
+		_UpperStringMarks:	OPWORD	$A254
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpperStringMarks
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ELSE
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  UpperString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void UpperString(Str255 theString, Boolean diacSensitive)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpperString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  Old routine name but no new names are mapped to it:
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  UprText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void UprText(Ptr textPtr, short len)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	textPtr         => A0
+		;	len             => D0
+		_UprText:	OPWORD	$A054
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UprText
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+;    Functions for converting between C and Pascal Strings
+;    (Previously in Strings.h)
+;    
+;    Note: CopyPascalStringToC, CopyCStringToPascal, c2pstrcpy, and p2cstrcpy
+;          are written to allow inplace conversion.  That is, the src and dst
+;          parameters can point to the memory location.  These functions
+;          are available in CarbonLib and CarbonAccessors.o.
+;          
+;    Note: c2pstr, C2PStr, p2cstr, and P2CStr are all deprecated.  These functions
+;          only do inplace conversion and often require casts to call them.  This can
+;          cause bugs because you can easily cast away a const and change the 
+;          contents of a read-only buffer.  These functions are available
+;          in InterfaceLib, or when building for Carbon if you #define OLDP2C,
+;          then they are available as a macro.
+;    
+;
+
+
+; *  c2pstrcpy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void c2pstrcpy(Str255 dst, const char *src)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION c2pstrcpy
+	ENDIF
+
+
+; *  p2cstrcpy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void p2cstrcpy(char *dst, ConstStr255Param src)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION p2cstrcpy
+	ENDIF
+
+
+; *  CopyPascalStringToC()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CopyPascalStringToC(ConstStr255Param src, char *dst)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyPascalStringToC
+	ENDIF
+
+
+; *  CopyCStringToPascal()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CopyCStringToPascal(const char *src, Str255 dst)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyCStringToPascal
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  c2pstr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern StringPtr c2pstr(char *aStr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION c2pstr
+	ENDIF
+
+
+; *  C2PStr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal StringPtr C2PStr(Ptr cString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION C2PStr
+	ENDIF
+
+
+; *  p2cstr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern char *p2cstr(StringPtr aStr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION p2cstr
+	ENDIF
+
+
+; *  P2CStr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Ptr P2CStr(StringPtr pString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION P2CStr
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+
+	ENDIF ; __TEXTUTILS__ 
+

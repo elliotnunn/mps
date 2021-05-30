@@ -1,0 +1,966 @@
+
+; File: HardwareEqu.a
+;
+; Version 2.0a2.2
+;
+; Copyright Apple Computer, Inc. 1984-1987
+; All Rights Reserved
+
+
+;--------------------------------------------------------------------
+;
+; The following information was formerly in "private" files that were
+; not released to the general developer community.
+;
+; The information in this file is not needed for normal application
+; development. These equates and macros were necessary for development
+; of the Macintosh ToolBox and Operating System, and are likely to be
+; dependent on their current implementation. Use of any information
+; in this file is likely to cause your software to fail on future
+; versions of Macintosh system software or hardware.
+;
+; Apple Developer Support will not support any use of the following
+; information.
+;
+; In order to prevent any "accidental" use of this information, it has
+; been disabled using the conditional-assembly variable, HWNonPortable,
+; defined below. If you change this to a non-zero value, you're on your
+; own. Since this gives hardware specific equates, we must also define
+; which type of Mac we are assembling for. Define the following variable:
+;
+;		onMac	if for 128K, 512K, 512Ke, or Mac+
+;		onMacPP	if for Freeport
+;		onNuMac	if for Paris
+;
+;
+; Hardware Equates -- This file defines the low-level equates for the
+;	Macintosh hardware interface.
+;
+;
+; modifications:
+; <10May85>  LAK	Broke out equates from SysEqu.Text and PrivateEqu.Text
+;					  while changing equates to support 2MB Mac.
+; <09Jul85>  LAK	Added equates for additional DiagROM entrypoints.
+; <24Jul85>  RDC	Added changes for project X (aka MidMac):
+;					 - new interrupt levels and equates
+;					 - new screen parameters
+;					 - new VIA, SCC and IWM addresses and equates
+;					 - added hardware equates from serial driver (os-async.text)
+;					 - added timing constant equates
+;					 - MMU equates
+;					 - equates for real time clock interface
+;					 - DMA chip equates
+;					 - added Screenwidth, screenheight equates from Newprivate file
+; <25Jul85>  RDC	Added system error and debugger equates from newequ file
+;					 (they are based on SERegs location)
+; <26Jul85>  RDC	Removed machine flag equates - now part of each header file for
+;					hardware dependent modules
+; <31Jul85>  LAK	Adjusted DiagROM entrypoints for General Computer . . .
+; <01Aug85>  RDC	Adjusted DS rect coordinates for MidMac
+; <05Aug85>  RDC	Added MidMac equate for difference between Mac and MidMac screen
+;					center point
+; <26Aug85>  LAK	Changed Mac HW addresses for max 4MB of memory.  Changed to turn
+;					 overlay off at VIA init.
+; <05Sep85>  ELR	Added SCSI chip addresses for MacPlus.
+; <09Sep85>  LAK	Removed equate for DiagROM3.
+; <13Sep85>  RDC	Added SCSI changes for MidMac
+; <16Sep85>  RDC	More SCSI changes for MidMac
+; <24Sep85>  LAK	VIA init for reg B now disables sound.
+; <C1/14Apr86> RDC	Added changes for new 020 Reno project (NuMac)
+;					- Deleted default screen variables
+;					- Added new SCC constants for NuMac
+;					- Added equate for slot dispatch table size
+;					- Added NTicks equate for timer mgr (moved from newequ file)
+;					- Added changes for new memory map
+;					- Adjusted screen equates
+;					- Changed address for video card control reg, added bit definitions
+;					- Added equate for icon flash delay count
+;					- Added equates to support memory sizing
+;					- Changed system data space to use low mem area
+;					- Added equate for DOEject jump vector
+;					- Changed clock values for serial port
+;					- Changed screen locations for icons to make it look better
+;					- Added Heapstart var from NewEqu file
+; <c21/29may86> WRL	Changes to VIA equates for DVT build
+; <C28/2Jun86>CSL  Added changes for Aladdin, and Aladdin Front desk bus support.
+; <C41/09Jun86> RDC Changed ROMstart value for NuMac to full 32 bit address
+; <C44/15jun86>	WRL	[NuMac]	Added RAMchk equate (amount of RAM to check at first)
+; <C46/16jun86>	DAH [NuMac]	Removed Patrn (no longer used).
+; <C49/18jun86>	WRL	[NuMac]	Set RAMchk to 1k to reflect new RAM test interface.
+; <C56/26jun86>	WRL	Added Machine equate.  Made RamChk present for all machines.
+;					Added SoundChip equate.  Corrected number of ticks per millisecond.
+; <C91/29jul86>	WRL	CSL	Moved Aladdin heapstart to $2200 for now.
+; <C99/31jul86> BBM	expanded the toolbox trap table.  Required changes to
+;					five files: hwequ.a, startinit.a, postlinker.a, dispatch.a,
+;					and disptable.a.
+; <C84/01aug86>	WRL	Added Rom85Bits (value to go in ROM85 global).
+;<C112/07Aug86>	RDC	Added changes for new NuMac hardware 
+;					(VIA1 and VIA2 pinout changes)
+;<C119/18Aug86>	RDC	Added fix for new NuMac H/W so printing works on modem port
+;<C131/29aug86>	BBM	moved ToolTable from newequ.a to hwequ.a
+;<C137/03Sep86>	SHF Added equate for handshaking DMA address for onNuMac SCSI
+;<C14x/07sep86>	BBM hacked away for expanded tb trap table
+;<C152/15sep86>	WRL	Added BufWorldSize, DefSysHeapSize; corrected RomBSize and RomWSize.
+;					Added ScrnHorRes and ScrnVertRes for Jerome.
+;<23sep86>		NSJ Merged in HardwareEqu from MPW 1.0 release
+;<A228/26Oct86> RDC	Added changes for rev8 NuMac board  
+;<A270/27Oct86> SHF **ALADDIN** Modified vBout and vBInit for Aladdin's VIA
+;					port B (SCSI IRQ mask), added a SCSI WrOffs definition.
+;<A275/27Oct86> RDC Added new equates for SCSI addresses
+;<A283/28oct86> bbm changed lo memory all around and moved the toolbox trap table
+;<C289/29oct86> RDC deleted DBase and other IWM equ's for NuMac (oldIWMBase, offsets should be used)
+;<C406/12Nov86> SHF	Fixed the SCSI DMA address for Beck's Rev. 8 boards.
+;<C483/04dec86> bbm The tooltable had wrong address for macplus.
+;<C579/31dec86> GWN Added equates for centering the sys alert box.
+;<C587/04Jan87> JTC New variable NDfltStackSize replaces old DfltStackSize in sysequ.a
+;<C634/14jan87> bbm	one of the via ports used to be connected to the sound stuff, and has been
+;				disconected on numac.  In order for the sound manager to work old sound programs
+;				on the new chip, that portbit still needs to be set to output, even though it
+;				is not connected to anything.
+;	9feb87	KLH	SCCRd and SCCWr moved back to SysEqu.a
+;_______________________________________________________________________
+
+
+; If HWNonPortable is defined to be non-zero, Then a machine type must be specified!
+
+	IF (&TYPE('HWNonPortable') = 'UNDEFINED') THEN
+HWNonPortable EQU 0
+	ENDIF
+
+	IF (&TYPE('onMac') = 'UNDEFINED') THEN	
+onMac	EQU 1 
+	ENDIF
+	IF (&TYPE('onMacXL') = 'UNDEFINED') THEN
+onMacXL	EQU 0 
+	ENDIF
+	IF (&TYPE('onMacPP') = 'UNDEFINED') THEN
+onMacPP	EQU 0 
+	ENDIF
+	IF (&TYPE('onNuMac') = 'UNDEFINED') THEN
+onNuMac	EQU 0 
+	ENDIF
+	IF (&TYPE('onOldNu') = 'UNDEFINED') THEN
+onOldNu	EQU	0 
+	ENDIF
+
+	IF HWNonPortable THEN
+
+
+
+ramChk			EQU		1024				; <C56> Amount of memory tested for stack.
+
+; ((( -------------------- Macintosh --------------------
+				IF	 onMac THEN 			; <C56>
+machine			EQU		0
+rom85Bits		EQU		$7F					; <C84> New ROMs, No Power Off.
+				ENDIF
+; ))) -------------------- Macintosh --------------------
+
+
+; ((( -------------------- NuMac --------------------
+				IF	 onNuMac THEN			; <C56>
+machine			EQU		1
+rom85Bits		EQU		$3F					; <C84> New ROMs, Power Off ability.
+				ENDIF
+; ))) -------------------- NuMac --------------------
+
+
+; ((( -------------------- Mac++ --------------------
+				IF	 onMacPP THEN 			; <C56>
+machine			EQU		2
+rom85Bits		EQU		$7F					; <C84> New ROMs, No Power Off.
+				ENDIF
+; ))) -------------------- Mac++ --------------------
+
+DiagROM 		EQU 	$F80000 			; Alternate ROM - initial vector		<09Jul85>
+DiagROM1		EQU 	$F80080 			; Alternate ROM - memory sizing vector	<31Jul85>
+DiagROM2		EQU 	$F80088 			; Alternate ROM - init I/O vector		<31Jul85>
+PhaseRead		EQU 	$F00000 			; Phase read address (StartMain)
+
+				IF	 onMac|onMacPP THEN 	;										<C28/2Jun86>
+hiIntMask		EQU 	$0300
+loIntMask		EQU 	$0100
+vIAIntMask		EQU 	$0100				; mask for VIA (and VBL) interrupts 	<24Jul85>
+sCCEnblMask 	EQU 	$F9FF				; mask to enable SCC interrupts 		<24Jul85>
+				ENDIF						;										<24Jul85>
+
+				IF	  onNuMac THEN			;										<C1/14Apr86>
+hiIntMask		EQU 	$0700				; mask for all interrupts
+sCCIntMask		EQU 	$0400				; SCC interrupt vector
+vIA2IntMask 	EQU 	$0200				; VIA2 interrupt vector
+vIAIntMask		EQU 	$0100				; VIA interrupt vector
+loIntMask		EQU 	$0100
+sCCEnblMask 	EQU 	$FBFF				; mask to enable SCC interrupts
+				ENDIF						;										<C1/14Apr86>
+
+				IF	  onMacXL THEN
+hiIntMask		EQU 	$0600				; mask for all interrupts (except NMI)	<24Jul85>
+loIntMask		EQU 	$0100				;										<24Jul85>
+				ENDIF
+
+
+ovlyRAM 		EQU  $600000 ; low RAM address when overlay is on <23sep86>
+ovlyScreen		EQU  $67A700 ; top of screen with overlay <23sep86>
+
+;________________________________;
+;
+; Screen, Sound, ROM, RAM addresses
+;________________________________;
+
+				IF	 onMac|onMacPP THEN 	;										<C28/2Jun86>
+SoundLow		EQU 	 $3FFD00			; sound buffer start address			<26Aug85>
+PWMBuffer		EQU 	 $3FFD01			; PWM bytes are low bytes				<26Aug85>
+;ovlyRAM		.EQU	 $600000			; low RAM address when overlay is on	<26Aug85>
+;ovlyScreen 	.EQU	 $7FA700			; top of screen with overlay			<26Aug85>
+ROMStart		EQU 	 $400000			; starting address of ROM code
+ScreenLow		EQU 	 $3FA700			; top of screen screen address
+;SEOvlyRegs 	.EQU	 $7FFC80			; Sys Error Regs w. Overlay 			<26Aug85>
+SERegs			EQU 	 $3FFC80			; Sys Error Regs w/o Overlay			<26Aug85>
+
+SEScrnNum		EQU 	 $3FD3DD			; Sys Error Number Screen address =$7CB5E+64*34 - 1 <26Aug85>
+											; "vaguely centered" plus 34 scanlines -1 for extra digit
+SEScrnInc		EQU 	 $3FD5DF			; address to diddle below death number	<26Aug85>
+SEScrnIcon		EQU 	 $3FCB5E			; centered screen addr for Mac icons	<26Aug85>
+SEScrnFace		EQU 	 $3FCCDF			; screen addr for face					<26Aug85>
+SEScrnI2		EQU 	 $3FCF1F			; screen addr for boot icon overlay 	<26Aug85>
+				ENDIF						;										<24Jul85>
+
+				IF	 onNuMac THEN			;										<C1/14Apr86>
+ROMStart		EQU 	$40800000 			; starting address of final ROM code	<C1/14Apr86>/<C41>
+ROM_hi			EQU 	$40 				; high byte of ROM address
+MaxAdr			EQU 	$800000 			; max RAM search address (8 MB) 				<C1/14Apr86>
+RamSiz			EQU 	$40 				; setting for VIA2 bits that control RAM size	<C1/14Apr86>
+
+SERegs			EQU 	$0C30				; offset to Sys Error Regs w/o Overlay			<C1/14Apr86><A283>
+SEOvlyRegs		EQU 	SERegs				; no overlay space for NuMac					<C1/14Apr86>
+
+; offsets to various screen locations (tied to base address of screen)
+
+SEScrnNum		EQU 	$57A7				; Sys Error Number Screen address = $46A8+(128*34) - 1	<C1/14Apr86>
+											; "vaguely centered" plus 34 scanlines -1 for extra digit <C1/14Apr86>
+SEScrnInc		EQU 	$4AAA				; address to diddle below death number=$46A8+(128*8)+2	<C1/14Apr86>
+SEScrnIcon		EQU 	$46A8				; centered screen addr for NuMac icons					<C1/14Apr86>
+SEScrnFace		EQU 	$49A9				; screen addr for face = $46A8+(128*6)+1				<C1/14Apr86>
+SEScrnI2		EQU 	$4E29				; screen addr for boot icon overlay=$46A8+(128*15)+1	<C1/14Apr86>
+				ENDIF						;														<C1/14Apr86>
+
+; New system error equates															<25Jul85>
+
+SEVars			EQU 	SERegs				; start of system error data space (wrap city)
+sEVSize 		EQU 	128 				; # of bytes in space
+
+SED0			EQU 	SEVars				; loc of saved reg D0
+SEA0			EQU 	SED0+32 			; loc of saved reg A0
+SEA7			EQU 	SEA0+28 			; loc of saved reg A7
+SEPC			EQU 	SEA7+4				; loc of saved PC
+SESR			EQU 	SEPC+4				; loc of saved SR
+SEAccess		EQU 	SESR+2				; PC address during bus/address error
+SECmdSize		EQU 	SEAccess+4			; # of bytes of parameters passed in _debugger call
+SE000BE 		EQU 	SECmdSize+2 		; 8 bytes of bus error info for 68000			<04Nov85>  JTC
+SELastVar		EQU 	SE000BE+8			; last var in System Error data space			<04Nov85>  JTC
+
+; Rom-based debugger nub equates													<25Jul85>
+
+RDport			EQU 	SELastVar		; Number of port currently in use (0 => no link, 1 => A, 2 => B)
+RDcode			EQU 	RDport+2		; Ptr to code download buffer.
+RDAtrap 		EQU 	RDcode+4		; Saved Rom Atrap handler
+RDlowTrap		EQU 	RDAtrap+4		; low value for trap handling
+RDhiTrap		EQU 	RDlowTrap+2 	; high value for trap handling
+RDresult		EQU 	RDhiTrap+2		; result of executing down-loaded code, etc. (16 bytes)
+RDend			EQU 	RDresult+16 	; end of vars
+
+; MicroBug Equates																	<25Jul85>
+; NOTE: Keep MBdotAddr immediately before MBlocAddr
+
+mBbufSize		EQU 	34
+
+MBbuffer		EQU 	SELastVar			; buffer for input
+MBSign			EQU 	MBbuffer+MBbufSize	; ST => negative sign during conversion
+MBdotAddr		EQU 	MBSign+2			; saved address
+MBlocAddr		EQU 	MBdotAddr+4 		; saved location
+
+				IF	 onMac|onMacPP THEN 	;										<C28/2Jun86>
+dSrectTL		EQU 	$00400020			; top left = 64,32
+dSrectBR		EQU 	$00BE01E0			; bottom right = 190,480
+				ENDIF						;										<01Aug85>
+
+
+				IF	 onNuMac THEN			;										<C1/14Apr86>
+dSrectTL		EQU 	$0078003C			; top left = 120,60
+dSrectBR		EQU 	$01180244			; bottom right = 280,580
+ctrDiff 		EQU 	$00450040			; coord diff from Mac screen center 	<05Aug85>
+dSRectHei		EQU		(DSrectBR**$FFFF0000)-(DSrectTL**$FFFF0000)>>16	;<C579>
+dSRectLen		EQU		(DSrectBR**$FFFF)-(DSrectTL**$FFFF)				;<C579>
+				ENDIF						;										<C1/14Apr86>
+
+; Screen, Sound, ROM, RAM  Constants
+
+PWM2MemTop		EQU 	$2FF		; PWMBuffer to MemTop
+Snd2MemTop		EQU 	$300		; SoundLow to Memtop
+sndBufWLen		EQU 	$0172		; sound/disk buffer word length
+
+				IF		onMac THEN				;									<C152>
+romWSize		EQU 	$10000					; 64K words in present ROM
+romBSize		EQU 	$20000					; 128K bytes in present ROM
+				ELSEIF	onNuMac|onMacPP THEN	;									<C152>
+romWSize		EQU 	$20000					; 128K words in present ROM			<C152>
+romBSize		EQU 	$40000					; 256K bytes in present ROM			<C152>
+				ENDIF
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+Scrn2MemTop 	EQU 	$5900		; ScreenBase to Memtop
+scrnRowB		EQU 	64			; bytes per scan line
+maxX			EQU 	512			; number of pixels horizontally
+maxY			EQU 	342			; number of pixels vertically
+screenWidth 	EQU 	maxX		; screen width									<24Jul85>
+screenHeight	EQU 	maxY		; screen height 								<24Jul85>
+scrnBytes		EQU 	21888		; scrnRowB*maxY
+BufWorldSize	EQU		Scrn2MemTop	; total size of the BufPtr world				<C152>
+				ELSEIF	onNuMac	THEN	;											<C152>
+BufWorldSize	EQU		Snd2MemTop	; total size of the BufPtr world				<C152>
+				ENDIF				;												<24Jul85>
+
+; @@@ The following two should really be defined only for Mac and MacPP,			<C152>
+; @@@ but this info is not in the Video ROMs yet...									<C152>
+scrnHorRes		EQU		72			; number of dots per inch horizontally			<C152>
+scrnVertRes		EQU		72			; number of dots per inch vertically			<C152>
+
+
+;________________________________;
+;
+; VIA (6522) interface chip
+;________________________________;
+
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+VBase			EQU 	 $EFE1FE	; base address
+AVBufB			EQU 	 $EFE1FE	; buffer B
+AVBufA			EQU 	 $EFFFFE	; buffer A
+AVBufM			EQU 	 $EFE1FE	; buffer with mouse button bit
+AVIFR			EQU 	 $EFFBFE	; interrupt flag register
+AVIER			EQU 	 $EFFDFE	; interrupt enable register
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1/14Apr86>
+VBase			EQU 	 $50F00000	; base address									<C1/14Apr86>
+AVBufB			EQU 	 VBase		; buffer B
+AVBufA			EQU 	 $50F01E00	; buffer A										<C1/14Apr86>
+AVBufM			EQU 	 VBase		; buffer with mouse button bit
+AVIFR			EQU 	 $50F01A00	; interrupt flag register						<C1/14Apr86>
+AVIER			EQU 	 $50F01C00	; interrupt enable register 					<C1/14Apr86>
+
+VBase2			EQU 	 $50F02000	; base for 2nd VIA								<C1/14Apr86>
+				ENDIF				;												<C1/14Apr86>
+
+; VIA Offsets
+
+vBufB			EQU 	 0			; BUFFER B
+vBufAH			EQU 	 $200		; buffer a (with handshake) [ Dont use! ]
+vDIRB			EQU 	 $400		; DIRECTION B
+vDIRA			EQU 	 $600		; DIRECTION A
+vT1C			EQU 	 $800		; TIMER 1 COUNTER (L.O.)
+vT1CH			EQU 	 $A00		; timer 1 counter (high order)
+vT1L			EQU 	 $C00		; TIMER 1 LATCH (L.O.)
+vT1LH			EQU 	 $E00		; timer 1 latch (high order)
+vT2C			EQU 	 $1000		; TIMER 2 LATCH (L.O.)
+vT2CH			EQU 	 $1200		; timer 2 counter (high order)
+vSR 			EQU 	 $1400		; SHIFT REGISTER
+vACR			EQU 	 $1600		; AUX. CONTROL REG.
+vPCR			EQU 	 $1800		; PERIPH. CONTROL REG.
+vIFR			EQU 	 $1A00		; INT. FLAG REG.
+vIER			EQU 	 $1C00		; INT. ENABLE REG.
+vBufA			EQU 	 $1E00		; BUFFER A
+
+vBufD			EQU 	 $1E00		; disk head select buffer
+
+				IF	 onMac THEN ;											<C28/2Jun86>
+; Buffer A:
+
+vAOut			EQU 	 $7F		; VBufA output bits
+vAInit			EQU 	 $69		; VBufA initial values (low volume)	<C56>
+vSound			EQU 	 $7 		; sound volume bits
+vSndPg2 		EQU 	 3			; select sound page 2 if 0
+vOverlay		EQU 	 4			; overlay bit (overlay when 1)
+vHeadSel		EQU 	 5
+vPage2			EQU 	 6			; select video page 2 if 0
+vSCCWrReq		EQU 	 7			; SCC write/request line
+				ENDIF
+
+				IF	 onMacPP THEN ;		<C28/2Jun86>									<C28/2Jun86>
+; Buffer A:
+
+vAOut			EQU 	 $7F		; VBufA output bits
+vAInit			EQU 	 $69		; VBufA initial values (low volume)	<C56>
+vSound			EQU 	 $7 		; sound volume bits
+vSndPg2 		EQU 	 3			; select sound page 2 if 0
+vDriveSel		EQU 	 4			; int drive select (lower drive when 1)
+vHeadSel		EQU 	 5
+vPage2			EQU 	 6			; select video page 2 if 0
+vSCCWrReq		EQU 	 7			; SCC write/request line
+				ENDIF
+
+				IF	 onMac THEN 	;												<C28/2Jun86>				
+
+; Buffer B:
+
+vBOut			EQU 	 $87		; VBufB output bits
+vBInit			EQU 	 $87		; VBufB initial values
+rtcData 		EQU 	 0
+rtcClk			EQU 	 1
+rtcEnb			EQU 	 2			; enabled when 0
+vSW 			EQU 	 3			; mouse switch (0 when down)
+vX2 			EQU 	 4			; mouse X level
+vY2 			EQU 	 5			; mouse Y level
+vH4 			EQU 	 6			; horizontal sync
+vSndEnb 		EQU 	 7			; /sound enable (reset when 1)
+				ENDIF				;												<24Jul85>
+
+				IF	 onMacPP THEN 	;												<C28/2Jun86>				
+; Buffer B:
+
+vBOut			EQU 	$C7			; VBufB output bits						<A270>
+vBInit			EQU 	$C7			; VBufB initial values					<A270>
+rtcData			EQU		0
+rtcClk			EQU		1
+rtcEnb			EQU		2			; enabled when 0
+vFDBInt			EQU		3			; Front Desk bus interrupt			    <08Apr86>
+vFDesk1			EQU		4			; bit for front desk bus			    <08Apr86>
+vFDesk2			EQU		5			; and another				   			<08Apr86>
+vH4				EQU		6			; SCSI IRQ mask	(was horiz. sync)		<A270>
+vSndEnb			EQU		7			; /sound enable (reset when 1)
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1>
+				IF	 onOldNu THEN	;												<C112>
+; VIA1 Buffer A:
+
+vAOut			EQU 	 $3F		; VBufA output bits
+vAInit			EQU 	 $01		; VBufA initial values (low volume)	<C56>
+vSound			EQU 	 $F 		; sound volume bits (0..3)
+vOverlay		EQU 	 4			; overlay bit (overlay when 1)
+vHeadSel		EQU 	 5			; head select line for Sony
+vSCCWrReq		EQU 	 7			; SCC write/request line
+
+; VIA1 Buffer B:
+
+vBOut			EQU		$84			; VBufB output bits
+vBInit			EQU		$0C			; VBufB initial values
+vSync			EQU		0			; Synchronous modem				<c21/29may86> WRL
+vFC3			EQU		1			; PMMU FC3 indicator
+vRTCEnb 		EQU		2			; clock enable (0 for enable)
+vSW 			EQU		3			; mouse switch (0 when down)
+vTM1A			EQU		4			; bit for NUBus
+vTM0A			EQU		5			; and another
+vSndInt			EQU		6			; Sound chip interrupt			<c21>
+vSndRes 		EQU		7			; Sound Reset (reset when 1)	<c21>
+
+; VIA1 IFR bits:
+
+ifCA2			EQU 	0			; CA2, ONESEC interrupt
+ifCA1			EQU 	1			; CA1, VBL signal
+ifSR			EQU 	2			; SR done, Serial i/o to Servo
+ifCB2			EQU 	3			; CB2, Clock data
+ifCB1			EQU 	4			; CB1, for clock pulse
+ifT2			EQU 	5			; T2, INDEX pulse counter (VBL ctr)
+ifT1			EQU 	6			; T1, (unused as interrupt)
+ifIRQ			EQU 	7			; any interrupt
+
+; VIA2 Buffer A:
+
+v2AOut			EQU 	 $C0		; V2BufA output bits
+v2AInit 		EQU 	 $00		; V2BufA initial values
+v2RAMS			EQU 	 $C 		; RAM size bits (6,7)
+v2IRQ1			EQU 	 0			; slot 1 interrupt
+v2IRQ2			EQU 	 1			; slot 2 interrupt
+v2IRQ3			EQU 	 2			; slot 3 interrupt
+v2IRQ4			EQU 	 3			; slot 4 interrupt
+v2IRQ5			EQU 	 4			; slot 5 interrupt
+v2IRQ6			EQU 	 5			; slot 6 interrupt
+v2RAM0			EQU 	 6			; RAM size bit 0
+v2RAM1			EQU 	 7			; RAM size bit 1
+
+; VIA2 Buffer B:
+
+v2BOut			EQU 	 $80		; V2BufB output bits						
+v2BInit 		EQU 	 $05		; V2BufB initial values 			<c21/29may86> WRL
+v2CDis			EQU 	 0			; cache disable (when 0)			<c21/29may86> WRL
+v2BusLk 		EQU 	 1			; Bus lockout
+v2PowerOff		EQU 	 2			; soft power off signal (when 0)
+v2FDBInt		EQU 	 3			; Front Desk bus interrupt
+v2FDesk1		EQU 	 4			; bit for front desk bus
+v2FDesk2		EQU 	 5			; and another
+v2SCSIRQ		EQU 	 6			; SCSI interrupt request			<c21/29may86> WRL
+v2VBL			EQU 	 7			; pseudo VBL signal
+
+				ELSE				;												<C112>
+				
+; VIA1 Buffer A:
+
+vAOut			EQU 	 $3F		; VBufA output bits								<C112>/<C119>
+vAInit			EQU 	 $01		; VBufA initial values (low volume)	<C56>
+vSound			EQU 	 $7 		; sound volume bits (1..3)						<C112>
+vSync			EQU		 3			; Synchronous modem								<C112>
+vOverlay		EQU 	 4			; overlay bit (overlay when 1)
+vHeadSel		EQU 	 5			; head select line for Sony
+vRev8Bd			EQU		 6			; =0 for rev 8 board							<A228>
+vSCCWrReq		EQU 	 7			; SCC write/request line
+
+; VIA1 Buffer B:
+
+vBOut			EQU		$87			; VBufB output bits								<C634>
+vBInit			EQU		$07			; VBufB initial values							<C112>
+vrtcData 		EQU 	0			; real time clock data							<C112>
+vrtcClk			EQU 	1			; real time clock clock pulses					<C112>
+vRTCEnb 		EQU		2			; clock enable (0 for enable)
+vFDBInt			EQU 	3			; Front Desk bus interrupt						<C112>
+vFDesk1			EQU 	4			; bit for front desk bus						<C112>
+vFDesk2			EQU 	5			; and another									<C112>
+
+; VIA1 IFR bits:
+
+ifCA2			EQU 	0			; CA2, ONESEC interrupt
+ifCA1			EQU 	1			; CA1, VBL signal
+ifSR			EQU 	2			; SR done, Serial i/o to Servo
+ifCB2			EQU 	3			; CB2, Clock data
+ifCB1			EQU 	4			; CB1, for clock pulse
+ifT2			EQU 	5			; T2, INDEX pulse counter (VBL ctr)
+ifT1			EQU 	6			; T1, (unused as interrupt)
+ifIRQ			EQU 	7			; any interrupt
+
+; VIA2 Buffer A:
+
+v2AOut			EQU 	 $C0		; V2BufA output bits
+v2AInit 		EQU 	 $00		; V2BufA initial values
+v2RAMS			EQU 	 $C 		; RAM size bits (6,7)
+v2IRQ1			EQU 	 0			; slot 1 interrupt
+v2IRQ2			EQU 	 1			; slot 2 interrupt
+v2IRQ3			EQU 	 2			; slot 3 interrupt
+v2IRQ4			EQU 	 3			; slot 4 interrupt
+v2IRQ5			EQU 	 4			; slot 5 interrupt
+v2IRQ6			EQU 	 5			; slot 6 interrupt
+v2RAM0			EQU 	 6			; RAM size bit 0
+v2RAM1			EQU 	 7			; RAM size bit 1
+
+; VIA2 Buffer B:
+
+v2BOut			EQU 	 $80		; V2BufB output bits						
+v2BInit 		EQU 	 $05		; V2BufB initial values 			<c21/29may86> WRL
+v2CDis			EQU 	 0			; cache disable (when 0)			<c21/29may86> WRL
+v2BusLk 		EQU 	 1			; Bus lockout
+v2PowerOff		EQU 	 2			; soft power off signal (when 0)
+vFC3			EQU		 3			; PMMU FC3 indicator				<C112>
+v2TM1A			EQU		 4			; bit for NUBus						<C112>
+v2TM0A			EQU		 5			; and another						<C112>
+v2SCSIRQ		EQU 	 6			; SCSI interrupt request			<c21/29may86> WRL
+v2VBL			EQU 	 7			; pseudo VBL signal
+				ENDIF				; {onOldNu}							<C112>
+				ENDIF				; {onNuMac}							<C112>
+
+; timing constants																	<24Jul85>
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+ticksPr100		EQU 	78			; timer 1 setting for 100 usec intervals
+oneSecConst 	EQU 	2			; gets converted to $20000 for onesec constant
+flashDly		EQU 	4			; icon flash delay count						<C1/14Apr86>						
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1/14Apr86>
+ticksPr100		EQU 	78			; timer 1 setting for 100 usec intervals
+oneSecConst 	EQU 	8			; gets converted to $80000 for onesec constant
+flashDly		EQU 	8			; icon flash delay count						
+				ENDIF				;												<C1/14Apr86>
+
+
+;________________________________;
+;
+; SCC Serial Chip Addresses
+;________________________________;
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+SCCRBase		EQU 	 $9FFFF8	; SCC base read address
+SCCWBase		EQU 	 $BFFFF9	; SCC base write address
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1/14Apr86>
+SCCRBase		EQU 	 $50F04000	; SCC base read address 						<C1/14Apr86>
+SCCWBase		EQU 	 $50F04000	; SCC base write address						<C1/14Apr86>
+				ENDIF				;												<C1/14Apr86>
+
+; SCC Offsets
+
+aData			EQU 	 6			; offset for A channel data
+aCtl			EQU 	 2			; offset for A channel control
+bData			EQU 	 4			; offset for B channel data
+bCtl			EQU 	 0			; offset for B channel control
+
+sccData 		EQU 	 4			; general offset for data from control
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+sccWrite		EQU 	 $200001	; general offset for write from read
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1/14Apr86>
+sccWrite		EQU 	 $0 		; general offset for write from read
+				ENDIF				;												<24Jul85>
+
+rxBF			EQU 	 0			; SCC receive buffer full
+txBE			EQU 	 2			; SCC transmit buffer empty
+
+; SCC clock rates					;												<24Jul85>
+
+macClock		EQU 	36707		; in Hz * 100									<24Jul85>
+midMacClock 	EQU     39168		; <23sep86>						
+nuMacClock		EQU 	36864		;												<C1/14Apr86>
+lisaAClock		EQU 	40000		; port A clock									<24Jul85>
+lisaBCLock		EQU 	36864		; port B clock									<24Jul85>
+
+; SCC baud rate constants
+
+macConst		EQU 	114709		; in Hz/32										<24Jul85>
+midMacConst 	EQU     122400		; <23sep86>						
+nuMacConst		EQU 	115200		;												<C1/14Apr86>
+lisaAConst		EQU 	125000		;												<24Jul85>
+lisaBConst		EQU 	115200		;												<24Jul85>
+
+;________________________________;
+;
+; IWM Chip Addresses
+;________________________________;
+
+
+				IF	 onMac|onMacPP THEN ;											<C28/2Jun86>
+DBase			EQU 	 $DFE1FF	; disk address base
+DPh0L			EQU 	 $DFE1FF	; phase 0 low
+DPh0H			EQU 	 $DFE3FF	; phase 0 high
+DMtrOff 		EQU 	 $DFF1FF	; IWM Motor off
+DMtrOn			EQU 	 $DFF3FF	; IWM Motor on
+DiskQ6L 		EQU 	 $DFF9FF	; shift register
+DiskQ6H 		EQU 	 $DFFBFF
+DiskQ7L 		EQU 	 $DFFDFF
+DiskQ7H 		EQU 	 $DFFFFF
+				ENDIF				;												<24Jul85>
+
+				IF	 onNuMac THEN	;												<C1/14Apr86>
+oldIWMBase		EQU 	 $50F1C000	; old disk address base 						<A228>
+newIWMBase		EQU 	 $50F16000	; new disk address base 						<A228>
+
+;DBase			EQU 	 $50F1C000	; old disk address base 						<A228>/<C289>
+;DPh0L			EQU 	 $50F1C000	; phase 0 low									<C1>/<C289>
+;DPh0H			EQU 	 $50F1C200	; phase 0 high									<C1>/<C289>
+;DMtrOff 		EQU 	 $50F1D000	; IWM Motor off 								<C1>/<C289>
+;DMtrOn			EQU 	 $50F1D200	; IWM Motor on									<C1>/<C289>
+;DiskQ6L 		EQU 	 $50F1D800	; shift register								<C1>/<C289>
+;DiskQ6H 		EQU 	 $50F1DA00	;												<C1>/<C289>
+;DiskQ7L 		EQU 	 $50F1DC00	;												<C1>/<C289>
+;DiskQ7H 		EQU 	 $50F1DE00	;												<C1>/<C289>
+				ENDIF				;												<C1>/<C289>
+
+; IWM Offsets
+
+ph0L			EQU 	 0			; disk address offsets from base
+ph0H			EQU 	 $200
+ph1L			EQU 	 $400
+ph1H			EQU 	 $600
+ph2L			EQU 	 $800
+ph2H			EQU 	 $A00
+ph3L			EQU 	 $C00
+ph3H			EQU 	 $E00
+mtrOff			EQU 	 $1000
+mtrOn			EQU 	 $1200
+intDrive		EQU 	 $1400		; enable internal drive address
+extDrive		EQU 	 $1600		; enable external drive address
+q6L 			EQU 	 $1800
+q6H 			EQU 	 $1A00
+q7L 			EQU 	 $1C00
+q7H 			EQU 	 $1E00
+
+
+;  Interrupt Auto-vector and Exception Definitions <23sep86>
+
+Line1010		EQU  $28	 ; 1010 emulator trap (system routines)
+Line1111		EQU  $2C	 ; 1111 emulator trap (reserved)
+AutoInt1		EQU  $64	 ; level 1 auto-vector
+AutoInt2		EQU  $68	 ; level 2 auto-vector
+AutoInt3		EQU  $6C	 ; level 3 auto-vector
+AutoInt4		EQU  $70	 ; level 4 auto-vector
+AutoInt5		EQU  $74	 ; level 5 auto-vector
+AutoInt6		EQU  $78	 ; level 6 auto-vector
+AutoInt7		EQU  $7C	 ; level 7 auto-vector
+FmtErrVect		EQU  $38	 ; format error vector for 68010/68020
+
+
+			IF		OnMac THEN			; SCSI addresses					<C28/2Jun86>
+;
+;	base address for SCSI Port for MAC+
+;
+SCSIRd		EQU 		$580000 			; base address of SCSI interface - READ
+SCSIWr		EQU 		$580001 			; base address of SCSI interface - WRITE
+
+WrOffs		EQU			1					; write addresses are +1 to the read base <A270>
+			ENDIF							;									<C1/14Apr86>
+			
+			IF		OnMacPP THEN			; SCSI addresses					<A275>
+;
+;	base address for SCSI Port for MAC++
+;
+SCSIRd		EQU 		$5FF000 			; base address of SCSI interface - READ
+SCSIWr		EQU 		$5FF001 			; base address of SCSI interface - WRITE
+MacSCSIBase	EQU 		$5FF000 			; base address of SCSI READ interface
+MacSCSIDMA	EQU 		$5FF200 			; base address of SCSI DMA
+MacSCSIHsk	EQU 		$5FF200 			; base address of SCSI handshake
+
+WrOffs		EQU			1					; write addresses are +1 to the read base <A270>
+			ENDIF							;									<A275>
+			
+			IF	 onNuMac THEN				;									<C1/14Apr86>
+;	base address for SCSI Port for 020Mac
+
+;SCSIRd		EQU 		$50F10000			; base address of SCSI interface - READ 	<C1>/<A275>
+;SCSIWr		EQU 		$50F10000			; base address of SCSI interface - WRITE	<C1>/<A275>
+;SCSIHndShk	EQU 		$50F08000			; SCSI pseudo-DMA handshaking READ/WRITE	<C137>/<A275>
+
+WrOffs		EQU			0					; write addresses are same as read base <A270>
+
+OldSCSIBase	EQU			$50F10000			; base address of SCSI interface			<A228>
+OldSCSIDMA	EQU			$50F14000			; base address of SCSI DMA					<A228>
+OldSCSIHsk	EQU			$50F08000			; base address of SCSI handshake			<A228>
+
+NewSCSIBase	EQU			$50F10000			; rev8 base address of SCSI interface		<A228>
+NewSCSIDMA	EQU			$50F12000			; rev8 base address of SCSI DMA (corrected)	<C406/12Nov86>
+NewSCSIHsk	EQU			$50F06000			; rev8 base address of SCSI handshake		<A228>
+
+SCSIVct 	EQU 		AutoInt3			; SCSI int at level 3
+			ENDIF							;									<C1/14Apr86>
+
+;
+;	5380 Register Defs - Offsets
+;
+			IF		OnMac|onMacPP THEN		; address offsets (handshaking on MacPP)	<C28/2Jun86>
+dACKRd		EQU 		$200				; offset of psuedo-DMA - READ
+dACKWr		EQU 		$200				; offset of psuedo-DMA - WRITE
+			ENDIF							;									<13Sep85>
+
+
+			;	Removed DACKRd and DACKWr offsets for NuMac <C406/12Nov86>
+
+
+sCDR	   EQU 		   $00 					; Current SCSI Read Data
+sODR	   EQU 		   $00 					; Output data register
+
+sICR	   EQU 		   $10 					; Initiator Command Register - READ/WRITE
+iRST	   EQU 		   $80 				   	; *RST asserted
+iAIP	   EQU		   $40				   	; arbitration in progress (read)
+bAIP	   EQU		   6				   	;   bit test for arbitration in progress
+aTMD	   EQU		   $40				  	; assert Test Mode (write)
+iLA 	   EQU		   $20				  	; Lost arbitration (read)
+bLA 	   EQU		   5				   	;   bit test for Lost Arbitration
+aDIFF	   EQU		   $20				   	; assert Differential enable (write)
+iACK	   EQU		   $10				   	; *ACK is asserted
+iBSY	   EQU		   $08				   	; *BSY is asserted
+iSEL	   EQU		   $04				   	; *SEL is asserted
+iATN	   EQU		   $02				   	; *ATN is asserted
+iDB 	   EQU		   $01				   	; Data bus is asserted
+	
+sMR 	   EQU 		   $20 				   	; Mode Register - READ/WRITE
+iBDMA	   EQU		   $80				   	; Block Mode DMA
+iTGT	   EQU		   $40				   	; Target Mode
+iPTY	   EQU		   $20				   	; Enable Parity Checking
+iIPTY	   EQU		   $10				   	; Enable Parity interrupt
+iIEOP	   EQU		   $08				   	; Enable EOP interrupt
+iMBSY	   EQU		   $04				   	; Monitor BSY
+iDMA	   EQU		   $02				   	; DMA Mode
+iARB	   EQU		   $01				   	; Arbitration
+
+sTCR	   EQU 		   $30 				   	; Target Command Register - READ/WRITE
+iREQ	   EQU		   $08				   	; Assert *REQ
+iMSG	   EQU		   $04				   	; Assert *MSG
+iCD 	   EQU		   $02				   	; Assert C/*D
+iIO 	   EQU		   $01				   	; Assert I/*O
+
+sCSR	   EQU 		   $40 				   	; Current SCSI Bus Status (READ)
+aRST	   EQU		   $80				   	; *RST
+aBSY	   EQU		   $40				   	; *BSY
+bBSY	   EQU		   6				   	;  bit test for *BSY
+aREQ	   EQU		   $20				   	; *REQ
+bREQ	   EQU		   5				   	;  bit test for *REQ
+aMSG	   EQU		   $10				   	; *MSG
+bMSG	   EQU		   4				   	;  bit test for *MSG
+aCD 	   EQU		   $08				   	; C/*D
+bCD 	   EQU		   3				   	;  bit test for C/*D
+aIO 	   EQU		   $04				   	; I/*O
+bIO 	   EQU		   2				   	;  bit test for I/*O
+aSEL	   EQU		   $02				   	; *SEL
+bSEL	   EQU		   1				   	;  bit test for *SEL
+aDBP	   EQU		   $01				   	; *DBP
+
+sSER	   EQU 		   $40 				   	; Select Enable Register (WRITE)
+
+sBSR	   EQU		   $50 				   	; Bus & Status Register (READ)
+iEDMA	   EQU		   $80				   	; End of DMA
+bEDMA	   EQU		   7				   	; bit test for end of DMA			<13Sep85>
+iDMAR	   EQU		   $40				   	; DMA Request
+bDMAR	   EQU		   6				   	; bit test for DMA Req
+iPERR	   EQU		   $20				   	; Parity Error
+iIREQ	   EQU		   $10				   	; Interrupt Request
+bIREQ	   EQU		   4				   	; bit test for interrupt
+iPM 	   EQU		   $08				   	; Phase Match
+bPM 	   EQU		   3				   	;  bit test for Phase Match
+iBERR	   EQU		   $04				   	; Bus Error
+ATN 	   EQU		   $02				   	; *ATN
+ACK 	   EQU		   $01				   	; *ACK
+bACK	   EQU		   0				   	; bit test for ACK					<13Sep85>
+
+sDMAtx	   EQU 		   $50 					; DMA Transmit Start (WRITE)
+sIDR	   EQU 		   $60 					; Data input register (READ)
+sTDMArx    EQU 		   $60 					; Start Target DMA receive (WRITE)
+sRESET	   EQU 		   $70 					; Reset Parity/Interrupt (READ)
+sIDMArx    EQU 		   $70 					; Start Initiator DMA receive (WRITE)
+
+			IF	 onMac|onMacPP THEN 		;									<C28/2Jun86>
+onesec		EQU 	95528					; looptimes
+halfsec 	EQU 	onesec/2
+oneSecTicks EQU 	60						; ticks, of course
+stlDelay	EQU 	$30 					; default bus settle delay			<16Sep85>
+			ENDIF							;									<13Sep85>
+
+			IF	 onNuMac THEN				;									<C1/14Apr86>
+onesec		EQU 	382112					; looptimes
+halfsec 	EQU 	onesec/2
+oneSecTicks EQU 	60						; ticks, of course
+stlDelay	EQU 	$30 					; default bus settle delay
+
+;  slot equates
+
+Slot1Adr	EQU 	$F9900000				; slot 1 base address
+Slot2Adr	EQU 	$FAA00000				; slot 2 base address
+Slot3Adr	EQU 	$FBB00000				; slot 3 base address
+Slot4Adr	EQU 	$FCC00000				; slot 4 base address
+Slot5Adr	EQU 	$FDD00000				; slot 5 base address
+Slot6Adr	EQU 	$FEE00000				; slot 6 base address
+
+slotOfst	EQU 	$01100000				; address offset to next slot
+
+slotSize	EQU 	24						; bytes for slot dispatch table
+											;  (long word per slot)
+
+; Configuration ROM offsets
+
+CnfgROMOfst EQU 	$000FFE00				; offset to base addr of 128 byte config ROM
+sResType	EQU 	$100					; resource type
+sIDByte 	EQU 	$104					; ID byte
+sROMFrmt	EQU 	$10C					; ROM format
+sROMFlgs	EQU 	$110					; ROM flags
+sBrdType	EQU 	$184					; Board type
+sVidOfst	EQU 	$194					; offset to video params
+sROMSize	EQU 	$1B4					; actual config ROM size
+
+; Video parameter offsets
+
+vWidth		EQU 	0						; pixel screen width
+vHeigth 	EQU 	$8						; pixel screen heigth
+vRowBytes	EQU 	$10 					; screen row bytes (visible)
+vVBLRate	EQU 	$18 					; vertical blanking rate
+vVidSize	EQU 	$1C 					; size of video mem in bytes
+
+; Video card control register
+
+sCtlRegOfst EQU 	$00080003				; offset to ctl reg on video card
+iIRQ		EQU 	$08 					; Vsync interrupt
+bIRQ		EQU 	3						; bit test for IRQ
+iVPage		EQU 	$04 					; set video page
+bVSync		EQU 	2						; bit test for VSync
+
+			ENDIF							;									<C1/14Apr86>
+
+; equates for the expanded toolbox trap tables
+
+			IF	onNuMac|onMacPP THEN		; <C483>
+ToolTable	EQU 	$0E00					; start of toolbox trap table		<C131><C14x><A283><C483>
+			ELSE							; <C483>
+ToolTable	EQU 	$0C00					; start of toolbox trap table		<C131><A283><C483>
+			ENDIF							; <C483>
+
+			IF	onNuMac	THEN				; make a variable # of tb traps     <C99><C14x>
+numTbTrap   EQU		1024					; number of toolbox traps           <C99><C14x>
+numTrapMask EQU		$03FF					; mask for number of tb traps       <C99><C14x>
+			ELSE
+numTbTrap   EQU		512						; number of toolbox traps           <C99><C14x>
+numTrapMask EQU		$01FF					; mask for number of tb traps       <C99><C14x>
+			ENDIF
+numOsTrap   EQU		256						; number of os traps                <C99><C14x>
+
+; misc equates
+
+			IF	 onMac THEN					; <C28/2Jun86>
+ROMDoEject	EQU 	$40001E 				; jump to DoEject utility			<C1/14Apr86>
+HeapStart	EQU 	$1400					; Mac Plus starting point			<C1/14Apr86>
+defSysHeap	EQU		$B700					; Default size of the system heap	<C152>
+nDfltStackSize	EQU	$2000					; Default stack size				<C587>
+			ENDIF							;									<C1/14Apr86>
+
+			IF	 onMacPP THEN				; <C91>
+ROMDoEject	EQU 	$40001E 				; jump to DoEject utility
+HeapStart	EQU 	$1600					; Aladdin starting point			<A283>
+defSysHeap	EQU		$18000					; Default size of the system heap	<C152>
+nDfltStackSize	EQU	$2000					; Default stack size				<C587>
+			ENDIF							;
+
+			IF	 onNuMac THEN				;									<C1/14Apr86>
+ROMDoEject	EQU 	$4080001E 				; jump to DoEject utility			<C91>
+HeapStart	EQU 	$1E00					; need extra lomem for color quickdraw	<C1><C14x>
+defSysHeap	EQU		$18000					; Default size of the system heap	<C152><A283>
+nDfltStackSize	EQU	$6000					; Default stack size				<C587>
+			ENDIF							;									<C1/14Apr86>
+
+
+			IF	onNuMac	THEN
+;SoundChip	EQU		$50F18000				; Base of the sound chip's address space	<C56>
+OldSndBase	EQU		$50F18000				; old sound chip's base address				<A228>
+NewSndBase	EQU		$50F14000				; rev8 sound chip's base address			<A228>
+			ENDIF
+
+
+; Hardware Equates -- This file defines the low-level equates for the
+;	Macintosh hardware interface.
+
+
+;------------------------------
+; Hardware configuration bits.
+;------------------------------
+;the following goes with HWCfgFlags	
+
+hwCbSCSI	EQU		15					; SCSI port present
+hwCbClock	EQU		14					; New clock chip present
+hwCbExPRAM	EQU		13					; Extra Parameter Ram valid.
+hwCbFPU		EQU		12					; FPU chip present.
+hwCbMMU		EQU		11					; Some kind of MMU present (see MMUType for what kind).
+hwCbADB		EQU		10					; Apple Desktop Bus present.
+
+hwCmSCSI	EQU		(1 << hwCbSCSI)
+hwCmClock	EQU		(1 << hwCbClock)
+hwCmExPRAM	EQU		(1 << hwCbExPRAM)
+hwCmFPU		EQU		(1 << hwCbFPU)
+hwCmMMU		EQU		(1 << hwCbMMU)
+hwCmADB		EQU		(1 << hwCbADB)
+
+FPUIn		EQU		12					; bit 12 - FPU chip installed					<C67>
+
+			IF		onMac	THEN
+hwCfgBits	EQU		hwCmSCSI++hwCmClock
+			ELSEIF	onMacPP	THEN
+hwCfgBits	EQU		hwCmSCSI++hwCmClock++hwCmADB
+			ELSEIF	onNuMac	THEN
+hwCfgBits	EQU		hwCmSCSI++hwCmClock++hwCmFPU++hwCmMMU++hwCmADB
+			ELSE
+			AERROR	'WARNING: Unknown machine type (hwCfgBits).'
+			ENDIF
+
+
+; Screen, Sound, ROM, RAM  Constants
+
+			IF	 onMac|onMacPP THEN 		;<A258/24Oct86 GWN>
+dVertRRate	EQU	60							;<A258/24Oct86 GWN>
+			ENDIF							;<A258/24Oct86 GWN>
+			
+			ENDIF	;end exclusion of private information
+			

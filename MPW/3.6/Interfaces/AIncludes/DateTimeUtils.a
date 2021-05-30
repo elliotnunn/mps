@@ -1,0 +1,746 @@
+;
+;    File:       DateTimeUtils.a
+;
+;    Contains:   International Date and Time Interfaces (previously in TextUtils)
+;
+;    Version:    Technology: Mac OS 8.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DATETIMEUTILS__') = 'UNDEFINED' THEN
+__DATETIMEUTILS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+; 
+;
+;    Here are the current routine names and the translations to the older forms.
+;    Please use the newer forms in all new code and migrate the older names out of existing
+;    code as maintainance permits.
+;    
+;    New Name                    Old Name(s)
+;    
+;    DateString                  IUDatePString IUDateString 
+;    InitDateCache
+;    LongDateString              IULDateString
+;    LongTimeString              IULTimeString
+;    StringToDate                String2Date
+;    StringToTime                                
+;    TimeString                  IUTimeString IUTimePString
+;    LongDateToSeconds           LongDate2Secs
+;    LongSecondsToDate           LongSecs2Date
+;    DateToSeconds               Date2Secs
+;    SecondsToDate               Secs2Date
+;
+;
+;    Carbon only supports the new names.  The old names are undefined for Carbon targets.
+;    This is true for C, Assembly and Pascal.
+;    
+;    InterfaceLib always has exported the old names.  For C macros have been defined to allow
+;    the use of the new names.  For Pascal and Assembly using the new names will result
+;    in link errors. 
+;    
+;
+
+
+
+; typedef SInt16						ToggleResults
+															; Toggle results 
+toggleUndefined					EQU		0
+toggleOK						EQU		1
+toggleBadField					EQU		2
+toggleBadDelta					EQU		3
+toggleBadChar					EQU		4
+toggleUnknown					EQU		5
+toggleBadNum					EQU		6
+toggleOutOfRange				EQU		7					;synonym for toggleErr3
+toggleErr3						EQU		7
+toggleErr4						EQU		8
+toggleErr5						EQU		9
+
+															; Date equates 
+smallDateBit					EQU		31					;Restrict valid date/time to range of Time global
+togChar12HourBit				EQU		30					;If toggling hour by char, accept hours 1..12 only
+togCharZCycleBit				EQU		29					;Modifier for togChar12HourBit: accept hours 0..11 only
+togDelta12HourBit				EQU		28					;If toggling hour up/down, restrict to 12-hour range (am/pm)
+genCdevRangeBit					EQU		27					;Restrict date/time to range used by genl CDEV
+validDateFields					EQU		-1
+maxDateField					EQU		10
+
+eraMask							EQU		$0001
+yearMask						EQU		$0002
+monthMask						EQU		$0004
+dayMask							EQU		$0008
+hourMask						EQU		$0010
+minuteMask						EQU		$0020
+secondMask						EQU		$0040
+dayOfWeekMask					EQU		$0080
+dayOfYearMask					EQU		$0100
+weekOfYearMask					EQU		$0200
+pmMask							EQU		$0400
+dateStdMask						EQU		$007F				;default for ValidDate flags and ToggleDate TogglePB.togFlags
+
+; typedef SInt8							LongDateField
+eraField						EQU		0
+yearField						EQU		1
+monthField						EQU		2
+dayField						EQU		3
+hourField						EQU		4
+minuteField						EQU		5
+secondField						EQU		6
+dayOfWeekField					EQU		7
+dayOfYearField					EQU		8
+weekOfYearField					EQU		9
+pmField							EQU		10
+res1Field						EQU		11
+res2Field						EQU		12
+res3Field						EQU		13
+
+; typedef SInt8							DateForm
+shortDate						EQU		0
+longDate						EQU		1
+abbrevDate						EQU		2
+
+															; StringToDate status values 
+fatalDateTime					EQU		$8000				; StringToDate and String2Time mask to a fatal error 
+longDateFound					EQU		1					; StringToDate mask to long date found 
+leftOverChars					EQU		2					; StringToDate & Time mask to warn of left over characters 
+sepNotIntlSep					EQU		4					; StringToDate & Time mask to warn of non-standard separators 
+fieldOrderNotIntl				EQU		8					; StringToDate & Time mask to warn of non-standard field order 
+extraneousStrings				EQU		16					; StringToDate & Time mask to warn of unparsable strings in text 
+tooManySeps						EQU		32					; StringToDate & Time mask to warn of too many separators 
+sepNotConsistent				EQU		64					; StringToDate & Time mask to warn of inconsistent separators 
+tokenErr						EQU		$8100				; StringToDate & Time mask for 'tokenizer err encountered' 
+cantReadUtilities				EQU		$8200
+dateTimeNotFound				EQU		$8400
+dateTimeInvalid					EQU		$8800
+; typedef short 						StringToDateStatus
+
+; typedef StringToDateStatus 			String2DateStatus
+
+DateCacheRecord			RECORD 0
+hidden					 ds.w	256				; offset: $0 (0)		;  only for temporary use 
+sizeof					 EQU *					; size:   $200 (512)
+						ENDR
+; typedef struct DateCacheRecord *		DateCachePtr
+
+DateTimeRec				RECORD 0
+year					 ds.w	1				; offset: $0 (0)
+month					 ds.w	1				; offset: $2 (2)
+day						 ds.w	1				; offset: $4 (4)
+hour					 ds.w	1				; offset: $6 (6)
+minute					 ds.w	1				; offset: $8 (8)
+second					 ds.w	1				; offset: $A (10)
+dayOfWeek				 ds.w	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+LongDateTime			RECORD 0
+f						 ds		SInt64
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+LongDateCvt				RECORD 0
+c						 ds		SInt64			; offset: $0 (0)
+						 ORG 0
+lHigh					 ds.l	1				; offset: $0 (0)
+lLow					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+LongDateRec				RECORD 0
+era						 ds.w	1				; offset: $0 (0)
+year					 ds.w	1				; offset: $2 (2)
+month					 ds.w	1				; offset: $4 (4)
+day						 ds.w	1				; offset: $6 (6)
+hour					 ds.w	1				; offset: $8 (8)
+minute					 ds.w	1				; offset: $A (10)
+second					 ds.w	1				; offset: $C (12)
+dayOfWeek				 ds.w	1				; offset: $E (14)
+dayOfYear				 ds.w	1				; offset: $10 (16)
+weekOfYear				 ds.w	1				; offset: $12 (18)
+pm						 ds.w	1				; offset: $14 (20)
+res1					 ds.w	1				; offset: $16 (22)
+res2					 ds.w	1				; offset: $18 (24)
+res3					 ds.w	1				; offset: $1A (26)
+						 ORG 0
+list					 ds.w	14				; offset: $0 (0)		; Index by LongDateField!
+						 ORG 0
+eraAlt					 ds.w	1				; offset: $0 (0)
+oldDate					 ds		DateTimeRec		; offset: $2 (2)
+						 ORG 28
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef SInt8 						DateDelta
+
+TogglePB				RECORD 0
+togFlags				 ds.l	1				; offset: $0 (0)		; caller normally sets low word to dateStdMask=$7F
+amChars					 ds.l	1				; offset: $4 (4)		; from 'itl0', but uppercased
+pmChars					 ds.l	1				; offset: $8 (8)		; from 'itl0', but uppercased
+reserved				 ds.l	4				; offset: $C (12)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; 
+;    These routine are available in Carbon with their new name
+;
+
+
+; *  DateString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DateString(long dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DateString
+			move.w              #$000E,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DateString
+	ENDIF
+
+
+; *  TimeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TimeString(long dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TimeString
+			move.w              #$0010,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TimeString
+	ENDIF
+
+
+; *  LongDateString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LongDateString(const LongDateTime *dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LongDateString
+			move.w              #$0014,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LongDateString
+	ENDIF
+
+
+; *  LongTimeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LongTimeString(const LongDateTime *dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LongTimeString
+			move.w              #$0016,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LongTimeString
+	ENDIF
+
+
+; 
+;    These routine are available in Carbon and InterfaceLib with their new name
+;
+
+
+; *  InitDateCache()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr InitDateCache(DateCachePtr theCache)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitDateCache
+			move.l              #$8204FFF8,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitDateCache
+	ENDIF
+
+
+; *  StringToDate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StringToDateStatus StringToDate(Ptr textPtr, long textLen, DateCachePtr theCache, long *lengthUsed, LongDateRec *dateTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StringToDate
+			move.l              #$8214FFF6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringToDate
+	ENDIF
+
+
+; *  StringToTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StringToDateStatus StringToTime(Ptr textPtr, long textLen, DateCachePtr theCache, long *lengthUsed, LongDateRec *dateTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StringToTime
+			move.l              #$8214FFF4,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringToTime
+	ENDIF
+
+
+; *  LongDateToSeconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LongDateToSeconds(const LongDateRec *lDate, LongDateTime *lSecs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LongDateToSeconds
+			move.l              #$8008FFF2,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LongDateToSeconds
+	ENDIF
+
+
+; *  LongSecondsToDate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LongSecondsToDate(const LongDateTime *lSecs, LongDateRec *lDate)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LongSecondsToDate
+			move.l              #$8008FFF0,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LongSecondsToDate
+	ENDIF
+
+
+; *  ToggleDate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ToggleResults ToggleDate(LongDateTime *lSecs, LongDateField field, DateDelta delta, short ch, const TogglePB *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ToggleDate
+			move.l              #$820EFFEE,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ToggleDate
+	ENDIF
+
+
+; *  ValidDate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short ValidDate(const LongDateRec *vDate, long flags, LongDateTime *newSecs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ValidDate
+			move.l              #$820CFFE4,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ValidDate
+	ENDIF
+
+
+; *  ReadDateTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ReadDateTime(unsigned long *time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	time            => A0
+		; returns:
+		;	OSErr           <= D0
+		_ReadDateTime:	OPWORD	$A039
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReadDateTime
+	ENDIF
+
+
+; *  GetDateTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetDateTime(unsigned long *secs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	secs            => A0
+		Macro
+		_GetDateTime
+			move.l              $020C,(A0)
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDateTime
+	ENDIF
+
+
+; *  SetDateTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDateTime(unsigned long time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	time            => D0
+		; returns:
+		;	OSErr           <= D0
+		_SetDateTime:	OPWORD	$A03A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDateTime
+	ENDIF
+
+
+; *  SetTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetTime(const DateTimeRec *d)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	d               => A0
+		Macro
+		_SetTime
+			dc.w            	$A9C7
+			dc.w            	$A03A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTime
+	ENDIF
+
+
+; *  GetTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetTime(DateTimeRec *d)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	d               => A0
+		Macro
+		_GetTime
+			move.l              $020C,D0
+			dc.w            	$A9C6
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetTime
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DateToSeconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void DateToSeconds(const DateTimeRec *d, unsigned long *secs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DateToSeconds:	OPWORD	$A9C7
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DateToSeconds
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SecondsToDate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SecondsToDate(unsigned long secs, DateTimeRec *d)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	secs            => D0
+		;	d               => A0
+		_SecondsToDate:	OPWORD	$A9C6
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SecondsToDate
+	ENDIF
+
+
+; 
+;    These routine are available in InterfaceLib using their old name.
+;    Macros allow using the new names in all source code.
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  IUDateString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IUDateString(long dateTime, DateForm longFlag, Str255 result)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IUDateString
+			clr.w               -(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IUDateString
+	ENDIF
+
+
+; *  IUTimeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IUTimeString(long dateTime, Boolean wantSeconds, Str255 result)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IUTimeString
+			move.w              #$0002,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IUTimeString
+	ENDIF
+
+
+; *  IUDatePString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IUDatePString(long dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IUDatePString
+			move.w              #$000E,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IUDatePString
+	ENDIF
+
+
+; *  IUTimePString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IUTimePString(long dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IUTimePString
+			move.w              #$0010,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IUTimePString
+	ENDIF
+
+
+; *  IULDateString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IULDateString(LongDateTime *dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IULDateString
+			move.w              #$0014,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IULDateString
+	ENDIF
+
+
+; *  IULTimeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void IULTimeString(LongDateTime *dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IULTimeString
+			move.w              #$0016,-(sp)
+			dc.w            	$A9ED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IULTimeString
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+
+
+	ENDIF ; __DATETIMEUTILS__ 
+

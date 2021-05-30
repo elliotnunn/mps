@@ -1,0 +1,2340 @@
+;
+;    File:       JManager.a
+;
+;    Contains:   Routines that can be used to invoke the Java Virtual Machine in MRJ
+;
+;    Version:    Technology: MRJ 2.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__JMANAGER__') = 'UNDEFINED' THEN
+__JMANAGER__ SET 1
+
+; 
+; *  Note:   If you want to use any JManger routines which use JNI or JRI functionality,
+; *          you must #include <jni.h> or <jri.h> before this file.
+; *
+; 
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__DRAG__') = 'UNDEFINED' THEN
+	include 'Drag.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+
+
+kJMVersion						EQU		$11800007			; using Sun's 1.1.8 APIs, our rev 7 APIs. 
+kDefaultJMTime					EQU		$00000400			; how much time to give the JM library on "empty" events, in milliseconds. 
+
+kJMVersionError					EQU		-60000
+kJMExceptionOccurred			EQU		-60001
+kJMBadClassPathError			EQU		-60002
+; 
+; * Special codes for JMFrameKey, JMFrameKeyRelease:
+; *
+; * When your app notices that a modifiers is pressed (must be done by polling,
+; * unless Mac OS changes to support sending modifiers as events)
+; * you should notify the runtime using JMFrameKey, JMFrameKeyRelease, using
+; * these constants for asciiChar and keyCode.  This will allow the AWT to
+; * synthesize the appropriate events
+; 
+
+
+kModifierAsciiChar				EQU		0
+kModifierKeyCode				EQU		0
+; 
+; *  Private data structures
+; *
+; *  JMClientData        - enough bits to reliably store a pointer to arbitrary, client-specific data. 
+; *  JMSessionRef        - references the entire java runtime 
+; *  JMTextRef           - a Text string, length, and encoding 
+; *  JMTextEncoding      - which encoding to use when converting in and out of Java strings.
+; *  JMFrameRef          - a java frame 
+; *  JMAWTContextRef     - a context for the AWT to request frames, process events 
+; *  JMAppletLocatorRef  - a device for locating, fetching, and parsing URLs that may contain applets 
+; *  JMAppletViewerRef   - an object that displays applets in a Frame 
+; *  JMAppletPageRef     - a way to group JMAWTContextRef's so they share the same class loader
+; 
+
+; typedef void *						JMClientData
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; typedef TextEncoding 					JMTextEncoding
+
+
+; 
+; * The runtime requires certain callbacks be used to communicate between
+; * session events and the embedding application.
+; *
+; * In general, you can pass nil as a callback and a "good" default will be used.
+; *
+; *  JMConsoleProcPtr        - redirect stderr or stdout - the message is delivered in the encoding specified when
+; *                              you created the session, or possibly binary data.
+; *  JMConsoleReadProcPtr    - take input from the user from a console or file.  The input is expected to 
+; *                              be in the encoding specified when you opened the session.
+; *  JMExitProcPtr           - called via System.exit(int), return "true" to kill the current thread,
+; *                              false, to cause a 'QUIT' AppleEvent to be sent to the current process,
+; *                              or just tear down the runtime and exit to shell immediately
+; * JMLowMemoryProcPtr       - This callback is available to notify the embedding application that
+; *                              a low memory situation has occurred so it can attempt to recover appropriately.
+; * JMAuthenicateURLProcPtr  - prompt the user for autentication based on the URL.  If you pass
+; *                              nil, JManager will prompt the user.  Return false if the user pressed cancel.
+; 
+
+JMSessionCallbacks		RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fStandardOutput			 ds.l	1				; offset: $4 (4)		;  JM will route "stdout" to this function. 
+fStandardError			 ds.l	1				; offset: $8 (8)		;  JM will route "stderr" to this function. 
+fStandardIn				 ds.l	1				; offset: $C (12)		;  read from console - can be nil for default behavior (no console IO) 
+fExitProc				 ds.l	1				; offset: $10 (16)		;  handle System.exit(int) requests 
+fAuthenticateProc		 ds.l	1				; offset: $14 (20)		;  present basic authentication dialog 
+fLowMemProc				 ds.l	1				; offset: $18 (24)		;  Low Memory notification Proc 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+; typedef long							JMVerifierOptions
+eDontCheckCode					EQU		0
+eCheckRemoteCode				EQU		1
+eCheckAllCode					EQU		2
+
+; 
+; * JMRuntimeOptions is a mask that allows you to specify certain attributes
+; * for the runtime. Bitwise or the fields together, or use one of the "premade" entries.
+; * eJManager2Defaults is the factory default, and best bet to use.
+; 
+
+
+; typedef long							JMRuntimeOptions
+eJManager2Defaults				EQU		0
+eUseAppHeapOnly					EQU		$01
+eDisableJITC					EQU		$02
+eEnableDebugger					EQU		$04
+eDisableInternetConfig			EQU		$08
+eInhibitClassUnloading			EQU		$10
+eEnableProfiling				EQU		$20
+eJManager1Compatible			EQU		$18
+
+
+
+; 
+; * Returns the version of the currently installed JManager library.
+; * Compare to kJMVersion.  This is the only call that doesn't
+; * require a session, or a reference to something that references
+; * a session.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern unsigned long JMGetVersion(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetVersion
+	ENDIF
+
+; 
+; * Returns the version number of the MRJ installation.  This is an
+; * official version number that will change for each official release
+; * of MRJ, whereas for an incremental MRJ release, the version number
+; * returned by JMGetVersion may not change.
+; 
+
+
+; *  JMGetMRJRuntimeVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 JMGetMRJRuntimeVersion(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetMRJRuntimeVersion
+	ENDIF
+
+; 
+; * JMOpenSession creates a new Java Runtime.  Note that JManger 2.0 doesn't set 
+; * security options at the time of runtime instantiation.  AppletViewer Objecs have
+; * seperate security attributes bound to them, and the verifier is availiable elsewhere
+; * as well.  The client data parameter lets a client associate an arbitgrary tagged pointer
+; * with the seession.
+; * When you create the session, you must specify the desired Text Encoding to use for
+; * console IO.  Usually, its OK to use "kTextEncodingMacRoman".  See TextCommon.h for the list.
+; 
+
+
+; *  JMOpenSession()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMOpenSession(JMSessionRef *session, JMRuntimeOptions runtimeOptions, JMVerifierOptions verifyMode, const JMSessionCallbacks *callbacks, JMTextEncoding desiredEncoding, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMOpenSession
+	ENDIF
+
+
+; *  JMCloseSession()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMCloseSession(JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMCloseSession
+	ENDIF
+
+
+; 
+; * Client data getter/setter functions.
+; 
+
+
+; *  JMGetSessionData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetSessionData(JMSessionRef session, JMClientData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetSessionData
+	ENDIF
+
+
+; *  JMSetSessionData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetSessionData(JMSessionRef session, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetSessionData
+	ENDIF
+
+
+; 
+; * Prepend the target of the FSSpec to the class path.
+; * If a file, .zip or other known archive file - not a .class file
+; 
+
+
+; *  JMAddToClassPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMAddToClassPath(JMSessionRef session, const FSSpec *spec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMAddToClassPath
+	ENDIF
+
+
+; 
+; * Utility returns (client owned) null terminated handle containing "file://xxxx", or nil if fnfErr
+; 
+
+
+; *  JMFSSToURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Handle JMFSSToURL(JMSessionRef session, const FSSpec *spec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFSSToURL
+	ENDIF
+
+
+; 
+; * Turns "file:///disk/file" into an FSSpec.  other handlers return paramErr
+; 
+
+
+; *  JMURLToFSS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMURLToFSS(JMSessionRef session, JMTextRef urlString, FSSpec *spec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMURLToFSS
+	ENDIF
+
+
+; 
+; * JMIdle gives time to all Java threads. Giving more time makes Java programs run faster,
+; * but can reduce overall system responsiveness. JMIdle will return sooner if low-level (user)
+; * events appear in the event queue.
+; 
+
+
+; *  JMIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMIdle(JMSessionRef session, UInt32 jmTimeMillis)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMIdle
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+; * JMGetCurrenvEnv gives access to the underlying JRI interface, if available.
+; * This gives the client more control over the underlying Java runtime, without
+; * exposing the implementation too much.
+; * NOTE: JRI is deprecated; please upgrade your code to work with JNI instead.
+; 
+
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetJRIRuntimeInstance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern JRIRuntimeInstance *JMGetJRIRuntimeInstance(JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetJRIRuntimeInstance
+	ENDIF
+
+
+; *  JMGetCurrentJRIEnv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern JRIEnv *JMGetCurrentJRIEnv(JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetCurrentJRIEnv
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * JNI is to be preferred.
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetCurrentEnv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern JNIEnv *JMGetCurrentEnv(JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetCurrentEnv
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * Since JManager calls reutrn jref (JRI Java references)
+; * you need to convert between them and JNI references (jobjects) if you're
+; * using JNI.  These routines facilitate that conversion.
+; 
+
+	IF (&TYPE('JRI_H') <> 'UNDEFINED') ** (&TYPE('JNI_H') <> 'UNDEFINED') THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMJRIRefToJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMJRIRefToJNIObject(JMSessionRef session, JNIEnv *env, jref jriRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMJRIRefToJNIObject
+	ENDIF
+
+
+; *  JMJNIObjectToJRIRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMJNIObjectToJRIRef(JMSessionRef session, JNIEnv *env, jobject jniObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMJNIObjectToJRIRef
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * Java defines system-wide properties that applets can use to make queries about the
+; * host system. Many of these properties correspond to defaults provided by "Internet Config."
+; * JMPutSessionProperty can be used by a client program to modify various system-wide properties.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetSessionProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetSessionProperty(JMSessionRef session, JMTextRef propertyName, JMTextRef *propertyValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetSessionProperty
+	ENDIF
+
+
+; *  JMPutSessionProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMPutSessionProperty(JMSessionRef session, JMTextRef propertyName, JMTextRef propertyValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMPutSessionProperty
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+; * Returns a com.apple.mrj.JManager.JMSession object
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetSessionJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetSessionJNIObject(JMSessionRef session, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetSessionJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetSessionObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetSessionObject(JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetSessionObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * JMText: opaque object that encapsulates a string, length, and
+; * character encoding.  Strings passed between JManager and the
+; * embedding application goes through this interface.  Only the most
+; * rudimentary conversion routines are supplied - it is expected that
+; * the embedding application will most of its work in the System Script.
+; *
+; * These APIs present some questions about who actually owns the 
+; * JMText.  The rule is, if you created a JMTextRef, you are responsible
+; * for deleting it after passing it into the runtime.  If the runtime passes
+; * one to you, it will be deleted after the callback.
+; *
+; * If a pointer to an uninitialised JMTextRef is passed in to a routine (eg JMGetSessionProperty),
+; * it is assumed to have been created for the caller, and it is the callers responsibility to
+; * dispose of it.
+; *
+; * The encoding types are taken verbatim from the Text Encoding Converter,
+; * which handles the ugly backside of script conversion.
+; 
+
+; 
+; * JMNewTextRef can create from a buffer of data in the specified encoding
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMNewTextRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewTextRef(JMSessionRef session, JMTextRef *textRef, JMTextEncoding encoding, const void *charBuffer, UInt32 bufferLengthInBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewTextRef
+	ENDIF
+
+
+; 
+; * JMCopyTextRef clones a text ref.
+; 
+
+
+; *  JMCopyTextRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMCopyTextRef(JMTextRef textRefSrc, JMTextRef *textRefDst)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMCopyTextRef
+	ENDIF
+
+
+; 
+; * Disposes of a text ref passed back from the runtime, or created explicitly through JMNewTextRef
+; 
+
+
+; *  JMDisposeTextRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDisposeTextRef(JMTextRef textRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDisposeTextRef
+	ENDIF
+
+
+; 
+; * Returns the text length, in characters
+; 
+
+
+; *  JMGetTextLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetTextLength(JMTextRef textRef, UInt32 *textLengthInCharacters)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetTextLength
+	ENDIF
+
+
+; 
+; * Returns the text length, in number of bytes taken in the destination encoding
+; 
+
+
+; *  JMGetTextLengthInBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetTextLengthInBytes(JMTextRef textRef, JMTextEncoding dstEncoding, UInt32 *textLengthInBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetTextLengthInBytes
+	ENDIF
+
+
+; 
+; * Copies the specified number of characters to the destination buffer with the appropriate
+; * destination encoding.
+; 
+
+
+; *  JMGetTextBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetTextBytes(JMTextRef textRef, JMTextEncoding dstEncoding, void *textBuffer, UInt32 textBufferLength, UInt32 *numCharsCopied)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetTextBytes
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+; * Return the JMText as a reference to a Java String.  Note that
+; * this is the only reference to the string - it will be collected if you don't
+; * hang on to it.
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMTextToJNIJavaString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jstring JMTextToJNIJavaString(JMTextRef textRef, JMSessionRef session, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMTextToJNIJavaString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMTextToJavaString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMTextToJavaString(JMTextRef textRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMTextToJavaString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * Returns a Handle to a null terminated, "C" string in the System Script.
+; * Note that using this routine could result in data loss, if the characters
+; * are not availiable in the System Script.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMTextToMacOSCStringHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Handle JMTextToMacOSCStringHandle(JMTextRef textRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMTextToMacOSCStringHandle
+	ENDIF
+
+
+
+
+; 
+; * Proxy properties in the runtime.
+; *
+; * These will only be checked if InternetConfig isn't used to specify properties,
+; * or if it doesn't have the data for these.
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+JMProxyInfo				RECORD 0
+useProxy				 ds.b	1				; offset: $0 (0)
+proxyHost				 ds.b	255				; offset: $1 (1)
+proxyPort				 ds.w	1				; offset: $100 (256)
+sizeof					 EQU *					; size:   $102 (258)
+						ENDR
+
+; typedef long							JMProxyType
+eHTTPProxy						EQU		0
+eFirewallProxy					EQU		1
+eFTPProxy						EQU		2
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetProxyInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetProxyInfo(JMSessionRef session, JMProxyType proxyType, JMProxyInfo *proxyInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetProxyInfo
+	ENDIF
+
+
+; *  JMSetProxyInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetProxyInfo(JMSessionRef session, JMProxyType proxyType, const JMProxyInfo *proxyInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetProxyInfo
+	ENDIF
+
+
+; 
+; * Security - JManager 2.0 security is handled on a per-applet basis.
+; * There are some security settings that are inherited from InternetConfig
+; * (Proxy Servers) but the verifier can now be enabled and disabled.
+; 
+
+
+; *  JMGetVerifyMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetVerifyMode(JMSessionRef session, JMVerifierOptions *verifierOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetVerifyMode
+	ENDIF
+
+
+; *  JMSetVerifyMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetVerifyMode(JMSessionRef session, JMVerifierOptions verifierOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetVerifyMode
+	ENDIF
+
+
+
+
+; 
+; * The basic unit of AWT interaction is the JMFrame.  A JMFrame is bound to top level
+; * awt Frame, Window, or Dialog.  When a user event occurs for a MacOS window, the event is passed
+; * to the corrosponding frame object.  Similarly, when an AWT event occurs that requires the
+; * Mac OS Window to change, a callback is made.  JManager 1.x bound the frame to the window through
+; * a callback to set and restore the windows GrafPort.  In JManager 2.0, a GrafPort, Offset, and 
+; * ClipRgn are specified up front - changes in visibility and structure require that these be re-set.
+; * This enables support for the JavaSoft DrawingSurface API - and also improves graphics performance.
+; * You should reset the graphics attributes anytime the visiblity changes, like when scrolling.
+; * You should also set it initially when the AWTContext requests the frame.
+; * At various times, JM will call back to the client to register a new JMFrame, 
+; * indicating the frame type.  The client should take the following steps:
+; *
+; *  o   Create a new invisible window of the specified type
+; *  o   Fill in the callbacks parameter with function pointers
+; *  o   Do something to bind the frame to the window (like stuff the WindowPtr in the JMClientData of the frame)
+; *  o   Register the visiblity parameters (GrafPtr, etc) with the frame
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; typedef long							ReorderRequest
+eBringToFront					EQU		0					; bring the window to front 
+eSendToBack						EQU		1					; send the window to back 
+eSendBehindFront				EQU		2					; send the window behind the front window 
+; 
+; * New in JManager 2.1:
+; *  If the AWT needs to set focus to a frame (in the case of multiple JMFrames within
+; *  a single Mac OS Frame) it will call back to the embedding application using
+; *  JMRRequestFocus.  The application should then defocus what it thought did have the
+; *  focus, and set the focus to the new frame.
+; *  If the user is tabbing within a JMFrame, and the focus reaches the last focusable
+; *  component (or the first, if focus is traversing backwards) JMNexetFocus will be called.
+; *  The application should defocus the component that requests this, and focus the next application
+; *  visible focusable element.  (If none, send focus back to the frame.)
+; 
+
+JMFrameCallbacks		RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fSetFrameSize			 ds.l	1				; offset: $4 (4)
+fInvalRect				 ds.l	1				; offset: $8 (8)
+fShowHide				 ds.l	1				; offset: $C (12)
+fSetTitle				 ds.l	1				; offset: $10 (16)
+fCheckUpdate			 ds.l	1				; offset: $14 (20)
+fReorderFrame			 ds.l	1				; offset: $18 (24)
+fSetResizeable			 ds.l	1				; offset: $1C (28)
+fGetInsets				 ds.l	1				; offset: $20 (32)
+fNextFocus				 ds.l	1				; offset: $24 (36)
+fRequestFocus			 ds.l	1				; offset: $28 (40)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMSetFrameVisibility()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetFrameVisibility(JMFrameRef frame, GrafPtr famePort, Point frameOrigin, RgnHandle frameClip)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetFrameVisibility
+	ENDIF
+
+
+; *  JMGetFrameData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetFrameData(JMFrameRef frame, JMClientData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetFrameData
+	ENDIF
+
+
+; *  JMSetFrameData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetFrameData(JMFrameRef frame, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetFrameData
+	ENDIF
+
+
+; *  JMGetFrameSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetFrameSize(JMFrameRef frame, Rect *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetFrameSize
+	ENDIF
+
+;  note that the top left indicates the "global" position of this frame 
+;  use this to update the frame position when it gets moved 
+
+; *  JMSetFrameSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetFrameSize(JMFrameRef frame, const Rect *newSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetFrameSize
+	ENDIF
+
+; 
+; * Dispatch a particular event to an embedded frame
+; 
+
+
+; *  JMFrameClickWithEventRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameClickWithEventRecord(JMFrameRef frame, Point localPos, const EventRecord *event)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameClickWithEventRecord
+	ENDIF
+
+
+; *  JMFrameKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameKey(JMFrameRef frame, char asciiChar, char keyCode, short modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameKey
+	ENDIF
+
+
+; *  JMFrameKeyRelease()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameKeyRelease(JMFrameRef frame, char asciiChar, char keyCode, short modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameKeyRelease
+	ENDIF
+
+
+; *  JMFrameUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameUpdate(JMFrameRef frame, RgnHandle updateRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameUpdate
+	ENDIF
+
+
+; *  JMFrameActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameActivate(JMFrameRef frame, Boolean activate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameActivate
+	ENDIF
+
+
+; *  JMFrameResume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameResume(JMFrameRef frame, Boolean resume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameResume
+	ENDIF
+
+
+; *  JMFrameMouseOver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameMouseOver(JMFrameRef frame, Point localPos, short modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameMouseOver
+	ENDIF
+
+
+; *  JMFrameShowHide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameShowHide(JMFrameRef frame, Boolean showFrame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameShowHide
+	ENDIF
+
+
+; *  JMFrameGoAway()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameGoAway(JMFrameRef frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameGoAway
+	ENDIF
+
+
+; *  JMGetFrameContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern JMAWTContextRef JMGetFrameContext(JMFrameRef frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetFrameContext
+	ENDIF
+
+
+; *  JMFrameDragTracking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameDragTracking(JMFrameRef frame, DragTrackingMessage message, DragReference theDragRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameDragTracking
+	ENDIF
+
+
+; *  JMFrameDragReceive()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameDragReceive(JMFrameRef frame, DragReference theDragRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameDragReceive
+	ENDIF
+
+; 
+; * JMFrameClick is deprecated - please use JMFrameClickWithEventRecord instead.
+; 
+
+
+; *  JMFrameClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameClick(JMFrameRef frame, Point localPos, short modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameClick
+	ENDIF
+
+; 
+; * If you may have multiple JMFrames in a single Mac OS Window (for example,
+; * in a browser) then use JMFrameFocus to control when you believe the
+; * frame should logically contain the focus.  This will allow for the correct
+; * appearance of Controls and Text Fields.  If you will only have one
+; * JMFrame per Mac OS Window, use JMFrameFocus as well as JMFrameActivate to
+; * control hiliting.
+; 
+
+
+; *  JMFrameFocus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMFrameFocus(JMFrameRef frame, Boolean gotFocus)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMFrameFocus
+	ENDIF
+
+; 
+; * Cause a Frame and its contents to be rendered in a GrafPort.
+; * This is typically going to be used to cause an applet to print itself
+; * into a PrGrafPort.
+; * If you pass 'true' as the last parameter, the paint(Graphics) method of the
+; * frame is called, rather than print(Graphics).
+; 
+
+
+; *  JMDrawFrameInPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDrawFrameInPort(JMFrameRef frame, GrafPtr framePort, Point frameOrigin, RgnHandle clipRgn, Boolean callPaintAsOpposedToPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDrawFrameInPort
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  
+; * returns the java.awt.Frame for this frame 
+;
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAWTFrameJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetAWTFrameJNIObject(JMFrameRef frame, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAWTFrameJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAWTFrameObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetAWTFrameObject(JMFrameRef frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAWTFrameObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  
+; * returns the com.apple.mrj.JManager.JMFrame for this frame 
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetJMFrameJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetJMFrameJNIObject(JMFrameRef frame, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetJMFrameJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetJMFrameObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetJMFrameObject(JMFrameRef frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetJMFrameObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * Window types
+; 
+
+
+; typedef long							JMFrameKind
+eBorderlessModelessWindowFrame	EQU		0
+eModelessWindowFrame			EQU		1
+eModalWindowFrame				EQU		2
+eModelessDialogFrame			EQU		3
+
+;  JMAppletPageRef -
+; * Creating a "page" is optional. 
+; * Applets will share the same class loader (and thus static variables) iff
+; * they are share the same JMAppletPageRef and have the same codebase.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMNewAppletPage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAppletPage(JMAppletPageRef *page, JMSessionRef session)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAppletPage
+	ENDIF
+
+
+; *  JMDisposeAppletPage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDisposeAppletPage(JMAppletPageRef page)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDisposeAppletPage
+	ENDIF
+
+
+
+;  JMAWTContext -
+; * To create a top level frame, you must use a JMAWTContext object.
+; * The JMAWTContext provides a context for the AWT to request frames.
+; * A AWTContext has a threadgroup associated with it - all events and processing occurs
+; * there.  When you create one, it is quiescent, you must call resume before it begins executing.
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+JMAWTContextCallbacks	RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fRequestFrame			 ds.l	1				; offset: $4 (4)		;  a new frame is being created. 
+fReleaseFrame			 ds.l	1				; offset: $8 (8)		;  an existing frame is being destroyed. 
+fUniqueMenuID			 ds.l	1				; offset: $C (12)		;  a new menu will be created with this id. 
+fExceptionOccurred		 ds.l	1				; offset: $10 (16)		;  just some notification that some recent operation caused an exception.  You can't do anything really from here. 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMNewAWTContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAWTContext(JMAWTContextRef *context, JMSessionRef session, const JMAWTContextCallbacks *callbacks, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAWTContext
+	ENDIF
+
+
+; *  JMNewAWTContextInPage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAWTContextInPage(JMAWTContextRef *context, JMSessionRef session, JMAppletPageRef page, const JMAWTContextCallbacks *callbacks, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAWTContextInPage
+	ENDIF
+
+
+; *  JMDisposeAWTContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDisposeAWTContext(JMAWTContextRef context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDisposeAWTContext
+	ENDIF
+
+
+; *  JMGetAWTContextData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAWTContextData(JMAWTContextRef context, JMClientData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAWTContextData
+	ENDIF
+
+
+; *  JMSetAWTContextData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetAWTContextData(JMAWTContextRef context, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetAWTContextData
+	ENDIF
+
+
+; *  JMCountAWTContextFrames()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMCountAWTContextFrames(JMAWTContextRef context, UInt32 *frameCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMCountAWTContextFrames
+	ENDIF
+
+
+; *  JMGetAWTContextFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAWTContextFrame(JMAWTContextRef context, UInt32 frameIndex, JMFrameRef *frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAWTContextFrame
+	ENDIF
+
+; 
+; * Starting in MRJ 2.1, JMMenuSelected is deprecated.  Please use JMMenuSelectedWithModifiers instead.
+; 
+
+
+; *  JMMenuSelected()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMMenuSelected(JMAWTContextRef context, MenuRef hMenu, short menuItem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMMenuSelected
+	ENDIF
+
+; 
+; * Starting in MRJ 2.1, this call takes an additional 'modifiers' parameter that you can get
+; * from your event record.
+; 
+
+
+; *  JMMenuSelectedWithModifiers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMMenuSelectedWithModifiers(JMAWTContextRef context, MenuRef hMenu, short menuItem, short modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMMenuSelectedWithModifiers
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+; 
+; * JRI Access APIs
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMExecMethodInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMExecMethodInContext(JMAWTContextRef context, jref objref, JRIMethodID methodID, UInt32 argCount, JRIValue args[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMExecMethodInContext
+	ENDIF
+
+
+; *  JMExecStaticMethodInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMExecStaticMethodInContext(JMAWTContextRef context, JRIClassID classID, JRIMethodID methodID, UInt32 argCount, JRIValue args[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMExecStaticMethodInContext
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+; 
+; * JNI Access APIs
+; * Note that you must pass the JNIEnv to these as well.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMExecJNIMethodInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMExecJNIMethodInContext(JMAWTContextRef context, JNIEnv *env, jobject objref, jmethodID methodID, UInt32 argCount, jvalue args[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMExecJNIMethodInContext
+	ENDIF
+
+
+; *  JMExecJNIStaticMethodInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMExecJNIStaticMethodInContext(JMAWTContextRef context, JNIEnv *env, jclass classID, jmethodID methodID, UInt32 argCount, jvalue args[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMExecJNIStaticMethodInContext
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * return a com.apple.mrj.JManager.JMAWTContext
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAwtContextJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetAwtContextJNIObject(JMAWTContextRef context, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAwtContextJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAwtContextObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetAwtContextObject(JMAWTContextRef context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAwtContextObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+; 
+; * Beginning in 2.1, this function maps a JNIEnv to the owning AWTContext, if one exists
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMJNIToAWTContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern JMAWTContextRef JMJNIToAWTContext(JMSessionRef session, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMJNIToAWTContext
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+
+; 
+; * JMAppletLocator - Since Java applets are always referenced by a Uniform Resource Locator
+; * (see RFC 1737, http://www.w3.org/pub/WWW/Addressing/rfc1738.txt), we provide an object
+; * that encapsulates the information about a set of applets. A JMAppletLocator is built
+; * by providing a base URL, which must point at a valid HTML document containing applet
+; * tags. To save a network transaction, the contents of the document may be passed optionally. 
+; *
+; * You can also use a JMLocatorInfoBlock for a synchronous resolution of the applet,
+; * assuming that you already have the info for the tag.
+; 
+
+
+; typedef long							JMLocatorErrors
+eLocatorNoErr					EQU		0					; the html was retrieved successfully
+eHostNotFound					EQU		1					; the host specified by the url could not be found
+eFileNotFound					EQU		2					; the file could not be found on the host
+eLocatorTimeout					EQU		3					; a timeout occurred retrieving the html text
+eLocatorKilled					EQU		4					; in response to a JMDisposeAppletLocator before it has completed
+JMAppletLocatorCallbacks RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fCompleted				 ds.l	1				; offset: $4 (4)		;  called when the html has been completely fetched 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+; * These structures are used to pass pre-parsed parameter
+; * tags to the AppletLocator.  Implies synchronous semantics.
+; 
+
+
+JMLIBOptionalParams		RECORD 0
+fParamName				 ds.l	1				; offset: $0 (0)		;  could be from a <parameter name=foo value=bar> or "zipbase", etc 
+fParamValue				 ds.l	1				; offset: $4 (4)		;  the value of this optional tag 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+JMLocatorInfoBlock		RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+;  These are required to be present and not nil 
+fBaseURL				 ds.l	1				; offset: $4 (4)		;  the URL of this applet's host page 
+fAppletCode				 ds.l	1				; offset: $8 (8)		;  code= parameter 
+fWidth					 ds.w	1				; offset: $C (12)		;  width= parameter 
+fHeight					 ds.w	1				; offset: $E (14)		;  height= parameter 
+;  These are optional parameters 
+fOptionalParameterCount	 ds.l	1				; offset: $10 (16)		;  how many in this array 
+fParams					 ds.l	1				; offset: $14 (20)		;  pointer to an array of these (points to first element) 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMNewAppletLocator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAppletLocator(JMAppletLocatorRef *locatorRef, JMSessionRef session, const JMAppletLocatorCallbacks *callbacks, JMTextRef url, JMTextRef htmlText, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAppletLocator
+	ENDIF
+
+
+; *  JMNewAppletLocatorFromInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAppletLocatorFromInfo(JMAppletLocatorRef *locatorRef, JMSessionRef session, const JMLocatorInfoBlock *info, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAppletLocatorFromInfo
+	ENDIF
+
+
+; *  JMDisposeAppletLocator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDisposeAppletLocator(JMAppletLocatorRef locatorRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDisposeAppletLocator
+	ENDIF
+
+
+; *  JMGetAppletLocatorData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletLocatorData(JMAppletLocatorRef locatorRef, JMClientData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletLocatorData
+	ENDIF
+
+
+; *  JMSetAppletLocatorData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetAppletLocatorData(JMAppletLocatorRef locatorRef, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetAppletLocatorData
+	ENDIF
+
+
+; *  JMCountApplets()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMCountApplets(JMAppletLocatorRef locatorRef, UInt32 *appletCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMCountApplets
+	ENDIF
+
+
+; *  JMGetAppletDimensions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletDimensions(JMAppletLocatorRef locatorRef, UInt32 appletIndex, UInt32 *width, UInt32 *height)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletDimensions
+	ENDIF
+
+
+; *  JMGetAppletTag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletTag(JMAppletLocatorRef locatorRef, UInt32 appletIndex, JMTextRef *tagRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletTag
+	ENDIF
+
+
+; *  JMGetAppletName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletName(JMAppletLocatorRef locatorRef, UInt32 appletIndex, JMTextRef *nameRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletName
+	ENDIF
+
+
+; 
+; * JMAppletViewer - Applets are instantiated, one by one, by specifying a JMAppletLocator and
+; * a zero-based index (Macintosh API's usually use one-based indexing, the Java language
+; * uses zero, however.). The resulting applet is encapsulated in a JMAppletViewer object. 
+; * Since applets can have one or more visible areas to draw in, one or more JMFrame objects
+; * may be requested while the viewer is being created, or at a later time, thus the client
+; * must provide callbacks to satisfy these requests.
+; *
+; * The window name for the ShowDocument callback is one of:
+; *   _self      show in current frame
+; *   _parent    show in parent frame
+; *   _top       show in top-most frame
+; *   _blank     show in new unnamed top-level window
+; *   <other>    show in new top-level window named <other> 
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+JMAppletViewerCallbacks	RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fShowDocument			 ds.l	1				; offset: $4 (4)		;  go to a url, optionally in a new window 
+fSetStatusMsg			 ds.l	1				; offset: $8 (8)		;  applet changed status message 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; 
+; * NEW: per-applet security settings
+; * Previously, these settings were attached to the session.
+; * JManager 2.0 allows them to be attached to each viewer.
+; 
+
+
+; typedef long							JMNetworkSecurityOptions
+eNoNetworkAccess				EQU		0
+eAppletHostAccess				EQU		1
+eUnrestrictedAccess				EQU		2
+
+; typedef long							JMFileSystemOptions
+eNoFSAccess						EQU		0
+eLocalAppletAccess				EQU		1
+eAllFSAccess					EQU		2
+; 
+; * Lists of packages are comma separated,
+; * the default for mrj.security.system.access is
+; * "sun,netscape,com.apple".
+; 
+
+
+JMAppletSecurity		RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  should be set to kJMVersion 
+fNetworkSecurity		 ds.l	1				; offset: $4 (4)		;  can this applet access network resources 
+fFileSystemSecurity		 ds.l	1				; offset: $8 (8)		;  can this applet access network resources 
+fRestrictSystemAccess	 ds.b	1				; offset: $C (12)		;  restrict access to system packages (com.apple.*, sun.*, netscape.*) also found in the property "mrj.security.system.access" 
+fRestrictSystemDefine	 ds.b	1				; offset: $D (13)		;  restrict classes from loading system packages (com.apple.*, sun.*, netscape.*) also found in the property "mrj.security.system.define" 
+fRestrictApplicationAccess  ds.b 1				; offset: $E (14)		;  restrict access to application packages found in the property "mrj.security.application.access" 
+fRestrictApplicationDefine  ds.b 1				; offset: $F (15)		;  restrict access to application packages found in the property "mrj.security.application.access" 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; 
+; * AppletViewer methods
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMNewAppletViewer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMNewAppletViewer(JMAppletViewerRef *viewer, JMAWTContextRef context, JMAppletLocatorRef locatorRef, UInt32 appletIndex, const JMAppletSecurity *security, const JMAppletViewerCallbacks *callbacks, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMNewAppletViewer
+	ENDIF
+
+
+; *  JMDisposeAppletViewer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMDisposeAppletViewer(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMDisposeAppletViewer
+	ENDIF
+
+
+; *  JMGetAppletViewerData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletViewerData(JMAppletViewerRef viewer, JMClientData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletViewerData
+	ENDIF
+
+
+; *  JMSetAppletViewerData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetAppletViewerData(JMAppletViewerRef viewer, JMClientData data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetAppletViewerData
+	ENDIF
+
+
+; 
+; * You can change the applet security on the fly
+; 
+
+
+; *  JMGetAppletViewerSecurity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetAppletViewerSecurity(JMAppletViewerRef viewer, JMAppletSecurity *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletViewerSecurity
+	ENDIF
+
+
+; *  JMSetAppletViewerSecurity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSetAppletViewerSecurity(JMAppletViewerRef viewer, const JMAppletSecurity *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSetAppletViewerSecurity
+	ENDIF
+
+
+; 
+; * JMReloadApplet reloads viewer's applet from the source.
+; * JMRestartApplet reinstantiates the applet without reloading.
+; 
+
+
+; *  JMReloadApplet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMReloadApplet(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMReloadApplet
+	ENDIF
+
+
+; *  JMRestartApplet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMRestartApplet(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMRestartApplet
+	ENDIF
+
+
+; 
+; * JMSuspendApplet tells the Java thread scheduler to stop executing the viewer's applet.
+; * JMResumeApplet resumes execution of the viewer's applet.
+; 
+
+
+; *  JMSuspendApplet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMSuspendApplet(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMSuspendApplet
+	ENDIF
+
+
+; *  JMResumeApplet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMResumeApplet(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMResumeApplet
+	ENDIF
+
+
+;  
+; * To get back to the JMAppletViewerRef instance from whence a frame came,
+; * as well as the ultimate frame parent (the one created _for_ the applet viewer)
+; 
+
+
+; *  JMGetFrameViewer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetFrameViewer(JMFrameRef frame, JMAppletViewerRef *viewer, JMFrameRef *parentFrame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetFrameViewer
+	ENDIF
+
+; 
+; * To get a ref back to the Frame that was created for this JMAppletViewerRef
+; 
+
+
+; *  JMGetViewerFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus JMGetViewerFrame(JMAppletViewerRef viewer, JMFrameRef *frame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetViewerFrame
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+; * To get the ref of the com.apple.mrj.JManager.JMAppletViewer java object
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAppletViewerJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetAppletViewerJNIObject(JMAppletViewerRef viewer, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletViewerJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAppletViewerObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetAppletViewerObject(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletViewerObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * To get the ref of the java.applet.Applet itself
+; 
+
+	IF &TYPE('JNI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAppletJNIObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jobject JMGetAppletJNIObject(JMAppletViewerRef viewer, JNIEnv *env)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletJNIObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF &TYPE('JRI_H') <> 'UNDEFINED' THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMGetAppletObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern jref JMGetAppletObject(JMAppletViewerRef viewer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMGetAppletObject
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+; * Tell MRJ to add connID to its list of shared libraries used when searching for
+; * JNI (and JRI) native methods. This is useful for overriding or redirecting
+; * a java call to System.loadLibrary().  In particular System.loadLibrary()
+; * does not reuse CFM connections to libraries already open by someone outside
+; * of the java session.  It always forces its own private copy of a shared library 
+; * to be opened.  This can result in multiple instances of the data/TOC section
+; * of a shared library.  
+; * Note: This function has no effect on JDirect based native methods.
+; * If connID exports a function named "JNI_OnLoad", it is immediately called.
+; * If javaShouldClose is true, MRJ will close the connection when the session is closed.
+; * Returns false and does nothing if a library with that name is already registered.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  JMRegisterLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in JManager 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean JMRegisterLibrary(JMSessionRef session, ConstStr63Param libraryName, CFragConnectionID connID, Boolean javaShouldClose)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION JMRegisterLibrary
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __JMANAGER__ 
+

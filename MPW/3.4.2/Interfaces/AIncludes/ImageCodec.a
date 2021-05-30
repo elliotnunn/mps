@@ -1,0 +1,311 @@
+;
+;	File:		ImageCodec.a
+;
+;	Contains:	QuickTime Interfaces.
+;
+;	Version:	Technology:	QuickTime 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__IMAGECODEC__') = 'UNDEFINED' THEN
+__IMAGECODEC__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__QDOFFSCREEN__') = 'UNDEFINED' THEN
+	include 'QDOffscreen.a'
+	ENDIF
+;		include 'Errors.a'											;
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Memory.a'											;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+	include 'ImageCompression.a'
+	ENDIF
+;		include 'Components.a'										;
+;		include 'StandardFile.a'									;
+;			include 'Dialogs.a'									;
+;				include 'TextEdit.a'								;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;			include 'AppleTalk.a'									;
+
+codecGetCodecInfo				EQU		$00
+codecGetCompressionTime			EQU		$01
+codecGetMaxCompressionSize		EQU		$02
+codecPreCompress				EQU		$03
+codecBandCompress				EQU		$04
+codecPreDecompress				EQU		$05
+codecBandDecompress				EQU		$06
+codecCDSequenceBusy				EQU		$07
+codecGetCompressedImageSize		EQU		$08
+codecGetSimilarity				EQU		$09
+codecTrimImage					EQU		$0A
+codecRequestSettings			EQU		$0B
+codecGetSettings				EQU		$0C
+codecSetSettings				EQU		$0D
+codecCDSequenceFlush			EQU		$0E
+codecSetTimeCode				EQU		$0F
+
+codecCanScale					EQU		1 << 0
+codecCanMask					EQU		1 << 1
+codecCanMatte					EQU		1 << 2
+codecCanTransform				EQU		1 << 3
+codecCanTransferMode			EQU		1 << 4
+codecCanCopyPrev				EQU		1 << 5
+codecCanSpool					EQU		1 << 6
+codecCanClipVertical			EQU		1 << 7
+codecCanClipRectangular			EQU		1 << 8
+codecCanRemapColor				EQU		1 << 9
+codecCanFastDither				EQU		1 << 10
+codecCanSrcExtract				EQU		1 << 11
+codecCanCopyPrevComp			EQU		1 << 12
+codecCanAsync					EQU		1 << 13
+codecCanMakeMask				EQU		1 << 14
+codecCanShift					EQU		1 << 15
+codecCanAsyncWhen				EQU		1 << 16
+codecCanShieldCursor			EQU		1 << 17
+codecCanManagePrevBuffer		EQU		1 << 18
+
+CodecCapabilities 		RECORD	0
+flags					 ds.l   1		; offset: $0 (0)
+wantedPixelSize			 ds.w   1		; offset: $4 (4)
+extendWidth				 ds.w   1		; offset: $6 (6)
+extendHeight			 ds.w   1		; offset: $8 (8)
+bandMin					 ds.w   1		; offset: $A (10)
+bandInc					 ds.w   1		; offset: $C (12)
+pad						 ds.w   1		; offset: $E (14)
+time					 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct CodecCapabilities  CodecCapabilities
+
+codecConditionFirstBand			EQU		1 << 0
+codecConditionLastBand			EQU		1 << 1
+codecConditionFirstFrame		EQU		1 << 2
+codecConditionNewDepth			EQU		1 << 3
+codecConditionNewTransform		EQU		1 << 4
+codecConditionNewSrcRect		EQU		1 << 5
+codecConditionNewMask			EQU		1 << 6
+codecConditionNewMatte			EQU		1 << 7
+codecConditionNewTransferMode	EQU		1 << 8
+codecConditionNewClut			EQU		1 << 9
+codecConditionNewAccuracy		EQU		1 << 10
+codecConditionNewDestination	EQU		1 << 11
+codecConditionFirstScreen		EQU		1 << 12
+codecConditionDoCursor			EQU		1 << 13
+codecConditionCatchUpDiff		EQU		1 << 14
+codecConditionCodecChangedMask	EQU		1 << 31
+
+codecInfoResourceType			EQU		'cdci'
+codecInterfaceVersion			EQU		2
+
+CodecCompressParams 	RECORD	0
+sequenceID				 ds.l   1		; offset: $0 (0)
+imageDescription		 ds.l   1		; offset: $4 (4)
+data					 ds.l   1		; offset: $8 (8)
+bufferSize				 ds.l   1		; offset: $C (12)
+frameNumber				 ds.l   1		; offset: $10 (16)
+startLine				 ds.l   1		; offset: $14 (20)
+stopLine				 ds.l   1		; offset: $18 (24)
+conditionFlags			 ds.l   1		; offset: $1C (28)
+callerFlags				 ds.w   1		; offset: $20 (32)
+capabilities			 ds.l   1		; offset: $22 (34)
+progressProcRecord		 ds     ICMProgressProcRecord ; offset: $26 (38)
+completionProcRecord	 ds     ICMCompletionProcRecord ; offset: $2E (46)
+flushProcRecord			 ds     ICMFlushProcRecord ; offset: $36 (54)
+srcPixMap				 ds     PixMap	; offset: $3E (62)
+prevPixMap				 ds     PixMap	; offset: $70 (112)
+spatialQuality			 ds.l   1		; offset: $A2 (162)
+temporalQuality			 ds.l   1		; offset: $A6 (166)
+similarity				 ds.l   1		; offset: $AA (170)
+dataRateParams			 ds.l   1		; offset: $AE (174)
+reserved				 ds.l   1		; offset: $B2 (178)
+sizeof					 EQU *			; size:   $B6 (182)
+						ENDR
+
+; typedef struct CodecCompressParams  CodecCompressParams
+CodecDecompressParams 	RECORD	0
+sequenceID				 ds.l   1		; offset: $0 (0)
+imageDescription		 ds.l   1		; offset: $4 (4)
+data					 ds.l   1		; offset: $8 (8)
+bufferSize				 ds.l   1		; offset: $C (12)
+frameNumber				 ds.l   1		; offset: $10 (16)
+startLine				 ds.l   1		; offset: $14 (20)
+stopLine				 ds.l   1		; offset: $18 (24)
+conditionFlags			 ds.l   1		; offset: $1C (28)
+callerFlags				 ds.w   1		; offset: $20 (32)
+capabilities			 ds.l   1		; offset: $22 (34)
+progressProcRecord		 ds     ICMProgressProcRecord ; offset: $26 (38)
+completionProcRecord	 ds     ICMCompletionProcRecord ; offset: $2E (46)
+dataProcRecord			 ds     ICMDataProcRecord ; offset: $36 (54)
+port					 ds.l   1		; offset: $3E (62)
+dstPixMap				 ds     PixMap	; offset: $42 (66)
+maskBits				 ds.l   1		; offset: $74 (116)
+mattePixMap				 ds.l   1		; offset: $78 (120)
+srcRect					 ds     Rect	; offset: $7C (124)
+matrix					 ds.l   1		; offset: $84 (132)
+accuracy				 ds.l   1		; offset: $88 (136)
+transferMode			 ds.w   1		; offset: $8C (140)
+frameTime				 ds.l   1		; offset: $8E (142)
+reserved				 ds.l   1		; offset: $92 (146)
+matrixFlags				 ds.b   1		; offset: $96 (150)
+matrixType				 ds.b   1		; offset: $97 (151)
+dstRect					 ds     Rect	; offset: $98 (152)
+sizeof					 EQU *			; size:   $A0 (160)
+						ENDR
+
+; typedef struct CodecDecompressParams  CodecDecompressParams
+
+matrixFlagScale2x				EQU		1 << 7
+
+;
+; pascal ComponentResult CDGetCodecInfo(Handle storage, CodecInfo *info)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetCodecInfo
+	ENDIF
+
+;
+; pascal ComponentResult CDGetCompressionTime(Handle storage, PixMapHandle src, const Rect *srcRect, short depth, CodecQ *spatialQuality, CodecQ *temporalQuality, unsigned long *time)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetCompressionTime
+	ENDIF
+
+;
+; pascal ComponentResult CDGetMaxCompressionSize(Handle storage, PixMapHandle src, const Rect *srcRect, short depth, CodecQ quality, long *size)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetMaxCompressionSize
+	ENDIF
+
+;
+; pascal ComponentResult CDPreCompress(Handle storage, CodecCompressParams *params)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDPreCompress
+	ENDIF
+
+;
+; pascal ComponentResult CDBandCompress(Handle storage, CodecCompressParams *params)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDBandCompress
+	ENDIF
+
+;
+; pascal ComponentResult CDPreDecompress(Handle storage, CodecDecompressParams *params)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDPreDecompress
+	ENDIF
+
+;
+; pascal ComponentResult CDBandDecompress(Handle storage, CodecDecompressParams *params)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDBandDecompress
+	ENDIF
+
+;
+; pascal ComponentResult CDCodecBusy(Handle storage, ImageSequence seq)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDCodecBusy
+	ENDIF
+
+;
+; pascal ComponentResult CDGetCompressedImageSize(Handle storage, ImageDescriptionHandle desc, Ptr data, long bufferSize, ICMDataProcRecordPtr dataProc, long *dataSize)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetCompressedImageSize
+	ENDIF
+
+;
+; pascal ComponentResult CDGetSimilarity(Handle storage, PixMapHandle src, const Rect *srcRect, ImageDescriptionHandle desc, Ptr data, Fixed *similarity)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetSimilarity
+	ENDIF
+
+;
+; pascal ComponentResult CDTrimImage(Handle storage, ImageDescriptionHandle Desc, Ptr inData, long inBufferSize, ICMDataProcRecordPtr dataProc, Ptr outData, long outBufferSize, ICMFlushProcRecordPtr flushProc, Rect *trimRect, ICMProgressProcRecordPtr progressProc)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDTrimImage
+	ENDIF
+
+;
+; pascal ComponentResult CDRequestSettings(Handle storage, Handle settings, Rect *rp, ModalFilterUPP filterProc)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDRequestSettings
+	ENDIF
+
+;
+; pascal ComponentResult CDGetSettings(Handle storage, Handle settings)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDGetSettings
+	ENDIF
+
+;
+; pascal ComponentResult CDSetSettings(Handle storage, Handle settings)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDSetSettings
+	ENDIF
+
+;
+; pascal ComponentResult CDCodecFlush(Handle storage)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDCodecFlush
+	ENDIF
+
+;
+; pascal ComponentResult CDCodecSetTimeCode(Handle storage, void *timeCodeFormat, void *timeCodeTime)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CDCodecSetTimeCode
+	ENDIF
+
+	ENDIF ; __IMAGECODEC__

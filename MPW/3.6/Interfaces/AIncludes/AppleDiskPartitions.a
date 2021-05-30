@@ -1,0 +1,116 @@
+;
+;    File:       AppleDiskPartitions.a
+;
+;    Contains:   The Apple disk partition scheme as defined in Inside Macintosh: Volume V.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 2000-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__APPLEDISKPARTITIONS__') = 'UNDEFINED' THEN
+__APPLEDISKPARTITIONS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+;  Block 0 Definitions 
+
+sbSIGWord						EQU		$4552				; signature word for Block 0 ('ER') 
+sbMac							EQU		1					; system type for Mac 
+;  Partition Map Signatures 
+
+pMapSIG							EQU		$504D				; partition map signature ('PM') 
+pdSigWord						EQU		$5453				; partition map signature ('TS') 
+oldPMSigWord					EQU		$5453
+newPMSigWord					EQU		$504D
+
+;  Driver Descriptor Map 
+Block0					RECORD 0
+sbSig					 ds.w	1				; offset: $0 (0)		;  unique value for SCSI block 0 
+sbBlkSize				 ds.w	1				; offset: $2 (2)		;  block size of device 
+sbBlkCount				 ds.l	1				; offset: $4 (4)		;  number of blocks on device 
+sbDevType				 ds.w	1				; offset: $8 (8)		;  device type 
+sbDevId					 ds.w	1				; offset: $A (10)		;  device id 
+sbData					 ds.l	1				; offset: $C (12)		;  not used 
+sbDrvrCount				 ds.w	1				; offset: $10 (16)		;  driver descriptor count 
+ddBlock					 ds.l	1				; offset: $12 (18)		;  1st driver's starting block 
+ddSize					 ds.w	1				; offset: $16 (22)		;  size of 1st driver (512-byte blks) 
+ddType					 ds.w	1				; offset: $18 (24)		;  system type (1 for Mac+) 
+ddPad					 ds.w	243				; offset: $1A (26)		;  ARRAY[0..242] OF INTEGER; not used 
+sizeof					 EQU *					; size:   $200 (512)
+						ENDR
+;  Driver descriptor 
+DDMap					RECORD 0
+ddBlock					 ds.l	1				; offset: $0 (0)		;  1st driver's starting block 
+ddSize					 ds.w	1				; offset: $4 (4)		;  size of 1st driver (512-byte blks) 
+ddType					 ds.w	1				; offset: $6 (6)		;  system type (1 for Mac+) 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Constants for the ddType field of the DDMap structure. 
+
+kDriverTypeMacSCSI				EQU		$0001
+kDriverTypeMacATA				EQU		$0701
+kDriverTypeMacSCSIChained		EQU		$FFFF
+kDriverTypeMacATAChained		EQU		$F8FF
+;  Partition Map Entry 
+Partition				RECORD 0
+pmSig					 ds.w	1				; offset: $0 (0)		;  unique value for map entry blk 
+pmSigPad				 ds.w	1				; offset: $2 (2)		;  currently unused 
+pmMapBlkCnt				 ds.l	1				; offset: $4 (4)		;  # of blks in partition map 
+pmPyPartStart			 ds.l	1				; offset: $8 (8)		;  physical start blk of partition 
+pmPartBlkCnt			 ds.l	1				; offset: $C (12)		;  # of blks in this partition 
+pmPartName				 ds.b	32				; offset: $10 (16)		;  ASCII partition name 
+pmParType				 ds.b	32				; offset: $30 (48)		;  ASCII partition type 
+pmLgDataStart			 ds.l	1				; offset: $50 (80)		;  log. # of partition's 1st data blk 
+pmDataCnt				 ds.l	1				; offset: $54 (84)		;  # of blks in partition's data area 
+pmPartStatus			 ds.l	1				; offset: $58 (88)		;  bit field for partition status 
+pmLgBootStart			 ds.l	1				; offset: $5C (92)		;  log. blk of partition's boot code 
+pmBootSize				 ds.l	1				; offset: $60 (96)		;  number of bytes in boot code 
+pmBootAddr				 ds.l	1				; offset: $64 (100)		;  memory load address of boot code 
+pmBootAddr2				 ds.l	1				; offset: $68 (104)		;  currently unused 
+pmBootEntry				 ds.l	1				; offset: $6C (108)		;  entry point of boot code 
+pmBootEntry2			 ds.l	1				; offset: $70 (112)		;  currently unused 
+pmBootCksum				 ds.l	1				; offset: $74 (116)		;  checksum of boot code 
+pmProcessor				 ds.b	16				; offset: $78 (120)		;  ASCII for the processor type 
+pmPad					 ds.w	188				; offset: $88 (136)		;  ARRAY[0..187] OF INTEGER; not used 
+sizeof					 EQU *					; size:   $200 (512)
+						ENDR
+
+;  Flags for the pmPartStatus field of the Partition data structure. 
+
+kPartitionAUXIsValid			EQU		$00000001
+kPartitionAUXIsAllocated		EQU		$00000002
+kPartitionAUXIsInUse			EQU		$00000004
+kPartitionAUXIsBootValid		EQU		$00000008
+kPartitionAUXIsReadable			EQU		$00000010
+kPartitionAUXIsWriteable		EQU		$00000020
+kPartitionAUXIsBootCodePositionIndependent EQU $00000040
+kPartitionIsWriteable			EQU		$00000020
+kPartitionIsMountedAtStartup	EQU		$40000000
+kPartitionIsStartup				EQU		$80000000
+kPartitionIsChainCompatible		EQU		$00000100
+kPartitionIsRealDeviceDriver	EQU		$00000200
+kPartitionCanChainToNext		EQU		$00000400
+
+
+
+;  Well known driver signatures, stored in the first four byte of pmPad. 
+
+kPatchDriverSignature			EQU		'ptDR'				; SCSI and ATA[PI] patch driver    
+kSCSIDriverSignature			EQU		$00010600			; SCSI  hard disk driver           
+kATADriverSignature				EQU		'wiki'				; ATA   hard disk driver           
+kSCSICDDriverSignature			EQU		'CDvr'				; SCSI  CD-ROM    driver           
+kATAPIDriverSignature			EQU		'ATPI'				; ATAPI CD-ROM    driver           
+kDriveSetupHFSSignature			EQU		'DSU1'				; Drive Setup HFS partition        
+
+
+	ENDIF ; __APPLEDISKPARTITIONS__ 
+

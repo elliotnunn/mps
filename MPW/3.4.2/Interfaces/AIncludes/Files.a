@@ -1,0 +1,4543 @@
+;
+;	File:		Files.a
+;
+;	Contains:	File Manager (HFS and MFS) Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+__FILES__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+;		include 'Memory.a'											;
+	IF ¬ OLDROUTINELOCATIONS  THEN
+
+	IF &TYPE('__FINDER__') = 'UNDEFINED' THEN
+	include 'Finder.a'
+	ENDIF
+	ENDIF
+
+fsAtMark						EQU		0
+fsCurPerm						EQU		0
+fsRdPerm						EQU		1
+fInvisible						EQU		16384
+fsWrPerm						EQU		2
+fsRdWrPerm						EQU		3
+fsRdWrShPerm					EQU		4
+fsFromStart						EQU		1
+fsFromLEOF						EQU		2
+fsFromMark						EQU		3
+rdVerify						EQU		64
+ioMapBuffer						EQU		4
+ioModeReserved					EQU		8
+ioDirFlg						EQU		4					; see IM IV-125 
+ioDirMask						EQU		$10
+fsRtParID						EQU		1
+fsRtDirID						EQU		2
+
+	IF OLDROUTINELOCATIONS  THEN
+fOnDesk							EQU		1
+fHasBundle						EQU		8192
+fTrash							EQU		-3
+fDesktop						EQU		-2
+fDisk							EQU		0
+
+	ENDIF
+; CatSearch SearchBits Constants 
+fsSBPartialName					EQU		1
+fsSBFullName					EQU		2
+fsSBFlAttrib					EQU		4
+fsSBFlFndrInfo					EQU		8
+fsSBFlLgLen						EQU		32
+fsSBFlPyLen						EQU		64
+fsSBFlRLgLen					EQU		128
+fsSBFlRPyLen					EQU		256
+fsSBFlCrDat						EQU		512
+fsSBFlMdDat						EQU		1024
+fsSBFlBkDat						EQU		2048
+fsSBFlXFndrInfo					EQU		4096
+fsSBFlParID						EQU		8192
+fsSBNegate						EQU		16384
+fsSBDrUsrWds					EQU		8
+fsSBDrNmFls						EQU		16
+fsSBDrCrDat						EQU		512
+fsSBDrMdDat						EQU		1024
+fsSBDrBkDat						EQU		2048
+fsSBDrFndrInfo					EQU		4096
+; bit values for the above 
+fsSBPartialNameBit				EQU		0					;ioFileName points to a substring
+fsSBFullNameBit					EQU		1					;ioFileName points to a match string
+fsSBFlAttribBit					EQU		2					;search includes file attributes
+fsSBFlFndrInfoBit				EQU		3					;search includes finder info
+fsSBFlLgLenBit					EQU		5					;search includes data logical length
+fsSBFlPyLenBit					EQU		6					;search includes data physical length
+fsSBFlRLgLenBit					EQU		7					;search includes resource logical length
+fsSBFlRPyLenBit					EQU		8					;search includes resource physical length
+fsSBFlCrDatBit					EQU		9					;search includes create date
+fsSBFlMdDatBit					EQU		10					;search includes modification date
+fsSBFlBkDatBit					EQU		11					;search includes backup date
+fsSBFlXFndrInfoBit				EQU		12					;search includes extended finder info
+fsSBFlParIDBit					EQU		13					;search includes file's parent ID
+fsSBNegateBit					EQU		14					;return all non-matches
+fsSBDrUsrWdsBit					EQU		3					;search includes directory finder info
+fsSBDrNmFlsBit					EQU		4					;search includes directory valence
+fsSBDrCrDatBit					EQU		9					;directory-named version of fsSBFlCrDatBit
+fsSBDrMdDatBit					EQU		10					;directory-named version of fsSBFlMdDatBit
+fsSBDrBkDatBit					EQU		11					;directory-named version of fsSBFlBkDatBit
+fsSBDrFndrInfoBit				EQU		12					;directory-named version of fsSBFlXFndrInfoBit
+
+fsSBDrParID						EQU		8192
+fsSBDrParIDBit					EQU		13					;directory-named version of fsSBFlParIDBit
+; vMAttrib (GetVolParms) bit position constants 
+bLimitFCBs						EQU		31
+bLocalWList						EQU		30
+bNoMiniFndr						EQU		29
+bNoVNEdit						EQU		28
+bNoLclSync						EQU		27
+bTrshOffLine					EQU		26
+bNoSwitchTo						EQU		25
+bNoDeskItems					EQU		20
+bNoBootBlks						EQU		19
+bAccessCntl						EQU		18
+bNoSysDir						EQU		17
+bHasExtFSVol					EQU		16
+bHasOpenDeny					EQU		15
+bHasCopyFile					EQU		14
+bHasMoveRename					EQU		13
+bHasDesktopMgr					EQU		12
+bHasShortName					EQU		11
+bHasFolderLock					EQU		10
+bHasPersonalAccessPrivileges	EQU		9
+
+bHasUserGroupList				EQU		8
+bHasCatSearch					EQU		7
+bHasFileIDs						EQU		6
+bHasBTreeMgr					EQU		5
+bHasBlankAccessPrivileges		EQU		4
+; Desktop Database icon Constants 
+kLargeIcon						EQU		1
+kLarge4BitIcon					EQU		2
+kLarge8BitIcon					EQU		3
+kSmallIcon						EQU		4
+kSmall4BitIcon					EQU		5
+kSmall8BitIcon					EQU		6
+kLargeIconSize					EQU		256
+kLarge4BitIconSize				EQU		512
+kLarge8BitIconSize				EQU		1024
+kSmallIconSize					EQU		64
+kSmall4BitIconSize				EQU		128
+kSmall8BitIconSize				EQU		256
+; Foreign Privilege Model Identifiers 
+fsUnixPriv						EQU		1
+; Version Release Stage Codes 
+developStage					EQU		$20
+alphaStage						EQU		$40
+
+betaStage						EQU		$60
+finalStage						EQU		$80
+; Authentication Constants 
+kNoUserAuthentication			EQU		1
+kPassword						EQU		2
+kEncryptPassword				EQU		3
+kTwoWayEncryptPassword			EQU		6
+
+hFileInfo						EQU		0
+dirInfo							EQU		1
+
+; typedef SInt8 			CInfoType
+; mapping codes (ioObjType) for MapName & MapID 
+
+kOwnerID2Name					EQU		1
+kGroupID2Name					EQU		2
+kOwnerName2ID					EQU		3
+kGroupName2ID					EQU		4
+; types of oj object to be returned (ioObjType) for _GetUGEntry 
+kReturnNextUser					EQU		1
+kReturnNextGroup				EQU		2
+kReturnNextUG					EQU		3
+
+	IF OLDROUTINELOCATIONS  THEN
+;
+;	The following structures are being moved to Finder.i because
+;	they are Finder centric.  See Finder constants above.
+;
+FInfo 					RECORD	0
+fdType					 ds.l   1		; offset: $0 (0)		;the type of the file
+fdCreator				 ds.l   1		; offset: $4 (4)		;file's creator
+fdFlags					 ds.w   1		; offset: $8 (8)		;flags ex. hasbundle,invisible,locked, etc.
+fdLocation				 ds     Point	; offset: $A (10)		;file's location in folder
+fdFldr					 ds.w   1		; offset: $E (14)		;folder containing file
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct FInfo 		FInfo
+FXInfo 					RECORD	0
+fdIconID				 ds.w   1		; offset: $0 (0)		;Icon ID
+fdUnused				 ds.w   3		; offset: $2 (2)		;unused but reserved 6 bytes
+fdScript				 ds.b   1		; offset: $8 (8)		;Script flag and number
+fdXFlags				 ds.b   1		; offset: $9 (9)		;More flag bits
+fdComment				 ds.w   1		; offset: $A (10)		;Comment ID
+fdPutAway				 ds.l   1		; offset: $C (12)		;Home Dir ID
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct FXInfo 	FXInfo
+DInfo 					RECORD	0
+frRect					 ds     Rect	; offset: $0 (0)		;folder rect
+frFlags					 ds.w   1		; offset: $8 (8)		;Flags
+frLocation				 ds     Point	; offset: $A (10)		;folder location
+frView					 ds.w   1		; offset: $E (14)		;folder view
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct DInfo 		DInfo
+DXInfo 					RECORD	0
+frScroll				 ds     Point	; offset: $0 (0)		;scroll position
+frOpenChain				 ds.l   1		; offset: $4 (4)		;DirID chain of open folders
+frScript				 ds.b   1		; offset: $8 (8)		;Script flag and number
+frXFlags				 ds.b   1		; offset: $9 (9)		;More flag bits
+frComment				 ds.w   1		; offset: $A (10)		;comment
+frPutAway				 ds.l   1		; offset: $C (12)		;DirID
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct DXInfo 	DXInfo
+	ENDIF
+GetVolParmsInfoBuffer 	RECORD	0
+vMVersion				 ds.w   1		; offset: $0 (0)		;version number
+vMAttrib				 ds.l   1		; offset: $2 (2)		;bit vector of attributes (see vMAttrib constants)
+vMLocalHand				 ds.l   1		; offset: $6 (6)		;handle to private data
+vMServerAdr				 ds.l   1		; offset: $A (10)		;AppleTalk server address or zero
+vMVolumeGrade			 ds.l   1		; offset: $E (14)		;approx. speed rating or zero if unrated
+vMForeignPrivID			 ds.w   1		; offset: $12 (18)		;foreign privilege model supported or zero if none
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct GetVolParmsInfoBuffer  GetVolParmsInfoBuffer
+; typedef ParamBlockRec 	*ParmBlkPtr
+IOParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+ioVersNum				 ds.b   1		; offset: $1A (26)
+ioPermssn				 ds.b   1		; offset: $1B (27)
+ioMisc					 ds.l   1		; offset: $1C (28)
+ioBuffer				 ds.l   1		; offset: $20 (32)
+ioReqCount				 ds.l   1		; offset: $24 (36)
+ioActCount				 ds.l   1		; offset: $28 (40)
+ioPosMode				 ds.w   1		; offset: $2C (44)
+ioPosOffset				 ds.l   1		; offset: $2E (46)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct IOParam 	IOParam, *IOParamPtr
+FileParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioFRefNum				 ds.w   1		; offset: $18 (24)
+ioFVersNum				 ds.b   1		; offset: $1A (26)
+filler1					 ds.b   1		; offset: $1B (27)
+ioFDirIndex				 ds.w   1		; offset: $1C (28)
+ioFlAttrib				 ds.b   1		; offset: $1E (30)
+ioFlVersNum				 ds.b   1		; offset: $1F (31)
+ioFlFndrInfo			 ds     FInfo	; offset: $20 (32)
+ioFlNum					 ds.l   1		; offset: $30 (48)
+ioFlStBlk				 ds.w   1		; offset: $34 (52)
+ioFlLgLen				 ds.l   1		; offset: $36 (54)
+ioFlPyLen				 ds.l   1		; offset: $3A (58)
+ioFlRStBlk				 ds.w   1		; offset: $3E (62)
+ioFlRLgLen				 ds.l   1		; offset: $40 (64)
+ioFlRPyLen				 ds.l   1		; offset: $44 (68)
+ioFlCrDat				 ds.l   1		; offset: $48 (72)
+ioFlMdDat				 ds.l   1		; offset: $4C (76)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct FileParam 	FileParam, *FileParamPtr
+VolumeParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler2					 ds.l   1		; offset: $18 (24)
+ioVolIndex				 ds.w   1		; offset: $1C (28)
+ioVCrDate				 ds.l   1		; offset: $1E (30)
+ioVLsBkUp				 ds.l   1		; offset: $22 (34)
+ioVAtrb					 ds.w   1		; offset: $26 (38)
+ioVNmFls				 ds.w   1		; offset: $28 (40)
+ioVDirSt				 ds.w   1		; offset: $2A (42)
+ioVBlLn					 ds.w   1		; offset: $2C (44)
+ioVNmAlBlks				 ds.w   1		; offset: $2E (46)
+ioVAlBlkSiz				 ds.l   1		; offset: $30 (48)
+ioVClpSiz				 ds.l   1		; offset: $34 (52)
+ioAlBlSt				 ds.w   1		; offset: $38 (56)
+ioVNxtFNum				 ds.l   1		; offset: $3A (58)
+ioVFrBlk				 ds.w   1		; offset: $3E (62)
+sizeof					 EQU *			; size:   $40 (64)
+						ENDR
+
+; typedef struct VolumeParam  VolumeParam, *VolumeParamPtr
+CntrlParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+csParam					 ds.w   11		; offset: $1C (28)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct CntrlParam  CntrlParam, *CntrlParamPtr
+SlotDevParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioSRefNum				 ds.w   1		; offset: $18 (24)
+ioSVersNum				 ds.b   1		; offset: $1A (26)
+ioSPermssn				 ds.b   1		; offset: $1B (27)
+ioSMix					 ds.l   1		; offset: $1C (28)
+ioSFlags				 ds.w   1		; offset: $20 (32)
+ioSlot					 ds.b   1		; offset: $22 (34)
+ioID					 ds.b   1		; offset: $23 (35)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct SlotDevParam  SlotDevParam, *SlotDevParamPtr
+MultiDevParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioMRefNum				 ds.w   1		; offset: $18 (24)
+ioMVersNum				 ds.b   1		; offset: $1A (26)
+ioMPermssn				 ds.b   1		; offset: $1B (27)
+ioMMix					 ds.l   1		; offset: $1C (28)
+ioMFlags				 ds.w   1		; offset: $20 (32)
+ioSEBlkPtr				 ds.l   1		; offset: $22 (34)
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct MultiDevParam  MultiDevParam, *MultiDevParamPtr
+ParamBlockRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+ioVersNum				 ds.b   1		; offset: $1A (26)
+ioPermssn				 ds.b   1		; offset: $1B (27)
+ioMisc					 ds.l   1		; offset: $1C (28)
+ioBuffer				 ds.l   1		; offset: $20 (32)
+ioReqCount				 ds.l   1		; offset: $24 (36)
+ioActCount				 ds.l   1		; offset: $28 (40)
+ioPosMode				 ds.w   1		; offset: $2C (44)
+ioPosOffset				 ds.l   1		; offset: $2E (46)
+						 ORG 24
+ioFRefNum				 ds.w   1		; offset: $18 (24)
+ioFVersNum				 ds.b   1		; offset: $1A (26)
+filler1					 ds.b   1		; offset: $1B (27)
+ioFDirIndex				 ds.w   1		; offset: $1C (28)
+ioFlAttrib				 ds.b   1		; offset: $1E (30)
+ioFlVersNum				 ds.b   1		; offset: $1F (31)
+ioFlFndrInfo			 ds     FInfo	; offset: $20 (32)
+ioFlNum					 ds.l   1		; offset: $30 (48)
+ioFlStBlk				 ds.w   1		; offset: $34 (52)
+ioFlLgLen				 ds.l   1		; offset: $36 (54)
+ioFlPyLen				 ds.l   1		; offset: $3A (58)
+ioFlRStBlk				 ds.w   1		; offset: $3E (62)
+ioFlRLgLen				 ds.l   1		; offset: $40 (64)
+ioFlRPyLen				 ds.l   1		; offset: $44 (68)
+ioFlCrDat				 ds.l   1		; offset: $48 (72)
+ioFlMdDat				 ds.l   1		; offset: $4C (76)
+						 ORG 24
+filler2					 ds.l   1		; offset: $18 (24)
+ioVolIndex				 ds.w   1		; offset: $1C (28)
+ioVCrDate				 ds.l   1		; offset: $1E (30)
+ioVLsBkUp				 ds.l   1		; offset: $22 (34)
+ioVAtrb					 ds.w   1		; offset: $26 (38)
+ioVNmFls				 ds.w   1		; offset: $28 (40)
+ioVDirSt				 ds.w   1		; offset: $2A (42)
+ioVBlLn					 ds.w   1		; offset: $2C (44)
+ioVNmAlBlks				 ds.w   1		; offset: $2E (46)
+ioVAlBlkSiz				 ds.l   1		; offset: $30 (48)
+ioVClpSiz				 ds.l   1		; offset: $34 (52)
+ioAlBlSt				 ds.w   1		; offset: $38 (56)
+ioVNxtFNum				 ds.l   1		; offset: $3A (58)
+ioVFrBlk				 ds.w   1		; offset: $3E (62)
+						 ORG 24
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+csParam					 ds.w   11		; offset: $1C (28)
+						 ORG 24
+ioSRefNum				 ds.w   1		; offset: $18 (24)
+ioSVersNum				 ds.b   1		; offset: $1A (26)
+ioSPermssn				 ds.b   1		; offset: $1B (27)
+ioSMix					 ds.l   1		; offset: $1C (28)
+ioSFlags				 ds.w   1		; offset: $20 (32)
+ioSlot					 ds.b   1		; offset: $22 (34)
+ioID					 ds.b   1		; offset: $23 (35)
+						 ORG 24
+ioMRefNum				 ds.w   1		; offset: $18 (24)
+ioMVersNum				 ds.b   1		; offset: $1A (26)
+ioMPermssn				 ds.b   1		; offset: $1B (27)
+ioMMix					 ds.l   1		; offset: $1C (28)
+ioMFlags				 ds.w   1		; offset: $20 (32)
+ioSEBlkPtr				 ds.l   1		; offset: $22 (34)
+						 ORG 80
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+CInfoPBRec 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioFRefNum				 ds.w   1		; offset: $18 (24)
+ioFVersNum				 ds.b   1		; offset: $1A (26)
+filler1					 ds.b   1		; offset: $1B (27)
+ioFDirIndex				 ds.w   1		; offset: $1C (28)
+ioFlAttrib				 ds.b   1		; offset: $1E (30)
+ioACUser				 ds.b   1		; offset: $1F (31)
+ioFlFndrInfo			 ds     FInfo	; offset: $20 (32)
+ioDirID					 ds.l   1		; offset: $30 (48)
+ioFlStBlk				 ds.w   1		; offset: $34 (52)
+ioFlLgLen				 ds.l   1		; offset: $36 (54)
+ioFlPyLen				 ds.l   1		; offset: $3A (58)
+ioFlRStBlk				 ds.w   1		; offset: $3E (62)
+ioFlRLgLen				 ds.l   1		; offset: $40 (64)
+ioFlRPyLen				 ds.l   1		; offset: $44 (68)
+ioFlCrDat				 ds.l   1		; offset: $48 (72)
+ioFlMdDat				 ds.l   1		; offset: $4C (76)
+ioFlBkDat				 ds.l   1		; offset: $50 (80)
+ioFlXFndrInfo			 ds     FXInfo	; offset: $54 (84)
+ioFlParID				 ds.l   1		; offset: $64 (100)
+ioFlClpSiz				 ds.l   1		; offset: $68 (104)
+						 ORG 32
+ioDrUsrWds				 ds     DInfo	; offset: $20 (32)
+ioDrDirID				 ds.l   1		; offset: $30 (48)
+ioDrNmFls				 ds.w   1		; offset: $34 (52)
+filler3					 ds.w   9		; offset: $36 (54)
+ioDrCrDat				 ds.l   1		; offset: $48 (72)
+ioDrMdDat				 ds.l   1		; offset: $4C (76)
+ioDrBkDat				 ds.l   1		; offset: $50 (80)
+ioDrFndrInfo			 ds     DXInfo	; offset: $54 (84)
+ioDrParID				 ds.l   1		; offset: $64 (100)
+						 ORG 108
+sizeof					 EQU *			; size:   $6C (108)
+						ENDR
+
+; typedef struct CInfoPBRec  CInfoPBRec, *CInfoPBPtr
+CatPositionRec 			RECORD	0
+initialize				 ds.l   1		; offset: $0 (0)
+priv					 ds.w   6		; offset: $4 (4)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct CatPositionRec  CatPositionRec
+FSSpec 					RECORD	0
+vRefNum					 ds.w   1		; offset: $0 (0)
+parID					 ds.l   1		; offset: $2 (2)
+name					 ds.l   16		; offset: $6 (6)
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct FSSpec 	FSSpec
+; typedef FSSpec 			*FSSpecPtr, **FSSpecHandle
+; pointer to array of FSSpecs 
+; typedef FSSpecPtr 		FSSpecArrayPtr
+; The only difference between "const FSSpec*" and "ConstFSSpecPtr" is 
+;   that as a parameter, ConstFSSpecPtr is allowed to be NULL 
+; typedef const FSSpec 		*ConstFSSpecPtr
+; The following are structures to be filled out with the _GetVolMountInfo call
+; and passed back into the _VolumeMount call for external file system mounts. 
+; the "signature" of the file system 
+; typedef OSType 			VolumeType
+
+; the signature for AppleShare 
+AppleShareMediaType				EQU		'afpm'
+
+	IF ¬ OLDROUTINELOCATIONS  THEN
+VolMountInfoHeader 		RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of location data (including self) 
+media					 ds.l   1		; offset: $2 (2)		; type of media.  Variable length data follows 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct VolMountInfoHeader  VolMountInfoHeader
+; typedef VolMountInfoHeader  *VolMountInfoPtr
+; The new volume mount info record.  The old one is included for compatibility. 
+;	the new record allows access by foriegn filesystems writers to the flags 
+;	portion of the record. This portion is now public.  
+VolumeMountInfoHeader 	RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of location data (including self) 
+media					 ds.l   1		; offset: $2 (2)		; type of media (must be registered with Apple) 
+flags					 ds.w   1		; offset: $6 (6)		; volume mount flags. Variable length data follows 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct VolumeMountInfoHeader  VolumeMountInfoHeader
+; typedef VolumeMountInfoHeader  *VolumeMountInfoHeaderPtr
+;	additional volume mount flags 
+
+volMountInteractBit				EQU		15					; Input to VolumeMount: If set, it's OK for the file system 
+volMountInteractMask			EQU		$8000				; to perform user interaction to mount the volume 
+volMountChangedBit				EQU		14					; Output from VoumeMount: If set, the volume was mounted, but 
+volMountChangedMask				EQU		$4000				; the volume mounting information record needs to be updated. 
+volMountFSReservedMask			EQU		$00ff				; bits 0-7 are defined by each file system for its own use 
+volMountSysReservedMask			EQU		$ff00				; bits 8-15 are reserved for Apple system use 
+
+	ENDIF
+AFPVolMountInfo 		RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of location data (including self) 
+media					 ds.l   1		; offset: $2 (2)		; type of media 
+flags					 ds.w   1		; offset: $6 (6)		; bits for no messages, no reconnect 
+nbpInterval				 ds.b   1		; offset: $8 (8)		; NBP Interval parameter (IM2, p.322) 
+nbpCount				 ds.b   1		; offset: $9 (9)		; NBP Interval parameter (IM2, p.322) 
+uamType					 ds.w   1		; offset: $A (10)		; User Authentication Method 
+zoneNameOffset			 ds.w   1		; offset: $C (12)		; short positive offset from start of struct to Zone Name 
+serverNameOffset		 ds.w   1		; offset: $E (14)		; offset to pascal Server Name string 
+volNameOffset			 ds.w   1		; offset: $10 (16)		; offset to pascal Volume Name string 
+userNameOffset			 ds.w   1		; offset: $12 (18)		; offset to pascal User Name string 
+userPasswordOffset		 ds.w   1		; offset: $14 (20)		; offset to pascal User Password string 
+volPasswordOffset		 ds.w   1		; offset: $16 (22)		; offset to pascal Volume Password string 
+AFPData					 ds.b   144		; offset: $18 (24)		; variable length data may follow 
+sizeof					 EQU *			; size:   $A8 (168)
+						ENDR
+
+; typedef struct AFPVolMountInfo  AFPVolMountInfo
+; typedef AFPVolMountInfo 	*AFPVolMountInfoPtr
+DTPBRec 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioDTRefNum				 ds.w   1		; offset: $18 (24)		; desktop refnum 
+ioIndex					 ds.w   1		; offset: $1A (26)
+ioTagInfo				 ds.l   1		; offset: $1C (28)
+ioDTBuffer				 ds.l   1		; offset: $20 (32)
+ioDTReqCount			 ds.l   1		; offset: $24 (36)
+ioDTActCount			 ds.l   1		; offset: $28 (40)
+ioFiller1				 ds.b   1		; offset: $2C (44)
+ioIconType				 ds.b   1		; offset: $2D (45)
+ioFiller2				 ds.w   1		; offset: $2E (46)
+ioDirID					 ds.l   1		; offset: $30 (48)
+ioFileCreator			 ds.l   1		; offset: $34 (52)
+ioFileType				 ds.l   1		; offset: $38 (56)
+ioFiller3				 ds.l   1		; offset: $3C (60)
+ioDTLgLen				 ds.l   1		; offset: $40 (64)
+ioDTPyLen				 ds.l   1		; offset: $44 (68)
+ioFiller4				 ds.w   14		; offset: $48 (72)
+ioAPPLParID				 ds.l   1		; offset: $64 (100)
+sizeof					 EQU *			; size:   $68 (104)
+						ENDR
+
+; typedef struct DTPBRec 	DTPBRec
+; typedef DTPBRec 			*DTPBPtr
+HIOParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+ioVersNum				 ds.b   1		; offset: $1A (26)
+ioPermssn				 ds.b   1		; offset: $1B (27)
+ioMisc					 ds.l   1		; offset: $1C (28)
+ioBuffer				 ds.l   1		; offset: $20 (32)
+ioReqCount				 ds.l   1		; offset: $24 (36)
+ioActCount				 ds.l   1		; offset: $28 (40)
+ioPosMode				 ds.w   1		; offset: $2C (44)
+ioPosOffset				 ds.l   1		; offset: $2E (46)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct HIOParam 	HIOParam, *HIOParamPtr
+HFileParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioFRefNum				 ds.w   1		; offset: $18 (24)
+ioFVersNum				 ds.b   1		; offset: $1A (26)
+filler1					 ds.b   1		; offset: $1B (27)
+ioFDirIndex				 ds.w   1		; offset: $1C (28)
+ioFlAttrib				 ds.b   1		; offset: $1E (30)
+ioFlVersNum				 ds.b   1		; offset: $1F (31)
+ioFlFndrInfo			 ds     FInfo	; offset: $20 (32)
+ioDirID					 ds.l   1		; offset: $30 (48)
+ioFlStBlk				 ds.w   1		; offset: $34 (52)
+ioFlLgLen				 ds.l   1		; offset: $36 (54)
+ioFlPyLen				 ds.l   1		; offset: $3A (58)
+ioFlRStBlk				 ds.w   1		; offset: $3E (62)
+ioFlRLgLen				 ds.l   1		; offset: $40 (64)
+ioFlRPyLen				 ds.l   1		; offset: $44 (68)
+ioFlCrDat				 ds.l   1		; offset: $48 (72)
+ioFlMdDat				 ds.l   1		; offset: $4C (76)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct HFileParam  HFileParam, *HFileParamPtr
+HVolumeParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler2					 ds.l   1		; offset: $18 (24)
+ioVolIndex				 ds.w   1		; offset: $1C (28)
+ioVCrDate				 ds.l   1		; offset: $1E (30)
+ioVLsMod				 ds.l   1		; offset: $22 (34)
+ioVAtrb					 ds.w   1		; offset: $26 (38)
+ioVNmFls				 ds.w   1		; offset: $28 (40)
+ioVBitMap				 ds.w   1		; offset: $2A (42)
+ioAllocPtr				 ds.w   1		; offset: $2C (44)
+ioVNmAlBlks				 ds.w   1		; offset: $2E (46)
+ioVAlBlkSiz				 ds.l   1		; offset: $30 (48)
+ioVClpSiz				 ds.l   1		; offset: $34 (52)
+ioAlBlSt				 ds.w   1		; offset: $38 (56)
+ioVNxtCNID				 ds.l   1		; offset: $3A (58)
+ioVFrBlk				 ds.w   1		; offset: $3E (62)
+ioVSigWord				 ds.w   1		; offset: $40 (64)
+ioVDrvInfo				 ds.w   1		; offset: $42 (66)
+ioVDRefNum				 ds.w   1		; offset: $44 (68)
+ioVFSID					 ds.w   1		; offset: $46 (70)
+ioVBkUp					 ds.l   1		; offset: $48 (72)
+ioVSeqNum				 ds.w   1		; offset: $4C (76)
+ioVWrCnt				 ds.l   1		; offset: $4E (78)
+ioVFilCnt				 ds.l   1		; offset: $52 (82)
+ioVDirCnt				 ds.l   1		; offset: $56 (86)
+ioVFndrInfo				 ds.l   8		; offset: $5A (90)
+sizeof					 EQU *			; size:   $7A (122)
+						ENDR
+
+; typedef struct HVolumeParam  HVolumeParam, *HVolumeParamPtr
+
+; Large Volume Constants 
+kWidePosOffsetBit				EQU		8
+kMaximumBlocksIn4GB				EQU		$007FFFFF
+
+XIOParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+ioVersNum				 ds.b   1		; offset: $1A (26)
+ioPermssn				 ds.b   1		; offset: $1B (27)
+ioMisc					 ds.l   1		; offset: $1C (28)
+ioBuffer				 ds.l   1		; offset: $20 (32)
+ioReqCount				 ds.l   1		; offset: $24 (36)
+ioActCount				 ds.l   1		; offset: $28 (40)
+ioPosMode				 ds.w   1		; offset: $2C (44)		; must have kUseWidePositioning bit set 
+ioWPosOffset			 ds     wide	; offset: $2E (46)		; wide positioning offset 
+sizeof					 EQU *			; size:   $36 (54)
+						ENDR
+
+; typedef struct XIOParam 	XIOParam, *XIOParamPtr
+XVolumeParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioXVersion				 ds.l   1		; offset: $18 (24)		; this XVolumeParam version (0) 
+ioVolIndex				 ds.w   1		; offset: $1C (28)
+ioVCrDate				 ds.l   1		; offset: $1E (30)
+ioVLsMod				 ds.l   1		; offset: $22 (34)
+ioVAtrb					 ds.w   1		; offset: $26 (38)
+ioVNmFls				 ds.w   1		; offset: $28 (40)
+ioVBitMap				 ds.w   1		; offset: $2A (42)
+ioAllocPtr				 ds.w   1		; offset: $2C (44)
+ioVNmAlBlks				 ds.w   1		; offset: $2E (46)
+ioVAlBlkSiz				 ds.l   1		; offset: $30 (48)
+ioVClpSiz				 ds.l   1		; offset: $34 (52)
+ioAlBlSt				 ds.w   1		; offset: $38 (56)
+ioVNxtCNID				 ds.l   1		; offset: $3A (58)
+ioVFrBlk				 ds.w   1		; offset: $3E (62)
+ioVSigWord				 ds.w   1		; offset: $40 (64)
+ioVDrvInfo				 ds.w   1		; offset: $42 (66)
+ioVDRefNum				 ds.w   1		; offset: $44 (68)
+ioVFSID					 ds.w   1		; offset: $46 (70)
+ioVBkUp					 ds.l   1		; offset: $48 (72)
+ioVSeqNum				 ds.w   1		; offset: $4C (76)
+ioVWrCnt				 ds.l   1		; offset: $4E (78)
+ioVFilCnt				 ds.l   1		; offset: $52 (82)
+ioVDirCnt				 ds.l   1		; offset: $56 (86)
+ioVFndrInfo				 ds.l   8		; offset: $5A (90)
+ioVTotalBytes			 ds     UnsignedWide ; offset: $7A (122) ; total number of bytes on volume 
+ioVFreeBytes			 ds     UnsignedWide ; offset: $82 (130) ; number of free bytes on volume 
+sizeof					 EQU *			; size:   $8A (138)
+						ENDR
+
+; typedef struct XVolumeParam  XVolumeParam, *XVolumeParamPtr
+AccessParam 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler3					 ds.w   1		; offset: $18 (24)
+ioDenyModes				 ds.w   1		; offset: $1A (26)
+filler4					 ds.w   1		; offset: $1C (28)
+filler5					 ds.b   1		; offset: $1E (30)
+ioACUser				 ds.b   1		; offset: $1F (31)
+filler6					 ds.l   1		; offset: $20 (32)
+ioACOwnerID				 ds.l   1		; offset: $24 (36)
+ioACGroupID				 ds.l   1		; offset: $28 (40)
+ioACAccess				 ds.l   1		; offset: $2C (44)
+ioDirID					 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct AccessParam  AccessParam, *AccessParamPtr
+ObjParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler7					 ds.w   1		; offset: $18 (24)
+ioObjType				 ds.w   1		; offset: $1A (26)
+ioObjNamePtr			 ds.l   1		; offset: $1C (28)
+ioObjID					 ds.l   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct ObjParam 	ObjParam, *ObjParamPtr
+CopyParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioDstVRefNum			 ds.w   1		; offset: $18 (24)
+filler8					 ds.w   1		; offset: $1A (26)
+ioNewName				 ds.l   1		; offset: $1C (28)
+ioCopyName				 ds.l   1		; offset: $20 (32)
+ioNewDirID				 ds.l   1		; offset: $24 (36)
+filler14				 ds.l   1		; offset: $28 (40)
+filler15				 ds.l   1		; offset: $2C (44)
+ioDirID					 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct CopyParam 	CopyParam, *CopyParamPtr
+WDParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler9					 ds.w   1		; offset: $18 (24)
+ioWDIndex				 ds.w   1		; offset: $1A (26)
+ioWDProcID				 ds.l   1		; offset: $1C (28)
+ioWDVRefNum				 ds.w   1		; offset: $20 (32)
+filler10				 ds.w   1		; offset: $22 (34)
+filler11				 ds.l   1		; offset: $24 (36)
+filler12				 ds.l   1		; offset: $28 (40)
+filler13				 ds.l   1		; offset: $2C (44)
+ioWDDirID				 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct WDParam 	WDParam, *WDParamPtr
+FIDParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler14				 ds.l   1		; offset: $18 (24)
+ioDestNamePtr			 ds.l   1		; offset: $1C (28)
+filler15				 ds.l   1		; offset: $20 (32)
+ioDestDirID				 ds.l   1		; offset: $24 (36)
+filler16				 ds.l   1		; offset: $28 (40)
+filler17				 ds.l   1		; offset: $2C (44)
+ioSrcDirID				 ds.l   1		; offset: $30 (48)
+filler18				 ds.w   1		; offset: $34 (52)
+ioFileID				 ds.l   1		; offset: $36 (54)
+sizeof					 EQU *			; size:   $3A (58)
+						ENDR
+
+; typedef struct FIDParam 	FIDParam, *FIDParamPtr
+ForeignPrivParam 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioFiller21				 ds.l   1		; offset: $18 (24)
+ioFiller22				 ds.l   1		; offset: $1C (28)
+ioForeignPrivBuffer		 ds.l   1		; offset: $20 (32)
+ioForeignPrivActCount	 ds.l   1		; offset: $24 (36)
+ioForeignPrivReqCount	 ds.l   1		; offset: $28 (40)
+ioFiller23				 ds.l   1		; offset: $2C (44)
+ioForeignPrivDirID		 ds.l   1		; offset: $30 (48)
+ioForeignPrivInfo1		 ds.l   1		; offset: $34 (52)
+ioForeignPrivInfo2		 ds.l   1		; offset: $38 (56)
+ioForeignPrivInfo3		 ds.l   1		; offset: $3C (60)
+ioForeignPrivInfo4		 ds.l   1		; offset: $40 (64)
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct ForeignPrivParam  ForeignPrivParam, *ForeignPrivParamPtr
+HParamBlockRec 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+ioVersNum				 ds.b   1		; offset: $1A (26)
+ioPermssn				 ds.b   1		; offset: $1B (27)
+ioMisc					 ds.l   1		; offset: $1C (28)
+ioBuffer				 ds.l   1		; offset: $20 (32)
+ioReqCount				 ds.l   1		; offset: $24 (36)
+ioActCount				 ds.l   1		; offset: $28 (40)
+ioPosMode				 ds.w   1		; offset: $2C (44)
+ioPosOffset				 ds.l   1		; offset: $2E (46)
+						 ORG 24
+ioFRefNum				 ds.w   1		; offset: $18 (24)
+ioFVersNum				 ds.b   1		; offset: $1A (26)
+filler1					 ds.b   1		; offset: $1B (27)
+ioFDirIndex				 ds.w   1		; offset: $1C (28)
+ioFlAttrib				 ds.b   1		; offset: $1E (30)
+ioFlVersNum				 ds.b   1		; offset: $1F (31)
+ioFlFndrInfo			 ds     FInfo	; offset: $20 (32)
+ioDirID					 ds.l   1		; offset: $30 (48)
+ioFlStBlk				 ds.w   1		; offset: $34 (52)
+ioFlLgLen				 ds.l   1		; offset: $36 (54)
+ioFlPyLen				 ds.l   1		; offset: $3A (58)
+ioFlRStBlk				 ds.w   1		; offset: $3E (62)
+ioFlRLgLen				 ds.l   1		; offset: $40 (64)
+ioFlRPyLen				 ds.l   1		; offset: $44 (68)
+ioFlCrDat				 ds.l   1		; offset: $48 (72)
+ioFlMdDat				 ds.l   1		; offset: $4C (76)
+						 ORG 24
+filler2					 ds.l   1		; offset: $18 (24)
+ioVolIndex				 ds.w   1		; offset: $1C (28)
+ioVCrDate				 ds.l   1		; offset: $1E (30)
+ioVLsMod				 ds.l   1		; offset: $22 (34)
+ioVAtrb					 ds.w   1		; offset: $26 (38)
+ioVNmFls				 ds.w   1		; offset: $28 (40)
+ioVBitMap				 ds.w   1		; offset: $2A (42)
+ioAllocPtr				 ds.w   1		; offset: $2C (44)
+ioVNmAlBlks				 ds.w   1		; offset: $2E (46)
+ioVAlBlkSiz				 ds.l   1		; offset: $30 (48)
+ioVClpSiz				 ds.l   1		; offset: $34 (52)
+ioAlBlSt				 ds.w   1		; offset: $38 (56)
+ioVNxtCNID				 ds.l   1		; offset: $3A (58)
+ioVFrBlk				 ds.w   1		; offset: $3E (62)
+ioVSigWord				 ds.w   1		; offset: $40 (64)
+ioVDrvInfo				 ds.w   1		; offset: $42 (66)
+ioVDRefNum				 ds.w   1		; offset: $44 (68)
+ioVFSID					 ds.w   1		; offset: $46 (70)
+ioVBkUp					 ds.l   1		; offset: $48 (72)
+ioVSeqNum				 ds.w   1		; offset: $4C (76)
+ioVWrCnt				 ds.l   1		; offset: $4E (78)
+ioVFilCnt				 ds.l   1		; offset: $52 (82)
+ioVDirCnt				 ds.l   1		; offset: $56 (86)
+ioVFndrInfo				 ds.l   8		; offset: $5A (90)
+						 ORG 24
+filler3					 ds.w   1		; offset: $18 (24)
+ioDenyModes				 ds.w   1		; offset: $1A (26)
+filler4					 ds.w   1		; offset: $1C (28)
+filler5					 ds.b   1		; offset: $1E (30)
+ioACUser				 ds.b   1		; offset: $1F (31)
+filler6					 ds.l   1		; offset: $20 (32)
+ioACOwnerID				 ds.l   1		; offset: $24 (36)
+ioACGroupID				 ds.l   1		; offset: $28 (40)
+ioACAccess				 ds.l   1		; offset: $2C (44)
+						 ORG 24
+filler7					 ds.w   1		; offset: $18 (24)
+ioObjType				 ds.w   1		; offset: $1A (26)
+ioObjNamePtr			 ds.l   1		; offset: $1C (28)
+ioObjID					 ds.l   1		; offset: $20 (32)
+						 ORG 24
+ioDstVRefNum			 ds.w   1		; offset: $18 (24)
+filler8					 ds.w   1		; offset: $1A (26)
+ioNewName				 ds.l   1		; offset: $1C (28)
+ioCopyName				 ds.l   1		; offset: $20 (32)
+ioNewDirID				 ds.l   1		; offset: $24 (36)
+						 ORG 24
+filler9					 ds.w   1		; offset: $18 (24)
+ioWDIndex				 ds.w   1		; offset: $1A (26)
+ioWDProcID				 ds.l   1		; offset: $1C (28)
+ioWDVRefNum				 ds.w   1		; offset: $20 (32)
+filler10				 ds.w   1		; offset: $22 (34)
+filler11				 ds.l   1		; offset: $24 (36)
+filler12				 ds.l   1		; offset: $28 (40)
+filler13				 ds.l   1		; offset: $2C (44)
+ioWDDirID				 ds.l   1		; offset: $30 (48)
+						 ORG 24
+filler14				 ds.l   1		; offset: $18 (24)
+ioDestNamePtr			 ds.l   1		; offset: $1C (28)
+filler15				 ds.l   1		; offset: $20 (32)
+ioDestDirID				 ds.l   1		; offset: $24 (36)
+filler16				 ds.l   1		; offset: $28 (40)
+filler17				 ds.l   1		; offset: $2C (44)
+ioSrcDirID				 ds.l   1		; offset: $30 (48)
+filler18				 ds.w   1		; offset: $34 (52)
+ioFileID				 ds.l   1		; offset: $36 (54)
+						 ORG 24
+ioMatchPtr				 ds.l   1		; offset: $18 (24)
+ioReqMatchCount			 ds.l   1		; offset: $1C (28)
+ioActMatchCount			 ds.l   1		; offset: $20 (32)
+ioSearchBits			 ds.l   1		; offset: $24 (36)
+ioSearchInfo1			 ds.l   1		; offset: $28 (40)
+ioSearchInfo2			 ds.l   1		; offset: $2C (44)
+ioSearchTime			 ds.l   1		; offset: $30 (48)
+ioCatPosition			 ds     CatPositionRec ; offset: $34 (52)
+ioOptBuffer				 ds.l   1		; offset: $44 (68)
+ioOptBufSize			 ds.l   1		; offset: $48 (72)
+						 ORG 24
+ioFiller21				 ds.l   1		; offset: $18 (24)
+ioFiller22				 ds.l   1		; offset: $1C (28)
+ioForeignPrivBuffer		 ds.l   1		; offset: $20 (32)
+ioForeignPrivActCount	 ds.l   1		; offset: $24 (36)
+ioForeignPrivReqCount	 ds.l   1		; offset: $28 (40)
+ioFiller23				 ds.l   1		; offset: $2C (44)
+ioForeignPrivDirID		 ds.l   1		; offset: $30 (48)
+ioForeignPrivInfo1		 ds.l   1		; offset: $34 (52)
+ioForeignPrivInfo2		 ds.l   1		; offset: $38 (56)
+ioForeignPrivInfo3		 ds.l   1		; offset: $3C (60)
+ioForeignPrivInfo4		 ds.l   1		; offset: $40 (64)
+						 ORG 122
+sizeof					 EQU *			; size:   $7A (122)
+						ENDR
+
+; typedef HParamBlockRec 	*HParmBlkPtr
+CMovePBRec 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler1					 ds.l   1		; offset: $18 (24)
+ioNewName				 ds.l   1		; offset: $1C (28)
+filler2					 ds.l   1		; offset: $20 (32)
+ioNewDirID				 ds.l   1		; offset: $24 (36)
+filler3					 ds.l   2		; offset: $28 (40)
+ioDirID					 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct CMovePBRec  CMovePBRec
+; typedef CMovePBRec 		*CMovePBPtr
+WDPBRec 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+filler1					 ds.w   1		; offset: $18 (24)
+ioWDIndex				 ds.w   1		; offset: $1A (26)
+ioWDProcID				 ds.l   1		; offset: $1C (28)
+ioWDVRefNum				 ds.w   1		; offset: $20 (32)
+filler2					 ds.w   7		; offset: $22 (34)
+ioWDDirID				 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct WDPBRec 	WDPBRec
+; typedef WDPBRec 			*WDPBPtr
+FCBPBRec 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+filler					 ds.w   1		; offset: $1A (26)
+ioFCBIndx				 ds.w   1		; offset: $1C (28)
+filler1					 ds.w   1		; offset: $1E (30)
+ioFCBFlNm				 ds.l   1		; offset: $20 (32)
+ioFCBFlags				 ds.w   1		; offset: $24 (36)
+ioFCBStBlk				 ds.w   1		; offset: $26 (38)
+ioFCBEOF				 ds.l   1		; offset: $28 (40)
+ioFCBPLen				 ds.l   1		; offset: $2C (44)
+ioFCBCrPs				 ds.l   1		; offset: $30 (48)
+ioFCBVRefNum			 ds.w   1		; offset: $34 (52)
+ioFCBClpSiz				 ds.l   1		; offset: $36 (54)
+ioFCBParID				 ds.l   1		; offset: $3A (58)
+sizeof					 EQU *			; size:   $3E (62)
+						ENDR
+
+; typedef struct FCBPBRec 	FCBPBRec
+; typedef FCBPBRec 			*FCBPBPtr
+VCB 					RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+vcbFlags				 ds.w   1		; offset: $6 (6)
+vcbSigWord				 ds.w   1		; offset: $8 (8)
+vcbCrDate				 ds.l   1		; offset: $A (10)
+vcbLsMod				 ds.l   1		; offset: $E (14)
+vcbAtrb					 ds.w   1		; offset: $12 (18)
+vcbNmFls				 ds.w   1		; offset: $14 (20)
+vcbVBMSt				 ds.w   1		; offset: $16 (22)
+vcbAllocPtr				 ds.w   1		; offset: $18 (24)
+vcbNmAlBlks				 ds.w   1		; offset: $1A (26)
+vcbAlBlkSiz				 ds.l   1		; offset: $1C (28)
+vcbClpSiz				 ds.l   1		; offset: $20 (32)
+vcbAlBlSt				 ds.w   1		; offset: $24 (36)
+vcbNxtCNID				 ds.l   1		; offset: $26 (38)
+vcbFreeBks				 ds.w   1		; offset: $2A (42)
+vcbVN					 ds.l   7		; offset: $2C (44)
+vcbDrvNum				 ds.w   1		; offset: $48 (72)
+vcbDRefNum				 ds.w   1		; offset: $4A (74)
+vcbFSID					 ds.w   1		; offset: $4C (76)
+vcbVRefNum				 ds.w   1		; offset: $4E (78)
+vcbMAdr					 ds.l   1		; offset: $50 (80)
+vcbBufAdr				 ds.l   1		; offset: $54 (84)
+vcbMLen					 ds.w   1		; offset: $58 (88)
+vcbDirIndex				 ds.w   1		; offset: $5A (90)
+vcbDirBlk				 ds.w   1		; offset: $5C (92)
+vcbVolBkUp				 ds.l   1		; offset: $5E (94)
+vcbVSeqNum				 ds.w   1		; offset: $62 (98)
+vcbWrCnt				 ds.l   1		; offset: $64 (100)
+vcbXTClpSiz				 ds.l   1		; offset: $68 (104)
+vcbCTClpSiz				 ds.l   1		; offset: $6C (108)
+vcbNmRtDirs				 ds.w   1		; offset: $70 (112)
+vcbFilCnt				 ds.l   1		; offset: $72 (114)
+vcbDirCnt				 ds.l   1		; offset: $76 (118)
+vcbFndrInfo				 ds.l   8		; offset: $7A (122)
+vcbVCSize				 ds.w   1		; offset: $9A (154)
+vcbVBMCSiz				 ds.w   1		; offset: $9C (156)
+vcbCtlCSiz				 ds.w   1		; offset: $9E (158)
+vcbXTAlBlks				 ds.w   1		; offset: $A0 (160)
+vcbCTAlBlks				 ds.w   1		; offset: $A2 (162)
+vcbXTRef				 ds.w   1		; offset: $A4 (164)
+vcbCTRef				 ds.w   1		; offset: $A6 (166)
+vcbCtlBuf				 ds.l   1		; offset: $A8 (168)
+vcbDirIDM				 ds.l   1		; offset: $AC (172)
+vcbOffsM				 ds.w   1		; offset: $B0 (176)
+sizeof					 EQU *			; size:   $B2 (178)
+						ENDR
+
+; typedef struct VCB 		VCB
+	IF ¬ OLDROUTINELOCATIONS  THEN
+; typedef VCB 				*VCBPtr
+	ENDIF
+DrvQEl 					RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+dQDrive					 ds.w   1		; offset: $6 (6)
+dQRefNum				 ds.w   1		; offset: $8 (8)
+dQFSID					 ds.w   1		; offset: $A (10)
+dQDrvSz					 ds.w   1		; offset: $C (12)
+dQDrvSz2				 ds.w   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct DrvQEl 	DrvQEl
+; typedef DrvQEl 			*DrvQElPtr
+	IF OLDROUTINELOCATIONS  THEN
+;
+; pascal OSErr PBOpenSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenSync:	OPWORD	$A000
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenSync
+	ENDIF
+
+;
+; pascal OSErr PBOpenAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenAsync:	OPWORD	$A400
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenAsync
+	ENDIF
+
+;
+; pascal OSErr PBOpenImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenImmed:	OPWORD	$A200
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenImmed
+	ENDIF
+
+;
+; pascal OSErr PBCloseSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseSync:	OPWORD	$A001
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseSync
+	ENDIF
+
+;
+; pascal OSErr PBCloseAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseAsync:	OPWORD	$A401
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseAsync
+	ENDIF
+
+;
+; pascal OSErr PBCloseImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseImmed:	OPWORD	$A201
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseImmed
+	ENDIF
+
+;
+; pascal OSErr PBReadSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadSync:	OPWORD	$A002
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadSync
+	ENDIF
+
+;
+; pascal OSErr PBReadAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadAsync:	OPWORD	$A402
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadAsync
+	ENDIF
+
+;
+; pascal OSErr PBReadImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadImmed:	OPWORD	$A202
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadImmed
+	ENDIF
+
+;
+; pascal OSErr PBWriteSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteSync:	OPWORD	$A003
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteSync
+	ENDIF
+
+;
+; pascal OSErr PBWriteAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteAsync:	OPWORD	$A403
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteAsync
+	ENDIF
+
+;
+; pascal OSErr PBWriteImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteImmed:	OPWORD	$A203
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteImmed
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr PBGetVInfoSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetVInfoSync:	OPWORD	$A007
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBGetVInfoAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetVInfoAsync:	OPWORD	$A407
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBXGetVolInfoSync(XVolumeParamPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBXGetVolInfoSync
+			moveq	#18,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBXGetVolInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBXGetVolInfoAsync(XVolumeParamPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBXGetVolInfoAsync
+			moveq	#18,d0
+			dc.w 	$A460
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBXGetVolInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetVolSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetVolSync:	OPWORD	$A014
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVolSync
+	ENDIF
+
+;
+; pascal OSErr PBGetVolAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetVolAsync:	OPWORD	$A414
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVolAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetVolSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetVolSync:	OPWORD	$A015
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetVolSync
+	ENDIF
+
+;
+; pascal OSErr PBSetVolAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetVolAsync:	OPWORD	$A415
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetVolAsync
+	ENDIF
+
+;
+; pascal OSErr PBFlushVolSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBFlushVolSync:	OPWORD	$A013
+	ELSE
+		IMPORT_CFM_FUNCTION	PBFlushVolSync
+	ENDIF
+
+;
+; pascal OSErr PBFlushVolAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBFlushVolAsync:	OPWORD	$A413
+	ELSE
+		IMPORT_CFM_FUNCTION	PBFlushVolAsync
+	ENDIF
+
+;
+; pascal OSErr PBCreateSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCreateSync:	OPWORD	$A008
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCreateSync
+	ENDIF
+
+;
+; pascal OSErr PBCreateAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCreateAsync:	OPWORD	$A408
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCreateAsync
+	ENDIF
+
+;
+; pascal OSErr PBDeleteSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBDeleteSync:	OPWORD	$A009
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDeleteSync
+	ENDIF
+
+;
+; pascal OSErr PBDeleteAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBDeleteAsync:	OPWORD	$A409
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDeleteAsync
+	ENDIF
+
+;
+; pascal OSErr PBOpenDFSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBOpenDFSync
+			moveq	#26,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenDFSync
+	ENDIF
+
+;
+; pascal OSErr PBOpenDFAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBOpenDFAsync
+			moveq	#26,d0
+			dc.w 	$A460
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenDFAsync
+	ENDIF
+
+;
+; pascal OSErr PBOpenRFSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenRFSync:	OPWORD	$A00A
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenRFSync
+	ENDIF
+
+;
+; pascal OSErr PBOpenRFAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenRFAsync:	OPWORD	$A40A
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenRFAsync
+	ENDIF
+
+;
+; pascal OSErr PBRenameSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBRenameSync:	OPWORD	$A00B
+	ELSE
+		IMPORT_CFM_FUNCTION	PBRenameSync
+	ENDIF
+
+;
+; pascal OSErr PBRenameAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBRenameAsync:	OPWORD	$A40B
+	ELSE
+		IMPORT_CFM_FUNCTION	PBRenameAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetFInfoSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetFInfoSync:	OPWORD	$A00C
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBGetFInfoAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetFInfoAsync:	OPWORD	$A40C
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetFInfoSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFInfoSync:	OPWORD	$A00D
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBSetFInfoAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFInfoAsync:	OPWORD	$A40D
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetFLockSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFLockSync:	OPWORD	$A041
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFLockSync
+	ENDIF
+
+;
+; pascal OSErr PBSetFLockAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFLockAsync:	OPWORD	$A441
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFLockAsync
+	ENDIF
+
+;
+; pascal OSErr PBRstFLockSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBRstFLockSync:	OPWORD	$A042
+	ELSE
+		IMPORT_CFM_FUNCTION	PBRstFLockSync
+	ENDIF
+
+;
+; pascal OSErr PBRstFLockAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBRstFLockAsync:	OPWORD	$A442
+	ELSE
+		IMPORT_CFM_FUNCTION	PBRstFLockAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetFVersSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFVersSync:	OPWORD	$A043
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFVersSync
+	ENDIF
+
+;
+; pascal OSErr PBSetFVersAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFVersAsync:	OPWORD	$A443
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFVersAsync
+	ENDIF
+
+;
+; pascal OSErr PBAllocateSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBAllocateSync:	OPWORD	$A010
+	ELSE
+		IMPORT_CFM_FUNCTION	PBAllocateSync
+	ENDIF
+
+;
+; pascal OSErr PBAllocateAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBAllocateAsync:	OPWORD	$A410
+	ELSE
+		IMPORT_CFM_FUNCTION	PBAllocateAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetEOFSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetEOFSync:	OPWORD	$A011
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetEOFSync
+	ENDIF
+
+;
+; pascal OSErr PBGetEOFAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetEOFAsync:	OPWORD	$A411
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetEOFAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetEOFSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetEOFSync:	OPWORD	$A012
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetEOFSync
+	ENDIF
+
+;
+; pascal OSErr PBSetEOFAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetEOFAsync:	OPWORD	$A412
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetEOFAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetFPosSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetFPosSync:	OPWORD	$A018
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFPosSync
+	ENDIF
+
+;
+; pascal OSErr PBGetFPosAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBGetFPosAsync:	OPWORD	$A418
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFPosAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetFPosSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFPosSync:	OPWORD	$A044
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFPosSync
+	ENDIF
+
+;
+; pascal OSErr PBSetFPosAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBSetFPosAsync:	OPWORD	$A444
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetFPosAsync
+	ENDIF
+
+;
+; pascal OSErr PBFlushFileSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBFlushFileSync:	OPWORD	$A045
+	ELSE
+		IMPORT_CFM_FUNCTION	PBFlushFileSync
+	ENDIF
+
+;
+; pascal OSErr PBFlushFileAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBFlushFileAsync:	OPWORD	$A445
+	ELSE
+		IMPORT_CFM_FUNCTION	PBFlushFileAsync
+	ENDIF
+
+;
+; pascal OSErr PBMountVol(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBMountVol:	OPWORD	$A00F
+	ELSE
+		IMPORT_CFM_FUNCTION	PBMountVol
+	ENDIF
+
+;
+; pascal OSErr PBUnmountVol(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBUnmountVol:	OPWORD	$A00E
+	ELSE
+		IMPORT_CFM_FUNCTION	PBUnmountVol
+	ENDIF
+
+;
+; pascal OSErr PBEject(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBEject:	OPWORD	$A017
+	ELSE
+		IMPORT_CFM_FUNCTION	PBEject
+	ENDIF
+
+;
+; pascal OSErr PBOffLine(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOffLine:	OPWORD	$A035
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOffLine
+	ENDIF
+
+;
+; pascal OSErr PBCatSearchSync(CSParamPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCatSearchSync
+			moveq	#24,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCatSearchSync
+	ENDIF
+
+;
+; pascal OSErr PBCatSearchAsync(CSParamPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCatSearchAsync
+			moveq	#24,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCatSearchAsync
+	ENDIF
+
+;
+; pascal OSErr SetVol(ConstStr63Param volName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetVol
+	ENDIF
+
+;
+; pascal OSErr UnmountVol(ConstStr63Param volName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	UnmountVol
+	ENDIF
+
+;
+; pascal OSErr Eject(ConstStr63Param volName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	Eject
+	ENDIF
+
+;
+; pascal OSErr FlushVol(ConstStr63Param volName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FlushVol
+	ENDIF
+
+;
+; pascal OSErr HSetVol(ConstStr63Param volName, short vRefNum, long dirID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HSetVol
+	ENDIF
+
+	IF OLDROUTINELOCATIONS  THEN
+;
+; pascal void AddDrive(short drvrRefNum, short drvNum, DrvQElPtr qEl)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	AddDrive
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr FSOpen(ConstStr255Param fileName, short vRefNum, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FSOpen
+	ENDIF
+
+;
+; pascal OSErr OpenDF(ConstStr255Param fileName, short vRefNum, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	OpenDF
+	ENDIF
+
+;
+; pascal OSErr FSClose(short refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FSClose
+	ENDIF
+
+;
+; pascal OSErr FSRead(short refNum, long *count, void *buffPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FSRead
+	ENDIF
+
+;
+; pascal OSErr FSWrite(short refNum, long *count, const void *buffPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FSWrite
+	ENDIF
+
+;
+; pascal OSErr GetVInfo(short drvNum, StringPtr volName, short *vRefNum, long *freeBytes)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetVInfo
+	ENDIF
+
+;
+; pascal OSErr GetFInfo(ConstStr255Param fileName, short vRefNum, FInfo *fndrInfo)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetFInfo
+	ENDIF
+
+;
+; pascal OSErr GetVol(StringPtr volName, short *vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetVol
+	ENDIF
+
+;
+; pascal OSErr Create(ConstStr255Param fileName, short vRefNum, OSType creator, OSType fileType)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	Create
+	ENDIF
+
+;
+; pascal OSErr FSDelete(ConstStr255Param fileName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FSDelete
+	ENDIF
+
+;
+; pascal OSErr OpenRF(ConstStr255Param fileName, short vRefNum, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	OpenRF
+	ENDIF
+
+;
+; pascal OSErr Rename(ConstStr255Param oldName, short vRefNum, ConstStr255Param newName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	Rename
+	ENDIF
+
+;
+; pascal OSErr SetFInfo(ConstStr255Param fileName, short vRefNum, const FInfo *fndrInfo)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetFInfo
+	ENDIF
+
+;
+; pascal OSErr SetFLock(ConstStr255Param fileName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetFLock
+	ENDIF
+
+;
+; pascal OSErr RstFLock(ConstStr255Param fileName, short vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	RstFLock
+	ENDIF
+
+;
+; pascal OSErr Allocate(short refNum, long *count)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	Allocate
+	ENDIF
+
+;
+; pascal OSErr GetEOF(short refNum, long *logEOF)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetEOF
+	ENDIF
+
+;
+; pascal OSErr SetEOF(short refNum, long logEOF)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetEOF
+	ENDIF
+
+;
+; pascal OSErr GetFPos(short refNum, long *filePos)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetFPos
+	ENDIF
+
+;
+; pascal OSErr SetFPos(short refNum, short posMode, long posOff)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetFPos
+	ENDIF
+
+;
+; pascal OSErr GetVRefNum(short fileRefNum, short *vRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetVRefNum
+	ENDIF
+
+;
+; pascal OSErr PBOpenWDSync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBOpenWDSync
+			moveq	#1,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenWDSync
+	ENDIF
+
+;
+; pascal OSErr PBOpenWDAsync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBOpenWDAsync
+			moveq	#1,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenWDAsync
+	ENDIF
+
+;
+; pascal OSErr PBCloseWDSync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCloseWDSync
+			moveq	#2,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseWDSync
+	ENDIF
+
+;
+; pascal OSErr PBCloseWDAsync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCloseWDAsync
+			moveq	#2,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseWDAsync
+	ENDIF
+
+;
+; pascal OSErr PBHSetVolSync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetVolSync:	OPWORD	$A215
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetVolSync
+	ENDIF
+
+;
+; pascal OSErr PBHSetVolAsync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetVolAsync:	OPWORD	$A615
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetVolAsync
+	ENDIF
+
+;
+; pascal OSErr PBHGetVolSync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetVolSync:	OPWORD	$A214
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVolSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetVolAsync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetVolAsync:	OPWORD	$A614
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVolAsync
+	ENDIF
+
+;
+; pascal OSErr PBCatMoveSync(CMovePBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCatMoveSync
+			moveq	#5,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCatMoveSync
+	ENDIF
+
+;
+; pascal OSErr PBCatMoveAsync(CMovePBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCatMoveAsync
+			moveq	#5,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCatMoveAsync
+	ENDIF
+
+;
+; pascal OSErr PBDirCreateSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDirCreateSync
+			moveq	#6,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDirCreateSync
+	ENDIF
+
+;
+; pascal OSErr PBDirCreateAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDirCreateAsync
+			moveq	#6,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDirCreateAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetWDInfoSync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetWDInfoSync
+			moveq	#7,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetWDInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBGetWDInfoAsync(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetWDInfoAsync
+			moveq	#7,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetWDInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetFCBInfoSync(FCBPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetFCBInfoSync
+			moveq	#8,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFCBInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBGetFCBInfoAsync(FCBPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetFCBInfoAsync
+			moveq	#8,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetFCBInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetCatInfoSync(CInfoPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetCatInfoSync
+			moveq	#9,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetCatInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBGetCatInfoAsync(CInfoPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetCatInfoAsync
+			moveq	#9,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetCatInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetCatInfoSync(CInfoPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetCatInfoSync
+			moveq	#10,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetCatInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBSetCatInfoAsync(CInfoPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetCatInfoAsync
+			moveq	#10,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetCatInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBAllocContigSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBAllocContigSync:	OPWORD	$A210
+	ELSE
+		IMPORT_CFM_FUNCTION	PBAllocContigSync
+	ENDIF
+
+;
+; pascal OSErr PBAllocContigAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBAllocContigAsync:	OPWORD	$A610
+	ELSE
+		IMPORT_CFM_FUNCTION	PBAllocContigAsync
+	ENDIF
+
+;
+; pascal OSErr PBLockRangeSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBLockRangeSync
+			moveq	#16,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBLockRangeSync
+	ENDIF
+
+;
+; pascal OSErr PBLockRangeAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBLockRangeAsync
+			moveq	#16,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBLockRangeAsync
+	ENDIF
+
+;
+; pascal OSErr PBUnlockRangeSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBUnlockRangeSync
+			moveq	#17,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBUnlockRangeSync
+	ENDIF
+
+;
+; pascal OSErr PBUnlockRangeAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBUnlockRangeAsync
+			moveq	#17,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBUnlockRangeAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetVInfoSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetVInfoSync
+			moveq	#11,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetVInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBSetVInfoAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetVInfoAsync
+			moveq	#11,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetVInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBHGetVInfoSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetVInfoSync:	OPWORD	$A207
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetVInfoAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetVInfoAsync:	OPWORD	$A607
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHOpenSync:	OPWORD	$A200
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenSync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHOpenAsync:	OPWORD	$A600
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenAsync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenRFSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHOpenRFSync:	OPWORD	$A20A
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenRFSync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenRFAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHOpenRFAsync:	OPWORD	$A60A
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenRFAsync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenDFSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenDFSync
+			moveq	#26,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenDFSync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenDFAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenDFAsync
+			moveq	#26,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenDFAsync
+	ENDIF
+
+;
+; pascal OSErr PBHCreateSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHCreateSync:	OPWORD	$A208
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHCreateSync
+	ENDIF
+
+;
+; pascal OSErr PBHCreateAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHCreateAsync:	OPWORD	$A608
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHCreateAsync
+	ENDIF
+
+;
+; pascal OSErr PBHDeleteSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHDeleteSync:	OPWORD	$A209
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHDeleteSync
+	ENDIF
+
+;
+; pascal OSErr PBHDeleteAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHDeleteAsync:	OPWORD	$A609
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHDeleteAsync
+	ENDIF
+
+;
+; pascal OSErr PBHRenameSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHRenameSync:	OPWORD	$A20B
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHRenameSync
+	ENDIF
+
+;
+; pascal OSErr PBHRenameAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHRenameAsync:	OPWORD	$A60B
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHRenameAsync
+	ENDIF
+
+;
+; pascal OSErr PBHRstFLockSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHRstFLockSync:	OPWORD	$A242
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHRstFLockSync
+	ENDIF
+
+;
+; pascal OSErr PBHRstFLockAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHRstFLockAsync:	OPWORD	$A642
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHRstFLockAsync
+	ENDIF
+
+;
+; pascal OSErr PBHSetFLockSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetFLockSync:	OPWORD	$A241
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetFLockSync
+	ENDIF
+
+;
+; pascal OSErr PBHSetFLockAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetFLockAsync:	OPWORD	$A641
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetFLockAsync
+	ENDIF
+
+;
+; pascal OSErr PBHGetFInfoSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetFInfoSync:	OPWORD	$A20C
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetFInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetFInfoAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHGetFInfoAsync:	OPWORD	$A60C
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetFInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBHSetFInfoSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetFInfoSync:	OPWORD	$A20D
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetFInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBHSetFInfoAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBHSetFInfoAsync:	OPWORD	$A60D
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetFInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBMakeFSSpecSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBMakeFSSpecSync
+			moveq	#27,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBMakeFSSpecSync
+	ENDIF
+
+;
+; pascal OSErr PBMakeFSSpecAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBMakeFSSpecAsync
+			moveq	#27,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBMakeFSSpecAsync
+	ENDIF
+
+;
+; pascal void FInitQueue(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FInitQueue:	OPWORD	$A016
+	ELSE
+		IMPORT_CFM_FUNCTION	FInitQueue
+	ENDIF
+
+;
+; pascal QHdrPtr GetFSQHdr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFSQHdr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$0360
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFSQHdr
+	ENDIF
+
+;
+; pascal QHdrPtr GetVCBQHdr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetVCBQHdr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$0356
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetVCBQHdr
+	ENDIF
+
+	IF OLDROUTINELOCATIONS  THEN
+;
+; pascal QHdrPtr GetDrvQHdr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDrvQHdr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$0308
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDrvQHdr
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr HGetVol(StringPtr volName, short *vRefNum, long *dirID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HGetVol
+	ENDIF
+
+;
+; pascal OSErr HOpen(short vRefNum, long dirID, ConstStr255Param fileName, SInt8 permission, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HOpen
+	ENDIF
+
+;
+; pascal OSErr HOpenDF(short vRefNum, long dirID, ConstStr255Param fileName, SInt8 permission, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HOpenDF
+	ENDIF
+
+;
+; pascal OSErr HOpenRF(short vRefNum, long dirID, ConstStr255Param fileName, SInt8 permission, short *refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HOpenRF
+	ENDIF
+
+;
+; pascal OSErr AllocContig(short refNum, long *count)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	AllocContig
+	ENDIF
+
+;
+; pascal OSErr HCreate(short vRefNum, long dirID, ConstStr255Param fileName, OSType creator, OSType fileType)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HCreate
+	ENDIF
+
+;
+; pascal OSErr DirCreate(short vRefNum, long parentDirID, ConstStr255Param directoryName, long *createdDirID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DirCreate
+	ENDIF
+
+;
+; pascal OSErr HDelete(short vRefNum, long dirID, ConstStr255Param fileName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HDelete
+	ENDIF
+
+;
+; pascal OSErr HGetFInfo(short vRefNum, long dirID, ConstStr255Param fileName, FInfo *fndrInfo)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HGetFInfo
+	ENDIF
+
+;
+; pascal OSErr HSetFInfo(short vRefNum, long dirID, ConstStr255Param fileName, const FInfo *fndrInfo)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HSetFInfo
+	ENDIF
+
+;
+; pascal OSErr HSetFLock(short vRefNum, long dirID, ConstStr255Param fileName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HSetFLock
+	ENDIF
+
+;
+; pascal OSErr HRstFLock(short vRefNum, long dirID, ConstStr255Param fileName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HRstFLock
+	ENDIF
+
+;
+; pascal OSErr HRename(short vRefNum, long dirID, ConstStr255Param oldName, ConstStr255Param newName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	HRename
+	ENDIF
+
+;
+; pascal OSErr CatMove(short vRefNum, long dirID, ConstStr255Param oldName, long newDirID, ConstStr255Param newName)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CatMove
+	ENDIF
+
+;
+; pascal OSErr OpenWD(short vRefNum, long dirID, long procID, short *wdRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	OpenWD
+	ENDIF
+
+;
+; pascal OSErr CloseWD(short wdRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CloseWD
+	ENDIF
+
+;
+; pascal OSErr GetWDInfo(short wdRefNum, short *vRefNum, long *dirID, long *procID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetWDInfo
+	ENDIF
+
+;  shared environment  
+;
+; pascal OSErr PBHGetVolParmsSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetVolParmsSync
+			moveq	#48,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVolParmsSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetVolParmsAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetVolParmsAsync
+			moveq	#48,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetVolParmsAsync
+	ENDIF
+
+;
+; pascal OSErr PBHGetLogInInfoSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetLogInInfoSync
+			moveq	#49,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetLogInInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetLogInInfoAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetLogInInfoAsync
+			moveq	#49,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetLogInInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBHGetDirAccessSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetDirAccessSync
+			moveq	#50,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetDirAccessSync
+	ENDIF
+
+;
+; pascal OSErr PBHGetDirAccessAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHGetDirAccessAsync
+			moveq	#50,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHGetDirAccessAsync
+	ENDIF
+
+;
+; pascal OSErr PBHSetDirAccessSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHSetDirAccessSync
+			moveq	#51,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetDirAccessSync
+	ENDIF
+
+;
+; pascal OSErr PBHSetDirAccessAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHSetDirAccessAsync
+			moveq	#51,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHSetDirAccessAsync
+	ENDIF
+
+;
+; pascal OSErr PBHMapIDSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMapIDSync
+			moveq	#52,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMapIDSync
+	ENDIF
+
+;
+; pascal OSErr PBHMapIDAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMapIDAsync
+			moveq	#52,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMapIDAsync
+	ENDIF
+
+;
+; pascal OSErr PBHMapNameSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMapNameSync
+			moveq	#53,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMapNameSync
+	ENDIF
+
+;
+; pascal OSErr PBHMapNameAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMapNameAsync
+			moveq	#53,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMapNameAsync
+	ENDIF
+
+;
+; pascal OSErr PBHCopyFileSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHCopyFileSync
+			moveq	#54,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHCopyFileSync
+	ENDIF
+
+;
+; pascal OSErr PBHCopyFileAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHCopyFileAsync
+			moveq	#54,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHCopyFileAsync
+	ENDIF
+
+;
+; pascal OSErr PBHMoveRenameSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMoveRenameSync
+			moveq	#55,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMoveRenameSync
+	ENDIF
+
+;
+; pascal OSErr PBHMoveRenameAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHMoveRenameAsync
+			moveq	#55,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHMoveRenameAsync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenDenySync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenDenySync
+			moveq	#56,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenDenySync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenDenyAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenDenyAsync
+			moveq	#56,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenDenyAsync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenRFDenySync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenRFDenySync
+			moveq	#57,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenRFDenySync
+	ENDIF
+
+;
+; pascal OSErr PBHOpenRFDenyAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBHOpenRFDenyAsync
+			moveq	#57,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBHOpenRFDenyAsync
+	ENDIF
+
+;
+; pascal OSErr PBExchangeFilesSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBExchangeFilesSync
+			moveq	#23,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBExchangeFilesSync
+	ENDIF
+
+;
+; pascal OSErr PBExchangeFilesAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBExchangeFilesAsync
+			moveq	#23,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBExchangeFilesAsync
+	ENDIF
+
+;
+; pascal OSErr PBCreateFileIDRefSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCreateFileIDRefSync
+			moveq	#20,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCreateFileIDRefSync
+	ENDIF
+
+;
+; pascal OSErr PBCreateFileIDRefAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBCreateFileIDRefAsync
+			moveq	#20,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCreateFileIDRefAsync
+	ENDIF
+
+;
+; pascal OSErr PBResolveFileIDRefSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBResolveFileIDRefSync
+			moveq	#22,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBResolveFileIDRefSync
+	ENDIF
+
+;
+; pascal OSErr PBResolveFileIDRefAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBResolveFileIDRefAsync
+			moveq	#22,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBResolveFileIDRefAsync
+	ENDIF
+
+;
+; pascal OSErr PBDeleteFileIDRefSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDeleteFileIDRefSync
+			moveq	#21,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDeleteFileIDRefSync
+	ENDIF
+
+;
+; pascal OSErr PBDeleteFileIDRefAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDeleteFileIDRefAsync
+			moveq	#21,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDeleteFileIDRefAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetForeignPrivsSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetForeignPrivsSync
+			moveq	#96,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetForeignPrivsSync
+	ENDIF
+
+;
+; pascal OSErr PBGetForeignPrivsAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetForeignPrivsAsync
+			moveq	#96,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetForeignPrivsAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetForeignPrivsSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetForeignPrivsSync
+			moveq	#97,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetForeignPrivsSync
+	ENDIF
+
+;
+; pascal OSErr PBSetForeignPrivsAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetForeignPrivsAsync
+			moveq	#97,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetForeignPrivsAsync
+	ENDIF
+
+;  Desktop Manager  
+;
+; pascal OSErr PBDTGetPath(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetPath
+			moveq	#32,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetPath
+	ENDIF
+
+;
+; pascal OSErr PBDTCloseDown(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTCloseDown
+			moveq	#33,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTCloseDown
+	ENDIF
+
+;
+; pascal OSErr PBDTAddIconSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTAddIconSync
+			moveq	#34,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTAddIconSync
+	ENDIF
+
+;
+; pascal OSErr PBDTAddIconAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTAddIconAsync
+			moveq	#34,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTAddIconAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetIconSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetIconSync
+			moveq	#35,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetIconSync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetIconAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetIconAsync
+			moveq	#35,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetIconAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetIconInfoSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetIconInfoSync
+			moveq	#36,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetIconInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetIconInfoAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetIconInfoAsync
+			moveq	#36,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetIconInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTAddAPPLSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTAddAPPLSync
+			moveq	#37,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTAddAPPLSync
+	ENDIF
+
+;
+; pascal OSErr PBDTAddAPPLAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTAddAPPLAsync
+			moveq	#37,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTAddAPPLAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTRemoveAPPLSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTRemoveAPPLSync
+			moveq	#38,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTRemoveAPPLSync
+	ENDIF
+
+;
+; pascal OSErr PBDTRemoveAPPLAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTRemoveAPPLAsync
+			moveq	#38,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTRemoveAPPLAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetAPPLSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetAPPLSync
+			moveq	#39,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetAPPLSync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetAPPLAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetAPPLAsync
+			moveq	#39,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetAPPLAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTSetCommentSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTSetCommentSync
+			moveq	#40,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTSetCommentSync
+	ENDIF
+
+;
+; pascal OSErr PBDTSetCommentAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTSetCommentAsync
+			moveq	#40,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTSetCommentAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTRemoveCommentSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTRemoveCommentSync
+			moveq	#41,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTRemoveCommentSync
+	ENDIF
+
+;
+; pascal OSErr PBDTRemoveCommentAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTRemoveCommentAsync
+			moveq	#41,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTRemoveCommentAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetCommentSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetCommentSync
+			moveq	#42,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetCommentSync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetCommentAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetCommentAsync
+			moveq	#42,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetCommentAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTFlushSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTFlushSync
+			moveq	#43,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTFlushSync
+	ENDIF
+
+;
+; pascal OSErr PBDTFlushAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTFlushAsync
+			moveq	#43,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTFlushAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTResetSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTResetSync
+			moveq	#44,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTResetSync
+	ENDIF
+
+;
+; pascal OSErr PBDTResetAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTResetAsync
+			moveq	#44,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTResetAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetInfoSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetInfoSync
+			moveq	#45,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetInfoSync
+	ENDIF
+
+;
+; pascal OSErr PBDTGetInfoAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTGetInfoAsync
+			moveq	#45,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTGetInfoAsync
+	ENDIF
+
+;
+; pascal OSErr PBDTOpenInform(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTOpenInform
+			moveq	#46,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTOpenInform
+	ENDIF
+
+;
+; pascal OSErr PBDTDeleteSync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTDeleteSync
+			moveq	#47,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTDeleteSync
+	ENDIF
+
+;
+; pascal OSErr PBDTDeleteAsync(DTPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBDTDeleteAsync
+			moveq	#47,d0
+			dc.w 	$A460
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBDTDeleteAsync
+	ENDIF
+
+;  VolumeMount traps  
+;
+; pascal OSErr PBGetVolMountInfoSize(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetVolMountInfoSize
+			moveq	#63,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVolMountInfoSize
+	ENDIF
+
+;
+; pascal OSErr PBGetVolMountInfo(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetVolMountInfo
+			moveq	#64,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetVolMountInfo
+	ENDIF
+
+;
+; pascal OSErr PBVolumeMount(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBVolumeMount
+			moveq	#65,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBVolumeMount
+	ENDIF
+
+;  FSp traps  
+;
+; pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpec *spec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSMakeFSSpec
+			moveq	#1,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSMakeFSSpec
+	ENDIF
+
+;
+; pascal OSErr FSpOpenDF(const FSSpec *spec, SInt8 permission, short *refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpOpenDF
+			moveq	#2,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpOpenDF
+	ENDIF
+
+;
+; pascal OSErr FSpOpenRF(const FSSpec *spec, SInt8 permission, short *refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpOpenRF
+			moveq	#3,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpOpenRF
+	ENDIF
+
+;
+; pascal OSErr FSpCreate(const FSSpec *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpCreate
+			moveq	#4,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpCreate
+	ENDIF
+
+;
+; pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpDirCreate
+			moveq	#5,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpDirCreate
+	ENDIF
+
+;
+; pascal OSErr FSpDelete(const FSSpec *spec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpDelete
+			moveq	#6,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpDelete
+	ENDIF
+
+;
+; pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpGetFInfo
+			moveq	#7,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpGetFInfo
+	ENDIF
+
+;
+; pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpSetFInfo
+			moveq	#8,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpSetFInfo
+	ENDIF
+
+;
+; pascal OSErr FSpSetFLock(const FSSpec *spec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpSetFLock
+			moveq	#9,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpSetFLock
+	ENDIF
+
+;
+; pascal OSErr FSpRstFLock(const FSSpec *spec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpRstFLock
+			moveq	#10,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpRstFLock
+	ENDIF
+
+;
+; pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpRename
+			moveq	#11,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpRename
+	ENDIF
+
+;
+; pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpCatMove
+			moveq	#12,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpCatMove
+	ENDIF
+
+;
+; pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FSpExchangeFiles
+			moveq	#15,d0
+			dc.w 	$AA52
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FSpExchangeFiles
+	ENDIF
+
+;
+; pascal OSErr PBShareSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBShareSync
+			moveq	#66,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBShareSync
+	ENDIF
+
+;
+; pascal OSErr PBShareAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBShareAsync
+			moveq	#66,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBShareAsync
+	ENDIF
+
+;
+; pascal OSErr PBUnshareSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBUnshareSync
+			moveq	#67,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBUnshareSync
+	ENDIF
+
+;
+; pascal OSErr PBUnshareAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBUnshareAsync
+			moveq	#67,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBUnshareAsync
+	ENDIF
+
+;
+; pascal OSErr PBGetUGEntrySync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetUGEntrySync
+			moveq	#68,d0
+			dc.w 	$A260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetUGEntrySync
+	ENDIF
+
+;
+; pascal OSErr PBGetUGEntryAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetUGEntryAsync
+			moveq	#68,d0
+			dc.w 	$A660
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetUGEntryAsync
+	ENDIF
+
+	IF OLDROUTINENAMES  ** ¬ GENERATINGCFM  THEN
+;
+;	PBGetAltAccess and PBSetAltAccess are obsolete and will not be supported 
+;	on PowerPC. Equivalent functionality is provided by the routines 
+;	PBGetForeignPrivs and PBSetForeignPrivs.
+;
+;
+; pascal OSErr PBGetAltAccessSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetAltAccessSync
+			moveq	#96,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetAltAccessSync
+	ENDIF
+
+;
+; pascal OSErr PBGetAltAccessAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBGetAltAccessAsync
+			moveq	#96,d0
+			dc.w 	$A460
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBGetAltAccessAsync
+	ENDIF
+
+;
+; pascal OSErr PBSetAltAccessSync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetAltAccessSync
+			moveq	#97,d0
+			dc.w 	$A060
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetAltAccessSync
+	ENDIF
+
+;
+; pascal OSErr PBSetAltAccessAsync(HParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_PBSetAltAccessAsync
+			moveq	#97,d0
+			dc.w 	$A460
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PBSetAltAccessAsync
+	ENDIF
+
+	ENDIF
+	IF OLDROUTINENAMES  THEN
+;
+;	The PBxxx() routines are obsolete.  
+;	
+;	Use the PBxxxSync() or PBxxxAsync() version instead.
+;
+	IF OLDROUTINELOCATIONS  THEN
+	ENDIF
+	ENDIF
+	ENDIF ; __FILES__

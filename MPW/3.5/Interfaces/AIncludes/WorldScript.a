@@ -1,0 +1,273 @@
+;
+;    File:       WorldScript.a
+;
+;    Contains:   WorldScript I Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__WORLDSCRIPT__') = 'UNDEFINED' THEN
+__WORLDSCRIPT__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__TRAPS__') = 'UNDEFINED' THEN
+	include 'Traps.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAWTEXT__') = 'UNDEFINED' THEN
+	include 'QuickdrawText.a'
+	ENDIF
+
+; typedef UInt16 						WSIOffset
+
+; typedef UInt8 						WSIByteCount
+
+; typedef UInt8 						WSIByteIndex
+
+;  offset from start of sub-table to row in state table 
+; typedef UInt16 						WSIStateOffset
+
+; typedef UInt32 						WSITableOffset
+
+; typedef UInt16 						WSISubtableOffset
+
+; typedef UInt16 						WSIGlyphcode
+
+; typedef UInt32 						WSITableIdentifiers
+
+
+kScriptSettingsTag				EQU		'info'
+kMetamorphosisTag				EQU		'mort'
+kGlyphExpansionTag				EQU		'g2g#'
+kPropertiesTag					EQU		'prop'
+kJustificationTag				EQU		'kash'
+kCharToGlyphTag					EQU		'cmap'
+kGlyphToCharTag					EQU		'pamc'
+kFindScriptRunTag				EQU		'fstb'
+
+
+; ***           L O O K U P    T A B L E    T Y P E S       ***
+
+WSILookupSimpleArray			EQU		0					; a simple array indexed by glyph code 
+WSILookupSegmentSingle			EQU		2					; segment mapping to single value 
+WSILookupSegmentArray			EQU		4					; segment mapping to lookup array 
+WSILookupSingleTable			EQU		6					; sorted list of glyph, value pairs 
+WSILookupTrimmedArray			EQU		8					; a simple trimmed array indexed by glyph code 
+; typedef unsigned short 				WSILookupTableFormat
+
+; typedef unsigned short 				WSILookupValue
+
+;  An offset from the beginning of the lookup table 
+; typedef unsigned short 				WSILookupOffset
+
+;   FORMAT SPECIFIC DEFINITIONS 
+; 
+;        lookupSimpleArray:
+;        
+;        This is a simple array which maps all glyphs in the font
+;        to lookup values.
+;    
+
+WSILookupArrayHeader	RECORD 0
+lookupValues			 ds.w	1				; offset: $0 (0) <-- really an array of length one ;  The array of values indexed by glyph code 
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+; 
+;        lookupTrimmedArray:
+;        
+;        This is a single trimmed array which maps a single range
+;        of glyhs in the font to lookup values.
+;    
+
+WSILookupTrimmedArrayHeader RECORD 0
+firstGlyph				 ds.w	1				; offset: $0 (0)
+limitGlyph				 ds.w	1				; offset: $2 (2)
+valueArray				 ds.w	1				; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  The format specific part of the subtable header 
+WSILookupFormatSpecificHeader RECORD 0
+simpleArray				 ds		WSILookupArrayHeader ; offset: $0 (0)	;  rename lookupArray as simpleArray <9> 
+						 ORG 0
+trimmedArray			 ds		WSILookupTrimmedArrayHeader ; offset: $0 (0)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  The overall subtable header 
+WSILookupTableHeader	RECORD 0
+format					 ds.w	1				; offset: $0 (0)		;  table format 
+fsHeader				 ds		WSILookupFormatSpecificHeader ; offset: $2 (2) ;  format specific header 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+; ***       G L Y P H    E X P A N S I O N    ***
+
+															; fixed 1.0 
+kCurrentGlyphExpansionVersion	EQU		$00010000
+; typedef unsigned short 				GlyphExpansionFormats
+
+
+GlyphExpansionLookupFormat		EQU		1
+GlyphExpansionContextualFormat	EQU		2
+ExpandedGlyphCluster	RECORD 0
+numGlyphs				 ds.b	1				; offset: $0 (0)
+bestGlyph				 ds.b	1				; offset: $1 (1)
+glyphs					 ds.w	1				; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+ExpandedGlyphOffset		RECORD 0
+glyph					 ds.w	1				; offset: $0 (0)
+offset					 ds.w	1				; offset: $2 (2)		;  offset to ExpandedGlyphCluster 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+GlyphExpansionStateTable RECORD 0
+stateTableOffset		 ds.w	1				; offset: $0 (0)
+classTableOffset		 ds.w	1				; offset: $2 (2)
+actionTableOffset		 ds.w	1				; offset: $4 (4)		;  state, class and actions tables follow here... 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+GlyphExpansionTable		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+format					 ds.w	1				; offset: $4 (4)
+expansionNumer			 ds.w	1				; offset: $6 (6)
+expansionDenom			 ds.w	1				; offset: $8 (8)		;  num/denom ratio for expansion <2> 
+stateTable				 ds		GlyphExpansionStateTable ; offset: $A (10)
+						 ORG 10
+lookup					 ds		WSILookupTableHeader ; offset: $A (10) ;  expanded glyph clusters follow here... 
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+;  Glyph-to-Character constants and types  
+
+kCurrentGlyphToCharVersion		EQU		$00010100
+; typedef unsigned short 				GlyphToCharLookupFormats
+
+
+kGlyphToCharLookup8Format		EQU		1
+kGlyphToCharLookup16Format		EQU		2
+kGlyphToCharLookup32Format		EQU		3
+; typedef UInt8 						GlyphToCharFontIndex
+
+; typedef UInt8 						QDGlyphcode
+
+GlyphToCharActionTable	RECORD 0
+fontNameOffset			 ds.w	1				; offset: $0 (0)		;  offset relative to this table 
+actions					 ds		WSILookupTableHeader ; offset: $2 (2)	;  only support lookupSimpleArray format for now 
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+GlyphToCharActionHeader	RECORD 0
+numTables				 ds.w	1				; offset: $0 (0)		;  0..n 
+offsets					 ds.w	1				; offset: $2 (2) <-- really an array of length one ;  offsets from start of action table header 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+GlyphToCharHeader		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+actionOffset			 ds.w	1				; offset: $4 (4)		;  offset to GlyphToCharActionHeader 
+format					 ds.w	1				; offset: $6 (6)		;  size of font mask 
+mappingTable			 ds		WSILookupTableHeader ; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;  JUSTIFICATION TYPES
+;    WorldScript supports justification of text using insertion. The justification
+;    table specifies a insertion string to insert between 2 specified glyphs.
+;    Each combination of inter-glyph boundary can be assigned a justification priority,
+;    the higher the priority the more justification strings inserted at that position.
+;    
+;    The priorities for each inter-glyph boundary are specified by the justification table's
+;    state table.
+;    
+;    Special handling is done for scripts which use spaces to justify, because the width of 
+;    a space varies depending on the setting of SpaceExtra. This is why the number of spaces
+;    per inserting string is specified in the justification table.
+;
+;
+
+
+															; 1.0 not supported 
+kCurrentJustificationVersion	EQU		$0200
+
+kJustificationStateTableFormat	EQU		1
+
+															; WSI's internal limitation <12> 
+kMaxJustificationStringLength	EQU		13
+; typedef UInt8 						WSIJustificationPriority
+
+
+WSIJustificationSetMarkMask		EQU		$80
+WSIJustificationStateEntry RECORD 0
+markPriority			 ds.b	1				; offset: $0 (0)		;  non-zero priorities means insertion 
+priority				 ds.b	1				; offset: $1 (1)
+newState				 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef unsigned short 				WSIJustificationClasses
+
+
+wsiJustEndOfLineClass			EQU		0
+wsiJustEndOfRunClass			EQU		1
+wsiJustDeletedGlyphClass		EQU		2
+wsiJustUserDefinedClass			EQU		3
+; typedef unsigned short 				WSIJustificationStates
+
+
+wsiStartOfLineState				EQU		0					; pre-defined states 
+wsiStartOfRunState				EQU		1
+wsiUserDefinedState				EQU		2
+;  pre-multiplied: class# * sizeof(WSIJustificationStateEntry) 
+; typedef UInt8 						WSIJustificationClassOffset
+
+WSIJustificationStateTable RECORD 0
+maxPriorities			 ds.w	1				; offset: $0 (0)
+rowWidth				 ds.w	1				; offset: $2 (2)		;  width of a state table row in bytes 
+classTableOffset		 ds.w	1				; offset: $4 (4)
+stateTableOffset		 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;            Last two fields of above structure - someday?
+;            WSIJustificationClassOffset classes[up to 64 classes supported];
+;            WSIJustificationStateEntry  states[up to your heart's desire];
+;        
+
+WSIJustificationHeader	RECORD 0
+version					 ds.w	1				; offset: $0 (0)
+format					 ds.w	1				; offset: $2 (2)
+scaling					 ds		Point			; offset: $4 (4)		;  numer/denom scaling of priority weights <7> 
+spacesPerInsertion		 ds.w	1				; offset: $8 (8)		;  # of $20 chars in justification insertion string <12> 
+justStringOffset		 ds.w	1				; offset: $A (10)		;  offset to justification string 
+stateTable				 ds		WSIJustificationStateTable ; offset: $C (12) ;  long-aligned boundary aligned w/ spacesPerInsertion field - justification string follows 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+;  Line Layout's Property table version <11> 
+
+															; v1.0 
+currentPropsTableVersion		EQU		$00010000
+
+															; version is octal 0100 or hex 0x40 (#64) 
+kCharToGlyphCurrentVersion		EQU		$40
+;  pass as priorityWeight to JustifyWSILayout to use script's current just setting 
+
+kScriptsDefaultJustWeight		EQU		-1
+
+;  feature selectors used in FindScriptRun and itl5 configuration tables <9> 
+; typedef UInt16 						WSIFeatureType
+
+; typedef UInt16 						WSIFeatureSelector
+
+WSIFeature				RECORD 0
+featureType				 ds.w	1				; offset: $0 (0)
+featureSelector			 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+	ENDIF ; __WORLDSCRIPT__ 
+

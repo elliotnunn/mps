@@ -1,0 +1,319 @@
+;
+;    File:       Serial.a
+;
+;    Contains:   Asynchronous Serial Driver (.AIn/.AOut/.BIn/.BOut) Interfaces
+;
+;    Version:    Technology: System 7.6+
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SERIAL__') = 'UNDEFINED' THEN
+__SERIAL__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+
+baud150							EQU		763
+baud300							EQU		380
+baud600							EQU		189
+baud1200						EQU		94
+baud1800						EQU		62
+baud2400						EQU		46
+baud3600						EQU		30
+baud4800						EQU		22
+baud7200						EQU		14
+baud9600						EQU		10
+baud14400						EQU		6
+baud19200						EQU		4
+baud28800						EQU		2
+baud38400						EQU		1
+baud57600						EQU		0
+
+stop10							EQU		16384
+stop15							EQU		-32768
+stop20							EQU		-16384
+
+noParity						EQU		0
+oddParity						EQU		4096
+evenParity						EQU		12288
+
+data5							EQU		0
+data6							EQU		2048
+data7							EQU		1024
+data8							EQU		3072
+
+aData							EQU		6					; channel A data in or out (historical) 
+aCtl							EQU		2					; channel A control (historical) 
+bData							EQU		4					; channel B data in or out (historical) 
+bCtl							EQU		0					; channel B control (historical) 
+
+dsrEvent						EQU		2					; flag for SerShk.evts 
+riEvent							EQU		4					; flag for SerShk.evts 
+dcdEvent						EQU		8					; flag for SerShk.evts 
+ctsEvent						EQU		32					; flag for SerShk.evts 
+breakEvent						EQU		128					; flag for SerShk.evts 
+
+xOffWasSent						EQU		128					; flag for SerStaRec.xOffSent 
+dtrNegated						EQU		64					; flag for SerStaRec.xOffSent 
+rtsNegated						EQU		32					; flag for SerStaRec.xOffSent 
+
+ainRefNum						EQU		-6					; serial port A input 
+aoutRefNum						EQU		-7					; serial port A output 
+binRefNum						EQU		-8					; serial port B input 
+boutRefNum						EQU		-9					; serial port B output 
+
+swOverrunErr					EQU		1					; serial driver error masks 
+breakErr						EQU		8					; serial driver error masks 
+parityErr						EQU		16					; serial driver error masks 
+hwOverrunErr					EQU		32					; serial driver error masks 
+framingErr						EQU		64					; serial driver error masks 
+
+kOptionPreserveDTR				EQU		128					; option bit used with Control code 16 
+kOptionClockX1CTS				EQU		64					; option bit used with Control code 16 
+
+kUseCTSOutputFlowControl		EQU		128					; flag for SerShk.fCTS 
+kUseDSROutputFlowControl		EQU		64					; flag for SerShk.fCTS 
+kUseRTSInputFlowControl			EQU		128					; flag for SerShk.fDTR 
+kUseDTRInputFlowControl			EQU		64					; flag for SerShk.fDTR 
+
+sPortA							EQU		0					; Macintosh modem port 
+sPortB							EQU		1					; Macintosh printer port 
+sCOM1							EQU		2					; RS-232 port COM1 
+sCOM2							EQU		3					; RS-232 port COM2 
+; typedef SInt8 						SPortSel
+
+;  csCodes for serial driver Control routines 
+
+kSERDConfiguration				EQU		8					; program port speed, bits/char, parity, and stop bits 
+kSERDInputBuffer				EQU		9					; set buffer for chars received with no read pending 
+kSERDSerHShake					EQU		10					; equivalent to SerHShake, largely obsolete 
+kSERDClearBreak					EQU		11					; assert break signal on output 
+kSERDSetBreak					EQU		12					; negate break state on output 
+kSERDBaudRate					EQU		13					; set explicit baud rate, other settings unchanged 
+kSERDHandshake					EQU		14					; superset of 10, honors setting of fDTR 
+kSERDClockMIDI					EQU		15					; clock externally on CTS with specified multiplier 
+kSERDMiscOptions				EQU		16					; select clock source and DTR behavior on close 
+kSERDAssertDTR					EQU		17					; assert DTR output 
+kSERDNegateDTR					EQU		18					; negate DTR output 
+kSERDSetPEChar					EQU		19					; select char to replace chars with invalid parity 
+kSERDSetPEAltChar				EQU		20					; select char to replace char that replaces chars with invalid parity 
+kSERDSetXOffFlag				EQU		21					; set XOff output flow control (same as receiving XOff) 
+kSERDClearXOffFlag				EQU		22					; clear XOff output flow control (same as receiving XOn) 
+kSERDSendXOn					EQU		23					; send XOn if input flow control state is XOff 
+kSERDSendXOnOut					EQU		24					; send XOn regardless of input flow control state 
+kSERDSendXOff					EQU		25					; send XOff if input flow control state is XOn 
+kSERDSendXOffOut				EQU		26					; send XOff regardless of input flow control state 
+kSERDResetChannel				EQU		27					; reset serial I/O channel hardware 
+kSERDHandshakeRS232				EQU		28					; extension of 14, allows full RS-232 hardware handshaking 
+kSERDStickParity				EQU		29					; use mark/space parity 
+kSERDAssertRTS					EQU		30					; assert RTS output 
+kSERDNegateRTS					EQU		31					; negate RTS output 
+kSERD115KBaud					EQU		115					; set 115.2K baud data rate 
+kSERD230KBaud					EQU		230					; set 230.4K baud data rate 
+
+;  csCodes for serial driver Status routines 
+
+kSERDInputCount					EQU		2					; return characters available (SerGetBuf) 
+kSERDStatus						EQU		8					; return characters available (SerStatus) 
+kSERDVersion					EQU		9					; return version number in first byte of csParam 
+kSERDGetDCD						EQU		256					; get instantaneous state of DCD (GPi) 
+
+SerShk					RECORD 0
+fXOn					 ds.b	1				; offset: $0 (0)		;  XOn/XOff output flow control flag 
+fCTS					 ds.b	1				; offset: $1 (1)		;  hardware output flow control flags 
+xOn						 ds.b	1				; offset: $2 (2)		;  XOn character 
+xOff					 ds.b	1				; offset: $3 (3)		;  XOff character 
+errs					 ds.b	1				; offset: $4 (4)		;  errors mask bits 
+evts					 ds.b	1				; offset: $5 (5)		;  event enable mask bits 
+fInX					 ds.b	1				; offset: $6 (6)		;  XOn/XOff input flow control flag 
+fDTR					 ds.b	1				; offset: $7 (7)		;  hardware input flow control flags 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+SerStaRec				RECORD 0
+cumErrs					 ds.b	1				; offset: $0 (0)		;  errors accumulated since last SerStatus() call 
+xOffSent				 ds.b	1				; offset: $1 (1)		;  input (requested to be) held off by xOffWasSent or dtrNegated or rtsNegated 
+rdPend					 ds.b	1				; offset: $2 (2)		;  incomplete read pending in I/O queue 
+wrPend					 ds.b	1				; offset: $3 (3)		;  incomplete write pending in I/O queue 
+ctsHold					 ds.b	1				; offset: $4 (4)		;  transmit disabled by hardware handshaking 
+xOffHold				 ds.b	1				; offset: $5 (5)		;  transmit disabled by XOn/XOff handshaking 
+dsrHold					 ds.b	1				; offset: $6 (6)		;  transmit disabled: external device not ready 
+modemStatus				 ds.b	1				; offset: $7 (7)		;  reports modem status according to SerShk.evts 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+	IF OLDROUTINENAMES THEN
+;  ********************************************************************************************* 
+;  The following constant names have been retired in favor of standard, more descriptive names.  
+;  You can still compile old code by defining OLDROUTINENAMES. There were several constants that 
+;  were formerly available that have been removed, as they are now regarded as either private or 
+;  unsupported. We advise that you stop using any constants that are not defined in this file.   
+;  ********************************************************************************************* 
+
+serdOptionClockExternal			EQU		64					; option bit used with Control code 16 
+serdOptionPreserveDTR			EQU		128					; option bit used with Control code 16 
+;  csCodes for serial driver Control routines 
+
+serdReset						EQU		8
+serdSetBuf						EQU		9
+serdHShake						EQU		10
+serdClrBrk						EQU		11
+serdSetBrk						EQU		12
+serdSetBaud						EQU		13
+serdHShakeDTR					EQU		14
+serdSetMIDI						EQU		15
+serdSetMisc						EQU		16
+serdSetDTR						EQU		17
+serdClrDTR						EQU		18
+serdSetPEChar					EQU		19
+serdSetPECharAlternate			EQU		20
+serdSetXOff						EQU		21
+serdClrXOff						EQU		22
+serdSendXOnConditional			EQU		23
+serdSendXOn						EQU		24
+serdSendXOffConditional			EQU		25
+serdSendXOff					EQU		26
+serdChannelReset				EQU		27
+serdSet230KBaud					EQU		230					; set 230K baud data rate 
+
+;  csCodes for serial driver Status routines 
+
+serdGetBuf						EQU		2
+serdStatus						EQU		8
+serdGetVers						EQU		9
+	ENDIF	; OLDROUTINENAMES
+; 
+;    The following interfaces are for the legacy high-level serial driver glue in
+;    the interface libraries of your development system. They merely substitue for
+;    the corresponding synchronous calls to PBControl and PBStatus.
+;
+;    They have not been updated as the serial driver API has evolved. Take note:
+;
+;        SerHShake does not support hardware input flow control. Use csCode 14.
+;        SerStatus returns only the first six bytes of SerStaRec (through xOffHold).
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SerReset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerReset(short refNum, short serConfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerReset
+	ENDIF
+
+
+; *  SerSetBuf()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerSetBuf(short refNum, Ptr serBPtr, short serBLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerSetBuf
+	ENDIF
+
+
+; *  SerHShake()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerHShake(short refNum, const SerShk *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerHShake
+	ENDIF
+
+
+; *  SerSetBrk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerSetBrk(short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerSetBrk
+	ENDIF
+
+
+; *  SerClrBrk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerClrBrk(short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerClrBrk
+	ENDIF
+
+
+; *  SerGetBuf()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerGetBuf(short refNum, long *count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerGetBuf
+	ENDIF
+
+
+; *  SerStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SerStatus(short refNum, SerStaRec *serSta)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SerStatus
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __SERIAL__ 
+

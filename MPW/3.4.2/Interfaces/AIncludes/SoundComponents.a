@@ -1,0 +1,689 @@
+;
+;	File:		SoundComponents.a
+;
+;	Contains:	Sound Components Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.1
+;
+;	Copyright:	© 1984-1996 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SOUNDCOMPONENTS__') = 'UNDEFINED' THEN
+__SOUNDCOMPONENTS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__SOUND__') = 'UNDEFINED' THEN
+	include 'Sound.a'
+	ENDIF
+;
+;						* * *  N O T E  * * *
+;
+;	This file has been updated to include Sound Manager 3.2 interfaces.
+;
+;	Some of the Sound Manager 3.0 interfaces were not put into the InterfaceLib
+;	that originally shipped with the PowerMacs. These missing functions and the
+;	new 3.2 interfaces have been released in the SoundLib library for PowerPC
+;	developers to link with. The runtime library for these functions are
+;	installed by Sound Manager 3.2. The following functions are found in SoundLib.
+;
+;		AudioGetBass, AudioGetInfo, AudioGetMute, AudioGetOutputDevice,
+;		AudioGetTreble, AudioGetVolume, AudioMuteOnEvent, AudioSetBass,
+;		AudioSetMute, AudioSetToDefaults, AudioSetTreble, AudioSetVolume,
+;		OpenMixerSoundComponent, CloseMixerSoundComponent, SoundComponentAddSource,
+;		SoundComponentGetInfo, SoundComponentGetSource, SoundComponentGetSourceData,
+;		SoundComponentInitOutputDevice, SoundComponentPauseSource,
+;		SoundComponentPlaySourceBuffer, SoundComponentRemoveSource,
+;		SoundComponentSetInfo, SoundComponentSetOutput, SoundComponentSetSource,
+;		SoundComponentStartSource, SoundComponentStopSource
+;
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; constants
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+kNoSoundComponentType			EQU		'****'
+kSoundComponentType				EQU		'sift'				;component type
+kSoundComponentPPCType			EQU		'nift'				;component type for PowerPC code
+kRate8SubType					EQU		'ratb'				;8-bit rate converter
+kRate16SubType					EQU		'ratw'				;16-bit rate converter
+kConverterSubType				EQU		'conv'				;sample format converter
+kSndSourceSubType				EQU		'sour'				;generic source component
+kMixerType						EQU		'mixr'
+kMixer8SubType					EQU		'mixb'				;8-bit mixer
+kMixer16SubType					EQU		'mixw'				;16-bit mixer
+kSoundOutputDeviceType			EQU		'sdev'				;sound output component
+kClassicSubType					EQU		'clas'				;classic hardware, i.e. Mac Plus
+kASCSubType						EQU		'asc '				;Apple Sound Chip device
+kDSPSubType						EQU		'dsp '				;DSP device
+kAwacsSubType					EQU		'awac'				;Another of Will's Audio Chips device
+kGCAwacsSubType					EQU		'awgc'				;Awacs audio with Grand Central DMA
+kSingerSubType					EQU		'sing'				;Singer (via Whitney) based sound
+kSinger2SubType					EQU		'sng2'				;Singer 2 (via Whitney) for Acme
+kWhitSubType					EQU		'whit'				;Whit sound component for PrimeTime 3
+kSoundBlasterSubType			EQU		'sbls'				;Sound Blaster for CHRP
+kSoundCompressor				EQU		'scom'
+kSoundDecompressor				EQU		'sdec'
+kMace3SubType					EQU		'MAC3'				;MACE 3:1
+kMace6SubType					EQU		'MAC6'				;MACE 6:1
+kCDXA4SubType					EQU		'cdx4'				;CD/XA 4:1
+kCDXA2SubType					EQU		'cdx2'				;CD/XA 2:1
+kIMA4SubType					EQU		'ima4'				;IMA 4:1
+kULawSubType					EQU		'ulaw'				;µLaw 2:1
+kLittleEndianSubType			EQU		'sowt'				;Little-endian
+kAudioComponentType				EQU		'adio'				;Audio components and sub-types
+kAwacsPhoneSubType				EQU		'hphn'
+kAudioVisionSpeakerSubType		EQU		'telc'
+kAudioVisionHeadphoneSubType	EQU		'telh'
+kPhilipsFaderSubType			EQU		'tvav'
+
+;sound component set/get info selectors
+siVolume						EQU		'volu'
+siHardwareVolume				EQU		'hvol'
+siSpeakerVolume					EQU		'svol'
+siHeadphoneVolume				EQU		'pvol'
+siHardwareVolumeSteps			EQU		'hstp'
+siHeadphoneVolumeSteps			EQU		'hdst'
+siHardwareMute					EQU		'hmut'
+siSpeakerMute					EQU		'smut'
+siHeadphoneMute					EQU		'pmut'
+siRateMultiplier				EQU		'rmul'
+siQuality						EQU		'qual'
+siWideStereo					EQU		'wide'
+siHardwareFormat				EQU		'hwfm'
+siPreMixerSoundComponent		EQU		'prmx'
+siPostMixerSoundComponent		EQU		'psmx'
+kOffsetBinary					EQU		'raw '				;format types
+kTwosComplement					EQU		'twos'
+kMACE3Compression				EQU		'MAC3'
+kMACE6Compression				EQU		'MAC6'
+
+;quality flags
+;use interpolation in rate conversion
+kBestQuality					EQU		(1 << 0)
+
+;useful bit masks
+kInputMask						EQU		$000000FF			;masks off input bits
+kOutputMask						EQU		$0000FF00			;masks off output bits
+kOutputShift					EQU		8					;amount output bits are shifted
+kActionMask						EQU		$00FF0000			;masks off action bits
+kSoundComponentBits				EQU		$00FFFFFF
+
+;SoundComponentPlaySourceBuffer action flags
+kSourcePaused					EQU		(1 << 0)
+kPassThrough					EQU		(1 << 16)
+kNoSoundComponentChain			EQU		(1 << 17)
+;flags for OpenMixerSoundComponent
+kNoMixing						EQU		(1 << 0)			;don't mix source
+kNoSampleRateConversion			EQU		(1 << 1)			;don't convert sample rate (i.e. 11 kHz -> 22 kHz)
+kNoSampleSizeConversion			EQU		(1 << 2)			;don't convert sample size (i.e. 16 -> 8)
+kNoSampleFormatConversion		EQU		(1 << 3)			;don't convert sample format (i.e. 'twos' -> 'raw ')
+kNoChannelConversion			EQU		(1 << 4)			;don't convert stereo/mono
+kNoDecompression				EQU		(1 << 5)			;don't decompress (i.e. 'MAC3' -> 'raw ')
+kNoVolumeConversion				EQU		(1 << 6)			;don't apply volume
+kNoRealtimeProcessing			EQU		(1 << 7)			;won't run at interrupt time
+
+;Audio Component constants
+;Values for whichChannel parameter
+audioAllChannels				EQU		0					;All channels (usually interpreted as both left and right)
+audioLeftChannel				EQU		1					;Left channel
+audioRightChannel				EQU		2					;Right channel
+;Values for mute parameter
+audioUnmuted					EQU		0					;Device is unmuted
+audioMuted						EQU		1					;Device is muted
+;Capabilities flags definitions
+audioDoesMono					EQU		(1 << 0)			;Device supports mono output
+audioDoesStereo					EQU		(1 << 1)			;Device supports stereo output
+audioDoesIndependentChannels	EQU		(1 << 2)			;Device supports independent software control of each channel
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; typedefs
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;ShortFixed consists of an 8 bit, 2's complement integer part in the high byte,
+;with an 8 bit fractional part in the low byte; its range is -128 to 127.99609375
+; typedef short 			ShortFixed
+
+
+; typedef struct SoundParamBlock  SoundParamBlock
+; typedef SoundParamBlock 	*SoundParamBlockPtr
+SoundParamBlock 		RECORD	0
+recordSize				 ds.l   1		; offset: $0 (0)		;size of this record in bytes
+desc					 ds     SoundComponentData ; offset: $4 (4) ;description of sound buffer
+rateMultiplier			 ds.l   1		; offset: $20 (32)		;rate multiplier to apply to sound
+leftVolume				 ds.w   1		; offset: $24 (36)		;volumes to apply to sound
+rightVolume				 ds.w   1		; offset: $26 (38)
+quality					 ds.l   1		; offset: $28 (40)		;quality to apply to sound
+filter					 ds.l   1		; offset: $2C (44)		;filter to apply to sound
+moreRtn					 ds.l   1		; offset: $30 (48)		;routine to call to get more data
+completionRtn			 ds.l   1		; offset: $34 (52)		;routine to call when buffer is complete
+refCon					 ds.l   1		; offset: $38 (56)		;user refcon
+result					 ds.w   1		; offset: $3C (60)		;result
+sizeof					 EQU *			; size:   $3E (62)
+						ENDR
+
+; typedef void 				*SoundSource
+
+SoundComponentLink		RECORD 0
+description				 ds		ComponentDescription ; offset: $0 (0)	; Describes the sound component
+mixerID					 ds.l	1				; offset: $14 (20)		; Reserved by Apple
+linkID					 ds.l	1				; offset: $18 (24)		; Reserved by Apple
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct SoundComponentLink *	SoundComponentLinkPtr
+
+AudioInfo 				RECORD	0
+capabilitiesFlags		 ds.l   1		; offset: $0 (0)		;Describes device capabilities
+reserved				 ds.l   1		; offset: $4 (4)		;Reserved by Apple
+numVolumeSteps			 ds.w   1		; offset: $8 (8)		;Number of significant increments between min and max volume
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct AudioInfo 	AudioInfo
+; typedef AudioInfo 		*AudioInfoPtr
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; functions for sound components
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;Sound Component dispatch selectors
+
+;these calls cannot be delegated
+kSoundComponentInitOutputDeviceSelect EQU		1
+kSoundComponentSetSourceSelect	EQU		2
+kSoundComponentGetSourceSelect	EQU		3
+kSoundComponentGetSourceDataSelect EQU		4
+kSoundComponentSetOutputSelect	EQU		5
+kDelegatedSoundComponentSelectors EQU		$0100				;first selector that can be delegated up the chain
+;these calls can be delegated and have own range
+kSoundComponentAddSourceSelect	EQU		kDelegatedSoundComponentSelectors + 1
+kSoundComponentRemoveSourceSelect EQU		kDelegatedSoundComponentSelectors + 2
+kSoundComponentGetInfoSelect	EQU		kDelegatedSoundComponentSelectors + 3
+kSoundComponentSetInfoSelect	EQU		kDelegatedSoundComponentSelectors + 4
+kSoundComponentStartSourceSelect EQU		kDelegatedSoundComponentSelectors + 5
+kSoundComponentStopSourceSelect	EQU		kDelegatedSoundComponentSelectors + 6
+kSoundComponentPauseSourceSelect EQU		kDelegatedSoundComponentSelectors + 7
+kSoundComponentPlaySourceBufferSelect EQU		kDelegatedSoundComponentSelectors + 8
+
+;Audio Component selectors
+kAudioGetVolumeSelect			EQU		0
+kAudioSetVolumeSelect			EQU		1
+kAudioGetMuteSelect				EQU		2
+kAudioSetMuteSelect				EQU		3
+kAudioSetToDefaultsSelect		EQU		4
+kAudioGetInfoSelect				EQU		5
+kAudioGetBassSelect				EQU		6
+kAudioSetBassSelect				EQU		7
+kAudioGetTrebleSelect			EQU		8
+kAudioSetTrebleSelect			EQU		9
+kAudioGetOutputDeviceSelect		EQU		10
+kAudioMuteOnEventSelect			EQU		129
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Sound Manager 3.0 utilities
+;
+; pascal OSErr OpenMixerSoundComponent(SoundComponentDataPtr outputDescription, long outputFlags, ComponentInstance *mixerComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenMixerSoundComponent
+			dc.w 	$203C
+			dc.w 	$0614
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenMixerSoundComponent
+	ENDIF
+
+;
+; pascal OSErr CloseMixerSoundComponent(ComponentInstance ci)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseMixerSoundComponent
+			dc.w 	$203C
+			dc.w 	$0218
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseMixerSoundComponent
+	ENDIF
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; basic sound component functions
+;
+; pascal ComponentResult SoundComponentInitOutputDevice(ComponentInstance ti, long actions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentInitOutputDevice
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0001
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentInitOutputDevice
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentSetSource(ComponentInstance ti, SoundSource sourceID, ComponentInstance source)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentSetSource
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0002
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentSetSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentGetSource(ComponentInstance ti, SoundSource sourceID, ComponentInstance *source)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentGetSource
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0003
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentGetSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentGetSourceData(ComponentInstance ti, SoundComponentDataPtr *sourceData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentGetSourceData
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0004
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentGetSourceData
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentSetOutput(ComponentInstance ti, SoundComponentDataPtr requested, SoundComponentDataPtr *actual)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentSetOutput
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0005
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentSetOutput
+	ENDIF
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; junction methods for the mixer, must be called at non-interrupt level
+;
+; pascal ComponentResult SoundComponentAddSource(ComponentInstance ti, SoundSource *sourceID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentAddSource
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0101
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentAddSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentRemoveSource(ComponentInstance ti, SoundSource sourceID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentRemoveSource
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0102
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentRemoveSource
+	ENDIF
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; info methods
+;
+; pascal ComponentResult SoundComponentGetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentGetInfo
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0103
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentGetInfo
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentSetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentSetInfo
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0104
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentSetInfo
+	ENDIF
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; control methods
+;
+; pascal ComponentResult SoundComponentStartSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentStartSource
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0105
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentStartSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentStopSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentStopSource
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0106
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentStopSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentPauseSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentPauseSource
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0107
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentPauseSource
+	ENDIF
+
+;
+; pascal ComponentResult SoundComponentPlaySourceBuffer(ComponentInstance ti, SoundSource sourceID, SoundParamBlockPtr pb, long actions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundComponentPlaySourceBuffer
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0108
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SoundComponentPlaySourceBuffer
+	ENDIF
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; interface for Audio Components
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;Volume is described as a value between 0 and 1, with 0 indicating minimum
+;  volume and 1 indicating maximum volume; if the device doesn't support
+;  software control of volume, then a value of unimpErr is returned, indicating
+;  that these functions are not supported by the device
+;
+; pascal ComponentResult AudioGetVolume(ComponentInstance ac, short whichChannel, ShortFixed *volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetVolume
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0000
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetVolume
+	ENDIF
+
+;
+; pascal ComponentResult AudioSetVolume(ComponentInstance ac, short whichChannel, ShortFixed volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioSetVolume
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0001
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioSetVolume
+	ENDIF
+
+;If the device doesn't support software control of mute, then a value of unimpErr is
+;returned, indicating that these functions are not supported by the device
+;
+; pascal ComponentResult AudioGetMute(ComponentInstance ac, short whichChannel, short *mute)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetMute
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0002
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetMute
+	ENDIF
+
+;
+; pascal ComponentResult AudioSetMute(ComponentInstance ac, short whichChannel, short mute)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioSetMute
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0003
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioSetMute
+	ENDIF
+
+;AudioSetToDefaults causes the associated device to reset its volume and mute values
+;(and perhaps other characteristics, e.g. attenuation) to "factory default" settings
+;
+; pascal ComponentResult AudioSetToDefaults(ComponentInstance ac)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioSetToDefaults
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0004
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioSetToDefaults
+	ENDIF
+
+;This routine is required; it must be implemented by all audio components
+;
+; pascal ComponentResult AudioGetInfo(ComponentInstance ac, AudioInfoPtr info)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetInfo
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0005
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetInfo
+	ENDIF
+
+;
+; pascal ComponentResult AudioGetBass(ComponentInstance ac, short whichChannel, short *bass)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetBass
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0006
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetBass
+	ENDIF
+
+;
+; pascal ComponentResult AudioSetBass(ComponentInstance ac, short whichChannel, short bass)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioSetBass
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0007
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioSetBass
+	ENDIF
+
+;
+; pascal ComponentResult AudioGetTreble(ComponentInstance ac, short whichChannel, short *Treble)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetTreble
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0008
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetTreble
+	ENDIF
+
+;
+; pascal ComponentResult AudioSetTreble(ComponentInstance ac, short whichChannel, short Treble)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioSetTreble
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0009
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioSetTreble
+	ENDIF
+
+;
+; pascal ComponentResult AudioGetOutputDevice(ComponentInstance ac, Component *outputDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioGetOutputDevice
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$000A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioGetOutputDevice
+	ENDIF
+
+;This is routine is private to the AudioVision component.  It enables the watching of the mute key.
+;
+; pascal ComponentResult AudioMuteOnEvent(ComponentInstance ac, short muteOnEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AudioMuteOnEvent
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0081
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AudioMuteOnEvent
+	ENDIF
+
+	ENDIF ; __SOUNDCOMPONENTS__

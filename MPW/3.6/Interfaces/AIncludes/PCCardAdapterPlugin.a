@@ -1,0 +1,138 @@
+;
+;    File:       PCCardAdapterPlugin.a
+;
+;    Contains:   PC Card Socket Service Plug-In Programming Interface
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc. and SystemSoft Corporation. All rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__PCCARDADAPTERPLUGIN__') = 'UNDEFINED' THEN
+__PCCARDADAPTERPLUGIN__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__INTERRUPTS__') = 'UNDEFINED' THEN
+	include 'Interrupts.a'
+	ENDIF
+	IF &TYPE('__PCCARD__') = 'UNDEFINED' THEN
+	include 'PCCard.a'
+	ENDIF
+
+
+; ------------------------------------------------------------------------------------
+;  Types
+;------------------------------------------------------------------------------------
+
+;   Interrupt Status Change bits
+
+
+kSCBatteryDead					EQU		$01					; Battery Dead Status Change
+kSCBatteryLow					EQU		$02					; Battery Warning Status Change
+kSCReady						EQU		$04					; Ready Status Change
+kSCCardDetect					EQU		$08					; Card Detect Status Change
+kSCCardEjected					EQU		$10					; Card Ejected
+kSCStatusChange					EQU		$20					; PC Card Status Change Signal Asserted
+kSCRingIndicate					EQU		$40					; PC Card Ring Indicate Signal Asserted
+
+;   IRQ bits 
+
+kIRQLevelMask					EQU		$1F
+kIRQInvalid						EQU		$20
+kIRQHigh						EQU		$40
+kIRQEnable						EQU		$80
+
+;   bits for adapter characteristics flags
+
+
+SS_ADPT_FLG_IND					EQU		$01					; indicators for write-protect, card lock,
+															; battery status, busy status, and XIP
+															; are shared for all sockets
+SS_ADPT_FLG_PWR					EQU		$02					; if set indicates that the sockets
+															; share the same power control
+SS_ADPT_FLG_DBW					EQU		$04					; all windows on the adapter must use
+															; the same Data Bus Width
+SS_ADPT_FLG_CARDBUS				EQU		$08					; all sockets are CardBus PC Card capable
+SS_ADPT_FLG_DMA					EQU		$10					; the adapter has DMA capability
+															;    bits for adapter power characteristics
+SS_ADPT_FLG_V33					EQU		$20					; adapter supports 3.3 volt power to socket
+SS_ADPT_FLG_V50					EQU		$40					; adapter supports 5.0 volt power to socket
+SS_ADPT_FLG_V12					EQU		$80					; adapter supports 12.0 volt power to socket
+
+; ------------------------------------------------------------------------------------
+;  Calls exported by the Family
+;------------------------------------------------------------------------------------
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CSReportStatusChange()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus CSReportStatusChange(const RegEntryID *adapterRef, PCCardSocket whichSocket, PCCardSCEvents statusChange, PCCardSocketStatus socketStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CSReportStatusChange
+	ENDIF
+
+; ------------------------------------------------------------------------------------
+;  Plugin Dispatch Table
+;------------------------------------------------------------------------------------
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kServiceTypePCCardAdapter		EQU		'sock'
+kPCCardAdapterPluginVersion		EQU		$00000001
+kPCCardAdapterPluginCurrentVersion EQU	$00000001
+PCCardAdapterPluginHeader RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+reserved1				 ds.l	1				; offset: $4 (4)
+reserved2				 ds.l	1				; offset: $8 (8)
+reserved3				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+PCCardAdapterPluginDispatchTable RECORD 0
+header					 ds		PCCardAdapterPluginHeader ; offset: $0 (0)
+validateHardware		 ds.l	1				; offset: $10 (16)
+initialize				 ds.l	1				; offset: $14 (20)
+suspend					 ds.l	1				; offset: $18 (24)
+resume					 ds.l	1				; offset: $1C (28)
+finalize				 ds.l	1				; offset: $20 (32)
+inquireAdapter			 ds.l	1				; offset: $24 (36)
+inquireSocket			 ds.l	1				; offset: $28 (40)
+getSocket				 ds.l	1				; offset: $2C (44)
+setSocket				 ds.l	1				; offset: $30 (48)
+resetSocket				 ds.l	1				; offset: $34 (52)
+getStatus				 ds.l	1				; offset: $38 (56)
+inquireWindow			 ds.l	1				; offset: $3C (60)
+getWindow				 ds.l	1				; offset: $40 (64)
+setWindow				 ds.l	1				; offset: $44 (68)
+getWindowOffset			 ds.l	1				; offset: $48 (72)
+setWindowOffset			 ds.l	1				; offset: $4C (76)
+inquireBridgeWindow		 ds.l	1				; offset: $50 (80)
+getBridgeWindow			 ds.l	1				; offset: $54 (84)
+setBridgeWindow			 ds.l	1				; offset: $58 (88)
+getInterruptSetMember	 ds.l	1				; offset: $5C (92)
+ejectCard				 ds.l	1				; offset: $60 (96)
+sizeof					 EQU *					; size:   $64 (100)
+						ENDR
+; typedef struct PCCardAdapterPluginDispatchTable * PCCardAdapterPluginDispatchTablePtr
+
+	ENDIF ; __PCCARDADAPTERPLUGIN__ 
+

@@ -1,0 +1,81 @@
+#	  BuildMenu - create the Build menu
+#
+#	  Usage:
+#			 BuildMenu [program]
+#
+#	  BuildMenu creates the menu shown below. 	The optional parameter
+#	  specifies the current program, to be underlined in the menu.
+#
+#	  The bottom section of the Build menu contains a list of the programs
+#	  (more generally targets) that can be build in the current directory.
+#	  This list contains the roots found in MakeFile (if it exists) and the
+#	  programs for which a <program>.make is found in the current directory.
+#
+#	  The list of targets in MakeFile is cached in file _BuildMenu.targets
+#	  and the name of the current program is saved in _BuildMenu.target.
+#
+#			 Build
+#
+#					 Create Build Commands…
+#					 ------------------------
+#					 Build								#P
+#					 Full Build
+#					 ------------------------
+#					 Show Build Commands
+#					 Show Full Build Commands
+#					 ------------------------
+#					 <program…>
+#
+#
+#	  Copyright Apple Computer, Inc. 1987
+#	  All rights reserved.
+
+Set Exit 0
+Set CaseSensitive 0
+DeleteMenu Build ≥ Dev:Null
+If "{1}" == ""
+	  Set disabled "("
+Else
+	  Set disabled ""
+	  Quote "{1}" > _BuildMenu.target
+End
+AddMenu Build 'Create Build Commands…' ∂
+	  '`Commando CreateMake || Echo Set Status 0` > "{MPW}"MPW.Errors ≥ Dev:StdOut ∂
+			 || Alert < "{MPW}"MPW.Errors'
+AddMenu Build '(-' ''
+AddMenu Build 'Build/P'"{disabled}" ∂
+	  'Begin; ∂
+		Open "{Worksheet}"; ∂
+		Build `Catenate _BuildMenu.target ≥ Dev:Null || Set Status 0`; ∂
+		End >> "{Worksheet}" ≥≥ Dev:StdOut'
+AddMenu Build 'Full Build'"{disabled}" ∂
+	  'Begin; ∂
+		Open "{Worksheet}"; ∂
+		Build `Catenate _BuildMenu.target ≥ Dev:Null || Set Status 0` -e; ∂
+		End >> "{Worksheet}" ≥≥ Dev:StdOut'
+AddMenu Build '(-' ''
+AddMenu Build 'Show Build Commands'"{disabled}" ∂
+	  'Begin; ∂
+		Open "{Worksheet}"; ∂
+		BuildCommands `Catenate _BuildMenu.target ≥ Dev:Null || Set Status 0`; ∂
+		End >> "{Worksheet}" ≥≥ Dev:StdOut'
+AddMenu Build 'Show Full Build Commands'"{disabled}" ∂
+	  'Begin; ∂
+		Open "{Worksheet}"; ∂
+		BuildCommands `Catenate _BuildMenu.target ≥ Dev:Null || Set Status 0` -e; ∂
+		End >> "{Worksheet}" ≥≥ Dev:StdOut'
+AddMenu Build '(-' ''
+
+If "`Newer MakeFile _BuildMenu.targets ≥ Dev:Null`" != ""
+	  Make -r > _BuildMenu.targets ≥ Dev:Null
+End
+For root in `(Catenate _BuildMenu.targets; Files -t TEXT ?+.make) ≥ Dev:Null`
+	  If "{root}" =~ /(?+)®1.make/
+			 Set root "{®1}"
+	  End
+	  AddMenu Build "{root}" 'BuildMenu "'"{root}"'" > Dev:Null ≥ Dev:StdOut'
+End
+If "{1}" != ""
+	  AddMenu Build "{1}"'<U' 'BuildMenu "'"{1}"'" > Dev:Null ≥ Dev:StdOut'
+End
+Exit 0

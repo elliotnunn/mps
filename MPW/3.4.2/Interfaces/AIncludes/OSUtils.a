@@ -1,0 +1,829 @@
+;
+;	File:		OSUtils.a
+;
+;	Contains:	OS Utilities Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+__OSUTILS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+
+useFree							EQU		0
+useATalk						EQU		1
+useAsync						EQU		2
+useExtClk						EQU		3					;Externally clocked
+useMIDI							EQU		4
+; Environs Equates 
+curSysEnvVers					EQU		2					;Updated to equal latest SysEnvirons version
+; Machine Types 
+envMac							EQU		-1
+envXL							EQU		-2
+envMachUnknown					EQU		0
+env512KE						EQU		1
+envMacPlus						EQU		2
+envSE							EQU		3
+envMacII						EQU		4
+envMacIIx						EQU		5
+envMacIIcx						EQU		6
+envSE30							EQU		7
+envPortable						EQU		8
+envMacIIci						EQU		9
+envMacIIfx						EQU		11
+; CPU types 
+envCPUUnknown					EQU		0
+
+env68000						EQU		1
+env68010						EQU		2
+env68020						EQU		3
+env68030						EQU		4
+env68040						EQU		5
+; Keyboard types 
+envUnknownKbd					EQU		0
+envMacKbd						EQU		1
+envMacAndPad					EQU		2
+envMacPlusKbd					EQU		3
+envAExtendKbd					EQU		4
+envStandADBKbd					EQU		5
+envPrtblADBKbd					EQU		6
+envPrtblISOKbd					EQU		7
+envStdISOADBKbd					EQU		8
+envExtISOADBKbd					EQU		9
+false32b						EQU		0					;24 bit addressing error
+true32b							EQU		1					;32 bit addressing error
+; result types for RelString Call 
+sortsBefore						EQU		-1					;first string < second string
+sortsEqual						EQU		0					;first string = second string
+sortsAfter						EQU		1					;first string > second string
+
+; Toggle results 
+toggleUndefined					EQU		0
+toggleOK						EQU		1
+toggleBadField					EQU		2
+toggleBadDelta					EQU		3
+toggleBadChar					EQU		4
+toggleUnknown					EQU		5
+toggleBadNum					EQU		6
+toggleOutOfRange				EQU		7					;synonym for toggleErr3
+toggleErr3						EQU		7
+toggleErr4						EQU		8
+toggleErr5						EQU		9
+; Date equates 
+smallDateBit					EQU		31					;Restrict valid date/time to range of Time global
+togChar12HourBit				EQU		30					;If toggling hour by char, accept hours 1..12 only
+togCharZCycleBit				EQU		29					;Modifier for togChar12HourBit: accept hours 0..11 only
+togDelta12HourBit				EQU		28					;If toggling hour up/down, restrict to 12-hour range (am/pm)
+genCdevRangeBit					EQU		27					;Restrict date/time to range used by genl CDEV
+validDateFields					EQU		-1
+maxDateField					EQU		10
+eraMask							EQU		$0001
+yearMask						EQU		$0002
+monthMask						EQU		$0004
+dayMask							EQU		$0008
+hourMask						EQU		$0010
+minuteMask						EQU		$0020
+secondMask						EQU		$0040
+dayOfWeekMask					EQU		$0080
+dayOfYearMask					EQU		$0100
+weekOfYearMask					EQU		$0200
+pmMask							EQU		$0400
+dateStdMask						EQU		$007F				;default for ValidDate flags and ToggleDate TogglePB.togFlags
+
+eraField						EQU		0
+yearField						EQU		1
+monthField						EQU		2
+dayField						EQU		3
+hourField						EQU		4
+minuteField						EQU		5
+secondField						EQU		6
+dayOfWeekField					EQU		7
+dayOfYearField					EQU		8
+weekOfYearField					EQU		9
+pmField							EQU		10
+res1Field						EQU		11
+res2Field						EQU		12
+res3Field						EQU		13
+
+; typedef SignedByte 		LongDateField
+
+dummyType						EQU		0
+vType							EQU		1
+ioQType							EQU		2
+drvQType						EQU		3
+evType							EQU		4
+fsQType							EQU		5
+sIQType							EQU		6
+dtQType							EQU		7
+nmType							EQU		8
+
+; typedef SignedByte 		QTypes
+
+OSTrap							EQU		0
+ToolTrap						EQU		1
+
+; typedef SignedByte 		TrapType
+SysParmType 			RECORD	0
+valid					 ds.b   1		; offset: $0 (0)
+aTalkA					 ds.b   1		; offset: $1 (1)
+aTalkB					 ds.b   1		; offset: $2 (2)
+config					 ds.b   1		; offset: $3 (3)
+portA					 ds.w   1		; offset: $4 (4)
+portB					 ds.w   1		; offset: $6 (6)
+alarm					 ds.l   1		; offset: $8 (8)
+font					 ds.w   1		; offset: $C (12)
+kbdPrint				 ds.w   1		; offset: $E (14)
+volClik					 ds.w   1		; offset: $10 (16)
+misc					 ds.w   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct SysParmType  SysParmType, *SysPPtr
+; typedef struct QElem 		QElem
+; typedef QElem 			*QElemPtr
+QElem 					RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+qData					 ds.w   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct QHdr 		QHdr
+; typedef QHdr 				*QHdrPtr
+QHdr 					RECORD	0
+qFlags					 ds.w   1		; offset: $0 (0)
+qHead					 ds.l   1		; offset: $2 (2)
+qTail					 ds.l   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+DeferredTask 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+dtFlags					 ds.w   1		; offset: $6 (6)
+dtAddr					 ds.l   1		; offset: $8 (8)
+dtParam					 ds.l   1		; offset: $C (12)
+dtReserved				 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct DeferredTask  DeferredTask, *DeferredTaskPtr
+SysEnvRec 				RECORD	0
+environsVersion			 ds.w   1		; offset: $0 (0)
+machineType				 ds.w   1		; offset: $2 (2)
+systemVersion			 ds.w   1		; offset: $4 (4)
+processor				 ds.w   1		; offset: $6 (6)
+hasFPU					 ds.b   1		; offset: $8 (8)
+hasColorQD				 ds.b   1		; offset: $9 (9)
+keyBoardType			 ds.w   1		; offset: $A (10)
+atDrvrVersNum			 ds.w   1		; offset: $C (12)
+sysVRefNum				 ds.w   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct SysEnvRec 	SysEnvRec
+MachineLocation 		RECORD	0
+latitude				 ds.l   1		; offset: $0 (0)
+longitude				 ds.l   1		; offset: $4 (4)
+dlsDelta				 ds.b   1		; offset: $8 (8)		;signed byte; daylight savings delta
+						 ORG 8
+gmtDelta				 ds.l   1		; offset: $8 (8)		;must mask - see documentation
+						 ORG 12
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct MachineLocation  MachineLocation
+DateTimeRec 			RECORD	0
+year					 ds.w   1		; offset: $0 (0)
+month					 ds.w   1		; offset: $2 (2)
+day						 ds.w   1		; offset: $4 (4)
+hour					 ds.w   1		; offset: $6 (6)
+minute					 ds.w   1		; offset: $8 (8)
+second					 ds.w   1		; offset: $A (10)
+dayOfWeek				 ds.w   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct DateTimeRec  DateTimeRec
+; typedef wide 				LongDateTime
+LongDateCvt 			RECORD	0
+c						 ds     wide	; offset: $0 (0)
+						 ORG 0
+lHigh					 ds.l   1		; offset: $0 (0)
+lLow					 ds.l   1		; offset: $4 (4)
+						 ORG 8
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef union LongDateCvt  LongDateCvt
+LongDateRec 			RECORD	0
+era						 ds.w   1		; offset: $0 (0)
+year					 ds.w   1		; offset: $2 (2)
+month					 ds.w   1		; offset: $4 (4)
+day						 ds.w   1		; offset: $6 (6)
+hour					 ds.w   1		; offset: $8 (8)
+minute					 ds.w   1		; offset: $A (10)
+second					 ds.w   1		; offset: $C (12)
+dayOfWeek				 ds.w   1		; offset: $E (14)
+dayOfYear				 ds.w   1		; offset: $10 (16)
+weekOfYear				 ds.w   1		; offset: $12 (18)
+pm						 ds.w   1		; offset: $14 (20)
+res1					 ds.w   1		; offset: $16 (22)
+res2					 ds.w   1		; offset: $18 (24)
+res3					 ds.w   1		; offset: $1A (26)
+						 ORG 0
+list					 ds.w   14		; offset: $0 (0)		;Index by LongDateField!
+						 ORG 0
+eraAlt					 ds.w   1		; offset: $0 (0)
+oldDate					 ds     DateTimeRec ; offset: $2 (2)
+						 ORG 28
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef union LongDateRec  LongDateRec
+; typedef SInt8 			DateDelta
+TogglePB 				RECORD	0
+togFlags				 ds.l   1		; offset: $0 (0)		;caller normally sets low word to dateStdMask=$7F
+amChars					 ds.l   1		; offset: $4 (4)		;from 'itl0', but uppercased
+pmChars					 ds.l   1		; offset: $8 (8)		;from 'itl0', but uppercased
+reserved				 ds.l   4		; offset: $C (12)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct TogglePB 	TogglePB
+; typedef short 			ToggleResults
+;
+; pascal void LongDateToSeconds(const LongDateRec *lDate, LongDateTime *lSecs)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LongDateToSeconds
+			dc.w 	$2F3C
+			dc.w 	$8008
+			dc.w 	$FFF2
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LongDateToSeconds
+	ENDIF
+
+;
+; pascal void LongSecondsToDate(LongDateTime *lSecs, LongDateRec *lDate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LongSecondsToDate
+			dc.w 	$2F3C
+			dc.w 	$8008
+			dc.w 	$FFF0
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LongSecondsToDate
+	ENDIF
+
+;
+; pascal ToggleResults ToggleDate(LongDateTime *lSecs, LongDateField field, DateDelta delta, short ch, const TogglePB *params)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ToggleDate
+			dc.w 	$2F3C
+			dc.w 	$820E
+			dc.w 	$FFEE
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ToggleDate
+	ENDIF
+
+;
+; pascal short ValidDate(const LongDateRec *vDate, long flags, LongDateTime *newSecs)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ValidDate
+			dc.w 	$2F3C
+			dc.w 	$820C
+			dc.w 	$FFE4
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ValidDate
+	ENDIF
+
+;
+; pascal Boolean IsMetric(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IsMetric
+			move.w	#$0004,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsMetric
+	ENDIF
+
+;
+; pascal SysPPtr GetSysPPtr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSysPPtr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$01F8
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSysPPtr
+	ENDIF
+
+;
+; pascal OSErr ReadDateTime(unsigned long *time)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 time          	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_ReadDateTime:	OPWORD	$A039
+	ELSE
+		IMPORT_CFM_FUNCTION	ReadDateTime
+	ENDIF
+
+;
+; pascal void GetDateTime(unsigned long *secs)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 secs          	=> A0
+		Macro
+		_GetDateTime
+			dc.w 	$20B8
+			dc.w 	$020C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDateTime
+	ENDIF
+
+;
+; pascal OSErr SetDateTime(unsigned long time)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 time          	=> D0
+		; returns: 
+		;	 OSErr         	<= D0
+		_SetDateTime:	OPWORD	$A03A
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDateTime
+	ENDIF
+
+;
+; pascal void SetTime(const DateTimeRec *d)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 d             	=> A0
+		Macro
+		_SetTime
+			dc.w 	$A9C7
+			dc.w 	$A03A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTime
+	ENDIF
+
+;
+; pascal void GetTime(DateTimeRec *d)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 d             	=> A0
+		Macro
+		_GetTime
+			dc.w 	$2038
+			dc.w 	$020C
+			dc.w 	$A9C6
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTime
+	ENDIF
+
+;
+; pascal void DateToSeconds(const DateTimeRec *d, unsigned long *secs)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DateToSeconds:	OPWORD	$A9C7
+	ELSE
+		IMPORT_CFM_FUNCTION	DateToSeconds
+	ENDIF
+
+;
+; pascal void SecondsToDate(unsigned long secs, DateTimeRec *d)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 secs          	=> D0
+		;	 d             	=> A0
+		_SecondsToDate:	OPWORD	$A9C6
+	ELSE
+		IMPORT_CFM_FUNCTION	SecondsToDate
+	ENDIF
+
+;
+; pascal void SysBeep(short duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SysBeep:	OPWORD	$A9C8
+	ELSE
+		IMPORT_CFM_FUNCTION	SysBeep
+	ENDIF
+
+;
+; pascal OSErr DTInstall(DeferredTaskPtr dtTaskPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 dtTaskPtr     	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_DTInstall:	OPWORD	$A082
+	ELSE
+		IMPORT_CFM_FUNCTION	DTInstall
+	ENDIF
+
+;
+; pascal SInt8 GetMMUMode(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMMUMode		 &dest=(sp)
+		move.b               $0CB2,&dest
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMMUMode
+	ENDIF
+
+;
+; pascal void SwapMMUMode(SInt8 *mode)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 mode          	=> A0
+		Macro
+		_SwapMMUMode
+			dc.w 	$1010
+			dc.w 	$A05D
+			dc.w 	$1080
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SwapMMUMode
+	ENDIF
+
+	IF SystemSixOrLater  THEN
+;
+; pascal OSErr SysEnvirons(short versionRequested, SysEnvRec *theWorld)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 versionRequested	=> D0
+		;	 theWorld      	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_SysEnvirons:	OPWORD	$A090
+	ELSE
+		IMPORT_CFM_FUNCTION	SysEnvirons
+	ENDIF
+
+	ELSE
+;
+; pascal OSErr SysEnvirons(short versionRequested, SysEnvRec *theWorld)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SysEnvirons
+	ENDIF
+
+	ENDIF
+;
+; pascal void Delay(long numTicks, long *finalTicks)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Delay:	OPWORD	$A03B
+	ELSE
+		IMPORT_CFM_FUNCTION	Delay
+	ENDIF
+
+	IF ¬ GENERATINGCFM  THEN
+;
+; pascal UniversalProcPtr GetTrapAddress(short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetTrapAddress:	OPWORD	$A146
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrapAddress
+	ENDIF
+
+;
+; pascal void SetTrapAddress(UniversalProcPtr trapAddr, short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetTrapAddress:	OPWORD	$A047
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrapAddress
+	ENDIF
+
+	ENDIF
+;
+; pascal UniversalProcPtr GetOSTrapAddress(short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapNum       	=> D0
+		; returns: 
+		;	 UniversalProcPtr	<= A0
+		_GetOSTrapAddress:	OPWORD	$A346
+	ELSE
+		IMPORT_CFM_FUNCTION	GetOSTrapAddress
+	ENDIF
+
+;
+; pascal void SetOSTrapAddress(UniversalProcPtr trapAddr, short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapAddr      	=> A0
+		;	 trapNum       	=> D0
+		_SetOSTrapAddress:	OPWORD	$A247
+	ELSE
+		IMPORT_CFM_FUNCTION	SetOSTrapAddress
+	ENDIF
+
+;
+; pascal UniversalProcPtr GetToolTrapAddress(short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapNum       	=> D0
+		; returns: 
+		;	 UniversalProcPtr	<= A0
+		_GetToolTrapAddress:	OPWORD	$A746
+	ELSE
+		IMPORT_CFM_FUNCTION	GetToolTrapAddress
+	ENDIF
+
+;
+; pascal void SetToolTrapAddress(UniversalProcPtr trapAddr, short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapAddr      	=> A0
+		;	 trapNum       	=> D0
+		_SetToolTrapAddress:	OPWORD	$A647
+	ELSE
+		IMPORT_CFM_FUNCTION	SetToolTrapAddress
+	ENDIF
+
+;
+; pascal UniversalProcPtr GetToolboxTrapAddress(short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapNum       	=> D0
+		; returns: 
+		;	 UniversalProcPtr	<= A0
+		_GetToolboxTrapAddress:	OPWORD	$A746
+	ELSE
+		IMPORT_CFM_FUNCTION	GetToolboxTrapAddress
+	ENDIF
+
+;
+; pascal void SetToolboxTrapAddress(UniversalProcPtr trapAddr, short trapNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 trapAddr      	=> A0
+		;	 trapNum       	=> D0
+		_SetToolboxTrapAddress:	OPWORD	$A647
+	ELSE
+		IMPORT_CFM_FUNCTION	SetToolboxTrapAddress
+	ENDIF
+
+;
+; pascal OSErr WriteParam(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_WriteParam:	OPWORD	$A038
+	ELSE
+		IMPORT_CFM_FUNCTION	WriteParam
+	ENDIF
+
+;
+; pascal void Enqueue(QElemPtr qElement, QHdrPtr qHeader)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 qElement      	=> A0
+		;	 qHeader       	=> A1
+		_Enqueue:	OPWORD	$A96F
+	ELSE
+		IMPORT_CFM_FUNCTION	Enqueue
+	ENDIF
+
+;
+; pascal OSErr Dequeue(QElemPtr qElement, QHdrPtr qHeader)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 qElement      	=> A0
+		;	 qHeader       	=> A1
+		; returns: 
+		;	 OSErr         	<= D0
+		_Dequeue:	OPWORD	$A96E
+	ELSE
+		IMPORT_CFM_FUNCTION	Dequeue
+	ENDIF
+
+	IF ¬ SystemSevenOrLater  THEN
+;
+; pascal void Environs(short *rom, short *machine)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	Environs
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr InitUtil(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 OSErr         	<= D0
+		_InitUtil:	OPWORD	$A03F
+	ELSE
+		IMPORT_CFM_FUNCTION	InitUtil
+	ENDIF
+
+	IF GENERATINGPOWERPC  THEN
+;
+; pascal void MakeDataExecutable(void *baseAddress, unsigned long length)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	MakeDataExecutable
+	ENDIF
+
+	ENDIF
+	IF GENERATING68K  THEN
+;
+; pascal Boolean SwapInstructionCache(Boolean cacheEnable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SwapInstructionCache
+			moveq	#0,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SwapInstructionCache
+	ENDIF
+
+;
+; pascal void FlushInstructionCache(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FlushInstructionCache
+			moveq	#1,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushInstructionCache
+	ENDIF
+
+;
+; pascal Boolean SwapDataCache(Boolean cacheEnable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SwapDataCache
+			moveq	#2,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SwapDataCache
+	ENDIF
+
+;
+; pascal void FlushDataCache(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FlushDataCache
+			moveq	#3,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushDataCache
+	ENDIF
+
+;
+; pascal void FlushCodeCache(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FlushCodeCache:	OPWORD	$A0BD
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushCodeCache
+	ENDIF
+
+;
+; pascal void FlushCodeCacheRange(void *address, unsigned long count)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 address       	=> A0
+		;	 count         	=> A1
+		Macro
+		_FlushCodeCacheRange
+			moveq	#9,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushCodeCacheRange
+	ENDIF
+
+;
+; pascal void FlushExternalCache(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FlushExternalCache
+			moveq	#6,d0
+			dc.w 	$A098
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushExternalCache
+	ENDIF
+
+	ENDIF
+;
+; pascal void ReadLocation(MachineLocation *loc)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 loc           	=> A0
+		Macro
+		_ReadLocation
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$00E4
+			dc.w 	$A051
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ReadLocation
+	ENDIF
+
+;
+; pascal void WriteLocation(const MachineLocation *loc)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 loc           	=> A0
+		Macro
+		_WriteLocation
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$00E4
+			dc.w 	$A052
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	WriteLocation
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+	ENDIF
+	ENDIF ; __OSUTILS__

@@ -1,0 +1,1543 @@
+;
+;    File:       MIDI.a
+;
+;    Contains:   MIDI Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1988-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MIDI__') = 'UNDEFINED' THEN
+__MIDI__ SET 1
+
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+; 
+;                        * * *  N O T E  * * * 
+;
+;    This file has been updated to include MIDI 2.0 interfaces.  
+;    
+;    The MIDI 2.0 interfaces were developed for the classic 68K runtime.
+;    Since then, Apple has created the PowerPC and CFM 68K runtimes.
+;    Currently, the extra functions in MIDI 2.0 are not in InterfaceLib
+;    and thus not callable from PowerPC and CFM 68K runtimes (you'll
+;    get a linker error).  
+;
+
+
+midiMaxNameLen					EQU		31					;maximum number of characters in port and client names
+
+															; Time formats 
+midiFormatMSec					EQU		0					;milliseconds
+midiFormatBeats					EQU		1					;beats
+midiFormat24fpsBit				EQU		2					;24 frames/sec.
+midiFormat25fpsBit				EQU		3					;25 frames/sec.
+midiFormat30fpsDBit				EQU		4					;30 frames/sec. drop-frame
+midiFormat30fpsBit				EQU		5					;30 frames/sec.
+midiFormat24fpsQF				EQU		6					;24 frames/sec. longInt format 
+midiFormat25fpsQF				EQU		7					;25 frames/sec. longInt format 
+midiFormat30fpsDQF				EQU		8					;30 frames/sec. drop-frame longInt format 
+midiFormat30fpsQF				EQU		9					;30 frames/sec. longInt format 
+
+midiInternalSync				EQU		0					;internal sync
+midiExternalSync				EQU		1					;external sync
+
+															; Port types
+midiPortTypeTime				EQU		0					;time port
+midiPortTypeInput				EQU		1					;input port
+midiPortTypeOutput				EQU		2					;output port
+midiPortTypeTimeInv				EQU		3					;invisible time port
+midiPortInvisible				EQU		$8000				;logical OR this to other types to make invisible ports
+midiPortTypeMask				EQU		$0007				;logical AND with this to convert new port types to old, i.e. to strip the property bits
+
+															; OffsetTimes  
+midiGetEverything				EQU		$7FFFFFFF			;get all packets, regardless of time stamps
+midiGetNothing					EQU		$80000000			;get no packets, regardless of time stamps
+midiGetCurrent					EQU		$00000000			;get current packets only
+;     MIDI data and messages are passed in MIDIPacket records (see below).
+;    The first byte of every MIDIPacket contains a set of flags
+;
+;    bits 0-1    00 = new MIDIPacket, not continued
+;                     01 = begining of continued MIDIPacket
+;                     10 = end of continued MIDIPacket
+;                     11 = continuation
+;    bits 2-3     reserved
+;
+;    bits 4-6      000 = packet contains MIDI data
+;
+;                  001 = packet contains MIDI Manager message
+;
+;    bit 7         0 = MIDIPacket has valid stamp
+;                  1 = stamp with current clock
+;
+
+
+midiContMask					EQU		$03
+midiNoCont						EQU		$00
+midiStartCont					EQU		$01
+midiMidCont						EQU		$03
+midiEndCont						EQU		$02
+midiTypeMask					EQU		$70
+midiMsgType						EQU		$00
+midiMgrType						EQU		$10
+midiTimeStampMask				EQU		$80
+midiTimeStampCurrent			EQU		$80
+midiTimeStampValid				EQU		$00
+
+															; MIDIPacket command words (the first word in the data field for midiMgrType messages) 
+midiOverflowErr					EQU		$0001
+midiSCCErr						EQU		$0002
+midiPacketErr					EQU		$0003				;all command words less than this value are error indicators
+midiMaxErr						EQU		$00FF
+
+															; Valid results to be returned by readHooks 
+midiKeepPacket					EQU		0
+midiMorePacket					EQU		1
+midiNoMorePacket				EQU		2
+midiHoldPacket					EQU		3
+
+															; Driver calls 
+midiOpenDriver					EQU		1
+midiCloseDriver					EQU		2
+
+mdvrAbortNotesOff				EQU		0					;abort previous mdvrNotesOff request
+mdvrChanNotesOff				EQU		1					;generate channel note off messages
+mdvrAllNotesOff					EQU		2					;generate all note off messages
+
+mdvrStopOut						EQU		0					;stop calling MDVROut temporarily
+mdvrStartOut					EQU		1					;resume calling MDVROut
+MIDIPacket				RECORD 0
+flags					 ds.b	1				; offset: $0 (0)
+len						 ds.b	1				; offset: $1 (1)
+tStamp					 ds.l	1				; offset: $2 (2)
+data					 ds.b	249				; offset: $6 (6)
+						 ORG 256
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+; typedef struct MIDIPacket *			MIDIPacketPtr
+
+MIDIClkInfo				RECORD 0
+syncType				 ds.w	1				; offset: $0 (0)		; synchronization external/internal
+curTime					 ds.l	1				; offset: $2 (2)		; current value of port's clock
+format					 ds.w	1				; offset: $6 (6)		; time code format
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+MIDIIDRec				RECORD 0
+clientID				 ds.l	1				; offset: $0 (0)
+portID					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+MIDIPortInfo			RECORD 0
+portType				 ds.w	1				; offset: $0 (0)		; type of port
+timeBase				 ds		MIDIIDRec		; offset: $2 (2)		; MIDIIDRec for time base
+numConnects				 ds.w	1				; offset: $A (10)		; number of connections
+cList					 ds		MIDIIDRec		; offset: $C (12) <-- really an array of length one ; ARRAY [1..numConnects] of MIDIIDRec
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct MIDIPortInfo *			MIDIPortInfoPtr
+
+; typedef MIDIPortInfoPtr *				MIDIPortInfoHdl
+
+; typedef MIDIPortInfoPtr *				MIDIPortInfoHandle
+
+MIDIPortParams			RECORD 0
+portID					 ds.l	1				; offset: $0 (0)		; ID of port, unique within client
+portType				 ds.w	1				; offset: $4 (4)		; Type of port - input, output, time, etc.
+timeBase				 ds.w	1				; offset: $6 (6)		; refnum of time base, 0 if none
+offsetTime				 ds.l	1				; offset: $8 (8)		; offset for current time stamps
+readHook				 ds.l	1				; offset: $C (12)		; routine to call when input data is valid
+refCon					 ds.l	1				; offset: $10 (16)		; refcon for port (for client use)
+initClock				 ds		MIDIClkInfo		; offset: $14 (20)		; initial settings for a time base
+name					 ds		Str255			; offset: $1C (28)		; name of the port, This is a real live string, not a ptr.
+sizeof					 EQU *					; size:   $11C (284)
+						ENDR
+; typedef struct MIDIPortParams *		MIDIPortParamsPtr
+
+MIDIIDList				RECORD 0
+numIDs					 ds.w	1				; offset: $0 (0)
+list					 ds.l	1				; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct MIDIIDList *			MIDIIDListPtr
+
+; typedef MIDIIDListPtr *				MIDIIDListHdl
+
+; typedef MIDIIDListPtr *				MIDIIDListHandle
+
+;  MDVR Control structs
+MDVRInCtlRec			RECORD 0
+timeCodeClock			 ds.w	1				; offset: $0 (0)		; refnum of time base for time code
+timeCodeFormat			 ds.w	1				; offset: $2 (2)		; format of time code output
+readProc				 ds.l	1				; offset: $4 (4)		; proc to call with intput characters
+commProc				 ds.l	1				; offset: $8 (8)		; proc to call for handshaking
+refCon					 ds.l	1				; offset: $C (12)		; refCon passed to readProc, commProc
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct MDVRInCtlRec *			MDVRInCtlPtr
+
+MDVROutCtlRec			RECORD 0
+timeCodeClock			 ds.w	1				; offset: $0 (0)		; time base driven by time code
+timeCodeFormat			 ds.w	1				; offset: $2 (2)		; format of time code to listen to
+timeCodeProc			 ds.l	1				; offset: $4 (4)		; proc called on time code fmt change
+commProc				 ds.l	1				; offset: $8 (8)		; proc called for handshaking
+refCon					 ds.l	1				; offset: $C (12)		; refCon passed to timeCodeProc
+timeCodeFilter			 ds.b	1				; offset: $10 (16)		; filter time code if true
+padding					 ds.b	1				; offset: $11 (17)		; unused pad byte
+midiMsgTicks			 ds.l	1				; offset: $12 (18)		; value of Ticks when MIDI msg rcvd
+timeCodeTicks			 ds.l	1				; offset: $16 (22)		; value of Ticks when time code rcvd
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+; typedef struct MDVROutCtlRec *		MDVROutCtlPtr
+
+; typedef void *						MDVRPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  MIDIVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal NumVersion MIDIVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIVersion
+			move.l              #$00000004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIVersion
+	ENDIF
+
+
+; *  MIDISignIn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDISignIn(OSType clientID, long refCon, Handle icon, ConstStr255Param name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISignIn
+			move.l              #$00040004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISignIn
+	ENDIF
+
+
+; *  MIDISignOut()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISignOut(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISignOut
+			move.l              #$00080004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISignOut
+	ENDIF
+
+
+; *  MIDIGetClients()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal MIDIIDListHandle MIDIGetClients(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetClients
+			move.l              #$000C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetClients
+	ENDIF
+
+
+; *  MIDIGetClientName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIGetClientName(OSType clientID, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetClientName
+			move.l              #$00100004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetClientName
+	ENDIF
+
+
+; *  MIDISetClientName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetClientName(OSType clientID, ConstStr255Param name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetClientName
+			move.l              #$00140004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetClientName
+	ENDIF
+
+
+; *  MIDIGetPorts()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal MIDIIDListHandle MIDIGetPorts(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetPorts
+			move.l              #$00180004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetPorts
+	ENDIF
+
+
+; *  MIDIAddPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIAddPort(OSType clientID, short BufSize, short *refnum, MIDIPortParamsPtr init)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIAddPort
+			move.l              #$001C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIAddPort
+	ENDIF
+
+
+; *  MIDIGetPortInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal MIDIPortInfoHandle MIDIGetPortInfo(OSType clientID, OSType portID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetPortInfo
+			move.l              #$00200004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetPortInfo
+	ENDIF
+
+
+; *  MIDIConnectData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIConnectData(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIConnectData
+			move.l              #$00240004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIConnectData
+	ENDIF
+
+
+; *  MIDIUnConnectData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIUnConnectData(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIUnConnectData
+			move.l              #$00280004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIUnConnectData
+	ENDIF
+
+
+; *  MIDIConnectTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIConnectTime(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIConnectTime
+			move.l              #$002C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIConnectTime
+	ENDIF
+
+
+; *  MIDIUnConnectTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIUnConnectTime(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIUnConnectTime
+			move.l              #$00300004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIUnConnectTime
+	ENDIF
+
+
+; *  MIDIFlush()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIFlush(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIFlush
+			move.l              #$00340004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIFlush
+	ENDIF
+
+
+; *  MIDIGetReadHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ProcPtr MIDIGetReadHook(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetReadHook
+			move.l              #$00380004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetReadHook
+	ENDIF
+
+
+; *  MIDISetReadHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetReadHook(short refnum, ProcPtr hook)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetReadHook
+			move.l              #$003C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetReadHook
+	ENDIF
+
+
+; *  MIDIGetPortName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIGetPortName(OSType clientID, OSType portID, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetPortName
+			move.l              #$00400004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetPortName
+	ENDIF
+
+
+; *  MIDISetPortName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetPortName(OSType clientID, OSType portID, ConstStr255Param name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetPortName
+			move.l              #$00440004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetPortName
+	ENDIF
+
+
+; *  MIDIWakeUp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIWakeUp(short refnum, long time, long period, MIDITimeUPP timeProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIWakeUp
+			move.l              #$00480004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIWakeUp
+	ENDIF
+
+
+; *  MIDIRemovePort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIRemovePort(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIRemovePort
+			move.l              #$004C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIRemovePort
+	ENDIF
+
+
+; *  MIDIGetSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short MIDIGetSync(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetSync
+			move.l              #$00500004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetSync
+	ENDIF
+
+
+; *  MIDISetSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetSync(short refnum, short sync)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetSync
+			move.l              #$00540004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetSync
+	ENDIF
+
+
+; *  MIDIGetCurTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long MIDIGetCurTime(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetCurTime
+			move.l              #$00580004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetCurTime
+	ENDIF
+
+
+; *  MIDISetCurTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetCurTime(short refnum, long time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetCurTime
+			move.l              #$005C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetCurTime
+	ENDIF
+
+
+; *  MIDIStartTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIStartTime(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIStartTime
+			move.l              #$00600004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIStartTime
+	ENDIF
+
+
+; *  MIDIStopTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIStopTime(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIStopTime
+			move.l              #$00640004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIStopTime
+	ENDIF
+
+
+; *  MIDIPoll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIPoll(short refnum, long offsetTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIPoll
+			move.l              #$00680004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIPoll
+	ENDIF
+
+
+; *  MIDIWritePacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MIDIWritePacket(short refnum, MIDIPacketPtr packet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIWritePacket
+			move.l              #$006C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIWritePacket
+	ENDIF
+
+
+; *  MIDIWorldChanged()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean MIDIWorldChanged(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIWorldChanged
+			move.l              #$00700004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIWorldChanged
+	ENDIF
+
+
+; *  MIDIGetOffsetTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long MIDIGetOffsetTime(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetOffsetTime
+			move.l              #$00740004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetOffsetTime
+	ENDIF
+
+
+; *  MIDISetOffsetTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetOffsetTime(short refnum, long offsetTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetOffsetTime
+			move.l              #$00780004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetOffsetTime
+	ENDIF
+
+
+; *  MIDIConvertTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long MIDIConvertTime(short srcFormat, short dstFormat, long time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIConvertTime
+			move.l              #$007C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIConvertTime
+	ENDIF
+
+
+; *  MIDIGetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long MIDIGetRefCon(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetRefCon
+			move.l              #$00800004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetRefCon
+	ENDIF
+
+
+; *  MIDISetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetRefCon(short refnum, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetRefCon
+			move.l              #$00840004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetRefCon
+	ENDIF
+
+
+; *  MIDIGetClRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long MIDIGetClRefCon(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetClRefCon
+			move.l              #$00880004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetClRefCon
+	ENDIF
+
+
+; *  MIDISetClRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetClRefCon(OSType clientID, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetClRefCon
+			move.l              #$008C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetClRefCon
+	ENDIF
+
+
+; *  MIDIGetTCFormat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short MIDIGetTCFormat(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetTCFormat
+			move.l              #$00900004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetTCFormat
+	ENDIF
+
+
+; *  MIDISetTCFormat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetTCFormat(short refnum, short format)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetTCFormat
+			move.l              #$00940004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetTCFormat
+	ENDIF
+
+
+; *  MIDISetRunRate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetRunRate(short refnum, short rate, long time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetRunRate
+			move.l              #$00980004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetRunRate
+	ENDIF
+
+
+; *  MIDIGetClientIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle MIDIGetClientIcon(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetClientIcon
+			move.l              #$009C0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetClientIcon
+	ENDIF
+
+
+; *  MIDICallAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ProcPtr MIDICallAddress(short callNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDICallAddress
+			move.l              #$00A40004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDICallAddress
+	ENDIF
+
+
+; *  MIDISetConnectionProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDISetConnectionProc(short refNum, ProcPtr connectionProc, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDISetConnectionProc
+			move.l              #$00A80004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDISetConnectionProc
+	ENDIF
+
+
+; *  MIDIGetConnectionProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIGetConnectionProc(short refnum, ProcPtr *connectionProc, long *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIGetConnectionProc
+			move.l              #$00AC0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIGetConnectionProc
+	ENDIF
+
+
+; *  MIDIDiscardPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MIDIDiscardPacket(short refnum, MIDIPacketPtr packet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MIDIDiscardPacket
+			move.l              #$00B00004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MIDIDiscardPacket
+	ENDIF
+
+
+; *  MDVRSignIn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr MDVRSignIn(OSType clientID, long refCon, Handle icon, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRSignIn
+			move.l              #$00B40004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRSignIn
+	ENDIF
+
+
+; *  MDVRSignOut()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRSignOut(OSType clientID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRSignOut
+			move.l              #$00B80004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRSignOut
+	ENDIF
+
+
+; *  MDVROpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal MDVRPtr MDVROpen(short portType, short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVROpen
+			move.l              #$00BC0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVROpen
+	ENDIF
+
+
+; *  MDVRClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRClose(MDVRPtr driverPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRClose
+			move.l              #$00C00004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRClose
+	ENDIF
+
+
+; *  MDVRControlIn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRControlIn(MDVRPtr portPtr, MDVRInCtlPtr inputCtl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRControlIn
+			move.l              #$00C40004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRControlIn
+	ENDIF
+
+
+; *  MDVRControlOut()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRControlOut(MDVRPtr portPtr, MDVROutCtlPtr outputCtl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRControlOut
+			move.l              #$00C80004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRControlOut
+	ENDIF
+
+
+; *  MDVRIn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRIn(MDVRPtr portPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRIn
+			move.l              #$00CC0004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRIn
+	ENDIF
+
+
+; *  MDVROut()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVROut(MDVRPtr portPtr, char *dataPtr, short length)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVROut
+			move.l              #$00D00004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVROut
+	ENDIF
+
+
+; *  MDVRNotesOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void MDVRNotesOff(MDVRPtr portPtr, short mode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MDVRNotesOff
+			move.l              #$00D40004,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MDVRNotesOff
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewMIDIReadHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMIDITimeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMIDIConnectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMDVRCommUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMDVRTimeCodeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMDVRReadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMIDIReadHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMIDITimeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMIDIConnectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMDVRCommUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMDVRTimeCodeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMDVRReadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMIDIReadHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMIDITimeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMIDIConnectionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMDVRCommUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMDVRTimeCodeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMDVRReadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+	ENDIF ; __MIDI__ 
+

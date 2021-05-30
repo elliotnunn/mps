@@ -1,0 +1,489 @@
+;
+;    File:       QuickTimeVRFormat.a
+;
+;    Contains:   QuickTime VR interfaces
+;
+;    Version:    Technology: QuickTime VR 5.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1997-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QUICKTIMEVRFORMAT__') = 'UNDEFINED' THEN
+__QUICKTIMEVRFORMAT__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+	IF &TYPE('__QUICKTIMEVR__') = 'UNDEFINED' THEN
+	include 'QuickTimeVR.a'
+	ENDIF
+
+;  User data type for the Movie Controller type specifier
+
+kQTControllerType				EQU		'ctyp'				; Atom & ID of where our
+kQTControllerID					EQU		1					; ...controller name is stored
+;  VRWorld atom types
+
+kQTVRWorldHeaderAtomType		EQU		'vrsc'
+kQTVRImagingParentAtomType		EQU		'imgp'
+kQTVRPanoImagingAtomType		EQU		'impn'
+kQTVRObjectImagingAtomType		EQU		'imob'
+kQTVRNodeParentAtomType			EQU		'vrnp'
+kQTVRNodeIDAtomType				EQU		'vrni'
+kQTVRNodeLocationAtomType		EQU		'nloc'
+kQTVRCursorParentAtomType		EQU		'vrcp'				; New with 2.1
+kQTVRCursorAtomType				EQU		'CURS'				; New with 2.1
+kQTVRColorCursorAtomType		EQU		'crsr'				; New with 2.1
+;  NodeInfo atom types
+
+kQTVRNodeHeaderAtomType			EQU		'ndhd'
+kQTVRHotSpotParentAtomType		EQU		'hspa'
+kQTVRHotSpotAtomType			EQU		'hots'
+kQTVRHotSpotInfoAtomType		EQU		'hsin'
+kQTVRLinkInfoAtomType			EQU		'link'
+;  Miscellaneous atom types
+
+kQTVRStringAtomType				EQU		'vrsg'
+kQTVRStringEncodingAtomType		EQU		'vrse'				; New with 2.1
+kQTVRPanoSampleDataAtomType		EQU		'pdat'
+kQTVRObjectInfoAtomType			EQU		'obji'
+kQTVRImageTrackRefAtomType		EQU		'imtr'				; Parent is kQTVRObjectInfoAtomType. Required if track ref is not 1 as required by 2.0 format.
+kQTVRHotSpotTrackRefAtomType	EQU		'hstr'				; Parent is kQTVRObjectInfoAtomType. Required if track ref is not 1 as required by 2.0 format.
+kQTVRAngleRangeAtomType			EQU		'arng'
+kQTVRTrackRefArrayAtomType		EQU		'tref'
+kQTVRPanConstraintAtomType		EQU		'pcon'
+kQTVRTiltConstraintAtomType		EQU		'tcon'
+kQTVRFOVConstraintAtomType		EQU		'fcon'
+kQTVRCubicViewAtomType			EQU		'cuvw'				; New with 5.0
+kQTVRCubicFaceDataAtomType		EQU		'cufa'				; New with 5.0
+
+kQTVRObjectInfoAtomID			EQU		1
+kQTVRObjectImageTrackRefAtomID	EQU		1					; New with 2.1, it adds a track reference to select between multiple image tracks
+kQTVRObjectHotSpotTrackRefAtomID EQU	1					; New with 2.1, it adds a track reference to select between multiple hotspot tracks
+;  Track reference types
+
+kQTVRImageTrackRefType			EQU		'imgt'
+kQTVRHotSpotTrackRefType		EQU		'hott'
+;  Old hot spot types
+
+kQTVRHotSpotNavigableType		EQU		'navg'
+;  Valid bits used in QTVRLinkHotSpotAtom
+
+kQTVRValidPan					EQU		$00000001
+kQTVRValidTilt					EQU		$00000002
+kQTVRValidFOV					EQU		$00000004
+kQTVRValidViewCenter			EQU		$00000008
+
+;  Values for flags field in QTVRPanoSampleAtom
+
+kQTVRPanoFlagHorizontal			EQU		$00000001
+kQTVRPanoFlagLast				EQU		$80000000
+
+;  Values for locationFlags field in QTVRNodeLocationAtom
+
+kQTVRSameFile					EQU		0
+
+;  Header for QTVR track's Sample Description record (vrWorld atom container is appended)
+QTVRSampleDescription	RECORD 0
+descSize				 ds.l	1				; offset: $0 (0)		;  total size of the QTVRSampleDescription
+descType				 ds.l	1				; offset: $4 (4)		;  must be 'qtvr'
+reserved1				 ds.l	1				; offset: $8 (8)		;  must be zero
+reserved2				 ds.w	1				; offset: $C (12)		;  must be zero
+dataRefIndex			 ds.w	1				; offset: $E (14)		;  must be zero
+data					 ds.l	1				; offset: $10 (16)		;  Will be extended to hold vrWorld QTAtomContainer
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct QTVRSampleDescription * QTVRSampleDescriptionPtr
+
+; typedef QTVRSampleDescriptionPtr *	QTVRSampleDescriptionHandle
+
+
+;  =================================================================================================
+;   Definitions and structures used in the VRWorld QTAtomContainer
+;  -------------------------------------------------------------------------------------------------
+
+
+
+QTVRStringAtom			RECORD 0
+stringUsage				 ds.w	1				; offset: $0 (0)
+stringLength			 ds.w	1				; offset: $2 (2)
+theString				 ds.b	4				; offset: $4 (4)		;  field previously named "string"
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct QTVRStringAtom *		QTVRStringAtomPtr
+
+
+QTVRWorldHeaderAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+nameAtomID				 ds.l	1				; offset: $4 (4)
+defaultNodeID			 ds.l	1				; offset: $8 (8)
+vrWorldFlags			 ds.l	1				; offset: $C (12)
+reserved1				 ds.l	1				; offset: $10 (16)
+reserved2				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct QTVRWorldHeaderAtom *	QTVRWorldHeaderAtomPtr
+
+
+;  Valid bits used in QTVRPanoImagingAtom
+
+kQTVRValidCorrection			EQU		$00000001
+kQTVRValidQuality				EQU		$00000002
+kQTVRValidDirectDraw			EQU		$00000004
+kQTVRValidFirstExtraProperty	EQU		$00000008
+QTVRPanoImagingAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+imagingMode				 ds.l	1				; offset: $4 (4)
+imagingValidFlags		 ds.l	1				; offset: $8 (8)
+correction				 ds.l	1				; offset: $C (12)
+quality					 ds.l	1				; offset: $10 (16)
+directDraw				 ds.l	1				; offset: $14 (20)
+imagingProperties		 ds.l	6				; offset: $18 (24)		;  for future properties
+reserved1				 ds.l	1				; offset: $30 (48)
+reserved2				 ds.l	1				; offset: $34 (52)
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+; typedef struct QTVRPanoImagingAtom *	QTVRPanoImagingAtomPtr
+
+QTVRNodeLocationAtom	RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+nodeType				 ds.l	1				; offset: $4 (4)
+locationFlags			 ds.l	1				; offset: $8 (8)
+locationData			 ds.l	1				; offset: $C (12)
+reserved1				 ds.l	1				; offset: $10 (16)
+reserved2				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct QTVRNodeLocationAtom *	QTVRNodeLocationAtomPtr
+
+
+;  =================================================================================================
+;   Definitions and structures used in the Nodeinfo QTAtomContainer
+;  -------------------------------------------------------------------------------------------------
+
+
+
+QTVRNodeHeaderAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+nodeType				 ds.l	1				; offset: $4 (4)
+nodeID					 ds.l	1				; offset: $8 (8)
+nameAtomID				 ds.l	1				; offset: $C (12)
+commentAtomID			 ds.l	1				; offset: $10 (16)
+reserved1				 ds.l	1				; offset: $14 (20)
+reserved2				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct QTVRNodeHeaderAtom *	QTVRNodeHeaderAtomPtr
+
+QTVRAngleRangeAtom		RECORD 0
+minimumAngle			 ds		Float32			; offset: $0 (0)
+maximumAngle			 ds		Float32			; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct QTVRAngleRangeAtom *	QTVRAngleRangeAtomPtr
+
+QTVRHotSpotInfoAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+hotSpotType				 ds.l	1				; offset: $4 (4)
+nameAtomID				 ds.l	1				; offset: $8 (8)
+commentAtomID			 ds.l	1				; offset: $C (12)
+cursorID				 ds.l	3				; offset: $10 (16)
+;  canonical view for this hot spot
+bestPan					 ds		Float32			; offset: $1C (28)
+bestTilt				 ds		Float32			; offset: $20 (32)
+bestFOV					 ds		Float32			; offset: $24 (36)
+bestViewCenter			 ds		QTVRFloatPoint ; offset: $28 (40)
+;  Bounding box for this hot spot
+hotSpotRect				 ds		Rect			; offset: $30 (48)
+flags					 ds.l	1				; offset: $38 (56)
+reserved1				 ds.l	1				; offset: $3C (60)
+reserved2				 ds.l	1				; offset: $40 (64)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+; typedef struct QTVRHotSpotInfoAtom *	QTVRHotSpotInfoAtomPtr
+
+QTVRLinkHotSpotAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+toNodeID				 ds.l	1				; offset: $4 (4)
+fromValidFlags			 ds.l	1				; offset: $8 (8)
+fromPan					 ds		Float32			; offset: $C (12)
+fromTilt				 ds		Float32			; offset: $10 (16)
+fromFOV					 ds		Float32			; offset: $14 (20)
+fromViewCenter			 ds		QTVRFloatPoint ; offset: $18 (24)
+toValidFlags			 ds.l	1				; offset: $20 (32)
+toPan					 ds		Float32			; offset: $24 (36)
+toTilt					 ds		Float32			; offset: $28 (40)
+toFOV					 ds		Float32			; offset: $2C (44)
+toViewCenter			 ds		QTVRFloatPoint ; offset: $30 (48)
+distance				 ds		Float32			; offset: $38 (56)
+flags					 ds.l	1				; offset: $3C (60)
+reserved1				 ds.l	1				; offset: $40 (64)
+reserved2				 ds.l	1				; offset: $44 (68)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+; typedef struct QTVRLinkHotSpotAtom *	QTVRLinkHotSpotAtomPtr
+
+
+;  =================================================================================================
+;   Definitions and structures used in Panorama and Object tracks
+;  -------------------------------------------------------------------------------------------------
+
+
+
+QTVRPanoSampleAtom		RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)
+minorVersion			 ds.w	1				; offset: $2 (2)
+imageRefTrackIndex		 ds.l	1				; offset: $4 (4)		;  track reference index of the full res image track
+hotSpotRefTrackIndex	 ds.l	1				; offset: $8 (8)		;  track reference index of the full res hot spot track
+minPan					 ds		Float32			; offset: $C (12)
+maxPan					 ds		Float32			; offset: $10 (16)
+minTilt					 ds		Float32			; offset: $14 (20)
+maxTilt					 ds		Float32			; offset: $18 (24)
+minFieldOfView			 ds		Float32			; offset: $1C (28)
+maxFieldOfView			 ds		Float32			; offset: $20 (32)
+defaultPan				 ds		Float32			; offset: $24 (36)
+defaultTilt				 ds		Float32			; offset: $28 (40)
+defaultFieldOfView		 ds		Float32			; offset: $2C (44)
+;  Info for highest res version of image track
+imageSizeX				 ds.l	1				; offset: $30 (48)		;  pixel width of the panorama (e.g. 768)
+imageSizeY				 ds.l	1				; offset: $34 (52)		;  pixel height of the panorama (e.g. 2496)
+imageNumFramesX			 ds.w	1				; offset: $38 (56)		;  diced frames wide (e.g. 1)
+imageNumFramesY			 ds.w	1				; offset: $3A (58)		;  diced frames high (e.g. 24)
+;  Info for highest res version of hotSpot track
+hotSpotSizeX			 ds.l	1				; offset: $3C (60)		;  pixel width of the hot spot panorama (e.g. 768)
+hotSpotSizeY			 ds.l	1				; offset: $40 (64)		;  pixel height of the hot spot panorama (e.g. 2496)
+hotSpotNumFramesX		 ds.w	1				; offset: $44 (68)		;  diced frames wide (e.g. 1)
+hotSpotNumFramesY		 ds.w	1				; offset: $46 (70)		;  diced frames high (e.g. 24)
+flags					 ds.l	1				; offset: $48 (72)
+panoType				 ds.l	1				; offset: $4C (76)
+reserved2				 ds.l	1				; offset: $50 (80)
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+; typedef struct QTVRPanoSampleAtom *	QTVRPanoSampleAtomPtr
+
+
+;   View atom for cubes (since same fields in QTVRPanoSampleAtom are set to special
+;   values for backwards compatibility and hence are ignored by the cubic engine)
+
+
+QTVRCubicViewAtom		RECORD 0
+minPan					 ds		Float32			; offset: $0 (0)
+maxPan					 ds		Float32			; offset: $4 (4)
+minTilt					 ds		Float32			; offset: $8 (8)
+maxTilt					 ds		Float32			; offset: $C (12)
+minFieldOfView			 ds		Float32			; offset: $10 (16)
+maxFieldOfView			 ds		Float32			; offset: $14 (20)
+defaultPan				 ds		Float32			; offset: $18 (24)
+defaultTilt				 ds		Float32			; offset: $1C (28)
+defaultFieldOfView		 ds		Float32			; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct QTVRCubicViewAtom *	QTVRCubicViewAtomPtr
+
+QTVRCubicFaceData		RECORD 0
+orientation				 ds.b	4 * Float32.sizeof ; offset: $0 (0)		;  WXYZ quaternion of absolute orientation
+center					 ds.b	2 * Float32.sizeof ; offset: $10 (16)	;  Center of image relative to center of projection (default = (0,0)) in normalized units
+aspect					 ds		Float32			; offset: $18 (24)		;  aspect>1 => tall pixels; aspect <1 => squat pixels (default = 1)
+skew					 ds		Float32			; offset: $1C (28)		;  skew x by y (default = 0)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct QTVRCubicFaceData *	QTVRCubicFaceDataPtr
+
+;  Special resolution values for the Image Track Reference Atoms. Use only one value per track reference.
+
+kQTVRFullTrackRes				EQU		$00000001
+kQTVRHalfTrackRes				EQU		$00000002
+kQTVRQuarterTrackRes			EQU		$00000004
+kQTVRPreviewTrackRes			EQU		$8000
+QTVRTrackRefEntry		RECORD 0
+trackRefType			 ds.l	1				; offset: $0 (0)
+trackResolution			 ds.w	1				; offset: $4 (4)
+trackRefIndex			 ds.l	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+
+;  =================================================================================================
+;   Object File format 2.0
+;  -------------------------------------------------------------------------------------------------
+
+
+
+kQTVRObjectAnimateViewFramesOn	EQU		$00000001
+kQTVRObjectPalindromeViewFramesOn EQU	$00000002
+kQTVRObjectStartFirstViewFrameOn EQU	$00000004
+kQTVRObjectAnimateViewsOn		EQU		$00000008
+kQTVRObjectPalindromeViewsOn	EQU		$00000010
+kQTVRObjectSyncViewToFrameRate	EQU		$00000020
+kQTVRObjectDontLoopViewFramesOn	EQU		$00000040
+kQTVRObjectPlayEveryViewFrameOn	EQU		$00000080
+kQTVRObjectStreamingViewsOn		EQU		$00000100
+
+kQTVRObjectWrapPanOn			EQU		$00000001
+kQTVRObjectWrapTiltOn			EQU		$00000002
+kQTVRObjectCanZoomOn			EQU		$00000004
+kQTVRObjectReverseHControlOn	EQU		$00000008
+kQTVRObjectReverseVControlOn	EQU		$00000010
+kQTVRObjectSwapHVControlOn		EQU		$00000020
+kQTVRObjectTranslationOn		EQU		$00000040
+
+kGrabberScrollerUI				EQU		1					; "Object" 
+kOldJoyStickUI					EQU		2					;  "1.0 Object as Scene"     
+kJoystickUI						EQU		3					; "Object In Scene"
+kGrabberUI						EQU		4					; "Grabber only"
+kAbsoluteUI						EQU		5					; "Absolute pointer"
+
+QTVRObjectSampleAtom	RECORD 0
+majorVersion			 ds.w	1				; offset: $0 (0)		;  kQTVRMajorVersion
+minorVersion			 ds.w	1				; offset: $2 (2)		;  kQTVRMinorVersion
+movieType				 ds.w	1				; offset: $4 (4)		;  ObjectUITypes
+viewStateCount			 ds.w	1				; offset: $6 (6)		;  The number of view states 1 based
+defaultViewState		 ds.w	1				; offset: $8 (8)		;  The default view state number. The number must be 1 to viewStateCount
+mouseDownViewState		 ds.w	1				; offset: $A (10)		;  The mouse down view state.   The number must be 1 to viewStateCount
+viewDuration			 ds.l	1				; offset: $C (12)		;  The duration of each view including all animation frames in a view
+columns					 ds.l	1				; offset: $10 (16)		;  Number of columns in movie
+rows					 ds.l	1				; offset: $14 (20)		;  Number rows in movie
+mouseMotionScale		 ds		Float32			; offset: $18 (24)		;  180.0 for kStandardObject or kQTVRObjectInScene, actual degrees for kOldNavigableMovieScene.
+minPan					 ds		Float32			; offset: $1C (28)		;  Start   horizontal pan angle in degrees
+maxPan					 ds		Float32			; offset: $20 (32)		;  End     horizontal pan angle in degrees
+defaultPan				 ds		Float32			; offset: $24 (36)		;  Initial horizontal pan angle in degrees (poster view)
+minTilt					 ds		Float32			; offset: $28 (40)		;  Start   vertical   pan angle in degrees
+maxTilt					 ds		Float32			; offset: $2C (44)		;  End     vertical   pan angle in degrees
+defaultTilt				 ds		Float32			; offset: $30 (48)		;  Initial vertical   pan angle in degrees (poster view)  
+minFieldOfView			 ds		Float32			; offset: $34 (52)		;  minimum field of view setting (appears as the maximum zoom effect) must be >= 1
+fieldOfView				 ds		Float32			; offset: $38 (56)		;  the field of view range must be >= 1
+defaultFieldOfView		 ds		Float32			; offset: $3C (60)		;  must be in minFieldOfView and maxFieldOfView range inclusive
+defaultViewCenterH		 ds		Float32			; offset: $40 (64)
+defaultViewCenterV		 ds		Float32			; offset: $44 (68)
+viewRate				 ds		Float32			; offset: $48 (72)
+frameRate				 ds		Float32			; offset: $4C (76)
+animationSettings		 ds.l	1				; offset: $50 (80)		;  32 reserved bit fields
+controlSettings			 ds.l	1				; offset: $54 (84)		;  32 reserved bit fields
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+; typedef struct QTVRObjectSampleAtom *	QTVRObjectSampleAtomPtr
+
+
+;  =================================================================================================
+;   QuickTime VR Authoring Components
+;  -------------------------------------------------------------------------------------------------
+
+
+
+
+;   ComponentDescription constants for QTVR Export components   
+;    (componentType = MovieExportType; componentSubType = MovieFileType)
+
+
+
+kQTVRFlattenerManufacturer		EQU		'vrwe'				; aka QTVRFlattenerType
+kQTVRSplitterManufacturer		EQU		'vrsp'
+kQTVRObjExporterManufacturer	EQU		'vrob'
+;  QuickTime VR Flattener atom types
+
+kQTVRFlattenerSettingsParentAtomType EQU 'VRWe'				; parent of settings atoms (other than compression)
+kQTVRFlattenerPreviewResAtomType EQU	'PRes'				; preview resolution Int16
+kQTVRFlattenerImportSpecAtomType EQU	'ISpe'				; import file spec FSSpec
+kQTVRFlattenerCreatePreviewAtomType EQU	'Prev'				; Boolean
+kQTVRFlattenerImportPreviewAtomType EQU	'IPre'				; Boolean
+kQTVRFlattenerBlurPreviewAtomType EQU	'Blur'				; Boolean
+;  QuickTime VR Splitter atom types
+
+kQTVRSplitterSettingsParentAtomType EQU	'VRSp'				; parent of settings atoms (other than compression)
+kQTVRSplitterGenerateHTMLAtomType EQU	'Ghtm'				; Boolean
+kQTVRSplitterOverwriteFilesAtomType EQU	'Owfi'				; Boolean
+kQTVRSplitterUseFlattenerAtomType EQU	'Usef'				; Boolean
+kQTVRSplitterShowControllerAtomType EQU	'Shco'				; Boolean
+kQTVRSplitterTargetMyselfAtomType EQU	'Tgtm'				; Boolean
+;  QuickTime VR Object Exporter atom types
+
+kQTVRObjExporterSettingsBlockSize EQU	'bsiz'				; block size for compression
+kQTVRObjExporterSettingsTargetSize EQU	'tsiz'				; target file size
+
+
+	IF OLDROUTINENAMES THEN
+VRStringAtom			RECORD 0
+f						 ds		QTVRStringAtom
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+VRWorldHeaderAtom		RECORD 0
+f						 ds		QTVRWorldHeaderAtom
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+
+VRPanoImagingAtom		RECORD 0
+f						 ds		QTVRPanoImagingAtom
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+
+
+VRNodeLocationAtom		RECORD 0
+f						 ds		QTVRNodeLocationAtom
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+
+VRNodeHeaderAtom		RECORD 0
+f						 ds		QTVRNodeHeaderAtom
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+
+VRAngleRangeAtom		RECORD 0
+f						 ds		QTVRAngleRangeAtom
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+VRHotSpotInfoAtom		RECORD 0
+f						 ds		QTVRHotSpotInfoAtom
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+
+
+VRLinkHotSpotAtom		RECORD 0
+f						 ds		QTVRLinkHotSpotAtom
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+
+
+VRPanoSampleAtom		RECORD 0
+f						 ds		QTVRPanoSampleAtom
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+
+
+VRTrackRefEntry			RECORD 0
+f						 ds		QTVRTrackRefEntry
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+
+
+VRObjectSampleAtom		RECORD 0
+f						 ds		QTVRObjectSampleAtom
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+
+
+	ENDIF	; OLDROUTINENAMES
+
+
+	ENDIF ; __QUICKTIMEVRFORMAT__ 
+

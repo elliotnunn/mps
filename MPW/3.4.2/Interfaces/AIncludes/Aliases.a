@@ -1,0 +1,199 @@
+;
+;	File:		Aliases.a
+;
+;	Contains:	Alias Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+__ALIASES__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+	include 'AppleTalk.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;			include 'MixedMode.a'									;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'Finder.a'											;
+
+rAliasType						EQU		'alis'				; Aliases are stored as resources of this type 
+; define alias resolution action rules mask 
+kARMMountVol					EQU		$00000001			; mount the volume automatically 
+kARMNoUI						EQU		$00000002			; no user interface allowed during resolution 
+kARMMultVols					EQU		$00000008			; search on multiple volumes 
+kARMSearch						EQU		$00000100			; search quickly 
+kARMSearchMore					EQU		$00000200			; search further 
+kARMSearchRelFirst				EQU		$00000400			; search target on a relative path first 
+; define alias record information types 
+asiZoneName						EQU		-3					; get zone name 
+asiServerName					EQU		-2					; get server name 
+asiVolumeName					EQU		-1					; get volume name 
+asiAliasName					EQU		0					; get aliased file/folder/volume name 
+asiParentName					EQU		1					; get parent folder name 
+
+; define the alias record that will be the blackbox for the caller 
+AliasRecord 			RECORD	0
+userType				 ds.l   1		; offset: $0 (0)		; appl stored type like creator type 
+aliasSize				 ds.w   1		; offset: $4 (4)		; alias record size in bytes, for appl usage 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct AliasRecord  AliasRecord
+; typedef AliasRecord 		*AliasPtr, **AliasHandle
+; alias record information type 
+; typedef short 			AliasInfoType
+;
+; pascal OSErr NewAlias(ConstFSSpecPtr fromFile, const FSSpec *target, AliasHandle *alias)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewAlias
+			moveq	#2,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewAlias
+	ENDIF
+
+; create a minimal new alias for a target and return alias record handle 
+;
+; pascal OSErr NewAliasMinimal(const FSSpec *target, AliasHandle *alias)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewAliasMinimal
+			moveq	#8,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewAliasMinimal
+	ENDIF
+
+; create a minimal new alias from a target fullpath (optional zone and server name) and return alias record handle  
+;
+; pascal OSErr NewAliasMinimalFromFullPath(short fullPathLength, const void *fullPath, ConstStr32Param zoneName, ConstStr31Param serverName, AliasHandle *alias)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewAliasMinimalFromFullPath
+			moveq	#9,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewAliasMinimalFromFullPath
+	ENDIF
+
+; given an alias handle and fromFile, resolve the alias, update the alias record and return aliased filename and wasChanged flag. 
+;
+; pascal OSErr ResolveAlias(ConstFSSpecPtr fromFile, AliasHandle alias, FSSpec *target, Boolean *wasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ResolveAlias
+			moveq	#3,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ResolveAlias
+	ENDIF
+
+; given an alias handle and an index specifying requested alias information type, return the information from alias record as a string. 
+;
+; pascal OSErr GetAliasInfo(AliasHandle alias, AliasInfoType index, Str63 theString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetAliasInfo
+			moveq	#7,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetAliasInfo
+	ENDIF
+
+; 
+;  Given a file spec, return target file spec if input file spec is an alias.
+;  It resolves the entire alias chain or one step of the chain.  It returns
+;  info about whether the target is a folder or file; and whether the input
+;  file spec was an alias or not. 
+;
+;
+; pascal OSErr ResolveAliasFile(FSSpec *theSpec, Boolean resolveAliasChains, Boolean *targetIsFolder, Boolean *wasAliased)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ResolveAliasFile
+			moveq	#12,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ResolveAliasFile
+	ENDIF
+
+;
+; pascal OSErr FollowFinderAlias(ConstFSSpecPtr fromFile, AliasHandle alias, Boolean logon, FSSpec *target, Boolean *wasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FollowFinderAlias
+			moveq	#15,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FollowFinderAlias
+	ENDIF
+
+; 
+;   Low Level Routines 
+; Given an alias handle and fromFile, match the alias and return aliased filename(s) and needsUpdate flag
+;
+;
+; pascal OSErr MatchAlias(ConstFSSpecPtr fromFile, unsigned long rulesMask, AliasHandle alias, short *aliasCount, FSSpecArrayPtr aliasList, Boolean *needsUpdate, AliasFilterUPP aliasFilter, void *yourDataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MatchAlias
+			moveq	#5,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MatchAlias
+	ENDIF
+
+; given a fromFile-target pair and an alias handle, update the lias record pointed to by alias handle to represent target as the new alias. 
+;
+; pascal OSErr UpdateAlias(ConstFSSpecPtr fromFile, const FSSpec *target, AliasHandle alias, Boolean *wasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UpdateAlias
+			moveq	#6,d0
+			dc.w 	$A823
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UpdateAlias
+	ENDIF
+
+	ENDIF ; __ALIASES__

@@ -1,0 +1,1837 @@
+;
+;    File:       Dialogs.a
+;
+;    Contains:   Dialog Manager interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+__DIALOGS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__MACWINDOWS__') = 'UNDEFINED' THEN
+	include 'MacWindows.a'
+	ENDIF
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+	IF &TYPE('__CONTROLS__') = 'UNDEFINED' THEN
+	include 'Controls.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__CARBONEVENTS__') = 'UNDEFINED' THEN
+	include 'CarbonEvents.a'
+	ENDIF
+
+
+															; new, more standard names for dialog item types
+kControlDialogItem				EQU		4
+kButtonDialogItem				EQU		4
+kCheckBoxDialogItem				EQU		5
+kRadioButtonDialogItem			EQU		6
+kResourceControlDialogItem		EQU		7
+kStaticTextDialogItem			EQU		8
+kEditTextDialogItem				EQU		16
+kIconDialogItem					EQU		32
+kPictureDialogItem				EQU		64
+kUserDialogItem					EQU		0
+kHelpDialogItem					EQU		1
+kItemDisableBit					EQU		128
+
+															; old names for dialog item types
+ctrlItem						EQU		4
+btnCtrl							EQU		0
+chkCtrl							EQU		1
+radCtrl							EQU		2
+resCtrl							EQU		3
+statText						EQU		8
+editText						EQU		16
+iconItem						EQU		32
+picItem							EQU		64
+userItem						EQU		0
+itemDisable						EQU		128
+
+															; standard dialog item numbers
+kStdOkItemIndex					EQU		1
+kStdCancelItemIndex				EQU		2					; old names
+ok								EQU		1
+cancel							EQU		2
+
+															; standard icon resource id's    
+kStopIcon						EQU		0
+kNoteIcon						EQU		1
+kCautionIcon					EQU		2					; old names
+stopIcon						EQU		0
+noteIcon						EQU		1
+cautionIcon						EQU		2
+
+
+
+	IF OLDROUTINENAMES THEN
+
+;   These constants lived briefly on ETO 16.  They suggest
+;   that there is only one index you can use for the OK 
+;   item, which is not true.  You can put the ok item 
+;   anywhere you want in the DITL.
+
+
+
+kOkItemIndex					EQU		1
+kCancelItemIndex				EQU		2
+	ENDIF	; OLDROUTINENAMES
+;   Dialog Item List Manipulation Constants 
+; typedef SInt16 						DITLMethod
+
+
+overlayDITL						EQU		0
+appendDITLRight					EQU		1
+appendDITLBottom				EQU		2
+; typedef SInt16 						StageList
+
+;  DialogPtr is obsolete. Use DialogRef instead.
+; typedef DialogPtr 					DialogRef
+
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+DialogRecord			RECORD 0
+window					 ds		WindowRecord	; offset: $0 (0)		;  in Carbon use GetDialogWindow or GetDialogPort
+items					 ds.l	1				; offset: $9C (156)		;  in Carbon use Get/SetDialogItem
+textH					 ds.l	1				; offset: $A0 (160)		;  in Carbon use GetDialogTextEditHandle
+editField				 ds.w	1				; offset: $A4 (164)		;  in Carbon use SelectDialogItemText/GetDialogKeyboardFocusItem
+editOpen				 ds.w	1				; offset: $A6 (166)		;  not available in Carbon 
+aDefItem				 ds.w	1				; offset: $A8 (168)		;  in Carbon use Get/SetDialogDefaultItem
+sizeof					 EQU *					; size:   $AA (170)
+						ENDR
+; typedef struct DialogRecord *			DialogPeek
+
+	ENDIF
+DialogTemplate			RECORD 0
+boundsRect				 ds		Rect			; offset: $0 (0)
+procID					 ds.w	1				; offset: $8 (8)
+visible					 ds.b	1				; offset: $A (10)
+filler1					 ds.b	1				; offset: $B (11)
+goAwayFlag				 ds.b	1				; offset: $C (12)
+filler2					 ds.b	1				; offset: $D (13)
+refCon					 ds.l	1				; offset: $E (14)
+itemsID					 ds.w	1				; offset: $12 (18)
+title					 ds		Str255			; offset: $14 (20)
+sizeof					 EQU *					; size:   $114 (276)
+						ENDR
+; typedef struct DialogTemplate *		DialogTPtr
+
+; typedef DialogTPtr *					DialogTHndl
+
+AlertTemplate			RECORD 0
+boundsRect				 ds		Rect			; offset: $0 (0)
+itemsID					 ds.w	1				; offset: $8 (8)
+stages					 ds.w	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct AlertTemplate *		AlertTPtr
+
+; typedef AlertTPtr *					AlertTHndl
+
+;  new type abstractions for the dialog manager 
+; typedef SInt16 						DialogItemIndexZeroBased
+
+; typedef SInt16 						DialogItemIndex
+
+; typedef SInt16 						DialogItemType
+
+;  dialog manager callbacks 
+;  ModalFilterYDProcPtr was previously in StandardFile.h 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewSoundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewModalFilterYDUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewUserItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DisposeSoundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DisposeModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeModalFilterYDUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeUserItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InvokeSoundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  InvokeModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeModalFilterYDUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeUserItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+	IF ¬ TARGET_OS_MAC THEN
+;  QuickTime 3.0 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetModelessDialogCallbackProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetModelessDialogCallbackProc(DialogRef theDialog, QTModelessCallbackProcPtr callbackProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetModelessDialogCallbackProc
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef QTModelessCallbackProcPtr 	QTModelessCallbackUPP
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetDialogControlNotificationProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetDialogControlNotificationProc(void *theProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogControlNotificationProc
+	ENDIF
+
+
+; *  SetDialogMovableModal()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetDialogMovableModal(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogMovableModal
+	ENDIF
+
+
+; *  GetDialogParent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void *GetDialogParent(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogParent
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+;    • Following types are valid with Appearance 1.0 and later
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+															; Alert types to pass into StandardAlert 
+kAlertStopAlert					EQU		0
+kAlertNoteAlert					EQU		1
+kAlertCautionAlert				EQU		2
+kAlertPlainAlert				EQU		3
+; typedef SInt16 						AlertType
+
+
+kAlertDefaultOKText				EQU		-1					; "OK"
+kAlertDefaultCancelText			EQU		-1					; "Cancel"
+kAlertDefaultOtherText			EQU		-1					; "Don't Save"
+;  StandardAlert alert button numbers 
+
+kAlertStdAlertOKButton			EQU		1
+kAlertStdAlertCancelButton		EQU		2
+kAlertStdAlertOtherButton		EQU		3
+kAlertStdAlertHelpButton		EQU		4
+
+															; Dialog Flags for use in NewFeaturesDialog or dlgx resource 
+kDialogFlagsUseThemeBackground	EQU		$01
+kDialogFlagsUseControlHierarchy	EQU		$02
+kDialogFlagsHandleMovableModal	EQU		$04
+kDialogFlagsUseThemeControls	EQU		$08
+
+															; Alert Flags for use in alrx resource 
+kAlertFlagsUseThemeBackground	EQU		$01
+kAlertFlagsUseControlHierarchy	EQU		$02
+kAlertFlagsAlertIsMovable		EQU		$04
+kAlertFlagsUseThemeControls		EQU		$08
+;  For dftb resource 
+
+kDialogFontNoFontStyle			EQU		0
+kDialogFontUseFontMask			EQU		$0001
+kDialogFontUseFaceMask			EQU		$0002
+kDialogFontUseSizeMask			EQU		$0004
+kDialogFontUseForeColorMask		EQU		$0008
+kDialogFontUseBackColorMask		EQU		$0010
+kDialogFontUseModeMask			EQU		$0020
+kDialogFontUseJustMask			EQU		$0040
+kDialogFontUseAllMask			EQU		$00FF
+kDialogFontAddFontSizeMask		EQU		$0100
+kDialogFontUseFontNameMask		EQU		$0200
+kDialogFontAddToMetaFontMask	EQU		$0400
+;  Also for dftb resource. This one is available in Mac OS X or later. 
+;  It corresponds directly to kControlUseThemeFontIDMask from Controls.h. 
+
+kDialogFontUseThemeFontIDMask	EQU		$0080
+AlertStdAlertParamRec	RECORD 0
+movable					 ds.b	1				; offset: $0 (0)		;  Make alert movable modal 
+helpButton				 ds.b	1				; offset: $1 (1)		;  Is there a help button? 
+filterProc				 ds.l	1				; offset: $2 (2)		;  Event filter 
+defaultText				 ds.l	1				; offset: $6 (6)		;  Text for button in OK position 
+cancelText				 ds.l	1				; offset: $A (10)		;  Text for button in cancel position 
+otherText				 ds.l	1				; offset: $E (14)		;  Text for button in left position 
+defaultButton			 ds.w	1				; offset: $12 (18)		;  Which button behaves as the default 
+cancelButton			 ds.w	1				; offset: $14 (20)		;  Which one behaves as cancel (can be 0) 
+position				 ds.w	1				; offset: $16 (22)		;  Position (kWindowDefaultPosition in this case 
+;  equals kWindowAlertPositionParentWindowScreen) 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct AlertStdAlertParamRec * AlertStdAlertParamPtr
+
+
+kHICommandOther					EQU		'othr'				; sent by standard sheet dialogs when the "other" button is pressed 
+
+kStdCFStringAlertVersionOne		EQU		1					; current version of AlertStdCFStringAlertParamRec 
+;  flags to CreateStandardAlert that are specified in the AlertStdCFStringAlertParamRec.flags field
+
+kStdAlertDoNotDisposeSheet		EQU		$01					; applies to StandardSheet only; do not dispose of sheet after closing it. 
+AlertStdCFStringAlertParamRec RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  kStdCFStringAlertVersionOne 
+movable					 ds.b	1				; offset: $4 (4)		;  Make alert movable modal 
+helpButton				 ds.b	1				; offset: $5 (5)		;  Is there a help button? 
+defaultText				 ds.l	1				; offset: $6 (6)		;  Text for button in OK position 
+cancelText				 ds.l	1				; offset: $A (10)		;  Text for button in cancel position 
+otherText				 ds.l	1				; offset: $E (14)		;  Text for button in left position 
+defaultButton			 ds.w	1				; offset: $12 (18)		;  Which button behaves as the default 
+cancelButton			 ds.w	1				; offset: $14 (20)		;  Which one behaves as cancel (can be 0) 
+position				 ds.w	1				; offset: $16 (22)		;  Position (kWindowDefaultPosition in this case 
+;  equals kWindowAlertPositionParentWindowScreen) 
+flags					 ds.l	1				; offset: $18 (24)		;  Options for the behavior of the alert or sheet 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct AlertStdCFStringAlertParamRec * AlertStdCFStringAlertParamPtr
+
+;  ——— end Appearance 1.0 or later stuff
+
+
+; 
+;    NOTE: Code running under MultiFinder or System 7.0 or newer
+;    should always pass NULL to InitDialogs.
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitDialogs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InitDialogs(void *ignored)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InitDialogs:	OPWORD	$A97B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitDialogs
+	ENDIF
+
+
+; *  ErrorSound()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void ErrorSound(SoundUPP soundProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ErrorSound:	OPWORD	$A98C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ErrorSound
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogRef NewDialog(void *dStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, SInt16 procID, WindowRef behind, Boolean goAwayFlag, SInt32 refCon, Handle items)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewDialog:	OPWORD	$A97D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewDialog
+	ENDIF
+
+
+; *  GetNewDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogRef GetNewDialog(SInt16 dialogID, void *dStorage, WindowRef behind)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetNewDialog:	OPWORD	$A97C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNewDialog
+	ENDIF
+
+
+; *  NewColorDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogRef NewColorDialog(void *dStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, SInt16 procID, WindowRef behind, Boolean goAwayFlag, SInt32 refCon, Handle items)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewColorDialog:	OPWORD	$AA4B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewColorDialog
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CloseDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CloseDialog(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CloseDialog:	OPWORD	$A982
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseDialog
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DisposeDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisposeDialog(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DisposeDialog:	OPWORD	$A983
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeDialog
+	ENDIF
+
+
+; *  ModalDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ModalDialog(ModalFilterUPP modalFilter, DialogItemIndex *itemHit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ModalDialog:	OPWORD	$A991
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ModalDialog
+	ENDIF
+
+
+; *  IsDialogEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsDialogEvent(const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_IsDialogEvent:	OPWORD	$A97F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsDialogEvent
+	ENDIF
+
+
+; *  DialogSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean DialogSelect(const EventRecord *theEvent, DialogRef *theDialog, DialogItemIndex *itemHit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DialogSelect:	OPWORD	$A980
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DialogSelect
+	ENDIF
+
+
+; *  DrawDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawDialog(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawDialog:	OPWORD	$A981
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawDialog
+	ENDIF
+
+
+; *  UpdateDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void UpdateDialog(DialogRef theDialog, RgnHandle updateRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_UpdateDialog:	OPWORD	$A978
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateDialog
+	ENDIF
+
+
+; *  HideDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HideDialogItem(DialogRef theDialog, DialogItemIndex itemNo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_HideDialogItem:	OPWORD	$A827
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideDialogItem
+	ENDIF
+
+
+; *  ShowDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ShowDialogItem(DialogRef theDialog, DialogItemIndex itemNo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ShowDialogItem:	OPWORD	$A828
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowDialogItem
+	ENDIF
+
+
+; *  FindDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndexZeroBased FindDialogItem(DialogRef theDialog, Point thePt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FindDialogItem:	OPWORD	$A984
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindDialogItem
+	ENDIF
+
+
+; *  Alert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndex Alert(SInt16 alertID, ModalFilterUPP modalFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_Alert:	OPWORD	$A985
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Alert
+	ENDIF
+
+
+; *  StopAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndex StopAlert(SInt16 alertID, ModalFilterUPP modalFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_StopAlert:	OPWORD	$A986
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StopAlert
+	ENDIF
+
+
+; *  NoteAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndex NoteAlert(SInt16 alertID, ModalFilterUPP modalFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NoteAlert:	OPWORD	$A987
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NoteAlert
+	ENDIF
+
+
+; *  CautionAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndex CautionAlert(SInt16 alertID, ModalFilterUPP modalFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CautionAlert:	OPWORD	$A988
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CautionAlert
+	ENDIF
+
+
+; *  GetDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetDialogItem(DialogRef theDialog, DialogItemIndex itemNo, DialogItemType *itemType, Handle *item, Rect *box)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetDialogItem:	OPWORD	$A98D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogItem
+	ENDIF
+
+
+; *  SetDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetDialogItem(DialogRef theDialog, DialogItemIndex itemNo, DialogItemType itemType, Handle item, const Rect *box)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetDialogItem:	OPWORD	$A98E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogItem
+	ENDIF
+
+
+; *  ParamText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ParamText(ConstStr255Param param0, ConstStr255Param param1, ConstStr255Param param2, ConstStr255Param param3)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ParamText:	OPWORD	$A98B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ParamText
+	ENDIF
+
+
+; *  SelectDialogItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SelectDialogItemText(DialogRef theDialog, DialogItemIndex itemNo, SInt16 strtSel, SInt16 endSel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SelectDialogItemText:	OPWORD	$A97E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SelectDialogItemText
+	ENDIF
+
+
+; *  GetDialogItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetDialogItemText(Handle item, Str255 text)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetDialogItemText:	OPWORD	$A990
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogItemText
+	ENDIF
+
+
+; *  SetDialogItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetDialogItemText(Handle item, ConstStr255Param text)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetDialogItemText:	OPWORD	$A98F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogItemText
+	ENDIF
+
+
+; *  GetAlertStage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetAlertStage(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetAlertStage        &dest=(sp)
+			move.w            $0A9A,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetAlertStage
+	ENDIF
+
+
+; *  SetDialogFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetDialogFont(SInt16 fontNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDialogFont        &src=(sp)+
+			move.w            &src,$0AFA
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogFont
+	ENDIF
+
+
+; *  ResetAlertStage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ResetAlertStage(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ResetAlertStage
+			clr.w               $0A9A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResetAlertStage
+	ENDIF
+
+;  APIs in Carbon
+
+; *  GetParamText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetParamText(StringPtr param0, StringPtr param1, StringPtr param2, StringPtr param3)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetParamText
+	ENDIF
+
+
+
+; *  AppendDITL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AppendDITL(DialogRef theDialog, Handle theHandle, DITLMethod method)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendDITL
+	ENDIF
+
+
+; *  CountDITL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogItemIndex CountDITL(DialogRef theDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountDITL
+	ENDIF
+
+
+; *  ShortenDITL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ShortenDITL(DialogRef theDialog, DialogItemIndex numberItems)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShortenDITL
+	ENDIF
+
+
+; *  InsertDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InsertDialogItem(DialogRef theDialog, DialogItemIndex afterItem, DialogItemType itemType, Handle itemHandle, const Rect *box)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertDialogItem
+	ENDIF
+
+
+; *  RemoveDialogItems()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RemoveDialogItems(DialogRef theDialog, DialogItemIndex itemNo, DialogItemIndex amountToRemove, Boolean disposeItemData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveDialogItems
+	ENDIF
+
+
+; *  GetStdFilterProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetStdFilterProc(ModalFilterUPP *theProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetStdFilterProc
+			move.w              #$0203,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetStdFilterProc
+	ENDIF
+
+
+; *  SetDialogDefaultItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDialogDefaultItem(DialogRef theDialog, DialogItemIndex newItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDialogDefaultItem
+			move.w              #$0304,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogDefaultItem
+	ENDIF
+
+
+; *  SetDialogCancelItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDialogCancelItem(DialogRef theDialog, DialogItemIndex newItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDialogCancelItem
+			move.w              #$0305,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogCancelItem
+	ENDIF
+
+
+; *  SetDialogTracksCursor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDialogTracksCursor(DialogRef theDialog, Boolean tracks)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDialogTracksCursor
+			move.w              #$0306,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogTracksCursor
+	ENDIF
+
+
+
+
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+;    • Appearance Dialog Routines (available only with Appearance 1.0 and later)
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+
+; *  NewFeaturesDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogRef NewFeaturesDialog(void *inStorage, const Rect *inBoundsRect, ConstStr255Param inTitle, Boolean inIsVisible, SInt16 inProcID, WindowRef inBehind, Boolean inGoAwayFlag, SInt32 inRefCon, Handle inItemListHandle, UInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewFeaturesDialog
+			move.w              #$110C,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewFeaturesDialog
+	ENDIF
+
+
+; *  AutoSizeDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AutoSizeDialog(DialogRef inDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AutoSizeDialog
+			move.w              #$020D,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AutoSizeDialog
+	ENDIF
+
+; 
+;    Regarding StandardAlert and constness:
+;    Even though the inAlertParam parameter is marked const here, there was
+;    a chance Dialog Manager would modify it on versions of Mac OS prior to 9.
+;
+
+
+; *  StandardAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr StandardAlert(AlertType inAlertType, ConstStr255Param inError, ConstStr255Param inExplanation, const AlertStdAlertParamRec *inAlertParam, SInt16 *outItemHit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StandardAlert
+			move.w              #$090E,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StandardAlert
+	ENDIF
+
+;  CFString-based StandardAlert and StandardSheet APIs are only available on Mac OS X and later
+
+
+; *  GetStandardAlertDefaultParams()
+; *  
+; *  Summary:
+; *    Fills out an AlertStdCFStringAlertParamRec with default values: -
+; *      not movable -   no help button -   default button with title
+; *    "OK" -   no cancel or other buttons
+; *  
+; *  Parameters:
+; *    
+; *    param:
+; *      The parameter block to initialize.
+; *    
+; *    version:
+; *      The parameter block version; pass kStdCFStringAlertVersionOne.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetStandardAlertDefaultParams(AlertStdCFStringAlertParamPtr param, UInt32 version)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetStandardAlertDefaultParams
+	ENDIF
+
+
+; *  CreateStandardAlert()
+; *  
+; *  Summary:
+; *    Creates an alert containing standard elements and using standard
+; *    formatting rules.
+; *  
+; *  Discussion:
+; *    CreateStandardAlert should be used in conjunction with
+; *    RunStandardAlert. After CreateStandardAlert returns, the alert is
+; *    still invisible. RunStandardAlert will show the alert and run a
+; *    modal dialog loop to process events in the alert.
+; *  
+; *  Parameters:
+; *    
+; *    alertType:
+; *      The type of alert to create.
+; *    
+; *    error:
+; *      The error string to display.
+; *    
+; *    explanation:
+; *      The explanation string to display. May be NULL or empty to
+; *      display no explanation.
+; *    
+; *    param:
+; *      The parameter block describing how to create the alert. May be
+; *      NULL.
+; *    
+; *    outAlert:
+; *      On exit, contains the new alert.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateStandardAlert(AlertType alertType, CFStringRef error, CFStringRef explanation, const AlertStdCFStringAlertParamRec *param, DialogRef *outAlert)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateStandardAlert
+	ENDIF
+
+
+; *  RunStandardAlert()
+; *  
+; *  Summary:
+; *    Shows and runs a standard alert using a modal dialog loop.
+; *  
+; *  Parameters:
+; *    
+; *    inAlert:
+; *      The alert to display.
+; *    
+; *    filterProc:
+; *      An event filter function for handling events that do not apply
+; *      to the alert. May be NULL.
+; *    
+; *    outItemHit:
+; *      On exit, contains the item index of the button that was pressed
+; *      to close the alert.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RunStandardAlert(DialogRef inAlert, ModalFilterUPP filterProc, DialogItemIndex *outItemHit)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RunStandardAlert
+	ENDIF
+
+
+; *  CreateStandardSheet()
+; *  
+; *  Summary:
+; *    Creates an alert containing standard elements and using standard
+; *    formatting rules, and prepares it to be displayed as a sheet.
+; *  
+; *  Discussion:
+; *    CreateStandardSheet should be used in conjunction with
+; *    ShowSheetWindow. After CreateStandardSheet returns, the alert is
+; *    still invisible. ShowSheetWindow will show the alert and then
+; *    return. Events in the sheet are handled asynchronously; the
+; *    application should be prepared for the sheet window to be part of
+; *    its windowlist while running its own event loop. When a button in
+; *    the sheet is pressed, the EventTargetRef passed to
+; *    CreateStandardSheet will receive a command event with one of the
+; *    command IDs kHICommandOK, kHICommandCancel, or kHICommandOther.
+; *    The sheet is closed before the command is sent.
+; *  
+; *  Parameters:
+; *    
+; *    alertType:
+; *      The type of alert to create.
+; *    
+; *    error:
+; *      The error string to display.
+; *    
+; *    explanation:
+; *      The explanation string to display. May be NULL or empty to
+; *      display no explanation.
+; *    
+; *    param:
+; *      The parameter block describing how to create the alert. May be
+; *      NULL.
+; *    
+; *    notifyTarget:
+; *      The event target to be notified when the sheet is closed. The
+; *      caller should install an event handler on this target for the
+; *      [kEventClassCommand, kEventProcessCommand] event.
+; *    
+; *    outSheet:
+; *      On exit, contains the new alert.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateStandardSheet(AlertType alertType, CFStringRef error, CFStringRef explanation, const AlertStdCFStringAlertParamRec *param, EventTargetRef notifyTarget, DialogRef *outSheet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateStandardSheet
+	ENDIF
+
+
+; *  CloseStandardSheet()
+; *  
+; *  Summary:
+; *    Closes a standard sheet dialog and releases the dialog data
+; *    structures.
+; *  
+; *  Discussion:
+; *    CloseStandardSheet is meant to be used when you need to remove a
+; *    sheet because of a higher-priority request to close the sheet's
+; *    document window. For example, you might have a Save Changes sheet
+; *    open on a document window. Meanwhile, the user drags the document
+; *    into the trash. When your application sees that the document has
+; *    been moved to the trash, it knows that it should close the
+; *    document window, but first it needs to close the sheet.
+; *    CloseStandardSheet should not be used by your Carbon event
+; *    handler in response to a click in one of the sheet buttons; the
+; *    Dialog Manager will close the sheet automatically in that case.
+; *    If kStdAlertDoNotDisposeSheet was specified when the sheet was
+; *    created, the sheet dialog will be hidden but not released, and
+; *    you can reuse the sheet later.
+; *  
+; *  Parameters:
+; *    
+; *    inSheet:
+; *      The sheet to close.
+; *    
+; *    inResultCommand:
+; *      This command, if not zero, will be sent to the EventTarget
+; *      specified when the sheet was created.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CloseStandardSheet(DialogRef inSheet, UInt32 inResultCommand)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseStandardSheet
+	ENDIF
+
+
+; *  GetDialogItemAsControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDialogItemAsControl(DialogRef inDialog, SInt16 inItemNo, ControlRef *outControl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDialogItemAsControl
+			move.w              #$050F,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogItemAsControl
+	ENDIF
+
+
+; *  MoveDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr MoveDialogItem(DialogRef inDialog, SInt16 inItemNo, SInt16 inHoriz, SInt16 inVert)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MoveDialogItem
+			move.w              #$0510,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MoveDialogItem
+	ENDIF
+
+
+; *  SizeDialogItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SizeDialogItem(DialogRef inDialog, SInt16 inItemNo, SInt16 inWidth, SInt16 inHeight)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SizeDialogItem
+			move.w              #$0511,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SizeDialogItem
+	ENDIF
+
+
+; *  AppendDialogItemList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DialogsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AppendDialogItemList(DialogRef dialog, SInt16 ditlID, DITLMethod method)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AppendDialogItemList
+			move.w              #$0412,D0
+			dc.w            	$AA68
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendDialogItemList
+	ENDIF
+
+
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+;    • Dialog Routines available only with Appearance 1.1 and later
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+
+; *  SetDialogTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DialogsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetDialogTimeout(DialogRef inDialog, SInt16 inButtonToPress, UInt32 inSecondsToWait)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDialogTimeout
+	ENDIF
+
+
+; *  GetDialogTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DialogsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetDialogTimeout(DialogRef inDialog, SInt16 *outButtonToPress, UInt32 *outSecondsToWait, UInt32 *outSecondsRemaining)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogTimeout
+	ENDIF
+
+
+; *  SetModalDialogEventMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DialogsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetModalDialogEventMask(DialogRef inDialog, EventMask inMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetModalDialogEventMask
+	ENDIF
+
+
+; *  GetModalDialogEventMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DialogsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetModalDialogEventMask(DialogRef inDialog, EventMask *outMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetModalDialogEventMask
+	ENDIF
+
+
+
+
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+;    • Accessor functions
+;  —————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+
+
+; *  GetDialogWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetDialogWindow(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogWindow
+	ENDIF
+
+
+
+; *  GetDialogTextEditHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEHandle GetDialogTextEditHandle(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogTextEditHandle
+	ENDIF
+
+
+
+; *  GetDialogDefaultItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetDialogDefaultItem(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogDefaultItem
+	ENDIF
+
+
+
+; *  GetDialogCancelItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetDialogCancelItem(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogCancelItem
+	ENDIF
+
+
+
+; *  GetDialogKeyboardFocusItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetDialogKeyboardFocusItem(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogKeyboardFocusItem
+	ENDIF
+
+
+
+; *  SetPortDialogPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetPortDialogPort(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetPortDialogPort
+	ENDIF
+
+
+
+; *  GetDialogPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal CGrafPtr GetDialogPort(DialogRef dialog)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogPort
+	ENDIF
+
+
+
+; *  GetDialogFromWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DialogRef GetDialogFromWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDialogFromWindow
+	ENDIF
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CouldDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CouldDialog(SInt16 dialogID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CouldDialog:	OPWORD	$A979
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CouldDialog
+	ENDIF
+
+
+; *  FreeDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void FreeDialog(SInt16 dialogID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FreeDialog:	OPWORD	$A97A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FreeDialog
+	ENDIF
+
+
+; *  CouldAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CouldAlert(SInt16 alertID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CouldAlert:	OPWORD	$A989
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CouldAlert
+	ENDIF
+
+
+; *  FreeAlert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void FreeAlert(SInt16 alertID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FreeAlert:	OPWORD	$A98A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FreeAlert
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+
+
+
+
+
+	IF ¬ TARGET_OS_MAC THEN
+	ENDIF
+
+
+
+
+	ENDIF ; __DIALOGS__ 
+

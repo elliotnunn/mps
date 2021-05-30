@@ -1,0 +1,1435 @@
+;
+;    File:       CFString.a
+;
+;    Contains:   CoreFoundation strings
+;
+;    Version:    Technology: Mac OS X
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+__CFSTRING__ SET 1
+
+	IF &TYPE('__CFBASE__') = 'UNDEFINED' THEN
+	include 'CFBase.a'
+	ENDIF
+	IF &TYPE('__CFARRAY__') = 'UNDEFINED' THEN
+	include 'CFArray.a'
+	ENDIF
+	IF &TYPE('__CFDATA__') = 'UNDEFINED' THEN
+	include 'CFData.a'
+	ENDIF
+	IF &TYPE('__CFDICTIONARY__') = 'UNDEFINED' THEN
+	include 'CFDictionary.a'
+	ENDIF
+
+
+; 
+;Please note: CFStrings are conceptually an array of Unicode characters.
+;However, in general, how a CFString stores this array is an implementation
+;detail. For instance, CFString might choose to use an array of 8-bit characters;
+;to store its contents; or it might use multiple blocks of memory; or whatever.
+;Furthermore, the implementation might change depending on the default
+;system encoding, the user's language, the OS, or even a given release.
+;
+;What this means is that you should use the following advanced functions with care:
+;
+;  CFStringGetPascalStringPtr()
+;  CFStringGetCStringPtr()
+;  CFStringGetCharactersPtr()
+;
+;These functions either return the desired pointer quickly, in constant time, or they
+;return NULL, which indicates you should use some of the other function, as shown
+;in this example:
+;
+;    Str255 buffer;
+;    StringPtr ptr = CFStringGetPascalStringPtr(str, encoding);
+;    if (ptr == NULL) {
+;        if (CFStringGetPascalString(str, buffer, 256, encoding)) ptr = buffer;
+;    }
+;
+;Note that CFStringGetPascalString call might still return NULL --- but that will happen
+;in two circumstances only: The conversion from the UniChar contents of CFString
+;to the specified encoding fails, or the buffer is too small.
+;
+;If you need a copy of the buffer in the above example, you might consider simply
+;calling CFStringGetPascalString() in all cases --- CFStringGetPascalStringPtr()
+;is simply an optimization.
+;
+;In addition, the following functions, which create immutable CFStrings from developer
+;supplied buffers without copying the buffers, might have to actually copy
+;under certain circumstances (If they do copy, the buffer will be dealt with by the
+;"contentsDeallocator" argument.):
+;
+;  CFStringCreateWithPascalStringNoCopy()
+;  CFStringCreateWithCStringNoCopy()
+;  CFStringCreateWithCharactersNoCopy()
+;
+;You should of course never depend on the backing store of these CFStrings being
+;what you provided, and in other no circumstance should you change the contents
+;of that buffer (given that would break the invariant about the CFString being immutable).
+;
+;Having said all this, there are actually ways to create a CFString where the backing store
+;is external, and can be manipulated by the developer or CFString itself:
+;
+;  CFStringCreateMutableWithExternalCharactersNoCopy()
+;  CFStringSetExternalCharactersNoCopy()
+;
+;A "contentsAllocator" is used to realloc or free the backing store by CFString.
+;kCFAllocatorNull can be provided to assure CFString will never realloc or free the buffer.
+;Developer can call CFStringSetExternalCharactersNoCopy() to update
+;CFString's idea of what's going on, if the buffer is changed externally. In these
+;strings, CFStringGetCharactersPtr() is guaranteed to return the external buffer.
+;
+;These functions are here to allow wrapping a buffer of UniChar characters in a CFString,
+;allowing the buffer to passed into CFString functions and also manipulated via CFString
+;mutation functions. In general, developers should not use this technique for all strings,
+;as it prevents CFString from using certain optimizations.
+;
+
+;  Identifier for character encoding; the values are the same as Text Encoding Converter TextEncoding.
+;
+; typedef UInt32 						CFStringEncoding
+
+;  Platform-independent built-in encodings; always available on all platforms.
+;   Call CFStringGetSystemEncoding() to get the default system encoding.
+;
+
+
+; typedef long							CFStringBuiltInEncodings
+kCFStringEncodingInvalidId		EQU		$FFFFFFFF
+kCFStringEncodingMacRoman		EQU		0
+kCFStringEncodingWindowsLatin1	EQU		$0500				; ANSI codepage 1252 
+kCFStringEncodingISOLatin1		EQU		$0201				; ISO 8859-1 
+kCFStringEncodingNextStepLatin	EQU		$0B01				; NextStep encoding
+kCFStringEncodingASCII			EQU		$0600				; 0..127 (in creating CFString, values greater than 0x7F are treated as corresponding Unicode value) 
+kCFStringEncodingUnicode		EQU		$0100				; kTextEncodingUnicodeDefault  + kTextEncodingDefaultFormat (aka kUnicode16BitFormat) 
+kCFStringEncodingUTF8			EQU		$08000100			; kTextEncodingUnicodeDefault + kUnicodeUTF8Format 
+kCFStringEncodingNonLossyASCII	EQU		$0BFF				; 7bit Unicode variants used by YellowBox & Java 
+;  CFString type ID 
+
+; *  CFStringGetTypeID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeID CFStringGetTypeID(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetTypeID
+	ENDIF
+
+;  Macro to allow creation of compile-time constant strings; the argument should be a constant string.
+;
+;CFSTR(), not being a "Copy" or "Create" function, does not return a new
+;reference for you. So, you should not release the return value. This is
+;much like constant C or Pascal strings --- when you use "hello world"
+;in a program, you do not free it.
+;
+;However, strings returned from CFSTR() can be retained and released in a
+;properly nested fashion, just like any other CF type. That is, if you pass
+;a CFSTR() return value to a function such as SetMenuItemWithCFString(), the
+;function can retain it, then later, when it's done with it, it can release it.
+;
+
+; ** Immutable string creation functions **
+;  Functions to create basic immutable strings. The provided allocator is used for all memory activity in these functions.
+;
+;  These functions copy the provided buffer into CFString's internal storage. 
+
+; *  CFStringCreateWithPascalString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithPascalString(CFAllocatorRef alloc, ConstStr255Param pStr, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithPascalString
+	ENDIF
+
+
+; *  CFStringCreateWithCString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithCString(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithCString
+	ENDIF
+
+
+; *  CFStringCreateWithCharacters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithCharacters(CFAllocatorRef alloc, const UniChar *chars, CFIndex numChars)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithCharacters
+	ENDIF
+
+;  These functions try not to copy the provided buffer. The buffer will be deallocated
+;with the provided contentsDeallocator when it's no longer needed; to not free
+;the buffer, specify kCFAllocatorNull here. As usual, NULL means default allocator.
+;NOTE: Do not count on these buffers as being used by the string;
+;in some cases the CFString might free the buffer and use something else
+;(for instance if it decides to always use Unicode encoding internally).
+;In addition, some encodings are not used internally; in
+;those cases CFString might also dump the provided buffer and use its own.
+;
+
+
+; *  CFStringCreateWithPascalStringNoCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithPascalStringNoCopy(CFAllocatorRef alloc, ConstStr255Param pStr, CFStringEncoding encoding, CFAllocatorRef contentsDeallocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithPascalStringNoCopy
+	ENDIF
+
+
+; *  CFStringCreateWithCStringNoCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithCStringNoCopy(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding, CFAllocatorRef contentsDeallocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithCStringNoCopy
+	ENDIF
+
+
+; *  CFStringCreateWithCharactersNoCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithCharactersNoCopy(CFAllocatorRef alloc, const UniChar *chars, CFIndex numChars, CFAllocatorRef contentsDeallocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithCharactersNoCopy
+	ENDIF
+
+;  Create copies of part or all of the string.
+;
+
+; *  CFStringCreateWithSubstring()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithSubstring(CFAllocatorRef alloc, CFStringRef str, CFRange range)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithSubstring
+	ENDIF
+
+
+; *  CFStringCreateCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateCopy(CFAllocatorRef alloc, CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateCopy
+	ENDIF
+
+;  These functions create a CFString from the provided printf-format and arguments.
+;
+
+; *  CFStringCreateWithFormat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithFormat(CFAllocatorRef alloc, CFDictionaryRef formatOptions, CFStringRef format, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithFormat
+	ENDIF
+
+
+; *  CFStringCreateWithFormatAndArguments()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithFormatAndArguments(CFAllocatorRef alloc, CFDictionaryRef formatOptions, CFStringRef format, va_list arguments)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithFormatAndArguments
+	ENDIF
+
+;  Functions to create mutable strings. "maxLength", if not 0, is a hard bound on the length of the string. If 0, there is no limit on the length.
+;
+
+; *  CFStringCreateMutable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFMutableStringRef CFStringCreateMutable(CFAllocatorRef alloc, CFIndex maxLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateMutable
+	ENDIF
+
+
+; *  CFStringCreateMutableCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFMutableStringRef CFStringCreateMutableCopy(CFAllocatorRef alloc, CFIndex maxLength, CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateMutableCopy
+	ENDIF
+
+;  This function creates a mutable string that has a developer supplied and directly editable backing store.
+;The string will be manipulated within the provided buffer (if any) until it outgrows capacity; then the
+;externalCharactersAllocator will be consulted for more memory. When the CFString is deallocated, the
+;buffer will be freed with the externalCharactersAllocator. Provide kCFAllocatorNull here to prevent the buffer
+;from ever being reallocated or deallocated by CFString. See comments at top of this file for more info.
+;
+
+
+; *  CFStringCreateMutableWithExternalCharactersNoCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFMutableStringRef CFStringCreateMutableWithExternalCharactersNoCopy(CFAllocatorRef alloc, UniChar *chars, CFIndex numChars, CFIndex capacity, CFAllocatorRef externalCharactersAllocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateMutableWithExternalCharactersNoCopy
+	ENDIF
+
+; ** Basic accessors for the contents **
+;  Number of 16-bit Unicode characters in the string.
+;
+
+; *  CFStringGetLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFStringGetLength(CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetLength
+	ENDIF
+
+;  Extracting the contents of the string. For obtaining multiple characters, calling
+;CFStringGetCharacters() is more efficient than multiple calls to CFStringGetCharacterAtIndex().
+;If the length of the string is not known (so you can't use a fixed size buffer for CFStringGetCharacters()),
+;another method is to use is CFStringGetCharacterFromInlineBuffer() (see further below).
+;
+
+
+; *  CFStringGetCharacterAtIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UniChar CFStringGetCharacterAtIndex(CFStringRef theString, CFIndex idx)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetCharacterAtIndex
+	ENDIF
+
+
+; *  CFStringGetCharacters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringGetCharacters(CFStringRef theString, CFRange range, UniChar *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetCharacters
+	ENDIF
+
+; ** Conversion to other encodings **
+;  These two convert into the provided buffer; they return FALSE if conversion isn't possible
+;(due to conversion error, or not enough space in the provided buffer).
+;These functions do zero-terminate or put the length byte; the provided bufferSize should include
+;space for this (so pass 256 for Str255). More sophisticated usages can go through CFStringGetBytes().
+;These functions are equivalent to calling CFStringGetBytes() with
+;the range of the string; lossByte = 0; and isExternalRepresentation = FALSE;
+;if successful, they then insert the leading length of terminating zero, as desired.
+;
+
+
+; *  CFStringGetPascalString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringGetPascalString(CFStringRef theString, StringPtr buffer, CFIndex bufferSize, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetPascalString
+	ENDIF
+
+
+; *  CFStringGetCString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringGetCString(CFStringRef theString, char *buffer, CFIndex bufferSize, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetCString
+	ENDIF
+
+;  These functions attempt to return in O(1) time the desired format for the string.
+;Note that although this means a pointer to the internal structure is being returned,
+;this can't always be counted on. Please see note at the top of the file for more
+;details.
+;
+
+
+; *  CFStringGetPascalStringPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern ConstStringPtr CFStringGetPascalStringPtr(CFStringRef theString, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetPascalStringPtr
+	ENDIF
+
+;  Be prepared for NULL 
+
+; *  CFStringGetCStringPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern const char *CFStringGetCStringPtr(CFStringRef theString, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetCStringPtr
+	ENDIF
+
+;  Be prepared for NULL 
+
+; *  CFStringGetCharactersPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern const UniChar *CFStringGetCharactersPtr(CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetCharactersPtr
+	ENDIF
+
+;  Be prepared for NULL 
+;  The primitive conversion routine; allows you to convert a string piece at a time
+;   into a fixed size buffer. Returns number of characters converted.
+;   Characters that cannot be converted to the specified encoding are represented
+;   with the byte specified by lossByte; if lossByte is 0, then lossy conversion
+;   is not allowed and conversion stops, returning partial results.
+;   Pass buffer==NULL if you don't care about the converted string (but just the convertability,
+;   or number of bytes required).
+;   maxBufLength indicates the maximum number of bytes to generate. It is ignored when buffer==NULL.
+;   Does not zero-terminate. If you want to create Pascal or C string, allow one extra byte at start or end.
+;   Setting isExternalRepresentation causes any extra bytes that would allow
+;   the data to be made persistent to be included; for instance, the Unicode BOM.
+;
+
+
+; *  CFStringGetBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFStringGetBytes(CFStringRef theString, CFRange range, CFStringEncoding encoding, UInt8 lossByte, Boolean isExternalRepresentation, UInt8 *buffer, CFIndex maxBufLen, CFIndex *usedBufLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetBytes
+	ENDIF
+
+;  This one goes the other way by creating a CFString from a bag of bytes.
+;This is much like CFStringCreateWithPascalString or CFStringCreateWithCString,
+;except the length is supplied explicitly. In addition, you can specify whether
+;the data is an external format --- that is, whether to pay attention to the
+;BOM character (if any) and do byte swapping if necessary
+;
+
+
+; *  CFStringCreateWithBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateWithBytes(CFAllocatorRef alloc, const UInt8 *bytes, CFIndex numBytes, CFStringEncoding encoding, Boolean isExternalRepresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateWithBytes
+	ENDIF
+
+;  Convenience functions String <-> Data. These generate "external" formats, that is, formats that
+;   can be written out to disk. For instance, if the encoding is Unicode, CFStringCreateFromExternalRepresentation()
+;   pays attention to the BOM character (if any) and does byte swapping if necessary.
+;   Similarly CFStringCreateExternalRepresentation() will always include a BOM character if the encoding is
+;   Unicode. See above for description of lossByte.
+;
+
+
+; *  CFStringCreateFromExternalRepresentation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateFromExternalRepresentation(CFAllocatorRef alloc, CFDataRef data, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateFromExternalRepresentation
+	ENDIF
+
+;  May return NULL on conversion error 
+
+; *  CFStringCreateExternalRepresentation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFDataRef CFStringCreateExternalRepresentation(CFAllocatorRef alloc, CFStringRef theString, CFStringEncoding encoding, UInt8 lossByte)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateExternalRepresentation
+	ENDIF
+
+;  May return NULL on conversion error 
+;  Hints about the contents of a string
+;
+
+; *  CFStringGetSmallestEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringGetSmallestEncoding(CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetSmallestEncoding
+	ENDIF
+
+;  Result in O(n) time max 
+
+; *  CFStringGetFastestEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringGetFastestEncoding(CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetFastestEncoding
+	ENDIF
+
+;  Result in O(1) time max 
+;  General encoding info
+;
+
+; *  CFStringGetSystemEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringGetSystemEncoding(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetSystemEncoding
+	ENDIF
+
+;  The default encoding for the system; untagged 8-bit characters are usually in this encoding 
+
+; *  CFStringGetMaximumSizeForEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFStringGetMaximumSizeForEncoding(CFIndex length, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetMaximumSizeForEncoding
+	ENDIF
+
+;  Max bytes a string of specified length (in UniChars) will take up if encoded 
+; ** Comparison functions. **
+
+; typedef long							CFStringCompareFlags
+															; Flags used in all find and compare operations 
+kCFCompareCaseInsensitive		EQU		1
+kCFCompareBackwards				EQU		4					; Starting from the end of the string 
+kCFCompareAnchored				EQU		8					; Only at the specified starting point 
+kCFCompareNonliteral			EQU		16					; If specified, loose equivalence is performed (o-umlaut == o, umlaut) 
+kCFCompareLocalized				EQU		32					; User's default locale is used for the comparisons 
+kCFCompareNumerically			EQU		64					; Numeric comparison is used; that is, Foo2.txt < Foo7.txt < Foo25.txt 
+;  The main comparison routine; compares specified range of the string to another.
+;   locale == NULL indicates canonical locale
+;
+
+
+; *  CFStringCompareWithOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFComparisonResult CFStringCompareWithOptions(CFStringRef theString1, CFStringRef theString2, CFRange rangeToCompare, CFOptionFlags compareOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCompareWithOptions
+	ENDIF
+
+;  Comparison convenience suitable for passing as sorting functions.
+;
+
+; *  CFStringCompare()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFComparisonResult CFStringCompare(CFStringRef theString1, CFStringRef theString2, CFOptionFlags compareOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCompare
+	ENDIF
+
+;  Find routines; CFStringFindWithOptions() returns the found range in the CFRange * argument;  You can pass NULL for simple discovery check.
+;   CFStringCreateArrayWithFindResults() returns an array of CFRange pointers, or NULL if there are no matches.
+;
+
+
+; *  CFStringFindWithOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringFindWithOptions(CFStringRef theString, CFStringRef stringToFind, CFRange rangeToSearch, CFOptionFlags searchOptions, CFRange *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringFindWithOptions
+	ENDIF
+
+
+; *  CFStringCreateArrayWithFindResults()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFArrayRef CFStringCreateArrayWithFindResults(CFAllocatorRef alloc, CFStringRef theString, CFStringRef stringToFind, CFRange rangeToSearch, CFOptionFlags compareOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateArrayWithFindResults
+	ENDIF
+
+;  Find conveniences
+;
+
+; *  CFStringFind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFRange CFStringFind(CFStringRef theString, CFStringRef stringToFind, CFOptionFlags compareOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringFind
+	ENDIF
+
+
+; *  CFStringHasPrefix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringHasPrefix(CFStringRef theString, CFStringRef prefix)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringHasPrefix
+	ENDIF
+
+
+; *  CFStringHasSuffix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringHasSuffix(CFStringRef theString, CFStringRef suffix)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringHasSuffix
+	ENDIF
+
+;  Find range of bounds of the line(s) that span the indicated range (startIndex, numChars),
+;   taking into account various possible line separator sequences (CR, CRLF, LF, and Unicode LS, PS).
+;   All return values are "optional" (provide NULL if you don't want them)
+;     lineStartIndex: index of first character in line
+;     lineEndIndex: index of first character of the next line (including terminating line separator characters)
+;     contentsEndIndex: index of the first line separator character
+;   Thus, lineEndIndex - lineStartIndex is the number of chars in the line, including the line separators
+;         contentsEndIndex - lineStartIndex is the number of chars in the line w/out the line separators
+;
+
+
+; *  CFStringGetLineBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringGetLineBounds(CFStringRef theString, CFRange range, CFIndex *lineBeginIndex, CFIndex *lineEndIndex, CFIndex *contentsEndIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetLineBounds
+	ENDIF
+
+; ** Exploding and joining strings with a separator string **
+
+; *  CFStringCreateByCombiningStrings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringCreateByCombiningStrings(CFAllocatorRef alloc, CFArrayRef theArray, CFStringRef separatorString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateByCombiningStrings
+	ENDIF
+
+;  Empty array returns empty string; one element array returns the element 
+
+; *  CFStringCreateArrayBySeparatingStrings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFArrayRef CFStringCreateArrayBySeparatingStrings(CFAllocatorRef alloc, CFStringRef theString, CFStringRef separatorString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCreateArrayBySeparatingStrings
+	ENDIF
+
+;  No separators in the string returns array with that string; string == sep returns two empty strings 
+; ** Parsing non-localized numbers from strings **
+
+; *  CFStringGetIntValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern SInt32 CFStringGetIntValue(CFStringRef str)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetIntValue
+	ENDIF
+
+;  Skips whitespace; returns 0 on error, MAX or -MAX on overflow 
+
+; *  CFStringGetDoubleValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern double CFStringGetDoubleValue(CFStringRef str)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetDoubleValue
+	ENDIF
+
+;  Skips whitespace; returns 0.0 on error 
+; ** MutableString functions **
+;  CFStringAppend("abcdef", "xxxxx") -> "abcdefxxxxx"
+;   CFStringDelete("abcdef", CFRangeMake(2, 3)) -> "abf"
+;   CFStringReplace("abcdef", CFRangeMake(2, 3), "xxxxx") -> "abxxxxxf"
+;   CFStringReplaceAll("abcdef", "xxxxx") -> "xxxxx"
+;
+
+
+; *  CFStringAppend()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringAppend(CFMutableStringRef theString, CFStringRef appendedString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringAppend
+	ENDIF
+
+
+; *  CFStringAppendCharacters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringAppendCharacters(CFMutableStringRef theString, const UniChar *chars, CFIndex numChars)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringAppendCharacters
+	ENDIF
+
+
+; *  CFStringAppendPascalString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringAppendPascalString(CFMutableStringRef theString, ConstStr255Param pStr, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringAppendPascalString
+	ENDIF
+
+
+; *  CFStringAppendCString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringAppendCString(CFMutableStringRef theString, const char *cStr, CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringAppendCString
+	ENDIF
+
+
+; *  CFStringAppendFormat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringAppendFormat(CFMutableStringRef theString, CFDictionaryRef formatOptions, CFStringRef format, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringAppendFormat
+	ENDIF
+
+
+; *  CFStringInsert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringInsert(CFMutableStringRef str, CFIndex idx, CFStringRef insertedStr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringInsert
+	ENDIF
+
+
+; *  CFStringDelete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringDelete(CFMutableStringRef theString, CFRange range)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringDelete
+	ENDIF
+
+
+; *  CFStringReplace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringReplace(CFMutableStringRef theString, CFRange range, CFStringRef replacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringReplace
+	ENDIF
+
+
+; *  CFStringReplaceAll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringReplaceAll(CFMutableStringRef theString, CFStringRef replacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringReplaceAll
+	ENDIF
+
+;  Replaces whole string 
+;  This function will make the contents of a mutable CFString point directly at the specified UniChar array.
+;it works only with CFStrings created with CFStringCreateMutableWithExternalCharactersNoCopy().
+;This function does not free the previous buffer.
+;The string will be manipulated within the provided buffer (if any) until it outgrows capacity; then the
+;externalCharactersAllocator will be consulted for more memory.
+;See comments at the top of this file for more info.
+;
+
+
+; *  CFStringSetExternalCharactersNoCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringSetExternalCharactersNoCopy(CFMutableStringRef theString, UniChar *chars, CFIndex length, CFIndex capacity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringSetExternalCharactersNoCopy
+	ENDIF
+
+;  Works only on specially created mutable strings! 
+;  CFStringPad() will pad or cut down a string to the specified size.
+;   The pad string is used as the fill string; indexIntoPad specifies which character to start with.
+;     CFStringPad("abc", " ", 9, 0) ->  "abc      "
+;     CFStringPad("abc", ". ", 9, 1) -> "abc . . ."
+;     CFStringPad("abcdef", ?, 3, ?) -> "abc"
+;
+;     CFStringTrim() will trim the specified string from both ends of the string.
+;     CFStringTrimWhitespace() will do the same with white space characters (tab, newline, etc)
+;     CFStringTrim("  abc ", " ") -> "abc"
+;     CFStringTrim("* * * *abc * ", "* ") -> "*abc "
+;
+
+
+; *  CFStringPad()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringPad(CFMutableStringRef theString, CFStringRef padString, CFIndex length, CFIndex indexIntoPad)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringPad
+	ENDIF
+
+
+; *  CFStringTrim()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringTrim(CFMutableStringRef theString, CFStringRef trimString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringTrim
+	ENDIF
+
+
+; *  CFStringTrimWhitespace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringTrimWhitespace(CFMutableStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringTrimWhitespace
+	ENDIF
+
+
+; *  CFStringLowercase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringLowercase(CFMutableStringRef theString, const void *localeTBD)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringLowercase
+	ENDIF
+
+
+; *  CFStringUppercase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringUppercase(CFMutableStringRef theString, const void *localeTBD)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringUppercase
+	ENDIF
+
+
+; *  CFStringCapitalize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFStringCapitalize(CFMutableStringRef theString, const void *localeTBD)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringCapitalize
+	ENDIF
+
+;  This returns availability of the encoding on the system
+;
+
+; *  CFStringIsEncodingAvailable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFStringIsEncodingAvailable(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringIsEncodingAvailable
+	ENDIF
+
+;  This function returns list of available encodings.  The returned list is terminated with kCFStringEncodingInvalidId and owned by the system.
+;
+
+; *  CFStringGetListOfAvailableEncodings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern const CFStringEncoding *CFStringGetListOfAvailableEncodings(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetListOfAvailableEncodings
+	ENDIF
+
+;  Returns name of the encoding
+;
+
+; *  CFStringGetNameOfEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringGetNameOfEncoding(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetNameOfEncoding
+	ENDIF
+
+;  ID mapping functions from/to YellowBox NSStringEncoding.  Returns kCFStringEncodingInvalidId if no mapping exists.
+;
+
+; *  CFStringConvertEncodingToNSStringEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 CFStringConvertEncodingToNSStringEncoding(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertEncodingToNSStringEncoding
+	ENDIF
+
+
+; *  CFStringConvertNSStringEncodingToEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringConvertNSStringEncodingToEncoding(UInt32 encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertNSStringEncodingToEncoding
+	ENDIF
+
+;  ID mapping functions from/to Microsoft Windows codepage (covers both OEM & ANSI).  Returns kCFStringEncodingInvalidId if no mapping exists.
+;
+
+; *  CFStringConvertEncodingToWindowsCodepage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 CFStringConvertEncodingToWindowsCodepage(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertEncodingToWindowsCodepage
+	ENDIF
+
+
+; *  CFStringConvertWindowsCodepageToEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringConvertWindowsCodepageToEncoding(UInt32 codepage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertWindowsCodepageToEncoding
+	ENDIF
+
+;  ID mapping functions from/to IANA registery charset names.  Returns kCFStringEncodingInvalidId if no mapping exists.
+;
+
+; *  CFStringConvertIANACharSetNameToEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringConvertIANACharSetNameToEncoding(CFStringRef theString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertIANACharSetNameToEncoding
+	ENDIF
+
+
+; *  CFStringConvertEncodingToIANACharSetName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFStringConvertEncodingToIANACharSetName(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringConvertEncodingToIANACharSetName
+	ENDIF
+
+;  Returns the most compatible MacOS script value for the input encoding 
+;  i.e. kCFStringEncodingMacRoman -> kCFStringEncodingMacRoman 
+;      kCFStringEncodingWindowsLatin1 -> kCFStringEncodingMacRoman 
+;      kCFStringEncodingISO_2022_JP -> kCFStringEncodingMacJapanese 
+
+; *  CFStringGetMostCompatibleMacStringEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringEncoding CFStringGetMostCompatibleMacStringEncoding(CFStringEncoding encoding)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFStringGetMostCompatibleMacStringEncoding
+	ENDIF
+
+
+;  Rest of the stuff in this file is private and should not be used directly
+;
+;  For debugging only
+;   Use CFShow() to printf the description of any CFType;
+;   Use CFShowStr() to printf detailed info about a CFString
+;
+
+
+; *  CFShow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFShow(CFTypeRef obj)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFShow
+	ENDIF
+
+
+; *  CFShowStr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFShowStr(CFStringRef str)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFShowStr
+	ENDIF
+
+;  This function is private and should not be used directly 
+	ENDIF ; __CFSTRING__ 
+

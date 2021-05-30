@@ -1,0 +1,1054 @@
+;
+;    File:       PPCToolbox.a
+;
+;    Contains:   Program-Program Communications Toolbox Interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1989-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__PPCTOOLBOX__') = 'UNDEFINED' THEN
+__PPCTOOLBOX__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+	include 'AppleTalk.a'
+	ENDIF
+
+
+; typedef UInt8							PPCServiceType
+ppcServiceRealTime				EQU		1
+
+; typedef SInt16						PPCLocationKind
+ppcNoLocation					EQU		0					; There is no PPCLocName 
+ppcNBPLocation					EQU		1					; Use AppleTalk NBP      
+ppcNBPTypeLocation				EQU		2					; Used for specifying a location name type during PPCOpen only 
+ppcXTIAddrLocation				EQU		3					; Use TCP/IP or DNS host name address 
+
+; typedef SInt16						PPCPortKinds
+ppcByCreatorAndType				EQU		1					; Port type is specified as colloquial Mac creator and type 
+ppcByString						EQU		2					; Port type is in pascal string format 
+;  Values returned for request field in PPCInform call 
+
+; typedef UInt8							PPCSessionOrigin
+ppcLocalOrigin					EQU		1					; session originated from this machine 
+ppcRemoteOrigin					EQU		2					; session originated from remote machine 
+
+; typedef short 						PPCPortRefNum
+
+; typedef long 							PPCSessRefNum
+
+
+
+;   The maximum allowed size of a fAddress in PPCXTIAddress 
+
+kMaxPPCXTIAddress				EQU		95
+
+;     
+;    The possible types of information found in the fAddressType field of a PPCXTIAddress record
+;    Note:   These constants are the same as the AF_INET & AF_DNS constants, defined in OpenTptInternet.x
+;
+
+
+; typedef SInt16						PPCXTIAddressType
+kINETAddrType					EQU		2					;    An IP address in binary form (type InetHost).
+kDNSAddrType					EQU		42					;    A DNS or dotted-decimal name string (no leading length byte, no NULL termination byte)
+
+;     
+;    This structure specifies a transport independent network address in a 
+;    form that can be used by Open Transport, or as a XTI/TLI/socket network 
+;    address in UNIX terminology.
+;
+
+PPCXTIAddress			RECORD 0
+fAddressType			 ds.w	1				; offset: $0 (0)		;  A constant specifying what kind of network address this is 
+fAddress				 ds.b	96				; offset: $2 (2)		;  The contents of the network address (variable length, NULL terminated). 
+sizeof					 EQU *					; size:   $62 (98)
+						ENDR
+; typedef struct PPCXTIAddress *		PPCXTIAddressPtr
+
+
+
+; 
+;    This structure is the variant type used in a LocationNameRec when an IP connection
+;    is being established for a PPC Toolbox session.
+;    
+;    NOTE: The value of the xtiAddrLen must be the length of the entire PPCXTIAddress structure 
+;    in the xtiAddr field, and not just the length of the fAddress field of the PPCXTIAddress structure.
+;
+
+PPCAddrRec				RECORD 0
+Reserved				 ds.b	3				; offset: $0 (0)		;  reserved - must be initialize to 0          
+xtiAddrLen				 ds.b	1				; offset: $3 (3)		;  size of the xtiAddr field             
+xtiAddr					 ds		PPCXTIAddress	; offset: $4 (4)		;  the transport-independent network address   
+sizeof					 EQU *					; size:   $66 (102)
+						ENDR
+; typedef struct PPCAddrRec *			PPCAddrRecPtr
+
+
+LocationNameRec			RECORD 0
+locationKindSelector	 ds.w	1				; offset: $0 (0)		;  which variant 
+nbpEntity				 ds		EntityName		; offset: $2 (2)		;  NBP name entity                   
+						 ORG 2
+nbpType					 ds.b	33				; offset: $2 (2)		;  just the NBP type string, for PPCOpen  
+						 ORG 2
+xtiType					 ds		PPCAddrRec		; offset: $2 (2)		;  an XTI-type network address record     
+sizeof					 EQU *					; size:   $68 (104)
+						ENDR
+; typedef struct LocationNameRec *		LocationNamePtr
+
+
+PPCPortRec				RECORD 0
+nameScript				 ds.w	1				; offset: $0 (0)		;  script of name 
+name					 ds		Str32Field		; offset: $2 (2)		;  name of port as seen in browser 
+portKindSelector		 ds.w	1				; offset: $24 (36)		;  which variant 
+portTypeStr				 ds.b	33				; offset: $26 (38)		;  pascal type string 
+						 ORG 38
+portCreator				 ds.l	1				; offset: $26 (38)
+portType				 ds.l	1				; offset: $2A (42)
+						 ORG 72
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+; typedef struct PPCPortRec *			PPCPortPtr
+
+PortInfoRec				RECORD 0
+filler1					 ds.b	1				; offset: $0 (0)
+authRequired			 ds.b	1				; offset: $1 (1)
+name					 ds		PPCPortRec		; offset: $2 (2)
+sizeof					 EQU *					; size:   $4A (74)
+						ENDR
+; typedef struct PortInfoRec *			PortInfoPtr
+
+; typedef struct PortInfoRec *			PortInfoArrayPtr
+
+
+
+; typedef PPCParamBlockRec *			PPCParamBlockPtr
+
+PPCOpenPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+portRefNum				 ds.w	1				; offset: $26 (38)		;  38 <--   Port Reference 
+filler1					 ds.l	1				; offset: $28 (40)
+serviceType				 ds.b	1				; offset: $2C (44)		;  44 -->    Bit field describing the requested port service 
+resFlag					 ds.b	1				; offset: $2D (45)		;  Must be set to 0 
+portName				 ds.l	1				; offset: $2E (46)		;  46 -->   PortName for PPC 
+locationName			 ds.l	1				; offset: $32 (50)		;  50 -->   If NBP Registration is required 
+networkVisible			 ds.b	1				; offset: $36 (54)		;  54 -->   make this network visible on network 
+nbpRegistered			 ds.b	1				; offset: $37 (55)		;  55 <--   The given location name was registered on the network 
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+; typedef struct PPCOpenPBRec *			PPCOpenPBPtr
+
+PPCInformPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+portRefNum				 ds.w	1				; offset: $26 (38)		;  38 -->   Port Identifier 
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 <--   Session Reference 
+serviceType				 ds.b	1				; offset: $2C (44)		;  44 <--   Status Flags for type of session, local, remote 
+autoAccept				 ds.b	1				; offset: $2D (45)		;  45 -->   if true session will be accepted automatically 
+portName				 ds.l	1				; offset: $2E (46)		;  46 -->   Buffer for Source PPCPortRec 
+locationName			 ds.l	1				; offset: $32 (50)		;  50 -->   Buffer for Source LocationNameRec 
+userName				 ds.l	1				; offset: $36 (54)		;  54 -->   Buffer for Soure user's name trying to link. 
+userData				 ds.l	1				; offset: $3A (58)		;  58 <--   value included in PPCStart's userData 
+requestType				 ds.b	1				; offset: $3E (62)		;  62 <--   Local or Network 
+filler					 ds.b	1				; offset: $3F (63)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; typedef struct PPCInformPBRec *		PPCInformPBPtr
+
+PPCStartPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+portRefNum				 ds.w	1				; offset: $26 (38)		;  38 -->   Port Identifier 
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 <--   Session Reference 
+serviceType				 ds.b	1				; offset: $2C (44)		;  44 <--   Actual service method (realTime) 
+resFlag					 ds.b	1				; offset: $2D (45)		;  45 -->   Must be set to 0  
+portName				 ds.l	1				; offset: $2E (46)		;  46 -->   Destination portName 
+locationName			 ds.l	1				; offset: $32 (50)		;  50 -->   NBP or NAS style service location name 
+rejectInfo				 ds.l	1				; offset: $36 (54)		;  54 <--   reason for rejecting the session request 
+userData				 ds.l	1				; offset: $3A (58)		;  58 -->   Copied to destination PPCInform parameter block 
+userRefNum				 ds.l	1				; offset: $3E (62)		;  62 -->   userRefNum (obtained during login process)  
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+; typedef struct PPCStartPBRec *		PPCStartPBPtr
+
+PPCAcceptPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 -->   Session Reference 
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+; typedef struct PPCAcceptPBRec *		PPCAcceptPBPtr
+
+PPCRejectPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 -->   Session Reference 
+filler2					 ds.w	1				; offset: $2C (44)
+filler3					 ds.l	1				; offset: $2E (46)
+filler4					 ds.l	1				; offset: $32 (50)
+rejectInfo				 ds.l	1				; offset: $36 (54)		;  54 -->   reason for rejecting the session request  
+sizeof					 EQU *					; size:   $3A (58)
+						ENDR
+; typedef struct PPCRejectPBRec *		PPCRejectPBPtr
+
+PPCWritePBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 -->   Session Reference 
+bufferLength			 ds.l	1				; offset: $2C (44)		;  44 -->   Length of the message buffer 
+actualLength			 ds.l	1				; offset: $30 (48)		;  48 <--   Actual Length Written 
+bufferPtr				 ds.l	1				; offset: $34 (52)		;  52 -->   Pointer to message buffer 
+more					 ds.b	1				; offset: $38 (56)		;  56 -->   if more data in this block will be written 
+filler2					 ds.b	1				; offset: $39 (57)
+userData				 ds.l	1				; offset: $3A (58)		;  58 -->   Message block userData Uninterpreted by PPC 
+blockCreator			 ds.l	1				; offset: $3E (62)		;  62 -->   Message block creator Uninterpreted by PPC 
+blockType				 ds.l	1				; offset: $42 (66)		;  66 -->   Message block type Uninterpreted by PPC 
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+; typedef struct PPCWritePBRec *		PPCWritePBPtr
+
+PPCReadPBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 -->   Session Reference 
+bufferLength			 ds.l	1				; offset: $2C (44)		;  44 -->   Length of the message buffer 
+actualLength			 ds.l	1				; offset: $30 (48)		;  48 <--   Actual length read 
+bufferPtr				 ds.l	1				; offset: $34 (52)		;  52 -->   Pointer to message buffer 
+more					 ds.b	1				; offset: $38 (56)		;  56 <--   if true more data in this block to be read 
+filler2					 ds.b	1				; offset: $39 (57)
+userData				 ds.l	1				; offset: $3A (58)		;  58 <--   Message block userData Uninterpreted by PPC 
+blockCreator			 ds.l	1				; offset: $3E (62)		;  62 <--   Message block creator Uninterpreted by PPC 
+blockType				 ds.l	1				; offset: $42 (66)		;  66 <--   Message block type Uninterpreted by PPC 
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+; typedef struct PPCReadPBRec *			PPCReadPBPtr
+
+PPCEndPBRec				RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+sessRefNum				 ds.l	1				; offset: $28 (40)		;  40 -->   Session Reference 
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+; typedef struct PPCEndPBRec *			PPCEndPBPtr
+
+PPCClosePBRec			RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+portRefNum				 ds.w	1				; offset: $26 (38)		;  38 -->   Port Identifier 
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+; typedef struct PPCClosePBRec *		PPCClosePBPtr
+
+IPCListPortsPBRec		RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)		;  PPC's Internal Use 
+csCode					 ds.w	1				; offset: $4 (4)		;  Requested PPC command 
+intUse					 ds.w	1				; offset: $6 (6)		;  Internal Use 
+intUsePtr				 ds.l	1				; offset: $8 (8)		;  Internal Use 
+ioCompletion			 ds.l	1				; offset: $C (12)		;  12 --> Completion Routine 
+ioResult				 ds.w	1				; offset: $10 (16)		;  16 <--     Command Result Code 
+Reserved				 ds.l	5				; offset: $12 (18)		;  Reserved for PPC, Don't use 
+filler1					 ds.w	1				; offset: $26 (38)
+startIndex				 ds.w	1				; offset: $28 (40)		;  40 -->   Start Index 
+requestCount			 ds.w	1				; offset: $2A (42)		;  42 -->   Number of entries to be returned 
+actualCount				 ds.w	1				; offset: $2C (44)		;  44 <--   Actual Number of entries to be returned 
+portName				 ds.l	1				; offset: $2E (46)		;  46 -->   PortName Match 
+locationName			 ds.l	1				; offset: $32 (50)		;  50 -->   NBP or NAS type name to locate the Port Location 
+bufferPtr				 ds.l	1				; offset: $36 (54)		;  54 -->   Pointer to a buffer requestCount*sizeof(PortInfo) bytes big 
+sizeof					 EQU *					; size:   $3A (58)
+						ENDR
+; typedef struct IPCListPortsPBRec *	IPCListPortsPBPtr
+
+PPCParamBlockRec		RECORD 0
+openParam				 ds		PPCOpenPBRec	; offset: $0 (0)
+						 ORG 0
+informParam				 ds		PPCInformPBRec ; offset: $0 (0)
+						 ORG 0
+startParam				 ds		PPCStartPBRec	; offset: $0 (0)
+						 ORG 0
+acceptParam				 ds		PPCAcceptPBRec ; offset: $0 (0)
+						 ORG 0
+rejectParam				 ds		PPCRejectPBRec ; offset: $0 (0)
+						 ORG 0
+writeParam				 ds		PPCWritePBRec	; offset: $0 (0)
+						 ORG 0
+readParam				 ds		PPCReadPBRec	; offset: $0 (0)
+						 ORG 0
+endParam				 ds		PPCEndPBRec		; offset: $0 (0)
+						 ORG 0
+closeParam				 ds		PPCClosePBRec	; offset: $0 (0)
+						 ORG 0
+listPortsParam			 ds		IPCListPortsPBRec ; offset: $0 (0)
+						 ORG 70
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+;   PPC Calling Conventions  
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PPCInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCInit(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCInit
+			moveq           	#0,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCInit
+	ENDIF
+
+
+
+; *  PPCOpenSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCOpenSync(PPCOpenPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCOpenSync
+			moveq           	#1,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCOpenSync
+	ENDIF
+
+
+; *  PPCOpenAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCOpenAsync(PPCOpenPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCOpenAsync
+			moveq           	#1,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCOpenAsync
+	ENDIF
+
+
+; *  PPCInformSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCInformSync(PPCInformPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCInformSync
+			moveq           	#3,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCInformSync
+	ENDIF
+
+
+; *  PPCInformAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCInformAsync(PPCInformPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCInformAsync
+			moveq           	#3,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCInformAsync
+	ENDIF
+
+
+; *  PPCStartSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCStartSync(PPCStartPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCStartSync
+			moveq           	#2,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCStartSync
+	ENDIF
+
+
+; *  PPCStartAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCStartAsync(PPCStartPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCStartAsync
+			moveq           	#2,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCStartAsync
+	ENDIF
+
+
+; *  PPCAcceptSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCAcceptSync(PPCAcceptPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCAcceptSync
+			moveq           	#4,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCAcceptSync
+	ENDIF
+
+
+; *  PPCAcceptAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCAcceptAsync(PPCAcceptPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCAcceptAsync
+			moveq           	#4,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCAcceptAsync
+	ENDIF
+
+
+; *  PPCRejectSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCRejectSync(PPCRejectPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCRejectSync
+			moveq           	#5,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCRejectSync
+	ENDIF
+
+
+; *  PPCRejectAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCRejectAsync(PPCRejectPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCRejectAsync
+			moveq           	#5,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCRejectAsync
+	ENDIF
+
+
+; *  PPCWriteSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCWriteSync(PPCWritePBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCWriteSync
+			moveq           	#6,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCWriteSync
+	ENDIF
+
+
+; *  PPCWriteAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCWriteAsync(PPCWritePBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCWriteAsync
+			moveq           	#6,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCWriteAsync
+	ENDIF
+
+
+; *  PPCReadSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCReadSync(PPCReadPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCReadSync
+			moveq           	#7,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCReadSync
+	ENDIF
+
+
+; *  PPCReadAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCReadAsync(PPCReadPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCReadAsync
+			moveq           	#7,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCReadAsync
+	ENDIF
+
+
+; *  PPCEndSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCEndSync(PPCEndPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCEndSync
+			moveq           	#8,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCEndSync
+	ENDIF
+
+
+; *  PPCEndAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCEndAsync(PPCEndPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCEndAsync
+			moveq           	#8,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCEndAsync
+	ENDIF
+
+
+; *  PPCCloseSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCCloseSync(PPCClosePBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCCloseSync
+			moveq           	#9,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCCloseSync
+	ENDIF
+
+
+; *  PPCCloseAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCCloseAsync(PPCClosePBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PPCCloseAsync
+			moveq           	#9,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCCloseAsync
+	ENDIF
+
+
+; *  IPCListPortsSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr IPCListPortsSync(IPCListPortsPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_IPCListPortsSync
+			moveq           	#10,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IPCListPortsSync
+	ENDIF
+
+
+; *  IPCListPortsAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr IPCListPortsAsync(IPCListPortsPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_IPCListPortsAsync
+			moveq           	#10,D0
+			dc.w            	$A4DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IPCListPortsAsync
+	ENDIF
+
+
+; *  IPCKillListPorts()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr IPCKillListPorts(IPCListPortsPBPtr pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	pb              => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_IPCKillListPorts
+			moveq           	#11,D0
+			dc.w            	$A0DD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IPCKillListPorts
+	ENDIF
+
+
+; *  DeleteUserIdentity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DeleteUserIdentity(unsigned long userRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteUserIdentity
+	ENDIF
+
+
+; *  GetDefaultUser()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetDefaultUser(unsigned long *userRef, Str32 userName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDefaultUser
+	ENDIF
+
+
+; *  StartSecureSession()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr StartSecureSession(PPCStartPBPtr pb, Str32 userName, Boolean useDefault, Boolean allowGuest, Boolean *guestSelected, ConstStr255Param prompt)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StartSecureSession
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewPPCCompUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewPPCFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePPCCompUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePPCFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePPCCompUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePPCFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PPCBrowser()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPCBrowser(ConstStr255Param prompt, ConstStr255Param applListLabel, Boolean defaultSpecified, LocationNameRec *theLocation, PortInfoRec *thePortInfo, PPCFilterUPP portFilter, ConstStr32Param theLocNBPType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PPCBrowser
+			move.w              #$0D00,D0
+			dc.w            	$A82B
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPCBrowser
+	ENDIF
+
+
+; 
+;  The ParamBlock calls without the "Sync" or "Async" suffix are being phased out.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+	ENDIF ; __PPCTOOLBOX__ 
+

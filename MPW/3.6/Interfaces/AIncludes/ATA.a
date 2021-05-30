@@ -1,0 +1,1382 @@
+;
+;    File:       ATA.a
+;
+;    Contains:   ATA (PC/AT Attachment) Interfaces
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__ATA__') = 'UNDEFINED' THEN
+__ATA__ SET 1
+
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+
+;  This is the structure used for the AT Interface core routines below 
+
+kATATrap						EQU		$AAF1				; Manager trap number <This should be defined in Traps.h>
+kATAPBVers1						EQU		$01					; parameter block version number 1
+kATAPBVers2						EQU		$02					; parameter block version number for structures
+kATAPBVers3						EQU		$03					; parameter block version for ATA times
+kATADefaultBlockSize			EQU		512					; default block size
+;  Used to determine the presence of traps
+
+kFSMTrap						EQU		$AC
+mDQEChanged						EQU		1					; DQE has changed 
+;  Task file definition ••• Error Register •••
+
+bATABadBlock					EQU		7					; bit number of bad block error bit
+bATAUncorrectable				EQU		6					; bit number of uncorrectable error bit
+bATAMediaChanged				EQU		5					; bit number of media changed indicator
+bATAIDNotFound					EQU		4					; bit number of ID not found error bit
+bATAMediaChangeReq				EQU		3					; bit number of media changed request
+bATACommandAborted				EQU		2					; bit number of command abort bit
+bATATrack0NotFound				EQU		1					; bit number of track not found
+bATAAddressNotFound				EQU		0					; bit number of address mark not found
+mATABadBlock					EQU		$80					; Bad Block Detected
+mATAUncorrectable				EQU		$40					; Uncorrectable Data Error
+mATAMediaChanged				EQU		$20					; Media Changed Indicator (for removable)
+mATAIDNotFound					EQU		$10					; ID Not Found
+mATAMediaChangeReq				EQU		$08					; Media Change Requested (NOT IMPLEMENTED)
+mATACommandAborted				EQU		$04					; Aborted Command
+mATATrack0NotFound				EQU		$02					; Track 0 Not Found
+mATAAddressNotFound				EQU		$01					; Address Mark Not Found
+;  Task file definition ••• Features register •••
+
+bATAPIuseDMA					EQU		0					; bit number of useDMA bit (ATAPI)
+mATAPIuseDMA					EQU		$01
+;  Task file definition ••• ataTFSDH Register •••
+
+mATAHeadNumber					EQU		$0F					; Head Number (bits 0-3) 
+mATASectorSize					EQU		$A0					; bit 7=1; bit 5 = 01 (512 sector size) <DP4>
+mATADriveSelect					EQU		$10					; Drive (0 = master, 1 = slave) 
+mATALBASelect					EQU		$40					; LBA mode bit (0 = chs, 1 = LBA)
+;  Task file definition ••• Status Register •••
+
+bATABusy						EQU		7					; bit number of BSY bit
+bATADriveReady					EQU		6					; bit number of drive ready bit
+bATAWriteFault					EQU		5					; bit number of write fault bit
+bATASeekComplete				EQU		4					; bit number of seek complete bit
+bATADataRequest					EQU		3					; bit number of data request bit
+bATADataCorrected				EQU		2					; bit number of data corrected bit
+bATAIndex						EQU		1					; bit number of index mark
+bATAError						EQU		0					; bit number of error bit
+mATABusy						EQU		$80					; Unit is busy
+mATADriveReady					EQU		$40					; Unit is ready
+mATAWriteFault					EQU		$20					; Unit has a write fault condition
+mATASeekComplete				EQU		$10					; Unit seek complete
+mATADataRequest					EQU		$08					; Unit data request
+mATADataCorrected				EQU		$04					; Data corrected
+mATAIndex						EQU		$02					; Index mark - NOT USED
+mATAError						EQU		$01					; Error condition - see error register
+;  Task file definition ••• Device Control Register •••
+
+bATADCROne						EQU		3					; bit number of always one bit
+bATADCRReset					EQU		2					; bit number of reset bit
+bATADCRnIntEnable				EQU		1					; bit number of interrupt disable
+mATADCROne						EQU		$08					; always one bit
+mATADCRReset					EQU		$04					; Reset (1 = reset)
+mATADCRnIntEnable				EQU		$02					; Interrupt Disable(0 = enabled)
+;  ATA Command Opcode definition
+
+kATAcmdWORetry					EQU		$01					; Without I/O retry option
+kATAcmdNOP						EQU		$0000				; NOP operation - media detect
+kATAcmdRecal					EQU		$0010				; Recalibrate command 
+kATAcmdRead						EQU		$0020				; Read command 
+kATAcmdReadLong					EQU		$0022				; Read Long command
+kATAcmdWrite					EQU		$0030				; Write command 
+kATAcmdWriteLong				EQU		$0032				; Write Long
+kATAcmdWriteVerify				EQU		$003C				; Write verify
+kATAcmdReadVerify				EQU		$0040				; Read Verify command 
+kATAcmdFormatTrack				EQU		$0050				; Format Track command 
+kATAcmdSeek						EQU		$0070				; Seek command 
+kATAcmdDiagnostic				EQU		$0090				; Drive Diagnostic command 
+kATAcmdInitDrive				EQU		$0091				; Init drive parameters command 
+kATAcmdReadMultiple				EQU		$00C4				; Read multiple
+kATAcmdWriteMultiple			EQU		$00C5				; Write multiple
+kATAcmdSetRWMultiple			EQU		$00C6				; Set Multiple for Read/Write Multiple
+kATAcmdReadDMA					EQU		$00C8				; Read DMA (with retries)
+kATAcmdWriteDMA					EQU		$00CA				; Write DMA (with retries)
+kATAcmdMCAcknowledge			EQU		$00DB				; Acknowledge media change - removable
+kATAcmdDoorLock					EQU		$00DE				; Door lock
+kATAcmdDoorUnlock				EQU		$00DF				; Door unlock
+kATAcmdStandbyImmed				EQU		$00E0				; Standby Immediate
+kATAcmdIdleImmed				EQU		$00E1				; Idle Immediate
+kATAcmdStandby					EQU		$00E2				; Standby
+kATAcmdIdle						EQU		$00E3				; Idle
+kATAcmdReadBuffer				EQU		$00E4				; Read sector buffer command 
+kATAcmdCheckPowerMode			EQU		$00E5				; Check power mode command   <04/04/94>
+kATAcmdSleep					EQU		$00E6				; Sleep
+kATAcmdWriteBuffer				EQU		$00E8				; Write sector buffer command 
+kATAcmdWriteSame				EQU		$00E9				; Write same data to multiple sectors
+kATAcmdDriveIdentify			EQU		$00EC				; Identify Drive command 
+kATAcmdMediaEject				EQU		$00ED				; Media Eject
+kATAcmdSetFeatures				EQU		$00EF				; Set Features
+;  Set feature command opcodes
+
+kATAEnableWriteCache			EQU		$02					;       Enable write cache
+kATASetTransferMode				EQU		$03					;       Set transfer mode
+kATASetPIOMode					EQU		$08					;       PIO Flow Control Tx Mode bit
+kATAEnableECC					EQU		$88					;       ECC enable
+kATAEnableRetry					EQU		$99					;       Retry enable
+kATAEnableReadAhead				EQU		$AA					;       Read look-ahead enable
+
+;  --------------------------------------------------------------------------------
+;   enums for dealing with device IDs
+
+
+
+
+kATABusIDMask					EQU		$000000FF
+kATADeviceIDMask				EQU		$0000FF00
+kATADeviceIDClippingMask		EQU		$0000FFFF
+kMinBusID						EQU		$00000000
+kMaxBusID						EQU		$000000FE
+
+kATAStartIterateDeviceID		EQU		$FFFF
+kATAEndIterateDeviceID			EQU		$FF
+; --------------------------------------------------------------------------------
+;  Device Register Images  (8 bytes) 
+ataTaskFile				RECORD 0
+ataTFFeatures			 ds.b	1				; offset: $0 (0)		;  <-> Error(R) or ataTFFeatures(W) register image 
+ataTFCount				 ds.b	1				; offset: $1 (1)		;  <-> Sector count/remaining 
+ataTFSector				 ds.b	1				; offset: $2 (2)		;  <-> Sector start/finish 
+ataTFReserved			 ds.b	1				; offset: $3 (3)		;  reserved             
+ataTFCylinder			 ds.w	1				; offset: $4 (4)		;  <-> ataTFCylinder (Big endian) 
+ataTFSDH				 ds.b	1				; offset: $6 (6)		;  <-> ataTFSDH register image
+ataTFCommand			 ds.b	1				; offset: $7 (7)		;  <-> Status(R) or Command(W) register image 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  ATA Manager Function Code Definition
+
+kATAMgrNOP						EQU		$00					; No Operation
+kATAMgrExecIO					EQU		$01					; Execute ATA I/O
+kATAMgrBusInquiry				EQU		$03					; Bus Inquiry
+kATAMgrQRelease					EQU		$04					; I/O Queue Release
+kATAMgrAbort					EQU		$10					; Abort command
+kATAMgrBusReset					EQU		$11					; Reset ATA bus
+kATAMgrRegAccess				EQU		$12					; Register Access
+kATAMgrDriveIdentify			EQU		$13					; Drive Identify        <DP03/10/94>
+kATAMgrDriverLoad				EQU		$82					; Load driver from either Media, ROM, etc.
+kATAMgrDriveRegister			EQU		$85					; Register a driver   <4/18/94>
+kATAMgrFindDriverRefnum			EQU		$86					; lookup a driver refnum <4/18/94>
+kATAMgrRemoveDriverRefnum		EQU		$87					; De-register a driver   <4/18/94>
+kATAMgrModifyEventMask			EQU		$88					; Modify driver event mask
+kATAMgrDriveEject				EQU		$89					; Eject the drive       <8/1/94>
+kATAMgrGetDrvConfiguration		EQU		$8A					; Get device configuration   <8/6/94>
+kATAMgrSetDrvConfiguration		EQU		$8B					; Set device configuration <8/6/94>
+kATAMgrGetLocationIcon			EQU		$8C					; Get card location icon <SM4>
+kATAMgrManagerInquiry			EQU		$90					; Manager Inquiry
+kATAMgrManagerInit				EQU		$91					; Manager initialization
+kATAMgrManagerShutdown			EQU		$92					; Manager ShutDown
+kATAMgrAddATABus				EQU		$93					; Add an AIM to ATA Manager  <3/1/2000>
+kATAMgrRemoveATABus				EQU		$94					; Remove an AIM from ATA Manager <3/1/2000>
+															; note: functions 0x95 to 0x97 are reserved
+kATAMgrFindSpecialDriverRefnum	EQU		$98					; lookup a driver refnum; driverloader,notify-all or ROM driver.
+kATAMgrNextAvailable			EQU		$99
+;  used in the ataDrvrFlags field for kATAMgrDriveRegister,kATAMgrRemoveDriverRefnum & kATAMgrFindSpecialDriverRefnum
+
+kATANotifyAllDriver				EQU		0					; Notify-All driver
+kATADriverLoader				EQU		1					; Driver loader driver     
+kATAROMDriver					EQU		2					; ROM driver
+;  'ATAFlags' field of the PB header definition
+
+bATAFlagUseConfigSpeed			EQU		15					; bit number of use default speed flag
+bATAFlagByteSwap				EQU		14					; bit number of byte swap flag
+bATAFlagIORead					EQU		13					; bit number of I/O read flag
+bATAFlagIOWrite					EQU		12					; bit number of I/O write flag
+bATAFlagImmediate				EQU		11					; bit number of immediate flag
+bATAFlagQLock					EQU		10					; bit number of que lock on error
+bATAFlagReserved1				EQU		9					; reserved
+bATAFlagUseScatterGather		EQU		8					; bit numbers of scatter gather
+bATAFlagUseDMA					EQU		7					; bit number of use DMA flag
+bATAFlagProtocolATAPI			EQU		5					; bit number of ATAPI protocol
+bATAFlagReserved2				EQU		4					; reserved
+bATAFlagTFRead					EQU		3					; bit number of register update
+bATAFlagLEDEnable				EQU		0					; bit number of LED enable
+mATAFlagUseConfigSpeed			EQU		$8000
+mATAFlagByteSwap				EQU		$4000				; Swap data bytes (read - after; write - before)
+mATAFlagIORead					EQU		$2000				; Read (in) operation
+mATAFlagIOWrite					EQU		$1000				; Write (out) operation
+mATAFlagImmediate				EQU		$0800				; Head of Que; Immediate operation
+mATAFlagQLock					EQU		$0400				; Manager queue lock on error (freeze the queue)
+mATAFlagUseScatterGather		EQU		$0100				; Scatter gather enable
+mATAFlagUseDMA					EQU		$80
+mATAFlagProtocolATAPI			EQU		$20					; ATAPI protocol indicator
+mATAFlagTFRead					EQU		$08					; update reg block request upon detection of an error
+mATAFlagLEDEnable				EQU		$01					; socket LED enable
+;  These are legacy ATAFlags definitions, which will go away in the future 
+
+bATAFlagScatterGather1			EQU		9					; 9
+bATAFlagScatterGather0			EQU		8					; 8
+bATAFlagProtocol1				EQU		5					; 5
+bATAFlagProtocol0				EQU		4					; 4
+mATAFlagScatterGather1			EQU		$0200
+mATAFlagScatterGather0			EQU		$0100
+mATAFlagScatterGathers			EQU		$0300
+mATAFlagProtocol1				EQU		$20
+mATAFlagProtocol0				EQU		$10
+mATAFlagProtocols				EQU		$30
+;  The Function codes passed by ATA Manager to the AIM plug-in 
+
+kATAFnNOP						EQU		$00					; No Operation 
+kATAFnExecIO					EQU		$01					; Execute ATA I/O 
+kATAFnBusInquiry				EQU		$02					; Bus Inquiry 
+kATAFnQRelease					EQU		$03					; I/O Queue Release 
+kATAFnCmd						EQU		$04					; ATA Command 
+kATAFnAbort						EQU		$05					; Abort command 
+kATAFnBusReset					EQU		$06					; Reset ATA bus 
+kATAFnRegAccess					EQU		$07					; Register Access 
+kATAFnDriveIdentify				EQU		$08					; Drive Identify 
+kATAPIFnExecIO					EQU		$09					; ATAPI I/O 
+kATAPIFnCmd						EQU		$0A					; ATAPI Command 
+kATAFnGetDriveConfig			EQU		$0B					; Get Drive specific bus configuration 
+kATAFnSetDriveConfig			EQU		$0C					; Set Drive specific bus configuration 
+kATAFnKillIO					EQU		$0D					; Kill any current interaction with bus 
+;  The state to put the device light in used in DeviceLight AIM plugin export 
+
+kATADeviceLightOff				EQU		$00					; Turn light off 
+kATADeviceLightOn				EQU		$01					; Turn light on 
+;  The state to put the device lock in used in DeviceLock AIM plugin export 
+
+kATADeviceUnlock				EQU		$00					; unlock 
+kATADeviceLock					EQU		$01					; lock 
+
+;  add bus flags 
+;  •• Applies to the ataAddBus structure •• 
+
+mATANoDMAOnBus					EQU		$80
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewATACallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeATACallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeATACallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+;   
+;   structure which defines the ATA bus/device ID, part of the Device 0/1 Software Guide
+;   see <http://developer.apple.com/techpubs/hardware/Developer_Notes/System_Software/ATA_Device_Zero_One.pdf>
+;   p 19 :   Although ataPBDeviceID remains defined as a 32-bit number, drivers and applications
+;            can typecast it to the ataDeviceID structure to determine the bus number and device number
+;            for a specific ATA or ATAPI device
+
+
+ataDeviceID				RECORD 0
+Reserved				 ds.w	1				; offset: $0 (0)		;  The upperword is reserved (0)
+devNum					 ds.b	1				; offset: $2 (2)		;  device number (0 or 1)
+busNum					 ds.b	1				; offset: $3 (3)		;  bus number
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+;   The kATADevIDProperty property will be inserted by the AIM when creating name registry entries for each 
+;   drive found on the bus. The 4-byte data shall be the ataDeviceID structure used by ATA Manager. <3/14/2000>
+
+
+
+kATADevIDPropertyNameLength		EQU		10					; Number of characters in kATADevIDProperty including the terminating null.
+kATADevIDPropertySize			EQU		4					; Size of the data
+ATADataObject			RECORD 0
+ioBuf					 ds.l	1				; offset: $0 (0)		;  if SG flag enabled then this points to the head of the list else it is the buffer 
+Count					 ds.l	1				; offset: $4 (4)		;  if SG flag enabled then count of SG Lists else the size 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ATAResult				RECORD 0
+ataResult				 ds.l	1				; offset: $0 (0)		;  the final result see Error Codes 
+ataStatusRegister		 ds.b	1				; offset: $4 (4)		;  the status register 
+ataErrorRegister		 ds.b	1				; offset: $5 (5)		;  the error register 
+actualXferCount			 ds.l	1				; offset: $6 (6)		;  in case of I/O the actual size of Xfer 
+TaskFile				 ds.l	1				; offset: $A (10)		;  if "mATAFlagTFRead" enabled 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+;   For ATAPI devices the ExtendedPB field is a pointer to the Command Packet
+;   record which exists of an array of words structured as follows…  <06/15/94>
+
+
+ATAPICmdPacket			RECORD 0
+atapiPacketSize			 ds.w	1				; offset: $0 (0)		;  Size of command packet in bytes    <06/15/94>
+atapiCommandByte		 ds.w	8				; offset: $2 (2)		;  The command packet itself  <06/15/94>
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+ATADevInfo				RECORD 0
+devType					 ds.b	1				; offset: $0 (0)
+devID					 ds.b	1				; offset: $1 (1)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+;  ATA Device ID codes to be used with devID field of the ATADevInfo structure 
+
+kATAInvalidDeviceID				EQU		-1
+kATADevice0DeviceID				EQU		0					; aka, Master. Device 0 is the correct terminology 
+kATADevice1DeviceID				EQU		1					; aka, Slave. Device 1 is the correct terminology 
+;  AIM initialization 
+ATAInitInfo				RECORD 0
+busID					 ds.l	1				; offset: $0 (0)		;  --> busID assigned by the Manager 
+FirstDevice				 ds		ATADevInfo		; offset: $4 (4)		;  <-- Type and ID of first device 
+SecondDevice			 ds		ATADevInfo		; offset: $6 (6)		;  <-- Type and ID of second device 
+aimRegEntry				 ds.l	1				; offset: $8 (8)		;  --> Name Registry entry for this controller 
+refCon					 ds.l	1				; offset: $C (12)		;  <-- refCon to be associated with this instantiation of the AIM 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  AIM Diag result 
+ATADiagResult			RECORD 0
+ataRegMask				 ds.w	1				; offset: $0 (0)		;  the registers to access 
+ataResult				 ds.l	1				; offset: $2 (2)		;  the final result see Error Codes 
+ataDataReg				 ds.w	1				; offset: $6 (6)		;  16 bit access only 
+ataTFFeatures			 ds.b	1				; offset: $8 (8)		;  Error(R)  or Feature(W) register 
+ataTFCount				 ds.b	1				; offset: $9 (9)		;  Sector Count register 
+ataTFSector				 ds.b	1				; offset: $A (10)		;  Sector number register 
+ataTFCylinderLo			 ds.b	1				; offset: $B (11)		;  Cylinder low bytes  
+ataTFCylinderHi			 ds.b	1				; offset: $C (12)		;  Cylinder High bytes  
+ataTFSDH				 ds.b	1				; offset: $D (13)		;  SDH register 
+ataTFCommand			 ds.b	1				; offset: $E (14)		;  status(R) or command(W) register 
+ataAltStatDevCnt		 ds.b	1				; offset: $F (15)		;  AltStatus(R) or Dev Cntrl(W) register 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  AIM Bus Info 
+ATABusInfo				RECORD 0
+ataPIOModes				 ds.b	1				; offset: $0 (0)		;  PIO modes supported (bit-significant) 
+ataSingleDMAModes		 ds.b	1				; offset: $1 (1)		;  <--: Single Word DMA modes supported (b-sig)    
+ataMultiDMAModes		 ds.b	1				; offset: $2 (2)		;  <--: Multiword DMA modes supported (b-sig) 
+ataUltraDMAModes		 ds.b	1				; offset: $3 (3)		;  <--: Ultra DMA modes supported (b-sig) 
+ataIOPBsize0			 ds.l	1				; offset: $4 (4)		;  the current size of the Transfer for device 0 
+ataIOPBsize1			 ds.l	1				; offset: $8 (8)		;  the current size of the Transfer for device 1 
+ataContrlType			 ds.b	16				; offset: $C (12)		;  the controller signature 
+ataHBAversion			 ds		NumVersion		; offset: $1C (28)		;  version number of the AIM 
+reserved3				 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+;  reserved words at the end of the devConfig structure
+
+kATAConfigReserved				EQU		5					; number of reserved words at the end
+
+;  Bus timing config info passed between ATA Mgr and the AIM 
+ATADevConfig			RECORD 0
+ataConfigSetting		 ds.l	1				; offset: $0 (0)		;  <->: Configuration setting  
+;       Bits 3 - 0: Reserved 
+;       Bit 4: Reserved  
+;       Bit 5: Reserved  
+;       Bit 6: ATAPIpacketDRQ 
+;        1 = Check for Interrupt DRQ on ATAPI command packet DRQ 
+;        0 = Default: Check only for the assertion of command packet DRQ 
+;       Bits 31 - 7: Reserved 
+ataPIOSpeedMode			 ds.b	1				; offset: $4 (4)		;  <->: Device access speed in PIO Mode 
+reserved				 ds.b	1				; offset: $5 (5)		;  • do not modify, use or rely on reserved fields 
+atapcValid				 ds.w	1				; offset: $6 (6)		;  reserved 
+ataRWMultipleCount		 ds.w	1				; offset: $8 (8)		;  AIM's must return 0  
+ataSectorsPerCylinder	 ds.w	1				; offset: $A (10)		;  AIM's must return 0  
+ataHeads				 ds.w	1				; offset: $C (12)		;  AIM's must return 0  
+ataSectorsPerTrack		 ds.w	1				; offset: $E (14)		;  AIM's must return 0 
+ataSocketNumber			 ds.w	1				; offset: $10 (16)		;  Reserved 
+ataSocketType			 ds.b	1				; offset: $12 (18)		;  <--: Specifies the socket type (get config only) 
+;        00 = Unknown socket 
+;       01 = Internal ATA bus 
+;        02 = Media Bay 
+;        03 = PCMCIA 
+ataDeviceType			 ds.b	1				; offset: $13 (19)		;  <--: Specifies the device type (get config only) 
+;        00 = Unknown device 
+;        01 = standard ATA device (HD) 
+;        02 = ATAPI device 
+;        03 = PCMCIA ATA device 
+atapcAccessMode			 ds.b	1				; offset: $14 (20)		;  Reserved 
+atapcVcc				 ds.b	1				; offset: $15 (21)		;  Reserved 
+atapcVpp1				 ds.b	1				; offset: $16 (22)		;  Reserved 
+atapcVpp2				 ds.b	1				; offset: $17 (23)		;  Reserved 
+atapcStatus				 ds.b	1				; offset: $18 (24)		;  Reserved 
+atapcPin				 ds.b	1				; offset: $19 (25)		;  Reserved 
+atapcCopy				 ds.b	1				; offset: $1A (26)		;  Reserved 
+atapcConfigIndex		 ds.b	1				; offset: $1B (27)		;  Reserved 
+ataSingleDMASpeed		 ds.b	1				; offset: $1C (28)		;  <->: Single Word DMA Timing Class 
+ataMultiDMASpeed		 ds.b	1				; offset: $1D (29)		;  <->: Multiple Word DMA Timing Class 
+ataPIOCycleTime			 ds.w	1				; offset: $1E (30)		;  <->:Cycle time in ms for PIO mode 
+ataMultiCycleTime		 ds.w	1				; offset: $20 (32)		;  <->:Cycle time in ms for Multiword DMA mode 
+ataUltraDMASpeed		 ds.b	1				; offset: $22 (34)		;  <-> Ultra DMA timing class bit-significant 
+reserved2				 ds.b	1				; offset: $23 (35)		;  reserved 
+ataUltraCycleTime		 ds.w	1				; offset: $24 (36)		;  <-> Cycle time in ms for Ultra DMA mode 
+Reserved1				 ds.w	5				; offset: $26 (38)		;  Reserved for future 
+sizeof					 EQU *					; size:   $30 (48)
+						ENDR
+;  The Request block passed by the manager to the AIM 
+ATAReqBlock				RECORD 0
+;  Filled in by ATA Mgr v4.0
+connectionID			 ds.l	1				; offset: $0 (0)		;  the connection ID of the req block 
+MsgID					 ds.l	1				; offset: $4 (4)		;  the ioTag value of this request 
+result					 ds.l	1				; offset: $8 (8)		;  result of this operation 
+DiagResult				 ds.l	1				; offset: $C (12)		;  for diagnostics i.e. R(W) registers 
+busInfo					 ds.l	1				; offset: $10 (16)		;  for bus info requests 
+devConfig				 ds.l	1				; offset: $14 (20)		;  for device config requests 
+ioObject				 ds		ATADataObject	; offset: $18 (24)		;  The actual transfer data 
+ataPBTaskFile			 ds		ataTaskFile		; offset: $20 (32)		;  the task file 
+packetCBD				 ds		ATAPICmdPacket ; offset: $28 (40)		;  For the ATAPI cmd packets 
+Timeout					 ds.l	1				; offset: $3A (58)		;  timeout for this request 
+BusID					 ds.l	1				; offset: $3E (62)		;  family assigned bus ID 
+DevID					 ds.b	1				; offset: $42 (66)		;  device ID, -1(bus), 0(master), 1(slave) 
+ataFunctionCode			 ds.b	1				; offset: $43 (67)
+AbortID					 ds.l	1				; offset: $44 (68)
+ataPBLogicalBlockSize	 ds.l	1				; offset: $48 (72)
+ataPBFlags				 ds.l	1				; offset: $4C (76)
+reserved				 ds.l	1				; offset: $50 (80)
+;  Used internally by the AIM
+nextREQ					 ds.l	1				; offset: $54 (84)		;  the next req on this list 
+ataPBResult				 ds.l	1				; offset: $58 (88)
+ataPBErrorRegister		 ds.b	1				; offset: $5C (92)
+ataPBStatusRegister		 ds.b	1				; offset: $5D (93)
+ataPBactualXferCount	 ds.l	1				; offset: $5E (94)
+ataPBState				 ds.l	1				; offset: $62 (98)
+ataPBSemaphores			 ds.l	1				; offset: $66 (102)
+XferType				 ds.b	1				; offset: $6A (106)
+ataModeType				 ds.b	1				; offset: $6B (107)		;  tracks old ataPBVers, to do absolute or bitmap modes       
+ataPBIOSpeed			 ds.b	1				; offset: $6C (108)		;  -->: I/O Timing Class       
+reserved2				 ds.b	1				; offset: $6D (109)
+reserved3				 ds.w	1				; offset: $6E (110)
+sizeof					 EQU *					; size:   $70 (112)
+						ENDR
+;  enum for modeType in ATAReqBlock, aligned with ataPBVers
+
+kATAModeAbsolute				EQU		2
+kATAModeBitmap					EQU		3					; actually three or above
+
+kATAPluginVersion				EQU		$00000001
+kATAPluginCurrentVersion		EQU		$00000001
+
+kServiceCategoryATA				EQU		'ata-'				; ata
+ataPBHeader				RECORD 0
+;  Start of cloned common header ataPBHdr 
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+sizeof					 EQU *					; size:   $30 (48)
+						ENDR
+;  data request entry structure (16 bytes)
+IOBlock					RECORD 0
+ataPBBuffer				 ds.l	1				; offset: $0 (0)		;  -->: Data buffer pointer
+ataPBByteCount			 ds.l	1				; offset: $4 (4)		;  -->: Data transfer length in bytes
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Manager parameter block structure (96 bytes)
+ataIOPB					RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataPBStatusRegister		 ds.b	1				; offset: $30 (48)		;  <--: Last ATA status image
+ataPBErrorRegister		 ds.b	1				; offset: $31 (49)		;  <--: Last ATA error image-valid if lsb of Status set
+ataPBReserved5			 ds.w	1				; offset: $32 (50)		;  Reserved
+ataPBLogicalBlockSize	 ds.l	1				; offset: $34 (52)		;  -->: Blind transfer size per interrupt (Logical block size)
+ataPBBuffer				 ds.l	1				; offset: $38 (56)		;  -->: Data buffer pointer
+ataPBByteCount			 ds.l	1				; offset: $3C (60)		;  -->: Data transfer length in bytes
+ataPBActualTxCount		 ds.l	1				; offset: $40 (64)		;  <--: Actual transfer count
+ataPBReserved6			 ds.l	1				; offset: $44 (68)		;  Reserved
+ataPBTaskFile			 ds		ataTaskFile		; offset: $48 (72)		;  <->:   Device register images
+ataPBPacketPtr			 ds.l	1				; offset: $50 (80)		;  -->: ATAPI packet command block pointer (valid with ATAPI bit set)
+ataPBReserved7			 ds.w	6				; offset: $54 (84)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Parameter block structure for bus and Manager inquiry command
+;  Manager parameter block structure
+ataBusInquiry			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataEngineCount			 ds.w	1				; offset: $30 (48)		;  <--: TBD; zero for now
+ataReserved1			 ds.w	1				; offset: $32 (50)		;  Reserved
+ataDataTypes			 ds.l	1				; offset: $34 (52)		;  <--: TBD; zero for now
+ataIOpbSize				 ds.w	1				; offset: $38 (56)		;  <--: Size of ATA IO PB
+ataMaxIOpbSize			 ds.w	1				; offset: $3A (58)		;  <--: TBD; zero for now
+ataFeatureFlags			 ds.l	1				; offset: $3C (60)		;  <--: TBD
+ataVersionNum			 ds.b	1				; offset: $40 (64)		;  <--: Version number for the HBA
+ataHBAInquiry			 ds.b	1				; offset: $41 (65)		;  <--: TBD; zero for now
+ataReserved2			 ds.w	1				; offset: $42 (66)		;  Reserved
+ataHBAPrivPtr			 ds.l	1				; offset: $44 (68)		;  <--: Ptr to HBA private data area
+ataHBAPrivSize			 ds.l	1				; offset: $48 (72)		;  <--: Size of HBA private data area
+ataAsyncFlags			 ds.l	1				; offset: $4C (76)		;  <--: Event capability for callback
+ataPIOModes				 ds.b	1				; offset: $50 (80)		;  <--: PIO modes supported (bit-significant)
+ataUltraDMAModes		 ds.b	1				; offset: $51 (81)		;  <--: Ultra DMA modes supported (b-sig)
+ataSingleDMAModes		 ds.b	1				; offset: $52 (82)		;  <--: Single Word DMA modes supported (b-sig)   
+ataMultiDMAModes		 ds.b	1				; offset: $53 (83)		;  <--: Multiword DMA modes supported (b-sig)
+ataReserved4			 ds.l	4				; offset: $54 (84)		;  Reserved
+ataReserved5			 ds.b	16				; offset: $64 (100)		;  TBD
+ataHBAVendor			 ds.b	16				; offset: $74 (116)		;  <--: Vendor ID of the HBA
+ataContrlFamily			 ds.b	16				; offset: $84 (132)		;  <--: Family of ATA Controller
+ataContrlType			 ds.b	16				; offset: $94 (148)		;  <--: Model number of controller
+ataXPTversion			 ds.b	4				; offset: $A4 (164)		;  <--: version number of XPT
+ataReserved6			 ds.b	4				; offset: $A8 (168)		;  Reserved
+ataHBAversion			 ds		NumVersion		; offset: $AC (172)		;  <--: version number of HBA
+ataHBAslotType			 ds.b	1				; offset: $B0 (176)		;  <--: type of slot
+ataHBAslotNum			 ds.b	1				; offset: $B1 (177)		;  <--: slot number of the HBA
+ataReserved7			 ds.w	1				; offset: $B2 (178)		;  Reserved
+ataReserved8			 ds.l	1				; offset: $B4 (180)		;  Reserved
+sizeof					 EQU *					; size:   $B8 (184)
+						ENDR
+;  Manager parameter block structure
+ataMgrInquiry			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataMgrVersion			 ds		NumVersion		; offset: $30 (48)		;  Manager Version information
+ataMgrPBVers			 ds.b	1				; offset: $34 (52)		;  <--: Manager PB version number supported
+Reserved1				 ds.b	1				; offset: $35 (53)		;  Reserved
+ataBusCnt				 ds.w	1				; offset: $36 (54)		;  <--: Number of ATA buses in the system
+ataDevCnt				 ds.w	1				; offset: $38 (56)		;  <--: Total number of ATA devices detected
+ataPioModes				 ds.b	1				; offset: $3A (58)		;  <--: Maximum Programmed I/O speed mode supported
+Reserved2				 ds.b	1				; offset: $3B (59)		;  Reserved
+ataIOClkResolution		 ds.w	1				; offset: $3C (60)		;  <--: IO Clock resolution in nsec (Not supported)
+ataSingleDMAModes		 ds.b	1				; offset: $3E (62)		;  <--: Single Word DMA modes supported   
+ataMultiDMAModes		 ds.b	1				; offset: $3F (63)		;  <--: Multiword DMA modes supported
+Reserved				 ds.w	16				; offset: $40 (64)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Parameter block structure for Abort command
+;  Manager parameter block structure
+ataAbort				RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataAbortPB				 ds.l	1				; offset: $30 (48)		;  -->: Parameter block to be aborted
+Reserved				 ds.w	22				; offset: $34 (52)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Manager parameter block structure
+ATAEventRec				RECORD 0
+ataEventCode			 ds.w	1				; offset: $0 (0)		;  --> ATA event code
+ataPhysicalID			 ds.w	1				; offset: $2 (2)		;  --> Physical drive reference
+ataDrvrContext			 ds.l	1				; offset: $4 (4)		;  Context pointer saved by driver
+ataMarker				 ds.l	1				; offset: $8 (8)		;  Always 'LOAD'
+ataEventRecVersion		 ds.l	1				; offset: $C (12)		;  Version number of this data structure
+ataDeviceType			 ds.l	1				; offset: $10 (16)		;  Device type on bus (valid for load driver only)
+ataRefNum				 ds.w	1				; offset: $14 (20)		;  RefNum of driver (valid for remove driver only)
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+; typedef struct ATAEventRec *			ATAEventRecPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewATAClientUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeATAClientUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeATAClientUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  Parameter block structure for Driver Register command
+;  Manager parameter block structure
+ataDrvrRegister			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataDrvrRefNum			 ds.w	1				; offset: $30 (48)		;  <->: Driver reference number
+ataDrvrFlags			 ds.w	1				; offset: $32 (50)		;  -->: 1 = loader driver if ataPBDeviceID = -1 {PB2}
+ataDeviceNextID			 ds.w	1				; offset: $34 (52)		;  <--: used to specified the next drive ID
+ataDrvrLoadPriv			 ds.w	1				; offset: $36 (54)		;  Driver loader private storage
+ataEventHandler			 ds.l	1				; offset: $38 (56)		;  <->: Pointer to ATA event callback routine {PB2}
+ataDrvrContext			 ds.l	1				; offset: $3C (60)		;  <->: Context data saved by driver {PB2}
+ataEventMask			 ds.l	1				; offset: $40 (64)		;  <->: Set to 1 for notification of event {PB2}
+Reserved				 ds.w	14				; offset: $44 (68)		;  Reserved for future expansion - from [21] {PB2}
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Parameter block structure for Modify driver event mask command
+ataModifyEventMask		RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataModifiedEventMask	 ds.l	1				; offset: $30 (48)		;  -->: new event mask value
+Reserved				 ds.w	22				; offset: $34 (52)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  'ataRegMask' field of the ataRegAccess definition
+
+bATAAltSDevCValid				EQU		14					; bit number of alternate status/device cntrl valid bit
+bATAStatusCmdValid				EQU		7					; bit number of status/command valid bit
+bATASDHValid					EQU		6					; bit number of ataTFSDH valid bit
+bATACylinderHiValid				EQU		5					; bit number of cylinder high valid bit
+bATACylinderLoValid				EQU		4					; bit number of cylinder low valid bit
+bATASectorNumValid				EQU		3					; bit number of sector number valid bit
+bATASectorCntValid				EQU		2					; bit number of sector count valid bit
+bATAErrFeaturesValid			EQU		1					; bit number of error/features valid bit
+bATADataValid					EQU		0					; bit number of data valid bit
+mATAAltSDevCValid				EQU		$4000				; alternate status/device control valid
+mATAStatusCmdValid				EQU		$80					; status/command valid
+mATASDHValid					EQU		$40					; ataTFSDH valid
+mATACylinderHiValid				EQU		$20					; cylinder high valid
+mATACylinderLoValid				EQU		$10					; cylinder low valid
+mATASectorNumValid				EQU		$08					; sector number valid
+mATASectorCntValid				EQU		$04					; sector count valid
+mATAErrFeaturesValid			EQU		$02					; error/features valid
+mATADataValid					EQU		$01					; data valid
+;  Parameter block structure for device register access command
+ataRegValueUnion		RECORD 0
+ataByteRegValue			 ds.b	1				; offset: $0 (0)		;  <->: Byte register value read or to be written
+						 ORG 0
+ataWordRegValue			 ds.w	1				; offset: $0 (0)		;  <->: Word register value read or to be written
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+;  Manager parameter block structure
+ataRegAccess			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataRegSelect			 ds.w	1				; offset: $30 (48)		;  -->: Device Register Selector
+;          DataReg       0  
+;          ErrorReg(R) or FeaturesReg(W)    1
+;          SecCntReg       2
+;          SecNumReg       3
+;          CylLoReg     4
+;          CylHiReg     5
+;          SDHReg      6
+;          StatusReg(R) or CmdReg(W)       7
+;          AltStatus(R) or DevCntr(W)   0E
+ataRegValue				 ds		ataRegValueUnion ; offset: $32 (50)
+;  Following fields are valid only if ataRegSelect = 0xFFFF
+ataRegMask				 ds.w	1				; offset: $34 (52)		;  -->: mask for register(s) to update
+;        bit 0 : data register valid
+;        bit 1 : error/feaures register valid
+;        bit 2 : sector count register valid
+;        bit 3 : sector number register valid
+;        bit 4 : cylinder low register valid
+;        bit 5 : cylinder high register valid
+;        bit 6 : ataTFSDH register valid
+;        bit 7 : status/command register valid
+;        bits 8 - 13 : reserved (set to 0)
+;        bit 14: alternate status / device control reg valid
+;       bit 15: reserved (set to 0)
+ataRegisterImage		 ds		ataTaskFile		; offset: $36 (54)		;  <->: register images
+ataAltSDevCReg			 ds.b	1				; offset: $3E (62)		;  <->: Alternate status(R) or Device Control(W) register image
+Reserved3				 ds.b	1				; offset: $3F (63)		;  Reserved
+Reserved				 ds.w	16				; offset: $40 (64)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Manager parameter block structure    <DP03/10/94>
+ataIdentify				RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+Reserved1				 ds.w	4				; offset: $30 (48)		;  Reserved.  These are used internally by the Manager
+ataPBBuffer				 ds.l	1				; offset: $38 (56)		;  Buffer for the identify data (512 bytes)
+Reserved2				 ds.w	12				; offset: $3C (60)		;  Used internally by the ATA Manager
+Reserved3				 ds.w	6				; offset: $54 (84)		;  Reserved for future expansion
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  'ataConfigSetting' field of the Get/Set Device Configuration definition <8/6/94>
+
+ATAPIpacketDRQ_bit				EQU		6					; bit number of ATAPI command packet DRQ option
+ATAPIpacketDRQ					EQU		$40					; ATAPI command packet DRQ option
+;  atapcValid field definition
+
+bATApcAccessMode				EQU		0
+bATApcVcc						EQU		1
+bATApcVpp1						EQU		2
+bATApcVpp2						EQU		3
+bATApcStatus					EQU		4
+bATApcPin						EQU		5
+bATApcCopy						EQU		6
+bATApcConfigIndex				EQU		7
+bATApcLockUnlock				EQU		15
+mATApcAccessMode				EQU		$01
+mATApcVcc						EQU		$02
+mATApcVpp1						EQU		$04
+mATApcVpp2						EQU		$08
+mATApcStatus					EQU		$10
+mATApcPin						EQU		$20
+mATApcCopy						EQU		$40
+mATApcConfigIndex				EQU		$80
+mATApcLockUnlock				EQU		$8000
+;  Device physical type & socket type indicator definition
+
+kATADeviceUnknown				EQU		$00					; no device or type undetermined
+kATADeviceATA					EQU		$01					; traditional ATA protocol device <7/29/94>
+kATADeviceATAPI					EQU		$02					; ATAPI protocol device  <7/29/94>
+kATADeviceReserved				EQU		$03					; reserved by Apple (was PCMCIA)
+
+kATASocketInternal				EQU		$01					; Internal ATA socket
+kATASocketMB					EQU		$02					; Media Bay socket
+kATASocketPCMCIA				EQU		$03					; PCMCIA socket
+
+
+;   Get/Set Device Configuration parameter block structure <8/6/94>
+;   Manager parameter block structure
+
+
+ataDevConfiguration		RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataConfigSetting		 ds.l	1				; offset: $30 (48)		;  <->: Configuration setting
+;       Bits 3 - 0: Reserved
+;       Bit 4: Reserved (allowLBAAccess)
+;       Bit 5: Reserved (allowRWMultiple)
+;       Bit 6: ATAPIpacketDRQ
+;        1 = Check for Interrupt DRQ on ATAPI command packet DRQ
+;        0 = Default: Check only for the assertion of command packet DRQ
+;       Bits 31 - 7: Reserved
+ataPIOSpeedMode			 ds.b	1				; offset: $34 (52)		;  <->: Device access speed in PIO Mode
+Reserved3				 ds.b	1				; offset: $35 (53)		;  Reserved to force word alignment
+atapcValid				 ds.w	1				; offset: $36 (54)		;  <->: Set when pcXXX fields are valid (atapcAccessMode - atapcConfigIndex)
+;        bit 0 - atapcAccessMode field valid, when set
+;        bit 1 - atapcVcc field valid, when set
+;        bit 2 - atapcVpp1 field valid, when set
+;        bit 3 - atapcVpp2 field valid, when set
+;        bit 4 - atapcStatus field valid, when set
+;        bit 5 - atapcPin field valid, when set
+;        bit 6 - atapcCopy field valid, when set
+;        bit 7 - atapcConfigIndex field valid, when set
+;        bits 14-8 - Reserved
+;        bit 15 - device lock/unlock request (write only)
+ataRWMultipleCount		 ds.w	1				; offset: $38 (56)		;  Reserved for future (not supported yet)
+ataSectorsPerCylinder	 ds.w	1				; offset: $3A (58)		;  Reserved for future (not supported yet)
+ataHeads				 ds.w	1				; offset: $3C (60)		;  Reserved for future (not supported yet)
+ataSectorsPerTrack		 ds.w	1				; offset: $3E (62)		;  Reserved for future (not supported yet)
+ataSocketNumber			 ds.w	1				; offset: $40 (64)		;  <--: Socket number used by the CardServices
+;        0xFF = socket number invalid (Not a CardServices device)
+;        other = socket number of the device
+ataSocketType			 ds.b	1				; offset: $42 (66)		;  <--: Specifies the socket type (get config only)
+;        00 = Unknown socket
+;       01 = Internal ATA bus
+;        02 = Media Bay
+;        03 = PCMCIA
+ataDeviceType			 ds.b	1				; offset: $43 (67)		;  <--: Specifies the device type (get config only)
+;        00 = Unknown device
+;        01 = standard ATA device (HD)
+;        02 = ATAPI device
+;        03 = PCMCIA ATA device
+atapcAccessMode			 ds.b	1				; offset: $44 (68)		;  <->: Access mode: Memory vs. I/O (PCMCIA only)
+atapcVcc				 ds.b	1				; offset: $45 (69)		;  <->: Voltage in tenths of a volt (PCMCIA only)
+atapcVpp1				 ds.b	1				; offset: $46 (70)		;  <->: Voltage in tenths of a volt (PCMCIA only)
+atapcVpp2				 ds.b	1				; offset: $47 (71)		;  <->: Voltage in tenths of a volt (PCMCIA only)
+atapcStatus				 ds.b	1				; offset: $48 (72)		;  <->: Card Status register setting (PCMCIA only)
+atapcPin				 ds.b	1				; offset: $49 (73)		;  <->: Card Pin register setting (PCMCIA only)
+atapcCopy				 ds.b	1				; offset: $4A (74)		;  <->: Card Socket/Copy register setting (PCMCIA only)
+atapcConfigIndex		 ds.b	1				; offset: $4B (75)		;  <->: Card Option register setting (PCMCIA only)
+ataSingleDMASpeed		 ds.b	1				; offset: $4C (76)		;  <->: Single Word DMA Timing Class
+ataMultiDMASpeed		 ds.b	1				; offset: $4D (77)		;  <->: Multiple Word DMA Timing Class
+ataPIOCycleTime			 ds.w	1				; offset: $4E (78)		;  <->:Cycle time for PIO mode
+ataMultiCycleTime		 ds.w	1				; offset: $50 (80)		;  <->:Cycle time for Multiword DMA mode
+ataUltraDMASpeed		 ds.b	1				; offset: $52 (82)		;  <-> Ultra DMA timing class
+reserved2				 ds.b	1				; offset: $53 (83)		;  reserved
+ataUltraCycleTime		 ds.w	1				; offset: $54 (84)		;  <-> Cycle time for Ultra DMA mode
+Reserved1				 ds.w	5				; offset: $56 (86)		;  Reserved for future
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  Get Card Location Icon/Text  <SM4>
+
+kATALargeIconHFS				EQU		$0001				; Large B&W icon with mask (HFS)
+kATALargeIconProDOS				EQU		$0081				; Large B&W icon with mask (ProDOS)
+;  Manager parameter block structure
+ataLocationData			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataIconType				 ds.w	1				; offset: $30 (48)		;  -->: icon type specifier
+;       1 = Large B&W icon with mask (256 bytes)
+;        0x81 = Same as 1, but ProDOS icon
+ataIconReserved			 ds.w	1				; offset: $32 (50)		;  Reserved to be longword aligned
+ataLocationIconPtr		 ds.l	1				; offset: $34 (52)		;  -->: Icon Data buffer pointer
+ataLocationStringPtr	 ds.l	1				; offset: $38 (56)		;  -->: Icon String buffer pointer
+Reserved1				 ds.w	18				; offset: $3C (60)		;  Reserved for future
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+;  ataOSType available
+
+kATAddTypeMacOS					EQU		$0001				; Blue Mac O/S ddType value
+;  Parameter block structure for adding an ATA bus; ATA Manager 4 and above.
+ataAddATABus			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer    
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier        
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+ataNameRegEntry			 ds.l	1				; offset: $30 (48)		;  -->: Pointer to name registry data
+connID					 ds.l	1				; offset: $34 (52)		;  -->: Reserved. Must be set to zero.
+busID					 ds.l	1				; offset: $38 (56)		;  <--: bus ID
+flags					 ds.b	1				; offset: $3C (60)		;  -->: add bus flags
+socketType				 ds.b	1				; offset: $3D (61)		;  -->:   Socket type as defined in the enum
+iconData				 ds.l	1				; offset: $3E (62)		;  -->: Ptr to 256 bytes of icon data (nil is OK)
+stringData				 ds.l	1				; offset: $42 (66)		;  -->: C String defining location of device. (nil is OK)
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+;  Parameter block structure for adding an ATA bus; ATA Manager 4 and above.
+ataRemoveATABus			RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer    
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier        
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+busID					 ds.l	1				; offset: $30 (48)		;  -->: Reserved. Must set to 0.             
+ataNameRegEntry			 ds.l	1				; offset: $34 (52)		;  -->: Pointer to name registry data 
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+;  The parameter block definition for all other ATA Manager functions.
+
+ataGeneric				RECORD 0
+;  Start of cloned common header ataPBHdr
+ataPBLink				 ds.l	1				; offset: $0 (0)		;  a pointer to the next entry in the queue   
+ataPBQType				 ds.w	1				; offset: $4 (4)		;  type byte for safety check
+ataPBVers				 ds.b	1				; offset: $6 (6)		;  -->: parameter block version number; Must be 0x01
+ataPBReserved			 ds.b	1				; offset: $7 (7)		;  Reserved                         
+ataPBReserved2			 ds.l	1				; offset: $8 (8)		;  Reserved                         
+ataPBCallbackPtr		 ds.l	1				; offset: $C (12)		;  -->: Completion Routine Pointer
+ataPBResult				 ds.w	1				; offset: $10 (16)		;  <--: Returned result          
+ataPBFunctionCode		 ds.b	1				; offset: $12 (18)		;  -->: Manager Function Code 
+ataPBIOSpeed			 ds.b	1				; offset: $13 (19)		;  -->: I/O Timing Class       
+ataPBFlags				 ds.w	1				; offset: $14 (20)		;  -->: Various control options   
+ataPBReserved3			 ds.w	1				; offset: $16 (22)		;  Reserved                         
+ataPBDeviceID			 ds.l	1				; offset: $18 (24)		;  -->: Device identifier (see ataDeviceID)      
+ataPBTimeOut			 ds.l	1				; offset: $1C (28)		;  -->: Transaction timeout value in msec 
+ataPBClientPtr1			 ds.l	1				; offset: $20 (32)		;  Client's storage Ptr 1     
+ataPBClientPtr2			 ds.l	1				; offset: $24 (36)		;  Client's storage Ptr 2     
+ataPBState				 ds.w	1				; offset: $28 (40)		;  Reserved for Manager; Initialize to 0 
+ataPBSemaphores			 ds.w	1				; offset: $2A (42)		;  Used internally by the manager
+ataPBReserved4			 ds.l	1				; offset: $2C (44)		;  Reserved                         
+;  End of cloned common header ataPBHdr
+Reserved				 ds.w	24				; offset: $30 (48)		;  Reserved for future
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+ataPB					RECORD 0
+ataIOParamBlock			 ds		ataIOPB			; offset: $0 (0)		;  parameter block for I/O
+						 ORG 0
+ataBIParamBlock			 ds		ataBusInquiry	; offset: $0 (0)		;  parameter block for bus inquiry
+						 ORG 0
+ataMIParamBlock			 ds		ataMgrInquiry	; offset: $0 (0)		;  parameter block for Manager inquiry
+						 ORG 0
+ataAbortParamBlock		 ds		ataAbort		; offset: $0 (0)		;  parameter block for abort
+						 ORG 0
+ataDRParamBlock			 ds		ataDrvrRegister ; offset: $0 (0)		;  parameter block for driver register
+						 ORG 0
+ataMEParamBlock			 ds		ataModifyEventMask ; offset: $0 (0)		;  parameter block for event mask modify
+						 ORG 0
+ataRAParamBlock			 ds		ataRegAccess	; offset: $0 (0)		;  parameter block for register access
+						 ORG 0
+ataDIParamBlock			 ds		ataIdentify		; offset: $0 (0)		;  parameter block for drive identify
+						 ORG 0
+ataDCParamBlock			 ds		ataDevConfiguration ; offset: $0 (0)	;  parameter block for device configuration
+						 ORG 0
+ataLDParamBlock			 ds		ataLocationData ; offset: $0 (0)		;  parameter block for location icon data
+; ataManagerInit  ataInitParamBlock;     // parameter block for Manager initialization
+; ataManagerShutDn    ataSDParamBlock;     // parameter block for Manager shutdown
+; ataDrvrLoad     ataDLParamBlock;     // parameter block for Driver loading
+						 ORG 0
+ataGenericParamBlock	 ds		ataGeneric		; offset: $0 (0)		;  parameter block for all other functions
+						 ORG 184
+sizeof					 EQU *					; size:   $B8 (184)
+						ENDR
+;  The ATA Event codes…
+
+kATANullEvent					EQU		$00					; Just kidding -- nothing happened
+kATAOnlineEvent					EQU		$01					; An ATA device has come online
+kATAOfflineEvent				EQU		$02					; An ATA device has gone offline
+kATARemovedEvent				EQU		$03					; An ATA device has been removed from the bus
+kATAResetEvent					EQU		$04					; Someone gave a hard reset to the drive
+kATAOfflineRequest				EQU		$05					; Someone requesting to offline the drive
+kATAEjectRequest				EQU		$06					; Someone requesting to eject the drive
+kATAUpdateEvent					EQU		$07					; Potential configuration change reported by CardServices <SM4>
+kATATaskTimeRequest				EQU		$08					; The manager is requesting to be called at Task Time
+kATALoadDriverNow				EQU		$09					; Load the driver for the given bus immediately
+kATAPIResetEvent				EQU		$0A					; Someone gave a ATAPI reset to the drive
+															; The following describes bit definitions in the eventMask field of ataDrvrRegister
+bATANullEvent					EQU		$01					; null event bit
+bATAOnlineEvent					EQU		$02					; online event bit
+bATAOfflineEvent				EQU		$04					; offline event bit
+bATARemovedEvent				EQU		$08					; removed event bit
+bATAResetEvent					EQU		$10					; ATA reset event bit
+bATAOfflineRequest				EQU		$20					; offline request event bit
+bATAEjectRequest				EQU		$40					; eject request event bit
+bATAUpdateEvent					EQU		$80					; configuration update event bit
+bATAPIResetEvent				EQU		$0400				; ATAPI reset event bit
+
+kATAEventMarker					EQU		'LOAD'				; Marker for the event data structure
+kATAEventVersion1				EQU		$00000001			; Version 1 of the event structure
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewATADispatchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeATADispatchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeATADispatchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ataManager()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal SInt16 ataManager(ataPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ataManager:	OPWORD	$AAF1
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ataManager
+	ENDIF
+
+;  Typedefs for the AIM entry point pointers
+	ENDIF	; CALL_NOT_IN_CARBON
+;  AIM Plugin header 
+ATAPluginHeader			RECORD 0
+headerVersion			 ds		NumVersion		; offset: $0 (0)
+dispatchVersion			 ds		NumVersion		; offset: $4 (4)
+reservedA				 ds.l	1				; offset: $8 (8)
+reservedB				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+ATAPluginDispatchTable	RECORD 0
+header					 ds		ATAPluginHeader ; offset: $0 (0)
+init					 ds.l	1				; offset: $10 (16)
+close					 ds.l	1				; offset: $14 (20)
+action					 ds.l	1				; offset: $18 (24)
+busEvent				 ds.l	1				; offset: $1C (28)
+poll					 ds.l	1				; offset: $20 (32)
+eject					 ds.l	1				; offset: $24 (36)
+light					 ds.l	1				; offset: $28 (40)
+lock					 ds.l	1				; offset: $2C (44)
+suspend					 ds.l	1				; offset: $30 (48)
+resume					 ds.l	1				; offset: $34 (52)
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+
+;  Callbacks into the System 7 ATA Manager
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ATAFamIODone()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATAManager 4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void ATAFamIODone(ATAReqBlock *theReq, OSStatus result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATAFamIODone
+	ENDIF
+
+
+; *  ATAFamBusEventForAIM()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATAManager 4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void ATAFamBusEventForAIM(UInt32 busID, UInt32 busEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ATAFamBusEventForAIM
+	ENDIF
+
+
+; *  NativeATAMgr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ATAManager 4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal SInt16 NativeATAMgr(ataPB *request)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NativeATAMgr
+	ENDIF
+
+
+
+;  Device Error codes: 0xDB42 - 0xDB5F  
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+ATABaseErrCode					EQU		-9406				; Base error code - 0xDB42   
+ioPending						EQU		1					; Asynch I/O in progress status
+AT_NRdyErr						EQU		-9405				; 0xDB43: Drive not Ready 
+AT_IDNFErr						EQU		-9404				; 0xDB44: ID not found 
+AT_DMarkErr						EQU		-9403				; 0xDB45: Data mark not found 
+AT_BadBlkErr					EQU		-9402				; 0xDB46: Bad Block 
+AT_CorDataErr					EQU		-9401				; 0xDB47: Data was corrected 
+AT_UncDataErr					EQU		-9400				; 0xDB48: Data was not corrected 
+AT_SeekErr						EQU		-9399				; 0xDB49: Seek error 
+AT_WrFltErr						EQU		-9398				; 0xDB4A: Write fault 
+AT_RecalErr						EQU		-9397				; 0xDB4B: Recalibrate failed 
+AT_AbortErr						EQU		-9396				; 0xDB4C: Command aborted by drive 
+AT_MCErr						EQU		-9394				; 0xDB4E: Media Changed error
+ATAPICheckErr					EQU		-9393				; 0xDB4F: ATAPI Check condition <06/15/94>
+AT_UltraDMAiCRCErr				EQU		-9392				; 0xDB50: CRC error during Ultra DMA xfer 
+															; System error codes...Custom Driver Error Codes 0xDB60 - 0xDB6F
+DRVRCantAllocate				EQU		-9376				; 0xDB60: Allocation error during initialization
+NoATAMgr						EQU		-9375				; 0xDB61: MgrInquiry failed => No ATA Manager
+ATAInitFail						EQU		-9374				; 0xDB62: Mgr Initialization failed
+ATABufFail						EQU		-9373				; 0xDB63: Device buffer test failure
+ATADevUnsupported				EQU		-9372				; 0xDB64: Device type not supported
+ATAEjectDrvErr					EQU		-9371				; 0xDB65: Could not eject the drive
+															; Manager Error Codes 0xDB70 - 0xDB8F
+ATAMgrNotInitialized			EQU		-9360				; 0xDB70: Mgr has not been initialized
+ATAPBInvalid					EQU		-9359				; 0xDB71: The bus base address couldn't be found
+ATAFuncNotSupported				EQU		-9358				; 0xDB72: An unknown function code specified
+ATABusy							EQU		-9357				; 0xDB73: Selected device is busy
+ATATransTimeOut					EQU		-9356				; 0xDB74: Transaction timeout detected
+ATAReqInProg					EQU		-9355				; 0xDB75: Channel busy; channel is processing another cmd
+ATAUnknownState					EQU		-9354				; 0xDB76: Device status register reflects an unknown state
+ATAQLocked						EQU		-9353				; 0xDB77: I/O Queue is locked due to previous I/O error.
+ATAReqAborted					EQU		-9352				; 0xDB78: The I/O queue entry was aborted due to an abort req.
+															;         or due to Manager shutdown.
+ATAUnableToAbort				EQU		-9351				; 0xDB79: The I/O queue entry could not be aborted.
+ATAAbortedDueToRst				EQU		-9350				; 0xDB7A: Request aborted due to a device reset command.
+ATAPIPhaseErr					EQU		-9349				; 0xDB7B: Unexpected phase - •••IS THIS VALID ERROR??? <06/15/94>
+ATAPITxCntErr					EQU		-9348				; 0xDB7C: Overrun/Underrun condition detected
+ATANoClientErr					EQU		-9347				; 0xDB7D: No client present to handle the event
+ATAInternalErr					EQU		-9346				; 0xDB7E: MagnumOpus returned an error
+ATABusErr						EQU		-9345				; 0xDB7F: Bus error detected on I/O  
+AT_NoAddrErr					EQU		-9344				; 0xDB80: Invalid AT base adress 
+DriverLocked					EQU		-9343				; 0xDB81: Current driver must be removed before adding another
+CantHandleEvent					EQU		-9342				; 0xDB82: Particular event couldn't be handled (call others)
+ATAMgrMemoryErr					EQU		-9341				; 0xDB83: Manager memory allocation error    
+ATASDFailErr					EQU		-9340				; 0xDB84: Shutdown failure          
+ATAXferParamErr					EQU		-9339				; 0xDB85: I/O xfer parameters inconsistent 
+ATAXferModeErr					EQU		-9338				; 0xDB86: I/O xfer mode not supported 
+ATAMgrConsistencyErr			EQU		-9337				; 0XDB87: Manager detected internal inconsistency. 
+ATADmaXferErr					EQU		-9336				; 0XDB88: fatal error in DMA side of transfer 
+															; Driver loader error Codes 0xDB90 - 0xDBA5
+ATAInvalidDrvNum				EQU		-9328				; 0xDB90: Invalid drive number from event
+ATAMemoryErr					EQU		-9327				; 0xDB91: Memory allocation error
+ATANoDDMErr						EQU		-9326				; 0xDB92: No DDM found on media  
+ATANoDriverErr					EQU		-9325				; 0xDB93: No driver found on the media   
+;  ------------------------ Version 1 definition -------------------------------    
+
+v1ATABaseErrCode				EQU		$0700				; This needs a home somewhere
+v1AT_NRdyErr					EQU		$FFFFF901			; 0xF901: -0x1DBE 
+v1AT_IDNFErr					EQU		$FFFFF904			; 0xF904: -0x1DC0 
+v1AT_DMarkErr					EQU		$FFFFF905			; 0xF905: -0x1DC0 
+v1AT_BadBlkErr					EQU		$FFFFF906			; 0xF906: -0x1DC0 
+v1AT_CorDataErr					EQU		$FFFFF907			; 0xF907: -0x1DC0 
+v1AT_UncDataErr					EQU		$FFFFF908			; 0xF908: -0x1DC0 
+v1AT_SeekErr					EQU		$FFFFF909			; 0xF909: -0x1DC0 
+v1AT_WrFltErr					EQU		$FFFFF90A			; 0xF90A: -0x1DC0 
+v1AT_RecalErr					EQU		$FFFFF90B			; 0xF90B: -0x1DC0 
+v1AT_AbortErr					EQU		$FFFFF90C			; 0xF90C: -0x1DC0 
+v1AT_NoAddrErr					EQU		$FFFFF90D			; 0xF90D: -0x1D8D 
+v1AT_MCErr						EQU		$FFFFF90E			; 0xF90E: -0x1DC0
+															; System error codes...Custom Driver Error Codes
+v1DRVRCantAllocate				EQU		-1793				; 0xF8FF: -0x1D9F
+v1NoATAMgr						EQU		-1794				; 0xF8FE: -0x1D9D
+v1ATAInitFail					EQU		-1795				; 0xF8FD: -0x1D9B
+v1ATABufFail					EQU		-1796				; 0xF8FC: -0x1D99
+v1ATADevUnsupported				EQU		-1797				; 0xF8FB: -0x1c97
+															; Manager Error Codes
+v1ATAMgrNotInitialized			EQU		-1802				; 0xF8F6: -0x1D86
+v1ATAPBInvalid					EQU		-1803				; 0xF8F5: -0x1D84
+v1ATAFuncNotSupported			EQU		-1804				; 0xF8F4: -0x1D82
+v1ATABusy						EQU		-1805				; 0xF8F3: -0x1D80
+v1ATATransTimeOut				EQU		-1806				; 0xF8F2: -0x1D7E
+v1ATAReqInProg					EQU		-1807				; 0xF8F1: -0x1D7C
+v1ATAUnknownState				EQU		-1808				; 0xF8F0: -0x1D7A
+v1ATAQLocked					EQU		-1809				; 0xF8EF: -0x1D78
+v1ATAReqAborted					EQU		-1810				; 0xF8EE: -0x1D76
+v1ATAUnableToAbort				EQU		-1811				; 0xF8ED: -0x1D74
+v1ATAAbortedDueToRst			EQU		-1812				; 0xF8EC: -0x1D72
+
+	ENDIF ; __ATA__ 
+

@@ -1,0 +1,123 @@
+
+; File: Sound.a
+;
+; Version 2.0a2
+;
+; Copyright 1986-1987 Apple Computer, Inc. All Rights Reserved
+;
+
+stdQLength		EQU 128
+
+;Command Numbers
+
+nullCmd			EQU 0
+initCmd			EQU 1
+quitCmd			EQU 2
+killCmd			EQU 3
+
+waitCmd			EQU 10
+pauseCmd		EQU 11
+resumeCmd		EQU 12
+callBackCmd		EQU 13
+syncCmd			EQU 14
+emptyCmd		EQU 15
+
+tickleCmd		EQU 20
+requestNextCmd	EQU 21
+howOftenCmd		EQU 22
+wakeUpCmd		EQU 23
+availableCmd	EQU 24
+
+scaleCmd		EQU 30
+tempoCmd		EQU 31
+
+noteCmd			EQU 40
+restCmd			EQU 41
+freqCmd			EQU 42
+ampCmd			EQU 43
+timbreCmd		EQU 44
+
+waveTableCmd	EQU 60
+phaseCmd		EQU 61
+
+soundCmd		EQU 80
+bufferCmd		EQU 81
+rateCmd			EQU 82
+
+SndCommand	RECORD	0
+commandNum	DS.W	1	;INTEGER
+wordArg		DS.W	1	;INTEGER
+longArg		DS.L	1	;LONGINT
+sndCSize	EQU		*	;size of SndCommand
+			ENDR
+
+ModifierStub	RECORD	0
+next			DS.L	1	;^ModifierStub
+modifierCode	DS.L	1	;ProcPtr
+userInfo		DS.L	1	;LONGINT
+count			DS.L	1	;Time [LONGINT]
+every			DS.L	1	;Time [LONGINT]
+mStbSize		EQU		*	;size of ModifierStub
+				ENDR
+
+		
+SndChannel		RECORD	0
+next			DS.L	1	;^SndChannel
+modifierChain	DS.L	1	;^ModifierStub
+callBack		DS.L	1	;ProcPtr
+userInfo		DS.L	1	;Ptr
+
+;The following is for internal Sound Manager use only.
+
+wait			DS.L	1				;Time [LONGINT]
+cmdInProgress	DS		SndCommand		;
+flags			DS.W	1				;INTEGER
+qLength			DS.W	1				;INTEGER
+qHead			DS.W	1				;INTEGER
+qTail			DS.W	1				;INTEGER
+queue			DS		128*SndCommand.sndCSize	; ARRAY [0..StdQLength-1] OF SndCommand
+sndChSize		EQU		*				;size of SndChannel
+				ENDR
+
+SoundHeader		RECORD	0
+samplePtr		DS.L	1	;Ptr - if NIL then samples are in sampleArea
+length			DS.L	1	;LONGINT
+sampleRate		DS.L	1	;Fixed
+loopStart		DS.L	1	;LONGINT
+loopEnd			DS.L	1	;LONGINT
+baseNote		DS.W	1	;INTEGER
+;sampleArea		DS.B	1	;PACKED ARRAY [0..0] OF Byte; -- not included, but logically here
+				ENDR
+
+
+; Sound Manager Traps
+	
+;FUNCTION SndDoCommand(chan: SndChannelPtr; cmd: SndCommand; noWait: BOOLEAN): OSErr;
+
+SndDoCommand		OPWORD	 $A803
+		
+;FUNCTION SndDoImmediate(chan: SndChannelPtr; cmd: SndCommand): OSErr;
+
+SndDoImmediate		OPWORD	 $A804
+		
+;FUNCTION SndAddModifier(chan: SndChannelPtr; modifierCode: ProcPtr; id: INTEGER; init: LONGINT): OSErr;
+
+SndAddModifier		OPWORD	 $A802
+		
+;FUNCTION SndNewChannel(VAR chan: SndChannelPtr; synth: INTEGER; init: LONGINT; userRoutine: ProcPtr): OSErr;
+
+SndNewChannel		OPWORD	 $A807
+		
+;FUNCTION SndDisposeChannel(chan: SndChannelPtr; killNow: BOOLEAN): OSErr;
+
+SndDisposeChannel	OPWORD	 $A801
+		
+;FUNCTION SndPlay(chan: SndChannelPtr; sList: Handle; async: BOOLEAN): OSErr;
+
+SndPlay				OPWORD	 $A805
+		
+;FUNCTION SndControl(id: INTEGER; VAR cmd: SndCommand): OSErr;
+
+SndControl			OPWORD	 $A806
+
+

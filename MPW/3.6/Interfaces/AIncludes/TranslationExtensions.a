@@ -1,0 +1,202 @@
+;
+;    File:       TranslationExtensions.a
+;
+;    Contains:   Macintosh Easy Open Translation Extension Interfaces.
+;
+;    Version:    Technology: Macintosh Easy Open 1.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1989-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TRANSLATIONEXTENSIONS__') = 'UNDEFINED' THEN
+__TRANSLATIONEXTENSIONS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+
+kSupportsFileTranslation		EQU		1
+kSupportsScrapTranslation		EQU		2
+kTranslatorCanGenerateFilename	EQU		4
+; *****************************************************************************************
+;  better names for 4-char codes
+; typedef OSType 						FileType
+
+; typedef ResType 						ScrapType
+
+; *****************************************************************************************
+
+; typedef UInt32						TranslationAttributes
+taDstDocNeedsResourceFork		EQU		1
+taDstIsAppTranslation			EQU		2
+; *****************************************************************************************
+FileTypeSpec			RECORD 0
+format					 ds.l	1				; offset: $0 (0)
+hint					 ds.l	1				; offset: $4 (4)
+flags					 ds.l	1				; offset: $8 (8)		;  taDstDocNeedsResourceFork, taDstIsAppTranslation
+catInfoType				 ds.l	1				; offset: $C (12)
+catInfoCreator			 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+FileTranslationList		RECORD 0
+modDate					 ds.l	1				; offset: $0 (0)
+groupCount				 ds.l	1				; offset: $4 (4)
+;  conceptual declarations:
+;     unsigned long group1SrcCount;
+;     unsigned long group1SrcEntrySize = sizeof(FileTypeSpec);
+;   FileTypeSpec  group1SrcTypes[group1SrcCount]
+;   unsigned long group1DstCount;
+;   unsigned long group1DstEntrySize = sizeof(FileTypeSpec);
+;   FileTypeSpec  group1DstTypes[group1DstCount]
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct FileTranslationList *	FileTranslationListPtr
+
+; typedef FileTranslationListPtr *		FileTranslationListHandle
+
+; *****************************************************************************************
+ScrapTypeSpec			RECORD 0
+format					 ds.l	1				; offset: $0 (0)
+hint					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ScrapTranslationList	RECORD 0
+modDate					 ds.l	1				; offset: $0 (0)
+groupCount				 ds.l	1				; offset: $4 (4)
+;  conceptual declarations:
+;     unsigned long     group1SrcCount;
+;     unsigned long     group1SrcEntrySize = sizeof(ScrapTypeSpec);
+;   ScrapTypeSpec     group1SrcTypes[group1SrcCount]
+;   unsigned long     group1DstCount;
+;     unsigned long     group1DstEntrySize = sizeof(ScrapTypeSpec);
+;   ScrapTypeSpec     group1DstTypes[group1DstCount]
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct ScrapTranslationList *	ScrapTranslationListPtr
+
+; typedef ScrapTranslationListPtr *		ScrapTranslationListHandle
+
+; *******************************************************************************************
+;
+;    definition of callbacks to update progress dialog
+;
+;******************************************************************************************
+
+; typedef long 							TranslationRefNum
+
+; *******************************************************************************************
+;
+;    This routine sets the advertisement in the top half of the progress dialog.
+;    It is called once at the beginning of your DoTranslateFile routine.
+;
+;    Enter   :   refNum          Translation reference supplied to DoTranslateFile.
+;                advertisement   A handle to the picture to display.  This must be non-purgable.
+;                                Before returning from DoTranslateFile, you should dispose
+;                                of the memory.  (Normally, it is in the temp translation heap
+;                                so it is cleaned up for you.)
+;
+;    Exit    :   returns         noErr, paramErr, or memFullErr
+;
+;******************************************************************************************
+
+
+; *  SetTranslationAdvertisement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Translation 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 thru 1.0.2
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetTranslationAdvertisement(TranslationRefNum refNum, PicHandle advertisement)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetTranslationAdvertisement
+			moveq           	#2,D0
+			dc.w            	$ABFC
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTranslationAdvertisement
+	ENDIF
+
+
+; *******************************************************************************************
+;
+;    This routine updates the progress bar in the progress dialog.
+;    It is called repeatedly from within your DoTranslateFile routine.
+;    It should be called often, so that the user will get feedback if
+;    he tries to cancel.
+;
+;    Enter   :   refNum      translation reference supplied to DoTranslateFile.
+;                progress    percent complete (0-100)
+;
+;    Exit    :   canceled    TRUE if the user clicked the Cancel button, FALSE otherwise
+;
+;    Return  :   noErr, paramErr, or memFullErr
+;
+;******************************************************************************************
+
+
+; *  UpdateTranslationProgress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Translation 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 thru 1.0.2
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr UpdateTranslationProgress(TranslationRefNum refNum, short percentDone, Boolean *canceled)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UpdateTranslationProgress
+			moveq           	#1,D0
+			dc.w            	$ABFC
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateTranslationProgress
+	ENDIF
+
+; *******************************************************************************************
+;
+;    Component Manager component selectors for translation extension routines
+;
+;******************************************************************************************
+
+
+kTranslateGetFileTranslationList EQU	0
+kTranslateIdentifyFile			EQU		1
+kTranslateTranslateFile			EQU		2
+kTranslateGetTranslatedFilename	EQU		3
+kTranslateGetScrapTranslationList EQU	10
+kTranslateIdentifyScrap			EQU		11
+kTranslateTranslateScrap		EQU		12
+kTranslateGetScrapTranslationListConsideringData EQU 13
+
+; *******************************************************************************************
+;
+;    routines which implement translation extensions
+;
+;******************************************************************************************
+
+	ENDIF ; __TRANSLATIONEXTENSIONS__ 
+

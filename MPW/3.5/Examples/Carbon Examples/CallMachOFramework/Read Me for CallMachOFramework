@@ -1,0 +1,73 @@
+Read Me for CallMachOFramework
+
+1.0a1
+
+This sample shows two ways of calling a Mach-O framework from a CFM application on Mac OS X.  Both approaches create a CFBundle for the framework and then extract pointers to functions in the framework using CFBundleGetFunctionPointerForName. The simpler approach approach just gets a pointer to the framework function, casts it to appropriate C function pointer type, and calls it. The more complex, but more general, approach uses CFMLateImport technology to bulk import functions from a framework without any messy function pointers.
+
+The sample runs on Mac OS X Public Beta.
+
+Packing List
+
+The sample contains the following items:
+
+• Read Me for CallMachOFramework — This document.
+
+• CallMachOFramework.mcp — A CodeWarrior Pro 6 project file. This file has two targets: one implements the CFBundle approach and the other implements the CFMLateImport approach.
+
+• CallMachOFramework.c — The sample source code. The same source is used for both approaches. The behaviour is controlled by a compiler variable set using one of the two prefix files.
+    • UseFunctionPointers.prefix — Prefix file for the CFBundle target.
+    • UseCFMLateImport.prefix — Prefix file for the CFMLateImport target.
+
+• CallMachOFramework.r — A 'carb' resource.
+
+• CallMachOFramework Bundle — A compiled binary of the CFBundle target.
+
+• CallMachOFramework Late — A compiled binary of the CFMLateImport target.
+
+• System Framework Stub — When using the CFMLateImport approach you have to cook up your own CFM stub libraries for the routines you need to import from Mach-O. This folder contains an example of such a library, and instructions on how to build one.
+
+• MoreIsBetter Bits — Components of the DTS sample code library MoreIsBetter that are required to compile the sample.
+
+Using the Sample
+
+To run the sample, simply double click either “CallMachOFramework Bundle” or “CallMachOFramework Late” in the Finder. The sample calls the BSD function gethostname (a Mach-O only routine in the System framework) and prints the result.
+
+Building the Sample
+
+The sample was built using the CodeWarrior Pro 6 environment.  You should be able to just open the project, select the appropriate target, and choose Make from the Project menu.
+
+How it Works
+
+Both approaches need to start by creating a CFBundleRef for the System framework.  I do this by finding the Frameworks folder using FindFolder and then accessing the System framework by name within that folder.
+
+Once I have created a bundle the approaches diverge.  For the CFBundle approach I just call CFBundleGetFunctionPointerForName, cast the result to the appropriate function pointer, and call it. For the CFMLateImport approach I call CFMLateImportBundle (part of MoreIsBetter) to fix up the weak linked routines so that I can call them directly without any messing around with function pointers.
+
+The approach you choose depends primarily on the number of Mach-O routines you need to call. If you need to call just one or two Mach-O routines, the CFBundle approach is simplest. However, if you need to call lots of them, the CFMLateImport approach pays off big time.
+
+Caveats
+
+Using CFMLateImport technology is somewhat tricky. Read the comments in "CFMLateImport.h" for details. Some things you have to remember:
+
+• You must have a fragment initialiser.  Your best bet is to copy the FragmentInit routine from "CallMachOFramework.c"
+
+• You must export a dummy routine from your application fragment. In my case the routine I export in DummyExport in "CallMachOFramework.c"
+
+• You must call turn off PEF data packing for your application. In CodeWarrior Pro 6 this translates to checking the "Expand Uninitialized Data" checkbox in the PPC PEF panel of your target settings.
+
+If you call Mach-O routines that have a callback (for example, the BSD signal function) you must do some extra work for your callback. See the sample CFM_MachO_CFM (part of the CarbonLib SDK) for details on doing this.
+
+This sample does not currently support importing data symbols. This will be fixed when the appropriate CF routine is made available in a public header file.
+
+Credits and Version History
+
+If you find any problems with this sample, mail <DTS@apple.com> and we will try to fix them up.
+
+1.0d1 (Nov 2000) was a pre-release version distributed to Apple reviewers and a small number of developers.
+
+1.0a1 (Nov 2000) was the first shipping version.
+
+Share and Enjoy.
+
+Worldwide Developer Technical Support
+
+30 Nov 2000

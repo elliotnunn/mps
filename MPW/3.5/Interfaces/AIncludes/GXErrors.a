@@ -1,0 +1,1105 @@
+;
+;    File:       GXErrors.a
+;
+;    Contains:   QuickDraw GX error constants and debugging routines
+;
+;    Version:    Technology: Quickdraw GX 1.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__GXERRORS__') = 'UNDEFINED' THEN
+__GXERRORS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__GXTYPES__') = 'UNDEFINED' THEN
+	include 'GXTypes.a'
+	ENDIF
+
+
+gxFirstSystemError				EQU		-27999				; 0xffff92a1 
+gxFirstFatalError				EQU		-27999
+gxLastFatalError				EQU		-27951
+gxFirstNonfatalError			EQU		-27950
+gxFirstFontScalerError			EQU		-27900
+gxLastFontScalerError			EQU		-27851
+gxFirstParameterError			EQU		-27850
+gxFirstImplementationLimitError	EQU		-27800
+gxFirstSystemDebuggingError		EQU		-27700
+gxLastSystemError				EQU		-27000				; 0xffff9688 
+gxFirstLibraryError				EQU		1048576				; 0x00100000 
+gxLastLibraryError				EQU		2097151				; 0x001fffff 
+gxFirstAppError					EQU		2097152				; 0x00200000 
+gxLastAppError					EQU		4194303				; 0x003fffff 
+gxFirstSystemWarning			EQU		-26999				; 0xffff9689 
+gxFirstResultOutOfRangeWarning	EQU		-26950
+gxFirstParameterOutOfRangeWarning EQU	-26900
+gxFirstFontScalerWarning		EQU		-26850
+gxFirstSystemDebuggingWarning	EQU		-26700
+gxLastSystemWarning				EQU		-26000				; 0xffff9a70 
+gxFirstLibraryWarning			EQU		4194304				; 0x00400000 
+gxLastLibraryWarning			EQU		5242879				; 0x004fffff 
+gxFirstAppWarning				EQU		5242880				; 0x00500000 
+gxLastAppWarning				EQU		7340031				; 0x006fffff 
+gxFirstSystemNotice				EQU		-25999				; 0xffff9a71 
+gxLastSystemNotice				EQU		-25500				; 0xffff9c64 
+gxFirstLibraryNotice			EQU		7340032				; 0x00700000 
+gxLastLibraryNotice				EQU		7602175				; 0x0073ffff 
+gxFirstAppNotice				EQU		7602176				; 0x00740000 
+gxLastAppNotice					EQU		8388607				; 0x007fffff 
+
+															; truly fatal errors 
+out_of_memory					EQU		-27999
+internal_fatal_error			EQU		-27998
+no_outline_font_found			EQU		-27997
+not_enough_memory_for_graphics_client_heap EQU -27996
+could_not_create_backing_store	EQU		-27995
+
+															; internal errors 
+internal_error					EQU		-27950
+internal_font_error				EQU		-27949
+internal_layout_error			EQU		-27948
+
+															; recoverable errors 
+could_not_dispose_backing_store	EQU		-27946
+unflattening_interrupted_by_client EQU	-27945
+
+															; font manager errors 
+font_cannot_be_changed			EQU		-27944
+illegal_font_parameter			EQU		-27943
+
+															; gxFont scaler errors 
+null_font_scaler_context		EQU		-27900
+null_font_scaler_input			EQU		-27899
+invalid_font_scaler_context		EQU		-27898
+invalid_font_scaler_input		EQU		-27897
+invalid_font_scaler_font_data	EQU		-27896
+font_scaler_newblock_failed		EQU		-27895
+font_scaler_getfonttable_failed	EQU		-27894
+font_scaler_bitmap_allocation_failed EQU -27893
+font_scaler_outline_allocation_failed EQU -27892
+required_font_scaler_table_missing EQU	-27891
+unsupported_font_scaler_outline_format EQU -27890
+unsupported_font_scaler_stream_format EQU -27889
+unsupported_font_scaler_font_format EQU	-27888
+font_scaler_hinting_error		EQU		-27887
+font_scaler_rasterizer_error	EQU		-27886
+font_scaler_internal_error		EQU		-27885
+font_scaler_invalid_matrix		EQU		-27884
+font_scaler_fixed_overflow		EQU		-27883
+font_scaler_api_version_mismatch EQU	-27882
+font_scaler_streaming_aborted	EQU		-27881
+unknown_font_scaler_error		EQU		-27880
+
+															; bad parameters 
+parameter_is_nil				EQU		-27850
+shape_is_nil					EQU		-27849
+style_is_nil					EQU		-27848
+transform_is_nil				EQU		-27847
+ink_is_nil						EQU		-27846
+transferMode_is_nil				EQU		-27845
+color_is_nil					EQU		-27844
+colorProfile_is_nil				EQU		-27843
+colorSet_is_nil					EQU		-27842
+spoolProcedure_is_nil			EQU		-27841
+tag_is_nil						EQU		-27840
+type_is_nil						EQU		-27839
+mapping_is_nil					EQU		-27838
+invalid_viewDevice_reference	EQU		-27837
+invalid_viewGroup_reference		EQU		-27836
+invalid_viewPort_reference		EQU		-27835
+
+															; implementation limits, these should be right before the debugging errors 
+number_of_contours_exceeds_implementation_limit EQU -27800
+number_of_points_exceeds_implementation_limit EQU -27799
+size_of_polygon_exceeds_implementation_limit EQU -27798
+size_of_path_exceeds_implementation_limit EQU -27797
+size_of_text_exceeds_implementation_limit EQU -27796
+size_of_bitmap_exceeds_implementation_limit EQU -27795
+number_of_colors_exceeds_implementation_limit EQU -27794
+procedure_not_reentrant			EQU		-27793
+
+
+
+															; internal debugging errors 
+functionality_unimplemented		EQU		-27700
+clip_to_frame_shape_unimplemented EQU	-27699				; font parameter debugging errors 
+illegal_font_storage_type		EQU		-27698
+illegal_font_storage_reference	EQU		-27697
+illegal_font_attributes			EQU		-27696				; parameter debugging errors 
+parameter_out_of_range			EQU		-27695
+inconsistent_parameters			EQU		-27694
+index_is_less_than_zero			EQU		-27693
+index_is_less_than_one			EQU		-27692
+count_is_less_than_zero			EQU		-27691
+count_is_less_than_one			EQU		-27690
+contour_is_less_than_zero		EQU		-27689
+length_is_less_than_zero		EQU		-27688
+invalid_client_reference		EQU		-27687
+invalid_graphics_heap_start_pointer EQU	-27686
+invalid_nongraphic_globals_pointer EQU	-27685
+colorSpace_out_of_range			EQU		-27684
+pattern_lattice_out_of_range	EQU		-27683
+frequency_parameter_out_of_range EQU	-27682
+tinting_parameter_out_of_range	EQU		-27681
+method_parameter_out_of_range	EQU		-27680
+space_may_not_be_indexed		EQU		-27679
+glyph_index_too_small			EQU		-27678
+no_glyphs_added_to_font			EQU		-27677
+glyph_not_added_to_font			EQU		-27676
+point_does_not_intersect_bitmap	EQU		-27675
+required_font_table_not_present	EQU		-27674
+unknown_font_table_format		EQU		-27673				; the styles encoding is not present in the font 
+shapeFill_not_allowed			EQU		-27672
+inverseFill_face_must_set_clipLayer_flag EQU -27671
+invalid_transferMode_colorSpace	EQU		-27670
+colorProfile_must_be_nil		EQU		-27669
+bitmap_pixel_size_must_be_1		EQU		-27668
+empty_shape_not_allowed			EQU		-27667
+ignorePlatformShape_not_allowed	EQU		-27666
+nil_style_in_glyph_not_allowed	EQU		-27665
+complex_glyph_style_not_allowed	EQU		-27664
+invalid_mapping					EQU		-27663
+cannot_set_item_shapes_to_nil	EQU		-27662
+cannot_use_original_item_shapes_when_growing_picture EQU -27661
+cannot_add_unspecified_new_glyphs EQU	-27660
+cannot_dispose_locked_tag		EQU		-27659
+cannot_dispose_locked_shape		EQU		-27658
+
+															; restricted access 
+shape_access_not_allowed		EQU		-27657
+colorSet_access_restricted		EQU		-27656
+colorProfile_access_restricted	EQU		-27655
+tag_access_restricted			EQU		-27654
+viewDevice_access_restricted	EQU		-27653
+graphic_type_does_not_have_a_structure EQU -27652
+style_run_array_does_not_match_number_of_characters EQU -27651
+rectangles_cannot_be_inserted_into EQU	-27650
+unknown_graphics_heap			EQU		-27649
+graphics_routine_selector_is_obsolete EQU -27648
+cannot_set_graphics_client_memory_without_setting_size EQU -27647
+graphics_client_memory_too_small EQU	-27646
+graphics_client_memory_is_already_allocated EQU -27645
+viewPort_is_a_window			EQU		-27644				; wrong type/bad reference 
+illegal_type_for_shape			EQU		-27643
+shape_does_not_contain_a_bitmap	EQU		-27642
+shape_does_not_contain_text		EQU		-27641
+picture_expected				EQU		-27640
+bitmap_is_not_resizable			EQU		-27639
+shape_may_not_be_a_bitmap		EQU		-27638
+shape_may_not_be_a_picture		EQU		-27637
+graphic_type_does_not_contain_points EQU -27636
+graphic_type_does_not_have_multiple_contours EQU -27635
+graphic_type_cannot_be_mapped	EQU		-27634
+graphic_type_cannot_be_moved	EQU		-27633
+graphic_type_cannot_be_scaled	EQU		-27632
+graphic_type_cannot_be_rotated	EQU		-27631
+graphic_type_cannot_be_skewed	EQU		-27630
+graphic_type_cannot_be_reset	EQU		-27629
+graphic_type_cannot_be_dashed	EQU		-27628
+graphic_type_cannot_be_reduced	EQU		-27627
+graphic_type_cannot_be_inset	EQU		-27626
+shape_cannot_be_inverted		EQU		-27625
+shape_does_not_have_area		EQU		-27624
+shape_does_not_have_length		EQU		-27623
+first_glyph_advance_must_be_absolute EQU -27622
+picture_cannot_contain_itself	EQU		-27621
+viewPort_cannot_contain_itself	EQU		-27620
+cannot_set_unique_items_attribute_when_picture_contains_items EQU -27619
+layer_style_cannot_contain_a_face EQU	-27618
+layer_glyph_shape_cannot_contain_nil_styles EQU -27617
+
+															; validation errors 
+object_wrong_type				EQU		-27616
+shape_wrong_type				EQU		-27615
+style_wrong_type				EQU		-27614
+ink_wrong_type					EQU		-27613
+transform_wrong_type			EQU		-27612
+device_wrong_type				EQU		-27611
+port_wrong_type					EQU		-27610
+
+															; validation cache errors 
+shape_cache_wrong_type			EQU		-27609
+style_cache_wrong_type			EQU		-27608
+ink_cache_wrong_type			EQU		-27607
+transform_cache_wrong_type		EQU		-27606
+port_cache_wrong_type			EQU		-27605
+shape_cache_parent_mismatch		EQU		-27604
+style_cache_parent_mismatch		EQU		-27603
+ink_cache_parent_mismatch		EQU		-27602
+transform_cache_parent_mismatch	EQU		-27601
+port_cache_parent_mismatch		EQU		-27600
+invalid_shape_cache_port		EQU		-27599
+invalid_shape_cache_device		EQU		-27598
+invalid_ink_cache_port			EQU		-27597
+invalid_ink_cache_device		EQU		-27596
+invalid_style_cache_port		EQU		-27595
+invalid_style_cache_device		EQU		-27594
+invalid_transform_cache_port	EQU		-27593
+invalid_transform_cache_device	EQU		-27592
+recursive_caches				EQU		-27591
+
+															; validation shape cache errors 
+invalid_fillShape_ownerCount	EQU		-27590
+recursive_fillShapes			EQU		-27589
+
+															; validation memory block errors 
+indirect_memory_block_too_small	EQU		-27588
+indirect_memory_block_too_large	EQU		-27587
+unexpected_nil_pointer			EQU		-27586
+bad_address						EQU		-27585
+
+															; validation object errors 
+no_owners						EQU		-27584
+invalid_pointer					EQU		-27583
+invalid_seed					EQU		-27582
+invalid_frame_seed				EQU		-27581
+invalid_text_seed				EQU		-27580
+invalid_draw_seed				EQU		-27579
+bad_private_flags				EQU		-27578
+
+															; validation path and polygon errors 
+invalid_vector_count			EQU		-27577
+invalid_contour_count			EQU		-27576
+
+															; validation bitmap errors 
+bitmap_ptr_too_small			EQU		-27575
+bitmap_ptr_not_aligned			EQU		-27574
+bitmap_rowBytes_negative		EQU		-27573
+bitmap_width_negative			EQU		-27572
+bitmap_height_negative			EQU		-27571
+invalid_pixelSize				EQU		-27570
+bitmap_rowBytes_too_small		EQU		-27569
+bitmap_rowBytes_not_aligned		EQU		-27568
+bitmap_rowBytes_must_be_specified_for_user_image_buffer EQU -27567
+
+															; validation bitmap image errors 
+invalid_bitImage_fileOffset		EQU		-27566
+invalid_bitImage_owners			EQU		-27565
+invalid_bitImage_rowBytes		EQU		-27564
+invalid_bitImage_internal_flag	EQU		-27563
+
+															; validation text errors 
+text_bounds_cache_wrong_size	EQU		-27562
+text_metrics_cache_wrong_size	EQU		-27561
+text_index_cache_wrong_size		EQU		-27560
+
+															; validation glyph errors 
+glyph_run_count_negative		EQU		-27559
+glyph_run_count_zero			EQU		-27558
+glyph_run_counts_do_not_sum_to_character_count EQU -27557
+glyph_first_advance_bit_set_not_allowed EQU -27556
+glyph_tangent_vectors_both_zero	EQU		-27555
+
+															; validation layout errors 
+layout_run_length_negative		EQU		-27554
+layout_run_length_zero			EQU		-27553
+layout_run_level_negative		EQU		-27552
+layout_run_lengths_do_not_sum_to_text_length EQU -27551
+
+															; validation picture errors 
+bad_shape_in_picture			EQU		-27550
+bad_style_in_picture			EQU		-27549
+bad_ink_in_picture				EQU		-27548
+bad_transform_in_picture		EQU		-27547
+bad_shape_cache_in_picture		EQU		-27546
+bad_seed_in_picture				EQU		-27545
+invalid_picture_count			EQU		-27544
+
+															; validation text face errors 
+bad_textLayer_count				EQU		-27543
+bad_fillType_in_textFace		EQU		-27542
+bad_style_in_textFace			EQU		-27541
+bad_transform_in_textFace		EQU		-27540
+
+															; validation transform errors 
+invalid_matrix_flag				EQU		-27539
+transform_clip_missing			EQU		-27538
+
+															; validation font cache errors 
+metrics_wrong_type				EQU		-27537
+metrics_point_size_probably_bad	EQU		-27536
+scalar_block_wrong_type			EQU		-27535
+scalar_block_parent_mismatch	EQU		-27534
+scalar_block_too_small			EQU		-27533
+scalar_block_too_large			EQU		-27532
+invalid_metrics_range			EQU		-27531
+invalid_metrics_flags			EQU		-27530
+metrics_maxWidth_probably_bad	EQU		-27529
+font_wrong_type					EQU		-27528
+font_wrong_size					EQU		-27527
+invalid_font_platform			EQU		-27526
+invalid_lookup_range			EQU		-27525
+invalid_lookup_platform			EQU		-27524
+font_not_in_font_list			EQU		-27523
+metrics_not_in_metrics_list		EQU		-27522
+
+															; validation view device errors 
+bad_device_private_flags		EQU		-27521
+bad_device_attributes			EQU		-27520
+invalid_device_number			EQU		-27519
+invalid_device_viewGroup		EQU		-27518
+invalid_device_bounds			EQU		-27517
+invalid_bitmap_in_device		EQU		-27516
+
+															; validation color set errors 
+colorSet_wrong_type				EQU		-27515
+invalid_colorSet_viewDevice_owners EQU	-27514
+invalid_colorSet_colorSpace		EQU		-27513
+invalid_colorSet_count			EQU		-27512
+
+															; validation color profile errors 
+colorProfile_wrong_type			EQU		-27511
+invalid_colorProfile_flags		EQU		-27510
+invalid_colorProfile_response_count EQU	-27509
+
+															; validation internal backing store errors 
+backing_free_parent_mismatch	EQU		-27508
+backing_store_parent_mismatch	EQU		-27507
+
+
+															; warnings about warnings 
+warning_stack_underflow			EQU		-26999
+warning_stack_overflow			EQU		-26998
+notice_stack_underflow			EQU		-26997
+notice_stack_overflow			EQU		-26996
+about_to_grow_heap				EQU		-26995
+about_to_unload_objects			EQU		-26994
+
+															; result went out of range 
+map_shape_out_of_range			EQU		-26950
+move_shape_out_of_range			EQU		-26949
+scale_shape_out_of_range		EQU		-26948
+rotate_shape_out_of_range		EQU		-26947
+skew_shape_out_of_range			EQU		-26946
+map_transform_out_of_range		EQU		-26945
+move_transform_out_of_range		EQU		-26944
+scale_transform_out_of_range	EQU		-26943
+rotate_transform_out_of_range	EQU		-26942
+skew_transform_out_of_range		EQU		-26941
+map_points_out_of_range			EQU		-26940
+
+															; gave a parameter out of range 
+contour_out_of_range			EQU		-26900
+index_out_of_range_in_contour	EQU		-26899
+picture_index_out_of_range		EQU		-26898
+color_index_requested_not_found	EQU		-26897
+colorSet_index_out_of_range		EQU		-26896
+index_out_of_range				EQU		-26895
+count_out_of_range				EQU		-26894
+length_out_of_range				EQU		-26893
+font_table_index_out_of_range	EQU		-26892
+font_glyph_index_out_of_range	EQU		-26891
+point_out_of_range				EQU		-26890
+profile_response_out_of_range	EQU		-26889
+
+															; gxFont scaler warnings 
+font_scaler_no_output			EQU		-26850
+font_scaler_fake_metrics		EQU		-26849
+font_scaler_fake_linespacing	EQU		-26848
+font_scaler_glyph_substitution	EQU		-26847
+font_scaler_no_kerning_applied	EQU		-26846				; might not be what you expected 
+character_substitution_took_place EQU	-26845
+unable_to_get_bounds_on_multiple_devices EQU -26844
+font_language_not_found			EQU		-26843
+font_not_found_during_unflattening EQU	-26842				;storage 
+unrecognized_stream_version		EQU		-26841
+bad_data_in_stream				EQU		-26840
+
+
+															; nonsense data 
+new_shape_contains_invalid_data	EQU		-26700
+new_tag_contains_invalid_data	EQU		-26699
+extra_data_passed_was_ignored	EQU		-26698
+font_table_not_found			EQU		-26697
+font_name_not_found				EQU		-26696
+
+															; doesn't make sense to do 
+unable_to_traverse_open_contour_that_starts_or_ends_off_the_curve EQU -26695
+unable_to_draw_open_contour_that_starts_or_ends_off_the_curve EQU -26694
+cannot_dispose_default_shape	EQU		-26693
+cannot_dispose_default_style	EQU		-26692
+cannot_dispose_default_ink		EQU		-26691
+cannot_dispose_default_transform EQU	-26690
+cannot_dispose_default_colorProfile EQU	-26689
+cannot_dispose_default_colorSet	EQU		-26688
+shape_direct_attribute_not_set	EQU		-26687
+
+															; couldn't find what you were looking for 
+point_does_not_intersect_port	EQU		-26686
+cannot_dispose_non_font			EQU		-26685
+face_override_style_font_must_match_style EQU -26684
+union_of_area_and_length_returns_area_only EQU -26683
+insufficient_coordinate_space_for_new_device EQU -26682
+
+															; other 
+shape_passed_has_no_bounds		EQU		-26681
+tags_of_type_flst_removed		EQU		-26680
+translator_not_installed_on_this_grafport EQU -26679
+
+parameters_have_no_effect		EQU		-25999
+attributes_already_set			EQU		-25998
+caps_already_set				EQU		-25997
+clip_already_set				EQU		-25996
+color_already_set				EQU		-25995
+curve_error_already_set			EQU		-25994
+dash_already_set				EQU		-25993
+default_colorProfile_already_set EQU	-25992
+default_ink_already_set			EQU		-25991
+default_transform_already_set	EQU		-25990
+default_shape_already_set		EQU		-25989
+default_style_already_set		EQU		-25988
+dither_already_set				EQU		-25987
+encoding_already_set			EQU		-25986
+face_already_set				EQU		-25985
+fill_already_set				EQU		-25984
+font_already_set				EQU		-25983
+font_variations_already_set		EQU		-25982
+glyph_positions_are_already_set	EQU		-25981
+glyph_tangents_are_already_set	EQU		-25980
+halftone_already_set			EQU		-25979
+hit_test_already_set			EQU		-25978
+ink_already_set					EQU		-25977
+join_already_set				EQU		-25976
+justification_already_set		EQU		-25975
+mapping_already_set				EQU		-25974
+pattern_already_set				EQU		-25973
+pen_already_set					EQU		-25972
+style_already_set				EQU		-25971
+tag_already_set					EQU		-25970
+text_attributes_already_set		EQU		-25969
+text_size_already_set			EQU		-25968
+transfer_already_set			EQU		-25967
+translator_already_installed_on_this_grafport EQU -25966
+transform_already_set			EQU		-25965
+type_already_set				EQU		-25964
+validation_level_already_set	EQU		-25963
+viewPorts_already_set			EQU		-25962
+viewPort_already_in_viewGroup	EQU		-25961
+viewDevice_already_in_viewGroup	EQU		-25960
+
+geometry_unaffected				EQU		-25959
+mapping_unaffected				EQU		-25958
+tags_in_shape_ignored			EQU		-25957
+
+shape_already_in_primitive_form	EQU		-25956
+shape_already_in_simple_form	EQU		-25955
+shape_already_broken			EQU		-25954
+shape_already_joined			EQU		-25953
+cache_already_cleared			EQU		-25952
+
+shape_not_disposed				EQU		-25951
+style_not_disposed				EQU		-25950
+ink_not_disposed				EQU		-25949
+transform_not_disposed			EQU		-25948
+colorSet_not_disposed			EQU		-25947
+colorProfile_not_disposed		EQU		-25946
+font_not_disposed				EQU		-25945
+
+glyph_tangents_have_no_effect	EQU		-25944
+glyph_positions_determined_by_advance EQU -25943
+transform_viewPorts_already_set	EQU		-25942
+
+directShape_attribute_set_as_side_effect EQU -25941
+lockShape_called_as_side_effect	EQU		-25940
+lockTag_called_as_side_effect	EQU		-25939
+shapes_unlocked_as_side_effect	EQU		-25938
+shape_not_locked				EQU		-25937
+tag_not_locked					EQU		-25936
+
+profile_not_locked				EQU		-25936
+lockProfile_called_as_side_effect EQU	-25939
+
+disposed_dead_caches			EQU		-25935
+disposed_live_caches			EQU		-25934
+low_on_memory					EQU		-25933
+very_low_on_memory				EQU		-25932
+
+transform_references_disposed_viewPort EQU -25931
+
+; typedef long 							gxGraphicsError
+
+; typedef long 							gxGraphicsWarning
+
+; typedef long 							gxGraphicsNotice
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewgxUserErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewgxUserWarningUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewgxUserNoticeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposegxUserErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposegxUserWarningUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposegxUserNoticeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokegxUserErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokegxUserWarningUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokegxUserNoticeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef gxUserErrorProcPtr 			gxUserErrorFunction
+
+; typedef gxUserWarningProcPtr 			gxUserWarningFunction
+
+; typedef gxUserNoticeProcPtr 			gxUserNoticeFunction
+
+
+
+common_colors_not_initialized	EQU		1048576
+no_open_picture					EQU		1048577
+picture_already_open			EQU		1048578
+no_open_poly					EQU		1048579
+poly_already_open				EQU		1048580
+no_open_region					EQU		1048581
+region_already_open				EQU		1048582
+no_active_picture				EQU		1048583
+
+no_picture_drawn				EQU		4194304
+polygons_have_different_size_contours EQU 4194305
+graphic_type_cannot_be_specifed_by_four_values EQU 4194306
+graphic_type_cannot_be_specifed_by_six_values EQU 4194307
+point_expected					EQU		4194308
+line_or_rectangle_expected		EQU		4194309
+curve_expected					EQU		4194310
+graphic_type_does_not_contain_control_bits EQU 4194311
+request_exceeds_available_data	EQU		4194312
+extra_data_unread				EQU		4194313
+no_variable_length_user_data_saved EQU	4194314
+
+zero_length_string_passed		EQU		7340032
+
+															; These levels tell how to validate routines.  Choose one. 
+gxNoValidation					EQU		$00					; no validation 
+gxPublicValidation				EQU		$01					; check parameters to public routines 
+gxInternalValidation			EQU		$02					; check parameters to internal routines 
+															; These levels tell how to validate types.  Choose one. 
+gxTypeValidation				EQU		$00					; check types of objects 
+gxStructureValidation			EQU		$10					; check fields of private structures 
+gxAllObjectValidation			EQU		$20					; check every object over every call 
+															; These levels tell how to validate memory manager blocks.  Choose any combination. 
+gxNoMemoryManagerValidation		EQU		$0000
+gxApBlockValidation				EQU		$0100				; check the relevant block structures after each memory mgr. call 
+gxFontBlockValidation			EQU		$0200				; check the system gxHeap as well 
+gxApHeapValidation				EQU		$0400				; check the memory manager’s gxHeap after every mem. call 
+gxFontHeapValidation			EQU		$0800				; check the system gxHeap as well 
+gxCheckApHeapValidation			EQU		$1000				; check the memory manager’s gxHeap if checking routine parameters 
+gxCheckFontHeapValidation		EQU		$2000				; check the system gxHeap as well 
+; typedef long 							gxValidationLevel
+
+
+no_draw_error					EQU		0
+
+															; gxShape type errors 
+shape_emptyType					EQU		1
+shape_inverse_fullType			EQU		2
+rectangle_zero_width			EQU		3
+rectangle_zero_height			EQU		4
+polygon_empty					EQU		5
+path_empty						EQU		6
+bitmap_zero_width				EQU		7
+bitmap_zero_height				EQU		8
+text_empty						EQU		9
+glyph_empty						EQU		10
+layout_empty					EQU		11
+picture_empty					EQU		12
+
+															; general gxShape errors 
+shape_no_fill					EQU		13
+shape_no_enclosed_area			EQU		14
+shape_no_enclosed_pixels		EQU		15
+shape_very_small				EQU		16
+shape_very_large				EQU		17
+shape_contours_cancel			EQU		18
+
+															; gxStyle errors 
+pen_too_small					EQU		19
+text_size_too_small				EQU		20
+dash_empty						EQU		21
+start_cap_empty					EQU		22
+pattern_empty					EQU		23
+textFace_empty					EQU		24
+shape_primitive_empty			EQU		25
+shape_primitive_very_small		EQU		26
+
+															; gxInk errors 
+transfer_equals_noMode			EQU		27
+transfer_matrix_ignores_source	EQU		28
+transfer_matrix_ignores_device	EQU		29
+transfer_source_reject			EQU		30
+transfer_mode_ineffective		EQU		31
+colorSet_no_entries				EQU		32
+bitmap_colorSet_one_entry		EQU		33
+
+															; gxTransform errors 
+transform_scale_too_small		EQU		34
+transform_map_too_large			EQU		35
+transform_move_too_large		EQU		36
+transform_scale_too_large		EQU		37
+transform_rotate_too_large		EQU		38
+transform_perspective_too_large	EQU		39
+transform_skew_too_large		EQU		40
+transform_clip_no_intersection	EQU		41
+transform_clip_empty			EQU		42
+transform_no_viewPorts			EQU		43
+
+															; gxViewPort errors 
+viewPort_disposed				EQU		44
+viewPort_clip_empty				EQU		45
+viewPort_clip_no_intersection	EQU		46
+viewPort_scale_too_small		EQU		47
+viewPort_map_too_large			EQU		48
+viewPort_move_too_large			EQU		49
+viewPort_scale_too_large		EQU		50
+viewPort_rotate_too_large		EQU		51
+viewPort_perspective_too_large	EQU		52
+viewPort_skew_too_large			EQU		53
+viewPort_viewGroup_offscreen	EQU		54
+
+															; gxViewDevice errors 
+viewDevice_clip_no_intersection	EQU		55
+viewDevice_scale_too_small		EQU		56
+viewDevice_map_too_large		EQU		57
+viewDevice_move_too_large		EQU		58
+viewDevice_scale_too_large		EQU		59
+viewDevice_rotate_too_large		EQU		60
+viewDevice_perspective_too_large EQU	61
+viewDevice_skew_too_large		EQU		62
+; typedef long 							gxDrawError
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GXGetShapeDrawError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern gxDrawError GXGetShapeDrawError(gxShape source)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXGetShapeDrawError
+			move.w              #$01EE,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXGetShapeDrawError
+	ENDIF
+
+
+; *  GXValidateAll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateAll(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateAll
+			move.w              #$01EF,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateAll
+	ENDIF
+
+
+; *  GXValidateColorSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateColorSet(gxColorSet target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateColorSet
+			move.w              #$01F0,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateColorSet
+	ENDIF
+
+
+; *  GXValidateColorProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateColorProfile(gxColorProfile target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateColorProfile
+			move.w              #$01F1,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateColorProfile
+	ENDIF
+
+
+; *  GXValidateGraphicsClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateGraphicsClient(gxGraphicsClient target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateGraphicsClient
+			move.w              #$01F2,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateGraphicsClient
+	ENDIF
+
+
+; *  GXValidateInk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateInk(gxInk target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateInk
+			move.w              #$01F3,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateInk
+	ENDIF
+
+
+; *  GXValidateShape()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateShape(gxShape target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateShape
+			move.w              #$01F4,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateShape
+	ENDIF
+
+
+; *  GXValidateStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateStyle(gxStyle target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateStyle
+			move.w              #$01F5,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateStyle
+	ENDIF
+
+
+; *  GXValidateTag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateTag(gxTag target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateTag
+			move.w              #$01F6,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateTag
+	ENDIF
+
+
+; *  GXValidateTransform()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateTransform(gxTransform target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateTransform
+			move.w              #$01F7,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateTransform
+	ENDIF
+
+
+; *  GXValidateViewDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateViewDevice(gxViewDevice target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateViewDevice
+			move.w              #$01F8,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateViewDevice
+	ENDIF
+
+
+; *  GXValidateViewPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateViewPort(gxViewPort target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateViewPort
+			move.w              #$01F9,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateViewPort
+	ENDIF
+
+
+; *  GXValidateViewGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXValidateViewGroup(gxViewGroup target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXValidateViewGroup
+			move.w              #$01FA,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXValidateViewGroup
+	ENDIF
+
+
+; *  GXGetValidation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern gxValidationLevel GXGetValidation(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXGetValidation
+			move.w              #$01FB,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXGetValidation
+	ENDIF
+
+
+; *  GXSetValidation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GXSetValidation(gxValidationLevel level)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXSetValidation
+			move.w              #$01FC,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXSetValidation
+	ENDIF
+
+
+; *  GXGetValidationError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern long GXGetValidationError(char *procedureName, void **argument, long *argumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GXGetValidationError
+			move.w              #$01FD,D0
+			dc.w            	$A832
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GXGetValidationError
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __GXERRORS__ 
+

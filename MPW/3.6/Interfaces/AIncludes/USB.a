@@ -1,0 +1,2120 @@
+;
+;    File:       USB.a
+;
+;    Contains:   Public API for USB Services Library (and associated components)
+;
+;    Version:    Technology: USB 1.4
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1998-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__USB__') = 'UNDEFINED' THEN
+__USB__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__DEVICES__') = 'UNDEFINED' THEN
+	include 'Devices.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+;  ************* Constants ************* 
+
+
+															; Flags 
+kUSBTaskTimeFlag				EQU		1
+kUSBHubPower					EQU		2
+kUSBPowerReset					EQU		4
+kUSBHubReaddress				EQU		8
+kUSBAddressRequest				EQU		16
+kUSBReturnOnException			EQU		32
+kUSBNo5SecTimeout				EQU		64
+kUSBTimeout						EQU		128
+kUSBNoDataTimeout				EQU		256
+kUSBDebugAwareFlag				EQU		512
+kUSBResetDescriptorCache		EQU		1024
+
+															; Hub messages 
+kUSBHubPortResetRequest			EQU		1
+kUSBHubPortSuspendRequest		EQU		2
+kUSBHubPortStatusRequest		EQU		3
+
+kVendorID_AppleComputer			EQU		$05AC
+;  ************* types ************* 
+
+; typedef SInt32 						USBReference
+
+; typedef USBReference 					USBDeviceRef
+
+; typedef USBDeviceRef *				USBDeviceRefPtr
+
+; typedef USBReference 					USBInterfaceRef
+
+; typedef USBReference 					USBPipeRef
+
+; typedef USBReference 					USBBusRef
+
+; typedef UInt32 						USBPipeState
+
+; typedef UInt32 						USBCount
+
+; typedef UInt32 						USBFlags
+
+; typedef UInt8 						USBRequest
+
+; typedef UInt8 						USBDirection
+
+; typedef UInt8 						USBRqRecipient
+
+; typedef UInt8 						USBRqType
+
+; typedef UInt16 						USBRqIndex
+
+; typedef UInt16 						USBRqValue
+
+
+
+usbControlBits			RECORD 0
+BMRequestType			 ds.b	1				; offset: $0 (0)
+BRequest				 ds.b	1				; offset: $1 (1)
+WValue					 ds.w	1				; offset: $2 (2)
+WIndex					 ds.w	1				; offset: $4 (4)
+reserved4				 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+USBIsocFrame			RECORD 0
+frStatus				 ds.l	1				; offset: $0 (0)
+frReqCount				 ds.w	1				; offset: $4 (4)
+frActCount				 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+kUSBMaxIsocFrameReqCount		EQU		1023				; maximum size (bytes) of any one Isoc frame
+usbIsocBits				RECORD 0
+FrameList				 ds.l	1				; offset: $0 (0)
+NumFrames				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+usbHubBits				RECORD 0
+Request					 ds.l	1				; offset: $0 (0)
+Spare					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+USBVariantBits			RECORD 0
+cntl					 ds		usbControlBits ; offset: $0 (0)
+						 ORG 0
+isoc					 ds		usbIsocBits		; offset: $0 (0)
+						 ORG 0
+hub						 ds		usbHubBits		; offset: $0 (0)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+USBPB					RECORD 0
+qlink					 ds.l	1				; offset: $0 (0)
+qType					 ds.w	1				; offset: $4 (4)
+pbLength				 ds.w	1				; offset: $6 (6)
+pbVersion				 ds.w	1				; offset: $8 (8)
+reserved1				 ds.w	1				; offset: $A (10)
+reserved2				 ds.l	1				; offset: $C (12)
+usbStatus				 ds.l	1				; offset: $10 (16)
+usbCompletion			 ds.l	1				; offset: $14 (20)
+usbRefcon				 ds.l	1				; offset: $18 (24)
+usbReference			 ds.l	1				; offset: $1C (28)
+usbBuffer				 ds.l	1				; offset: $20 (32)
+usbReqCount				 ds.l	1				; offset: $24 (36)
+usbActCount				 ds.l	1				; offset: $28 (40)
+usbFlags				 ds.l	1				; offset: $2C (44)
+usb						 ds		USBVariantBits ; offset: $30 (48)
+usbFrame				 ds.l	1				; offset: $38 (56)
+usbClassType			 ds.b	1				; offset: $3C (60)
+usbSubclass				 ds.b	1				; offset: $3D (61)
+usbProtocol				 ds.b	1				; offset: $3E (62)
+usbOther				 ds.b	1				; offset: $3F (63)
+reserved6				 ds.l	1				; offset: $40 (64)
+reserved7				 ds.w	1				; offset: $44 (68)
+reserved8				 ds.w	1				; offset: $46 (70)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+; typedef struct USBPB *				USBPBPtr
+
+uslReq					RECORD 0
+usbDirection			 ds.b	1				; offset: $0 (0)
+usbType					 ds.b	1				; offset: $1 (1)
+usbRecipient			 ds.b	1				; offset: $2 (2)
+usbRequest				 ds.b	1				; offset: $3 (3)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+
+															; BT 19Aug98, bump up to v1.10 for Isoc
+kUSBCurrentPBVersion			EQU		$0100				; v1.00
+kUSBIsocPBVersion				EQU		$0109				; v1.10
+kUSBCurrentHubPB				EQU		$0109
+
+
+
+
+kUSBNoCallBack					EQU		-1
+
+; typedef UInt8 						bcdUSB
+
+
+kUSBControl						EQU		0
+kUSBIsoc						EQU		1
+kUSBBulk						EQU		2
+kUSBInterrupt					EQU		3
+kUSBAnyType						EQU		$FF
+;  endpoint type 
+
+kUSBOut							EQU		0
+kUSBIn							EQU		1
+kUSBNone						EQU		2
+kUSBAnyDirn						EQU		3
+; USBDirection
+
+kUSBStandard					EQU		0
+kUSBClass						EQU		1
+kUSBVendor						EQU		2
+; USBRqType
+
+kUSBDevice						EQU		0
+kUSBInterface					EQU		1
+kUSBEndpoint					EQU		2
+kUSBOther						EQU		3
+; USBRqRecipient
+
+kUSBRqGetStatus					EQU		0
+kUSBRqClearFeature				EQU		1
+kUSBRqReserved1					EQU		2
+kUSBRqSetFeature				EQU		3
+kUSBRqReserved2					EQU		4
+kUSBRqSetAddress				EQU		5
+kUSBRqGetDescriptor				EQU		6
+kUSBRqSetDescriptor				EQU		7
+kUSBRqGetConfig					EQU		8
+kUSBRqSetConfig					EQU		9
+kUSBRqGetInterface				EQU		10
+kUSBRqSetInterface				EQU		11
+kUSBRqSyncFrame					EQU		12
+; USBRequest
+
+
+kUSBDeviceDesc					EQU		1
+kUSBConfDesc					EQU		2
+kUSBStringDesc					EQU		3
+kUSBInterfaceDesc				EQU		4
+kUSBEndpointDesc				EQU		5
+kUSBHIDDesc						EQU		$21
+kUSBReportDesc					EQU		$22
+kUSBPhysicalDesc				EQU		$23
+kUSBHUBDesc						EQU		$29
+;  descriptorType 
+
+
+kUSBFeatureDeviceRemoteWakeup	EQU		1
+kUSBFeatureEndpointStall		EQU		0
+;  Feature selectors 
+
+kUSBActive						EQU		0					; Pipe can accept new transactions
+kUSBIdle						EQU		1					; Pipe will not accept new transactions
+kUSBStalled						EQU		2					; An error occured on the pipe
+kUSBSuspended					EQU		4					; Device is suspended
+kUSBNoBandwidth					EQU		8					; (Isoc or Int) Pipe could not be initialised due to bandwidth constraint
+
+kUSB100mAAvailable				EQU		50
+kUSB500mAAvailable				EQU		250
+kUSB100mA						EQU		50
+kUSBAtrBusPowered				EQU		$80
+kUSBAtrSelfPowered				EQU		$40
+kUSBAtrRemoteWakeup				EQU		$20
+
+kUSBRel10						EQU		$0100
+
+kUSBDeviceDescriptorLength		EQU		$12
+kUSBInterfaceDescriptorLength	EQU		$09
+kUSBConfigDescriptorLength		EQU		$09
+USBDeviceDescriptor		RECORD 0
+length					 ds.b	1				; offset: $0 (0)
+descType				 ds.b	1				; offset: $1 (1)
+usbRel					 ds.w	1				; offset: $2 (2)
+deviceClass				 ds.b	1				; offset: $4 (4)
+deviceSubClass			 ds.b	1				; offset: $5 (5)
+protocol				 ds.b	1				; offset: $6 (6)
+maxPacketSize			 ds.b	1				; offset: $7 (7)
+vendor					 ds.w	1				; offset: $8 (8)
+product					 ds.w	1				; offset: $A (10)
+devRel					 ds.w	1				; offset: $C (12)
+manuIdx					 ds.b	1				; offset: $E (14)
+prodIdx					 ds.b	1				; offset: $F (15)
+serialIdx				 ds.b	1				; offset: $10 (16)
+numConf					 ds.b	1				; offset: $11 (17)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+; typedef struct USBDeviceDescriptor *	USBDeviceDescriptorPtr
+
+USBDescriptorHeader		RECORD 0
+length					 ds.b	1				; offset: $0 (0)
+descriptorType			 ds.b	1				; offset: $1 (1)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+; typedef struct USBDescriptorHeader *	USBDescriptorHeaderPtr
+
+USBConfigurationDescriptor RECORD 0
+length					 ds.b	1				; offset: $0 (0)
+descriptorType			 ds.b	1				; offset: $1 (1)
+totalLength				 ds.w	1				; offset: $2 (2)
+numInterfaces			 ds.b	1				; offset: $4 (4)
+configValue				 ds.b	1				; offset: $5 (5)
+configStrIndex			 ds.b	1				; offset: $6 (6)
+attributes				 ds.b	1				; offset: $7 (7)
+maxPower				 ds.b	1				; offset: $8 (8)
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct USBConfigurationDescriptor * USBConfigurationDescriptorPtr
+
+USBInterfaceDescriptor	RECORD 0
+length					 ds.b	1				; offset: $0 (0)
+descriptorType			 ds.b	1				; offset: $1 (1)
+interfaceNumber			 ds.b	1				; offset: $2 (2)
+alternateSetting		 ds.b	1				; offset: $3 (3)
+numEndpoints			 ds.b	1				; offset: $4 (4)
+interfaceClass			 ds.b	1				; offset: $5 (5)
+interfaceSubClass		 ds.b	1				; offset: $6 (6)
+interfaceProtocol		 ds.b	1				; offset: $7 (7)
+interfaceStrIndex		 ds.b	1				; offset: $8 (8)
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct USBInterfaceDescriptor * USBInterfaceDescriptorPtr
+
+USBEndPointDescriptor	RECORD 0
+length					 ds.b	1				; offset: $0 (0)
+descriptorType			 ds.b	1				; offset: $1 (1)
+endpointAddress			 ds.b	1				; offset: $2 (2)
+attributes				 ds.b	1				; offset: $3 (3)
+maxPacketSize			 ds.w	1				; offset: $4 (4)
+interval				 ds.b	1				; offset: $6 (6)
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct USBEndPointDescriptor * USBEndPointDescriptorPtr
+
+USBHIDDescriptor		RECORD 0
+descLen					 ds.b	1				; offset: $0 (0)
+descType				 ds.b	1				; offset: $1 (1)
+descVersNum				 ds.w	1				; offset: $2 (2)
+hidCountryCode			 ds.b	1				; offset: $4 (4)
+hidNumDescriptors		 ds.b	1				; offset: $5 (5)
+hidDescriptorType		 ds.b	1				; offset: $6 (6)
+hidDescriptorLengthLo	 ds.b	1				; offset: $7 (7)		;  can't make this a single 16bit value or the compiler will add a filler byte
+hidDescriptorLengthHi	 ds.b	1				; offset: $8 (8)
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct USBHIDDescriptor *		USBHIDDescriptorPtr
+
+USBHIDReportDesc		RECORD 0
+hidDescriptorType		 ds.b	1				; offset: $0 (0)
+hidDescriptorLengthLo	 ds.b	1				; offset: $1 (1)		;  can't make this a single 16bit value or the compiler will add a filler byte
+hidDescriptorLengthHi	 ds.b	1				; offset: $2 (2)
+						 ORG 4
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct USBHIDReportDesc *		USBHIDReportDescPtr
+
+USBHubPortStatus		RECORD 0
+portFlags				 ds.w	1				; offset: $0 (0)		;  Port status flags 
+portChangeFlags			 ds.w	1				; offset: $2 (2)		;  Port changed flags 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct USBHubPortStatus *		USBHubPortStatusPtr
+
+;  ********* ProtoTypes *************** 
+;  For dealing with endianisms 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  HostToUSBWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt16 HostToUSBWord(UInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HostToUSBWord
+	ENDIF
+
+
+; *  USBToHostWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt16 USBToHostWord(UInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBToHostWord
+	ENDIF
+
+
+; *  HostToUSBLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 HostToUSBLong(UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HostToUSBLong
+	ENDIF
+
+
+; *  USBToHostLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 USBToHostLong(UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBToHostLong
+	ENDIF
+
+;  Main prototypes 
+;  Transfer commands 
+
+; *  USBDeviceRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDeviceRequest(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDeviceRequest
+	ENDIF
+
+
+; *  USBBulkWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBBulkWrite(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBBulkWrite
+	ENDIF
+
+
+; *  USBBulkRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBBulkRead(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBBulkRead
+	ENDIF
+
+
+; *  USBIntRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBIntRead(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBIntRead
+	ENDIF
+
+
+; *  USBIntWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBIntWrite(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBIntWrite
+	ENDIF
+
+
+; *  USBIsocRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBIsocRead(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBIsocRead
+	ENDIF
+
+
+; *  USBIsocWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBIsocWrite(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBIsocWrite
+	ENDIF
+
+;  Pipe state control 
+
+; *  USBClearPipeStallByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBClearPipeStallByReference(USBPipeRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBClearPipeStallByReference
+	ENDIF
+
+
+; *  USBAbortPipeByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBAbortPipeByReference(USBReference ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBAbortPipeByReference
+	ENDIF
+
+
+; *  USBResetPipeByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBResetPipeByReference(USBReference ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBResetPipeByReference
+	ENDIF
+
+
+; *  USBSetPipeIdleByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSetPipeIdleByReference(USBPipeRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSetPipeIdleByReference
+	ENDIF
+
+
+; *  USBSetPipeActiveByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSetPipeActiveByReference(USBPipeRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSetPipeActiveByReference
+	ENDIF
+
+
+; *  USBClosePipeByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBClosePipeByReference(USBPipeRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBClosePipeByReference
+	ENDIF
+
+
+; *  USBGetPipeStatusByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetPipeStatusByReference(USBReference ref, USBPipeState *state)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetPipeStatusByReference
+	ENDIF
+
+
+;  Configuration services 
+
+; *  USBFindNextInterface()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBFindNextInterface(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBFindNextInterface
+	ENDIF
+
+
+; *  USBOpenDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBOpenDevice(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBOpenDevice
+	ENDIF
+
+
+; *  USBSetConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSetConfiguration(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSetConfiguration
+	ENDIF
+
+
+; *  USBNewInterfaceRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBNewInterfaceRef(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBNewInterfaceRef
+	ENDIF
+
+
+; *  USBDisposeInterfaceRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDisposeInterfaceRef(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDisposeInterfaceRef
+	ENDIF
+
+
+; *  USBConfigureInterface()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBConfigureInterface(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBConfigureInterface
+	ENDIF
+
+
+; *  USBFindNextPipe()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBFindNextPipe(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBFindNextPipe
+	ENDIF
+
+
+; *  USBSetPipePolicy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSetPipePolicy(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSetPipePolicy
+	ENDIF
+
+;  Dealing with descriptors. 
+;  Note most of this is temprorary 
+
+; *  USBGetConfigurationDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetConfigurationDescriptor(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetConfigurationDescriptor
+	ENDIF
+
+
+; *  USBGetFullConfigurationDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetFullConfigurationDescriptor(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetFullConfigurationDescriptor
+	ENDIF
+
+
+; *  USBGetStringDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetStringDescriptor(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetStringDescriptor
+	ENDIF
+
+
+; *  USBFindNextEndpointDescriptorImmediate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBFindNextEndpointDescriptorImmediate(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBFindNextEndpointDescriptorImmediate
+	ENDIF
+
+
+; *  USBFindNextInterfaceDescriptorImmediate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBFindNextInterfaceDescriptorImmediate(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBFindNextInterfaceDescriptorImmediate
+	ENDIF
+
+
+; *  USBFindNextAssociatedDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBFindNextAssociatedDescriptor(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBFindNextAssociatedDescriptor
+	ENDIF
+
+
+
+;  Utility functions 
+
+; *  USBResetDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBResetDevice(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBResetDevice
+	ENDIF
+
+
+; *  USBPortStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBPortStatus(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBPortStatus
+	ENDIF
+
+
+; *  USBSuspendDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSuspendDevice(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSuspendDevice
+	ENDIF
+
+
+; *  USBResumeDeviceByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBResumeDeviceByReference(USBReference refIn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBResumeDeviceByReference
+	ENDIF
+
+
+; *  USBGetBandwidthAvailableByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetBandwidthAvailableByReference(USBReference ref, UInt32 *avail)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetBandwidthAvailableByReference
+	ENDIF
+
+
+; *  USBGetFrameNumberImmediate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetFrameNumberImmediate(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetFrameNumberImmediate
+	ENDIF
+
+
+; *  USBDelay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDelay(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDelay
+	ENDIF
+
+
+; *  USBSAbortQueuesByReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBSAbortQueuesByReference(USBReference ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBSAbortQueuesByReference
+	ENDIF
+
+
+; *  USBAllocMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBAllocMem(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBAllocMem
+	ENDIF
+
+
+; *  USBDeallocMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDeallocMem(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDeallocMem
+	ENDIF
+
+;  Expert interface functions 
+
+; *  USBExpertInstallInterfaceDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertInstallInterfaceDriver(USBDeviceRef ref, USBDeviceDescriptorPtr desc, USBInterfaceDescriptorPtr interfacePtr, USBReference hubRef, UInt32 busPowerAvailable)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertInstallInterfaceDriver
+	ENDIF
+
+
+; *  USBExpertRemoveInterfaceDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertRemoveInterfaceDriver(USBDeviceRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertRemoveInterfaceDriver
+	ENDIF
+
+
+; *  USBExpertInstallDeviceDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertInstallDeviceDriver(USBDeviceRef ref, USBDeviceDescriptorPtr desc, USBReference hubRef, UInt32 port, UInt32 busPowerAvailable)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertInstallDeviceDriver
+	ENDIF
+
+
+; *  USBExpertRemoveDeviceDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertRemoveDeviceDriver(USBDeviceRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertRemoveDeviceDriver
+	ENDIF
+
+
+; *  USBExpertStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertStatus(USBDeviceRef ref, void *pointer, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertStatus
+	ENDIF
+
+
+; *  USBExpertFatalError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertFatalError(USBDeviceRef ref, OSStatus status, void *pointer, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertFatalError
+	ENDIF
+
+
+; *  USBExpertNotify()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBFamilyExpertLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertNotify(void *note)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertNotify
+	ENDIF
+
+
+; *  USBExpertStatusLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertStatusLevel(UInt32 level, USBDeviceRef ref, StringPtr status, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertStatusLevel
+	ENDIF
+
+
+; *  USBExpertGetStatusLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 USBExpertGetStatusLevel(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertGetStatusLevel
+	ENDIF
+
+
+; *  USBExpertSetStatusLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void USBExpertSetStatusLevel(UInt32 level)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertSetStatusLevel
+	ENDIF
+
+
+
+
+; *  USBExpertSetDevicePowerStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertSetDevicePowerStatus(USBDeviceRef ref, UInt32 reserved1, UInt32 reserved2, UInt32 powerStatus, UInt32 busPowerAvailable, UInt32 busPowerNeeded)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertSetDevicePowerStatus
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kUSBDevicePower_PowerOK			EQU		0
+kUSBDevicePower_BusPowerInsufficient EQU 1
+kUSBDevicePower_BusPowerNotAllFeatures EQU 2
+kUSBDevicePower_SelfPowerInsufficient EQU 3
+kUSBDevicePower_SelfPowerNotAllFeatures EQU 4
+kUSBDevicePower_HubPortOk		EQU		5
+kUSBDevicePower_HubPortOverCurrent EQU	6
+kUSBDevicePower_BusPoweredHubOnLowPowerPort EQU 7
+kUSBDevicePower_BusPoweredHubToBusPoweredHub EQU 8
+kUSBDevicePower_Reserved3		EQU		9
+kUSBDevicePower_Reserved4		EQU		10
+
+;  For hubs only 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  USBHubAddDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHubAddDevice(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHubAddDevice
+	ENDIF
+
+
+; *  USBHubConfigurePipeZero()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHubConfigurePipeZero(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHubConfigurePipeZero
+	ENDIF
+
+
+; *  USBHubSetAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHubSetAddress(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHubSetAddress
+	ENDIF
+
+
+; *  USBHubDeviceRemoved()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHubDeviceRemoved(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHubDeviceRemoved
+	ENDIF
+
+
+; *  USBMakeBMRequestType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt8 USBMakeBMRequestType(UInt8 direction, UInt8 reqtype, UInt8 recipient)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBMakeBMRequestType
+	ENDIF
+
+
+; *  USBControlRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBControlRequest(USBPB *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBControlRequest
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef UInt32 						USBLocationID
+
+
+kUSBLocationNibbleFormat		EQU		0					; Other values are reserved for future types (like when we have more than 16 ports per hub)
+
+
+kNoDeviceRef					EQU		-1
+;  Status Level constants
+; 
+;Level 1: Fatal errors
+;Level 2: General errors that may or may not effect operation
+;Level 3: General driver messages.  The "AddStatus" call that drivers use comes through as a level 3.  This is also the default level at boot time.
+;Level 4: Important status messages from the Expert and USL.
+;Level 5: General status messages from the Expert and USL.
+;
+
+
+kUSBStatusLevelFatal			EQU		1
+kUSBStatusLevelError			EQU		2
+kUSBStatusLevelClient			EQU		3
+kUSBStatusLevelGeneral			EQU		4
+kUSBStatusLevelVerbose			EQU		5
+;  Expert Notification Types
+
+; typedef UInt8							USBNotificationType
+kNotifyAddDevice				EQU		$00
+kNotifyRemoveDevice				EQU		$01
+kNotifyAddInterface				EQU		$02
+kNotifyRemoveInterface			EQU		$03
+kNotifyGetDeviceDescriptor		EQU		$04
+kNotifyGetInterfaceDescriptor	EQU		$05
+kNotifyGetNextDeviceByClass		EQU		$06
+kNotifyGetDriverConnectionID	EQU		$07
+kNotifyInstallDeviceNotification EQU	$08
+kNotifyRemoveDeviceNotification	EQU		$09
+kNotifyDeviceRefToBusRef		EQU		$0A
+kNotifyDriverNotify				EQU		$0C
+kNotifyParentNotify				EQU		$0D
+kNotifyAnyEvent					EQU		$FF
+kNotifyPowerState				EQU		$17
+kNotifyStatus					EQU		$18
+kNotifyFatalError				EQU		$19
+kNotifyStatusLevel				EQU		$20
+; typedef USBNotificationType 			USBDriverMessage
+
+
+;   USB Manager wildcard constants for USBGetNextDeviceByClass
+;   and USBInstallDeviceNotification.
+
+
+
+; typedef UInt16						USBManagerWildcard
+kUSBAnyClass					EQU		$FFFF
+kUSBAnySubClass					EQU		$FFFF
+kUSBAnyProtocol					EQU		$FFFF
+kUSBAnyVendor					EQU		$FFFF
+kUSBAnyProduct					EQU		$FFFF
+
+
+ExpertNotificationData	RECORD 0
+notification			 ds.b	1				; offset: $0 (0)
+filler					 ds.b	1				; offset: $1 (1) <-- really an array of length one ;  unused due to 2-byte 68k alignment
+deviceRef				 ds.l	1				; offset: $2 (2)
+busPowerAvailable		 ds.l	1				; offset: $6 (6)
+data					 ds.l	1				; offset: $A (10)
+info1					 ds.l	1				; offset: $E (14)
+info2					 ds.l	1				; offset: $12 (18)
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+; typedef struct ExpertNotificationData * ExpertNotificationDataPtr
+
+;  Definition of function pointer passed in ExpertEntryProc
+;  Definition of expert's callback installation function
+;  Device Notification Callback Routine
+;  Device Notification Parameter Block
+USBDeviceNotificationParameterBlock RECORD 0
+pbLength				 ds.w	1				; offset: $0 (0)
+pbVersion				 ds.w	1				; offset: $2 (2)
+usbDeviceNotification	 ds.b	1				; offset: $4 (4)
+reserved1				 ds.b	1				; offset: $5 (5) <-- really an array of length one ;  needed because of 2-byte 68k alignment
+usbDeviceRef			 ds.l	1				; offset: $6 (6)
+usbClass				 ds.w	1				; offset: $A (10)
+usbSubClass				 ds.w	1				; offset: $C (12)
+usbProtocol				 ds.w	1				; offset: $E (14)
+usbVendor				 ds.w	1				; offset: $10 (16)
+usbProduct				 ds.w	1				; offset: $12 (18)
+result					 ds.l	1				; offset: $14 (20)
+token					 ds.l	1				; offset: $18 (24)
+callback				 ds.l	1				; offset: $1C (28)
+refcon					 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct USBDeviceNotificationParameterBlock * USBDeviceNotificationParameterBlockPtr
+
+;  Definition of USBDriverNotificationCallback Routine
+;  Public Functions
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  USBGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBServicesLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 USBGetVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetVersion
+	ENDIF
+
+
+; *  USBGetNextDeviceByClass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetNextDeviceByClass(USBDeviceRef *deviceRef, CFragConnectionID *connID, UInt16 theClass, UInt16 theSubClass, UInt16 theProtocol)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetNextDeviceByClass
+	ENDIF
+
+
+; *  USBGetDeviceDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetDeviceDescriptor(USBDeviceRef *deviceRef, USBDeviceDescriptor *deviceDescriptor, UInt32 size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetDeviceDescriptor
+	ENDIF
+
+
+; *  USBGetInterfaceDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetInterfaceDescriptor(USBInterfaceRef *interfaceRef, USBInterfaceDescriptor *interfaceDescriptor, UInt32 size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetInterfaceDescriptor
+	ENDIF
+
+
+; *  USBGetDriverConnectionID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBGetDriverConnectionID(USBDeviceRef *deviceRef, CFragConnectionID *connID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBGetDriverConnectionID
+	ENDIF
+
+
+; *  USBInstallDeviceNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void USBInstallDeviceNotification(USBDeviceNotificationParameterBlock *pb)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBInstallDeviceNotification
+	ENDIF
+
+
+; *  USBRemoveDeviceNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBRemoveDeviceNotification(UInt32 token)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBRemoveDeviceNotification
+	ENDIF
+
+
+; *  USBDeviceRefToBusRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDeviceRefToBusRef(USBDeviceRef *deviceRef, USBBusRef *busRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDeviceRefToBusRef
+	ENDIF
+
+
+; *  USBDriverNotify()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBDriverNotify(USBReference reference, USBDriverMessage mesg, UInt32 refcon, USBDriverNotificationCallbackPtr callback)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBDriverNotify
+	ENDIF
+
+
+; *  USBExpertNotifyParent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBExpertNotifyParent(USBReference reference, void *pointer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBExpertNotifyParent
+	ENDIF
+
+
+; *  USBAddDriverForFSSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.3 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBAddDriverForFSSpec(USBReference reference, FSSpec *fileSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBAddDriverForFSSpec
+	ENDIF
+
+
+; *  USBAddShimFromDisk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBAddShimFromDisk(FSSpec *shimFilePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBAddShimFromDisk
+	ENDIF
+
+
+; *  USBReferenceToRegEntry()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBReferenceToRegEntry(RegEntryID *parentEntry, USBDeviceRef parentDeviceRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBReferenceToRegEntry
+	ENDIF
+
+
+; *  USBConfigureADBShim()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in USBManagerLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBConfigureADBShim(UInt32 inCommandID, void *arg1, void *arg2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBConfigureADBShim
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  HID Install Interrupt prototype
+;  HID Poll Device prototype
+;  HID Control Device prototype
+;  HID Get Device Info prototype
+;  HID Enter Polled Mode prototype
+;  HID Exit Polled Mode prototype
+;  HID Install Notification prototype
+
+kHIDStandardDispatchVersion		EQU		0
+kHIDReservedDispatchVersion		EQU		1
+kHIDNotificationDispatchVersion	EQU		2
+kHIDCurrentDispatchVersion		EQU		2
+
+USBHIDRev2DispatchTable	RECORD 0
+hidDispatchVersion		 ds.l	1				; offset: $0 (0)
+pUSBHIDInstallInterrupt	 ds.l	1				; offset: $4 (4)
+pUSBHIDPollDevice		 ds.l	1				; offset: $8 (8)
+pUSBHIDControlDevice	 ds.l	1				; offset: $C (12)
+pUSBHIDGetDeviceInfo	 ds.l	1				; offset: $10 (16)
+pUSBHIDEnterPolledMode	 ds.l	1				; offset: $14 (20)
+pUSBHIDExitPolledMode	 ds.l	1				; offset: $18 (24)
+pUSBHIDInstallNotification  ds.l 1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct USBHIDRev2DispatchTable * USBHIDRev2DispatchTablePtr
+
+USBHIDModuleDispatchTable RECORD 0
+hidDispatchVersion		 ds.l	1				; offset: $0 (0)
+pUSBHIDInstallInterrupt	 ds.l	1				; offset: $4 (4)
+pUSBHIDPollDevice		 ds.l	1				; offset: $8 (8)
+pUSBHIDControlDevice	 ds.l	1				; offset: $C (12)
+pUSBHIDGetDeviceInfo	 ds.l	1				; offset: $10 (16)
+pUSBHIDEnterPolledMode	 ds.l	1				; offset: $14 (20)
+pUSBHIDExitPolledMode	 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct USBHIDModuleDispatchTable * USBHIDModuleDispatchTablePtr
+
+;   Prototypes Tue, Mar 17, 1998 4:54:30 PM 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  USBHIDInstallInterrupt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDInstallInterrupt(HIDInterruptProcPtr HIDInterruptFunction, UInt32 refcon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDInstallInterrupt
+	ENDIF
+
+
+; *  USBHIDPollDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDPollDevice(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDPollDevice
+	ENDIF
+
+
+; *  USBHIDControlDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDControlDevice(UInt32 theControlSelector, void *theControlData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDControlDevice
+	ENDIF
+
+
+; *  USBHIDGetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDGetDeviceInfo(UInt32 theInfoSelector, void *theInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDGetDeviceInfo
+	ENDIF
+
+
+; *  USBHIDEnterPolledMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDEnterPolledMode(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDEnterPolledMode
+	ENDIF
+
+
+; *  USBHIDExitPolledMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDExitPolledMode(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDExitPolledMode
+	ENDIF
+
+
+; *  USBHIDInstallNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus USBHIDInstallNotification(HIDNotificationProcPtr HIDNotificationFunction, UInt32 refcon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION USBHIDInstallNotification
+	ENDIF
+
+
+; *  HIDNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void HIDNotification(UInt32 devicetype, UInt8 NewHIDData[], UInt8 OldHIDData[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HIDNotification
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kHIDRqGetReport					EQU		1
+kHIDRqGetIdle					EQU		2
+kHIDRqGetProtocol				EQU		3
+kHIDRqSetReport					EQU		9
+kHIDRqSetIdle					EQU		10
+kHIDRqSetProtocol				EQU		11
+
+kHIDRtInputReport				EQU		1
+kHIDRtOutputReport				EQU		2
+kHIDRtFeatureReport				EQU		3
+
+kHIDBootProtocolValue			EQU		0
+kHIDReportProtocolValue			EQU		1
+
+kHIDKeyboardInterfaceProtocol	EQU		1
+kHIDMouseInterfaceProtocol		EQU		2
+
+kHIDSetLEDStateByBits			EQU		1
+kHIDSetLEDStateByBitMask		EQU		1
+kHIDSetLEDStateByIDNumber		EQU		2
+kHIDRemoveInterruptHandler		EQU		3
+kHIDEnableDemoMode				EQU		4
+kHIDDisableDemoMode				EQU		5
+kHIDRemoveNotification			EQU		$1000
+
+kHIDGetLEDStateByBits			EQU		1					; not supported in 1.0 of keyboard module
+kHIDGetLEDStateByBitMask		EQU		1					; not supported in 1.0 of keyboard module
+kHIDGetLEDStateByIDNumber		EQU		2
+kHIDGetDeviceCountryCode		EQU		3					; not supported in 1.0 HID modules
+kHIDGetDeviceUnitsPerInch		EQU		4					; only supported in mouse HID module
+kHIDGetInterruptHandler			EQU		5
+kHIDGetCurrentKeys				EQU		6					; only supported in keyboard HID module
+kHIDGetInterruptRefcon			EQU		7
+kHIDGetVendorID					EQU		8
+kHIDGetProductID				EQU		9
+
+
+kNumLockLED						EQU		0
+kCapsLockLED					EQU		1
+kScrollLockLED					EQU		2
+kComposeLED						EQU		3
+kKanaLED						EQU		4
+
+kNumLockLEDMask					EQU		$01
+kCapsLockLEDMask				EQU		$02
+kScrollLockLEDMask				EQU		$04
+kComposeLEDMask					EQU		$08
+kKanaLEDMask					EQU		$10
+
+kUSBCapsLockKey					EQU		$39
+kUSBNumLockKey					EQU		$53
+kUSBScrollLockKey				EQU		$47
+USBMouseData			RECORD 0
+buttons					 ds.w	1				; offset: $0 (0)
+XDelta					 ds.w	1				; offset: $2 (2)
+YDelta					 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct USBMouseData *			USBMouseDataPtr
+
+USBKeyboardData			RECORD 0
+keycount				 ds.w	1				; offset: $0 (0)
+usbkeycode				 ds.w	32				; offset: $2 (2)
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+; typedef struct USBKeyboardData *		USBKeyboardDataPtr
+
+USBHIDData				RECORD 0
+kbd						 ds		USBKeyboardData ; offset: $0 (0)
+						 ORG 0
+mouse					 ds		USBMouseData	; offset: $0 (0)
+						 ORG 66
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+; typedef union USBHIDData *			USBHIDDataPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  StartCompoundClassDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void StartCompoundClassDriver(USBDeviceRef device, UInt16 classID, UInt16 subClass)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StartCompoundClassDriver
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kUSBCompositeClass				EQU		0
+kUSBAudioClass					EQU		1
+kUSBCommClass					EQU		2
+kUSBHIDClass					EQU		3
+kUSBDisplayClass				EQU		4
+kUSBPrintingClass				EQU		7
+kUSBMassStorageClass			EQU		8
+kUSBHubClass					EQU		9
+kUSBDataClass					EQU		10
+kUSBVendorSpecificClass			EQU		$FF
+
+kUSBCompositeSubClass			EQU		0
+kUSBHubSubClass					EQU		1
+kUSBPrinterSubclass				EQU		1
+kUSBVendorSpecificSubClass		EQU		$FF
+
+kUSBHIDInterfaceClass			EQU		$03
+
+kUSBNoInterfaceSubClass			EQU		$00
+kUSBBootInterfaceSubClass		EQU		$01
+
+kUSBNoInterfaceProtocol			EQU		$00
+kUSBKeyboardInterfaceProtocol	EQU		$01
+kUSBMouseInterfaceProtocol		EQU		$02
+kUSBVendorSpecificProtocol		EQU		$FF
+
+kUSBPrinterUnidirectionalProtocol EQU	$01
+kUSBPrinterBidirectionalProtocol EQU	$02
+
+
+kServiceCategoryUSB				EQU		'usb '				; USB
+
+kUSBDriverFileType				EQU		'ndrv'
+kUSBDriverRsrcType				EQU		'usbd'
+kUSBShimRsrcType				EQU		'usbs'
+
+kTheUSBDriverDescriptionSignature EQU	'usbd'
+
+kInitialUSBDriverDescriptor		EQU		0
+
+; typedef UInt32 						USBDriverDescVersion
+
+;   Driver Loading Options
+
+; typedef UInt32						USBDriverLoadingOptions
+kUSBDoNotMatchGenericDevice		EQU		$00000001			; Driver's VendorID must match Device's VendorID
+kUSBDoNotMatchInterface			EQU		$00000002			; Do not load this driver as an interface driver.
+kUSBProtocolMustMatch			EQU		$00000004			; Do not load this driver if protocol field doesn't match.
+kUSBInterfaceMatchOnly			EQU		$00000008			; Only load this driver as an interface driver.
+
+kClassDriverPluginVersion		EQU		$00001100
+
+
+USBDeviceInfo			RECORD 0
+usbVendorID				 ds.w	1				; offset: $0 (0)		;  USB Vendor ID
+usbProductID			 ds.w	1				; offset: $2 (2)		;  USB Product ID.
+usbDeviceReleaseNumber	 ds.w	1				; offset: $4 (4)		;  Release Number of Device
+usbDeviceProtocol		 ds.w	1				; offset: $6 (6)		;  Protocol Info.
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct USBDeviceInfo *		USBDeviceInfoPtr
+
+USBInterfaceInfo		RECORD 0
+usbConfigValue			 ds.b	1				; offset: $0 (0)		;  Configuration Value
+usbInterfaceNum			 ds.b	1				; offset: $1 (1)		;  Interface Number
+usbInterfaceClass		 ds.b	1				; offset: $2 (2)		;  Interface Class
+usbInterfaceSubClass	 ds.b	1				; offset: $3 (3)		;  Interface SubClass
+usbInterfaceProtocol	 ds.b	1				; offset: $4 (4)		;  Interface Protocol
+						 ORG 6
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct USBInterfaceInfo *		USBInterfaceInfoPtr
+
+USBDriverType			RECORD 0
+nameInfoStr				 ds		Str31			; offset: $0 (0)		;  Driver's name when loading into the Name Registry.
+usbDriverClass			 ds.b	1				; offset: $20 (32)		;  USB Class this driver belongs to.
+usbDriverSubClass		 ds.b	1				; offset: $21 (33)		;  Module type
+usbDriverVersion		 ds		NumVersion		; offset: $22 (34)		;  Class driver version number.
+sizeof					 EQU *					; size:   $26 (38)
+						ENDR
+; typedef struct USBDriverType *		USBDriverTypePtr
+
+USBDriverDescription	RECORD 0
+usbDriverDescSignature	 ds.l	1				; offset: $0 (0)		;  Signature field of this structure.
+usbDriverDescVersion	 ds.l	1				; offset: $4 (4)		;  Version of this data structure.
+usbDeviceInfo			 ds		USBDeviceInfo	; offset: $8 (8)		;  Product & Vendor Info
+usbInterfaceInfo		 ds		USBInterfaceInfo ; offset: $10 (16)		;  Interface info
+usbDriverType			 ds		USBDriverType	; offset: $16 (22)		;  Driver Info.
+usbDriverLoadingOptions	 ds.l	1				; offset: $3C (60)		;  Options for class driver loading.
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; typedef struct USBDriverDescription *	USBDriverDescriptionPtr
+
+
+;   Dispatch Table
+;   Definition of class driver's HW Validation proc.
+
+
+
+;   Definition of class driver's device initialization proc.
+;   Called if the driver is being loaded for a device
+
+
+;  Definition of class driver's interface initialization proc.
+;  Definition of class driver's finalization proc.
+
+; typedef UInt32						USBDriverNotification
+kNotifySystemSleepRequest		EQU		$00000001
+kNotifySystemSleepDemand		EQU		$00000002
+kNotifySystemSleepWakeUp		EQU		$00000003
+kNotifySystemSleepRevoke		EQU		$00000004
+kNotifyHubEnumQuery				EQU		$00000006
+kNotifyChildMessage				EQU		$00000007
+kNotifyExpertTerminating		EQU		$00000008
+kNotifyDriverBeingRemoved		EQU		$0000000B
+kNotifyAllowROMDriverRemoval	EQU		$0000000E
+
+;   Definition of driver's notification proc.      
+;   Added refcon for 1.1 version of dispatch table
+
+
+USBClassDriverPluginDispatchTable RECORD 0
+pluginVersion			 ds.l	1				; offset: $0 (0)
+validateHWProc			 ds.l	1				; offset: $4 (4)		;  Proc for driver to verify proper HW
+initializeDeviceProc	 ds.l	1				; offset: $8 (8)		;  Proc that initializes the class driver.
+initializeInterfaceProc	 ds.l	1				; offset: $C (12)		;  Proc that initializes a particular interface in the class driver.
+finalizeProc			 ds.l	1				; offset: $10 (16)		;  Proc that finalizes the class driver.
+notificationProc		 ds.l	1				; offset: $14 (20)		;  Proc to pass notifications to the driver.
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct USBClassDriverPluginDispatchTable * USBClassDriverPluginDispatchTablePtr
+
+;  Shim Defines
+
+kTheUSBShimDescriptionSignature	EQU		'usbs'
+
+; typedef UInt32						USBShimDescVersion
+kCurrentUSBShimDescVers			EQU		$0100
+;   Shim Loading Options
+
+; typedef UInt32						USBShimLoadingOptions
+kUSBRegisterShimAsSharedLibrary	EQU		$00000001			; Driver's VendorID must match Device's VendorID
+USBShimDescription		RECORD 0
+usbShimDescSignature	 ds.l	1				; offset: $0 (0)		;  Signature field of this structure.
+usbShimDescVersion		 ds.l	1				; offset: $4 (4)		;  Version of this data structure.
+usbDriverLoadingOptions	 ds.l	1				; offset: $8 (8)		;  Options for shim loading.
+libraryName				 ds		Str63			; offset: $C (12)		;  For optional shared library registration
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+; typedef struct USBShimDescription *	USBShimDescriptionPtr
+
+;  Hub defines
+
+
+kUSBHubDescriptorType			EQU		$29
+
+															; Hub features 
+kUSBHubLocalPowerChangeFeature	EQU		0
+kUSBHubOverCurrentChangeFeature	EQU		1					; port features 
+kUSBHubPortConnectionFeature	EQU		0
+kUSBHubPortEnableFeature		EQU		1
+kUSBHubPortSuspendFeature		EQU		2
+kUSBHubPortOverCurrentFeature	EQU		3
+kUSBHubPortResetFeature			EQU		4
+kUSBHubPortPowerFeature			EQU		8
+kUSBHubPortLowSpeedFeature		EQU		9
+kUSBHubPortConnectionChangeFeature EQU	16
+kUSBHubPortEnableChangeFeature	EQU		17
+kUSBHubPortSuspendChangeFeature	EQU		18
+kUSBHubPortOverCurrentChangeFeature EQU	19
+kUSBHubPortResetChangeFeature	EQU		20
+
+
+kHubPortConnection				EQU		1
+kHubPortEnabled					EQU		2
+kHubPortSuspend					EQU		4
+kHubPortOverCurrent				EQU		8
+kHubPortBeingReset				EQU		16
+kHubPortPower					EQU		$0100
+kHubPortSpeed					EQU		$0200
+
+kHubLocalPowerStatus			EQU		1
+kHubOverCurrentIndicator		EQU		2
+kHubLocalPowerStatusChange		EQU		1
+kHubOverCurrentIndicatorChange	EQU		2
+
+off								EQU		0
+on								EQU		1
+
+hubDescriptor			RECORD 0
+;  See usbDoc pg 250?? 
+dummy					 ds.b	1				; offset: $0 (0)		;  to align charcteristics 
+length					 ds.b	1				; offset: $1 (1)
+hubType					 ds.b	1				; offset: $2 (2)
+numPorts				 ds.b	1				; offset: $3 (3)
+characteristics			 ds.w	1				; offset: $4 (4)
+powerOnToGood			 ds.b	1				; offset: $6 (6)		;  Port settling time, in 2ms 
+hubCurrent				 ds.b	1				; offset: $7 (7)
+;  These are received packed, will have to be unpacked 
+removablePortFlags		 ds.b	8				; offset: $8 (8)
+pwrCtlPortFlags			 ds.b	8				; offset: $10 (16)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+
+	ENDIF ; __USB__ 
+

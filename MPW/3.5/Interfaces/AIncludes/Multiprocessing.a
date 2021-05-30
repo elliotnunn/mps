@@ -1,0 +1,1910 @@
+;
+;    File:       Multiprocessing.a
+;
+;    Contains:   Multiprocessing interfaces
+;
+;    Version:    Technology: Multiprocessing API version 2.2, integrated NanoKernel support
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 DayStar Digital, Inc.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+
+
+
+;   ===========================================================================================
+;   *** WARNING: You must properly check the availability of MP services before calling them!
+;   See the section titled "Checking API Availability".
+;   ===========================================================================================
+
+
+
+
+	IF &TYPE('__MULTIPROCESSING__') = 'UNDEFINED' THEN
+__MULTIPROCESSING__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+
+
+;   ===========================================================================================
+;   This is the header file for version 2.2 of the Mac OS multiprocessing support.  This version
+;   has been totally reimplemented and has significant new services.  The main goal of the
+;   reimplementation has been to transfer task management into the core operating system to provide
+;   much more reliable and more efficient operation, including on single processor machines.
+;   The memory management has also been massively improved, it is much faster and wastes much
+;   less space.  New services include POSIX style per-task storage, timers with millisecond and
+;   microsecond resolutions, memory allocation at a specified alignment, and system pageable
+;   and RAM resident memory pools.  See the MP API documentation for details.
+;   The old "DayStar" debugging services (whose names began with an underscore) have been
+;   removed from this header.  A very few are still implemented for binary compatibility, or in
+;   cases where they happened to be exposed inappropriately.  (E.g. _MPIsFullyInitialized must
+;   be called to see if the MP API is ReallyTruly™ usable.)  New code and recompiles of old
+;   code should avoid use of these defunct services, except for _MPIsFullyInitialized.
+;   ===========================================================================================
+
+
+
+
+
+;   ===========================================================================================
+;   The following services are from the original MP API and remain supported in version 2.0:
+;    MPProcessors
+;    MPCreateTask
+;    MPTerminateTask
+;    MPCurrentTaskID
+;    MPYield
+;    MPExit
+;    MPCreateQueue
+;    MPDeleteQueue
+;    MPNotifyQueue
+;    MPWaitOnQueue
+;    MPCreateSemaphore
+;    MPCreateBinarySemaphore     (In C only, a macro that calls MPCreateSemaphore.)
+;    MPDeleteSemaphore
+;    MPSignalSemaphore
+;    MPWaitOnSemaphore
+;    MPCreateCriticalRegion
+;    MPDeleteCriticalRegion
+;    MPEnterCriticalRegion
+;    MPExitCriticalRegion
+;    MPAllocate                  (Deprecated, use MPAllocateAligned for new builds.)
+;    MPFree
+;    MPBlockCopy
+;    MPLibraryIsLoaded           (In C only, a macro.)
+;    _MPIsFullyInitialized       (See comments about checking for MP API availability.)
+;   ===========================================================================================
+
+
+
+
+
+;   ===========================================================================================
+;   The following services are new in version 2.0:
+;    MPProcessorsScheduled
+;    MPSetTaskWeight
+;    MPTaskIsPreemptive
+;    MPAllocateTaskStorageIndex
+;    MPDeallocateTaskStorageIndex
+;    MPSetTaskStorageValue
+;    MPGetTaskStorageValue
+;    MPSetQueueReserve
+;    MPCreateEvent
+;    MPDeleteEvent
+;    MPSetEvent
+;    MPWaitForEvent
+;    UpTime
+;    DurationToAbsolute
+;    AbsoluteToDuration
+;    MPDelayUntil
+;    MPCreateTimer
+;    MPDeleteTimer
+;    MPSetTimerNotify
+;    MPArmTimer
+;    MPCancelTimer
+;    MPSetExceptionHandler
+;    MPThrowException
+;    MPDisposeTaskException
+;    MPExtractTaskState
+;    MPSetTaskState
+;    MPRegisterDebugger
+;    MPUnregisterDebugger
+;    MPAllocateAligned           (Preferred over MPAllocate.)
+;    MPGetAllocatedBlockSize
+;    MPBlockClear
+;    MPDataToCode
+;    MPRemoteCall                (Preferred over _MPRPC.)
+;   ===========================================================================================
+
+
+
+
+
+;   ===========================================================================================
+;   The following services are new in version 2.1:
+;    MPCreateNotification
+;    MPDeleteNotification
+;    MPModifyNotification
+;    MPCauseNotification
+;    MPGetNextTaskID
+;    MPGetNextCpuID
+;   ===========================================================================================
+
+
+
+
+
+;   ===========================================================================================
+;   The following services are "unofficial" extensions to the original API.  They are not in
+;   the multiprocessing API documentation, but were in previous versions of this header.  They
+;   remain supported in version 2.0.  They may not be supported in other environments.
+;    _MPRPC                      (Deprecated, use MPRemoteCall for new builds.)
+;    _MPAllocateSys              (Deprecated, use MPAllocateAligned for new builds.)
+;    _MPTaskIsToolboxSafe
+;    _MPLibraryVersion
+;    _MPLibraryIsCompatible
+;   ===========================================================================================
+
+
+
+
+
+;   ===========================================================================================
+;   The following services were in previous versions of this header for "debugging only" use.
+;   They are NOT implemented in version 2.0.  For old builds they can be accessed by defining
+;   the symbol MPIncludeDefunctServices to have a nonzero value.
+;    _MPInitializePrintf
+;    _MPPrintf
+;    _MPDebugStr
+;    _MPStatusPString
+;    _MPStatusCString
+;   ===========================================================================================
+
+
+
+
+
+;   §
+;   ===========================================================================================
+;   General Types and Constants
+;   ===========================
+
+
+
+
+
+
+MPLibrary_MajorVersion			EQU		2					; ! When these change be sure to update the build versions
+MPLibrary_MinorVersion			EQU		3					; !  used in the startup check in MPInitializeAPI!
+MPLibrary_Release				EQU		1
+MPLibrary_DevelopmentRevision	EQU		1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+															; Values for MPOpaqueIDClass.
+kOpaqueAnyID					EQU		0
+kOpaqueProcessID				EQU		1
+kOpaqueTaskID					EQU		2
+kOpaqueTimerID					EQU		3
+kOpaqueQueueID					EQU		4
+kOpaqueSemaphoreID				EQU		5
+kOpaqueCriticalRegionID			EQU		6
+kOpaqueCpuID					EQU		7
+kOpaqueAddressSpaceID			EQU		8
+kOpaqueEventID					EQU		9
+kOpaqueCoherenceID				EQU		10
+kOpaqueAreaID					EQU		11
+kOpaqueNotificationID			EQU		12
+kOpaqueConsoleID				EQU		13
+; typedef UInt32 						MPOpaqueIDClass
+
+
+
+kMPNoID							EQU		0					; New code should use kInvalidID everywhere.
+
+; typedef OptionBits 					MPTaskOptions
+
+; typedef UInt32 						TaskStorageIndex
+
+; typedef UInt32 						TaskStorageValue
+
+; typedef ItemCount 					MPSemaphoreCount
+
+; typedef UInt32 						MPTaskWeight
+
+; typedef UInt32 						MPEventFlags
+
+; typedef UInt32 						MPExceptionKind
+
+; typedef UInt32 						MPTaskStateKind
+
+; typedef UInt32 						MPPageSizeClass
+
+
+
+kDurationImmediate				EQU		0
+kDurationForever				EQU		$7FFFFFFF
+kDurationMillisecond			EQU		1
+kDurationMicrosecond			EQU		-1
+
+
+;   §
+;   ===========================================================================================
+;   Process/Processor Services
+;   ==========================
+
+
+
+
+
+
+; *  MPProcessors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern ItemCount MPProcessors(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPProcessors
+	ENDIF
+
+;  The physical total.
+
+
+; *  MPProcessorsScheduled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern ItemCount MPProcessorsScheduled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPProcessorsScheduled
+	ENDIF
+
+;  Those currently in use.
+
+
+;   §
+;   ===========================================================================================
+;   Tasking Services
+;   ================
+
+
+
+
+
+
+															; For MPCreateTask options
+kMPCreateTaskSuspendedMask		EQU		$00000001
+kMPCreateTaskTakesAllExceptionsMask EQU	$00000002
+kMPCreateTaskNotDebuggableMask	EQU		$00000004
+kMPCreateTaskValidOptionsMask	EQU		$00000007
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+
+
+; *  MPCreateTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateTask(TaskProc entryPoint, void *parameter, ByteCount stackSize, MPQueueID notifyQueue, void *terminationParameter1, void *terminationParameter2, MPTaskOptions options, MPTaskID *task)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateTask
+	ENDIF
+
+
+
+
+; *  MPTerminateTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPTerminateTask(MPTaskID task, OSStatus terminationStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPTerminateTask
+	ENDIF
+
+
+
+
+; *  MPSetTaskWeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetTaskWeight(MPTaskID task, MPTaskWeight weight)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetTaskWeight
+	ENDIF
+
+
+
+
+; *  MPTaskIsPreemptive()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean MPTaskIsPreemptive(MPTaskID taskID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPTaskIsPreemptive
+	ENDIF
+
+;  May be kInvalidID.
+
+
+; *  MPExit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPExit(OSStatus status)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPExit
+	ENDIF
+
+
+
+
+; *  MPYield()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPYield(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPYield
+	ENDIF
+
+
+
+
+; *  MPCurrentTaskID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern MPTaskID MPCurrentTaskID(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCurrentTaskID
+	ENDIF
+
+
+
+
+; *  MPSetTaskType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.3 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetTaskType(MPTaskID task, OSType taskType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetTaskType
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+;   ---------------------------------------------------
+;   ! The task storage services are new in version 2.0.
+
+
+
+
+
+
+; *  MPAllocateTaskStorageIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPAllocateTaskStorageIndex(TaskStorageIndex *index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPAllocateTaskStorageIndex
+	ENDIF
+
+
+
+
+; *  MPDeallocateTaskStorageIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeallocateTaskStorageIndex(TaskStorageIndex index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeallocateTaskStorageIndex
+	ENDIF
+
+
+
+
+; *  MPSetTaskStorageValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetTaskStorageValue(TaskStorageIndex index, TaskStorageValue value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetTaskStorageValue
+	ENDIF
+
+
+
+
+; *  MPGetTaskStorageValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern TaskStorageValue MPGetTaskStorageValue(TaskStorageIndex index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPGetTaskStorageValue
+	ENDIF
+
+
+
+;   §
+;   ===========================================================================================
+;   Synchronization Services
+;   ========================
+
+
+
+
+
+
+; *  MPCreateQueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateQueue(MPQueueID *queue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateQueue
+	ENDIF
+
+
+
+
+; *  MPDeleteQueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteQueue(MPQueueID queue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteQueue
+	ENDIF
+
+
+
+
+; *  MPNotifyQueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPNotifyQueue(MPQueueID queue, void *param1, void *param2, void *param3)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPNotifyQueue
+	ENDIF
+
+
+
+
+; *  MPWaitOnQueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPWaitOnQueue(MPQueueID queue, void **param1, void **param2, void **param3, Duration timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPWaitOnQueue
+	ENDIF
+
+
+
+
+; *  MPSetQueueReserve()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetQueueReserve(MPQueueID queue, ItemCount count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetQueueReserve
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+; *  MPCreateSemaphore()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateSemaphore(MPSemaphoreCount maximumValue, MPSemaphoreCount initialValue, MPSemaphoreID *semaphore)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateSemaphore
+	ENDIF
+
+
+
+
+; *  MPDeleteSemaphore()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteSemaphore(MPSemaphoreID semaphore)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteSemaphore
+	ENDIF
+
+
+
+
+; *  MPSignalSemaphore()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSignalSemaphore(MPSemaphoreID semaphore)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSignalSemaphore
+	ENDIF
+
+
+
+
+; *  MPWaitOnSemaphore()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPWaitOnSemaphore(MPSemaphoreID semaphore, Duration timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPWaitOnSemaphore
+	ENDIF
+
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+; *  MPCreateCriticalRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateCriticalRegion(MPCriticalRegionID *criticalRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateCriticalRegion
+	ENDIF
+
+
+
+
+; *  MPDeleteCriticalRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteCriticalRegion(MPCriticalRegionID criticalRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteCriticalRegion
+	ENDIF
+
+
+
+
+; *  MPEnterCriticalRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPEnterCriticalRegion(MPCriticalRegionID criticalRegion, Duration timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPEnterCriticalRegion
+	ENDIF
+
+
+
+
+; *  MPExitCriticalRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPExitCriticalRegion(MPCriticalRegionID criticalRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPExitCriticalRegion
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+; *  MPCreateEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus MPCreateEvent(MPEventID *event)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateEvent
+	ENDIF
+
+
+
+; *  MPDeleteEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteEvent(MPEventID event)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteEvent
+	ENDIF
+
+
+
+
+; *  MPSetEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetEvent(MPEventID event, MPEventFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetEvent
+	ENDIF
+
+
+
+; *  MPWaitForEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus MPWaitForEvent(MPEventID event, MPEventFlags *flags, Duration timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPWaitForEvent
+	ENDIF
+
+
+;   §
+;   ===========================================================================================
+;   Notification Services (API)
+;   =====================
+
+
+
+
+
+
+; *  MPCreateNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateNotification(MPNotificationID *notificationID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateNotification
+	ENDIF
+
+
+
+
+; *  MPDeleteNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteNotification(MPNotificationID notificationID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteNotification
+	ENDIF
+
+
+
+
+; *  MPModifyNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPModifyNotification(MPNotificationID notificationID, MPOpaqueID anID, void *notifyParam1, void *notifyParam2, void *notifyParam3)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPModifyNotification
+	ENDIF
+
+
+
+
+; *  MPModifyNotificationParameters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.3 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPModifyNotificationParameters(MPNotificationID notificationID, MPOpaqueIDClass kind, void *notifyParam1, void *notifyParam2, void *notifyParam3)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPModifyNotificationParameters
+	ENDIF
+
+
+
+
+; *  MPCauseNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCauseNotification(MPNotificationID notificationID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCauseNotification
+	ENDIF
+
+
+
+;   §
+;   ===========================================================================================
+;   Timer Services
+;   ==============
+
+
+
+
+
+;   --------------------------------------------
+;   ! The timer services are new in version 2.0.
+
+
+
+
+	IF 0 THEN
+;  For now these are taken from DriverServices, should be in a better place.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  UpTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern AbsoluteTime UpTime(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpTime
+	ENDIF
+
+
+; *  DurationToAbsolute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern AbsoluteTime DurationToAbsolute(Duration duration)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DurationToAbsolute
+	ENDIF
+
+
+; *  AbsoluteToDuration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Duration AbsoluteToDuration(AbsoluteTime time)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AbsoluteToDuration
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; 0
+
+
+															; For MPArmTimer options
+kMPPreserveTimerIDMask			EQU		$00000001
+kMPTimeIsDeltaMask				EQU		$00000002
+kMPTimeIsDurationMask			EQU		$00000004
+
+
+
+; *  MPDelayUntil()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDelayUntil(AbsoluteTime *expirationTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDelayUntil
+	ENDIF
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  MPDelayUntilSys()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus MPDelayUntilSys(AbsoluteTime *expirationTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDelayUntilSys
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  MPCreateTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCreateTimer(MPTimerID *timerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCreateTimer
+	ENDIF
+
+
+
+
+; *  MPDeleteTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDeleteTimer(MPTimerID timerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDeleteTimer
+	ENDIF
+
+
+
+
+; *  MPSetTimerNotify()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetTimerNotify(MPTimerID timerID, MPOpaqueID anID, void *notifyParam1, void *notifyParam2, void *notifyParam3)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetTimerNotify
+	ENDIF
+
+
+
+
+; *  MPArmTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPArmTimer(MPTimerID timerID, AbsoluteTime *expirationTime, OptionBits options)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPArmTimer
+	ENDIF
+
+
+
+
+; *  MPCancelTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPCancelTimer(MPTimerID timerID, AbsoluteTime *timeRemaining)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPCancelTimer
+	ENDIF
+
+
+
+;   §
+;   ===========================================================================================
+;   Memory Services
+;   ===============
+
+
+
+
+
+															; Maximum allocation request size is 1GB.
+kMPMaxAllocSize					EQU		1073741824
+
+															; Values for the alignment parameter to MPAllocateAligned.
+kMPAllocateDefaultAligned		EQU		0
+kMPAllocate8ByteAligned			EQU		3
+kMPAllocate16ByteAligned		EQU		4
+kMPAllocate32ByteAligned		EQU		5
+kMPAllocate1024ByteAligned		EQU		10
+kMPAllocate4096ByteAligned		EQU		12
+kMPAllocateMaxAlignment			EQU		16					; Somewhat arbitrary limit on expectations.
+kMPAllocateAltiVecAligned		EQU		4					; The P.C. name.
+kMPAllocateVMXAligned			EQU		4					; The older, common name.
+kMPAllocateVMPageAligned		EQU		254					; Pseudo value, converted at runtime.
+kMPAllocateInterlockAligned		EQU		255					; Pseudo value, converted at runtime.
+
+
+
+															; Values for the options parameter to MPAllocateAligned.
+kMPAllocateClearMask			EQU		$0001				; Zero the allocated block.
+kMPAllocateGloballyMask			EQU		$0002				; Allocate from the globally visible pool.
+kMPAllocateResidentMask			EQU		$0004				; Allocate from the RAM-resident pool.
+kMPAllocateNoGrowthMask			EQU		$0010				; Do not attempt to grow the pool.
+kMPAllocateNoCreateMask			EQU		$0020				; Do not attempt to create the pool if it doesn't exist yet.
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+; *  MPAllocateAligned()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern LogicalAddress MPAllocateAligned(ByteCount size, UInt8 alignment, OptionBits options)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPAllocateAligned
+	ENDIF
+
+;  ! MPAllocateAligned is new in version 2.0.
+
+
+; *  MPAllocate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern LogicalAddress MPAllocate(ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPAllocate
+	ENDIF
+
+;  Use MPAllocateAligned instead.
+
+
+; *  MPFree()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPFree(LogicalAddress object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPFree
+	ENDIF
+
+
+
+
+; *  MPGetAllocatedBlockSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern ByteCount MPGetAllocatedBlockSize(LogicalAddress object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPGetAllocatedBlockSize
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+; *  MPBlockCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPBlockCopy(LogicalAddress source, LogicalAddress destination, ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPBlockCopy
+	ENDIF
+
+
+
+
+; *  MPBlockClear()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPBlockClear(LogicalAddress address, ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPBlockClear
+	ENDIF
+
+;  ! MPBlockClear is new in version 2.0.
+
+
+; *  MPDataToCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void MPDataToCode(LogicalAddress address, ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDataToCode
+	ENDIF
+
+;  ! MPDataToCode is new in version 2.0.
+
+;   §
+;   ===========================================================================================
+;   Exception/Debugging Services
+;   ============================
+
+
+
+
+
+;   -------------------------------------------------------------------------------------------
+;   *** Important Note ***
+;   ----------------------
+;   
+;   The functions MPExtractTaskState and MPSetTaskState infer the size of the "info" buffer
+;   from the "kind" parameter.  A given value for MPTaskStateKind will always refer to a
+;   single specific physical buffer layout.  Should new register sets be added, or the size
+;   or number of any registers change, new values of MPTaskStateKind will be introduced to
+;   refer to the new buffer layouts.
+;   
+;   The following types for the buffers are in MachineExceptions. The correspondence between
+;   MPTaskStateKind values and MachineExceptions types is:
+;   
+;        kMPTaskStateRegisters               -> RegisterInformation
+;        kMPTaskStateFPU                     -> FPUInformation
+;        kMPTaskStateVectors                 -> VectorInformation
+;        kMPTaskStateMachine                 -> MachineInformation
+;        kMPTaskState32BitMemoryException    -> ExceptionInfo for old-style 32-bit memory exceptions
+;   
+;    For reference, on PowerPC the MachineExceptions types contain:
+;   
+;        RegisterInformation -> The GPRs, 32 values of 64 bits each.
+;        FPUInformation      -> The FPRs plus FPSCR, 32 values of 64 bits each, one value of
+;                                32 bits.
+;        VectorInformation   -> The AltiVec vector registers plus VSCR and VRSave, 32 values
+;                                of 128 bits each, one value of 128 bits, and one 32 bit value.
+;        MachineInformation  -> The CTR, LR, PC, each of 64 bits.  The CR, XER, MSR, MQ,
+;                                exception kind, and DSISR, each of 32 bits.  The 64 bit DAR.
+;        ExceptionInfo       -> Only memory exceptions are specified, 4 fields of 32 bits each.
+;                                Note that this type only covers memory exceptions on 32-bit CPUs!
+;   The following types are declared here:
+;        kMPTaskStateTaskInfo                -> MPTaskInfo
+
+
+
+
+
+
+															; Values for the TaskStateKind to MPExtractTaskState and MPSetTaskState.
+kMPTaskStateRegisters			EQU		0					; The task general registers.
+kMPTaskStateFPU					EQU		1					; The task floating point registers
+kMPTaskStateVectors				EQU		2					; The task vector registers
+kMPTaskStateMachine				EQU		3					; The task machine registers
+kMPTaskState32BitMemoryException EQU	4					; The task memory exception information for 32-bit CPUs.
+kMPTaskStateTaskInfo			EQU		5					; Static and dynamic information about the task.
+
+
+
+															; Option bits and numbers for MPDisposeTaskException.
+kMPTaskPropagate				EQU		0					; The exception is propagated.
+kMPTaskResumeStep				EQU		1					; The task is resumed and single step is enabled.
+kMPTaskResumeBranch				EQU		2					; The task is resumed and branch stepping is enabled.
+kMPTaskResumeMask				EQU		$0000				; The task is resumed.
+kMPTaskPropagateMask			EQU		$01					; The exception is propagated.
+kMPTaskResumeStepMask			EQU		$02					; The task is resumed and single step is enabled.
+kMPTaskResumeBranchMask			EQU		$04					; The task is resumed and branch stepping is enabled.
+
+
+
+															; For kMPTaskStateTaskInfo, the task's runState
+kMPTaskBlocked					EQU		0					; Task is blocked (queued on resource)
+kMPTaskReady					EQU		1					; Task is runnable
+kMPTaskRunning					EQU		2					; Task is running
+
+															; For kMPTaskStateTaskInfo, the version of the MPTaskInfo structure requested.
+kMPTaskInfoVersion				EQU		3
+
+MPTaskInfo				RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  Version 3 of the data structure requested
+name					 ds.l	1				; offset: $4 (4)		;  Task name
+queueName				 ds.l	1				; offset: $8 (8)		;  Task's queue owner name
+runState				 ds.w	1				; offset: $C (12)		;  Running, ready, blocked
+lastCPU					 ds.w	1				; offset: $E (14)		;  Address of CPU where task previously ran
+weight					 ds.l	1				; offset: $10 (16)		;  Processing weight: 1 - 10,000
+processID				 ds.l	1				; offset: $14 (20)		;  Owning process ID
+cpuTime					 ds		AbsoluteTime	; offset: $18 (24)		;  Accumulated task time
+schedTime				 ds		AbsoluteTime	; offset: $20 (32)		;  Time when last scheduled
+creationTime			 ds		AbsoluteTime	; offset: $28 (40)		;  Time when task created
+codePageFaults			 ds.l	1				; offset: $30 (48)		;  Page faults from code execution
+dataPageFaults			 ds.l	1				; offset: $34 (52)		;  Page faults from data access
+preemptions				 ds.l	1				; offset: $38 (56)		;  Number of times task was preempted
+cpuID					 ds.l	1				; offset: $3C (60)		;  ID of CPU where task previously ran.
+blockedObject			 ds.l	1				; offset: $40 (64)		;  ID of blocked object.
+spaceID					 ds.l	1				; offset: $44 (68)		;  Address space ID of this task.
+stackBase				 ds.l	1				; offset: $48 (72)		;  Base of stack (lowest address).
+stackLimit				 ds.l	1				; offset: $4C (76)		;  Stack limit (highest address).
+stackCurr				 ds.l	1				; offset: $50 (80)		;  Current stack address.
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+
+;    Upon a task exception, the following message is sent to the designated queue:
+;      1. The MPTaskID, 
+;      2. The exception kind. These are enumerated in the interfaces header MachineExceptions.h 
+;      3. N/A
+
+
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+
+; *  MPSetExceptionHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetExceptionHandler(MPTaskID task, MPQueueID exceptionQ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetExceptionHandler
+	ENDIF
+
+
+
+
+; *  MPDisposeTaskException()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPDisposeTaskException(MPTaskID task, OptionBits action)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPDisposeTaskException
+	ENDIF
+
+
+
+
+; *  MPExtractTaskState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPExtractTaskState(MPTaskID task, MPTaskStateKind kind, void *info)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPExtractTaskState
+	ENDIF
+
+
+
+
+; *  MPSetTaskState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPSetTaskState(MPTaskID task, MPTaskStateKind kind, void *info)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPSetTaskState
+	ENDIF
+
+
+
+
+; *  MPThrowException()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPThrowException(MPTaskID task, MPExceptionKind kind)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPThrowException
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------------
+
+
+
+; typedef UInt32						MPDebuggerLevel
+kMPLowLevelDebugger				EQU		$00000000			; MacsBug-like
+kMPMidLevelDebugger				EQU		$10000000			; Jasik-like
+kMPHighLevelDebugger			EQU		$20000000			; Metrowerks-like
+
+
+
+; *  MPRegisterDebugger()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPRegisterDebugger(MPQueueID queue, MPDebuggerLevel level)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPRegisterDebugger
+	ENDIF
+
+
+
+
+; *  MPUnregisterDebugger()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus MPUnregisterDebugger(MPQueueID queue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPUnregisterDebugger
+	ENDIF
+
+
+
+;   §
+;   ===========================================================================================
+;   Remote Call Services
+;   ====================
+
+
+
+
+
+; typedef UInt8 						MPRemoteContext
+
+
+kMPAnyRemoteContext				EQU		0
+kMPOwningProcessRemoteContext	EQU		1
+kMPInterruptRemoteContext		EQU		2
+kMPAsyncInterruptRemoteContext	EQU		3
+
+
+
+; *  MPRemoteCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *MPRemoteCall(MPRemoteProcedure remoteProc, void *parameter, MPRemoteContext context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MPRemoteCall
+	ENDIF
+
+;  ! MPRemoteCall is new in version 2.0.
+
+;   §
+;   ===========================================================================================
+;   Checking API Availability
+;   =========================
+
+
+
+
+
+;   ===========================================================================================
+;   *** WARNING: You must properly check the availability of MP services before calling them!
+;   ===========================================================================================
+;   
+;   Checking for the availability of the MP API is rather ugly.  This is a historical problem,
+;   caused by the original implementation letting itself get prepared when it really wasn't
+;   usable and complicated by some important clients then depending on weak linking to "work".
+;   (And further complicated by CFM not supporting "deferred" imports, which is how many
+;   programmers think weak imports work.)
+;   
+;   The end result is that the MP API library may get prepared by CFM but be totally unusable.
+;   This means that if you import from the MP API library, you cannot simply check for a
+;   resolved import to decide if MP services are available.  Worse, if you explicitly prepare
+;   the MP API library you cannot assume that a noErr result from GetSharedLibrary means that
+;   MP services are available.
+;   
+;   • If you import from the MP API library you MUST:
+;   
+;        Use the MPLibraryIsLoaded macro (or equivalent code in languages other than C) to tell
+;        if the MP API services are available.  It is not sufficient to simply check that an
+;        imported symbol is resolved as is commonly done for other libraries.  The macro expands
+;        to the expression:
+;   
+;            ( ( (UInt32)_MPIsFullyInitialized != (UInt32)kUnresolvedCFragSymbolAddress ) &&
+;              ( _MPIsFullyInitialized () ) )
+;   
+;        This checks if the imported symbol _MPIsFullyInitialized is resolved and if resolved
+;        calls it.  Both parts must succeed for the MP API services to be available.
+;   
+;   • If you explicitly prepare the MP API library you MUST:
+;   
+;        Use code similar to the following example to tell if the MP API services are available.
+;        It is not sufficient to depend on just a noErr result from GetSharedLibrary.
+;   
+;            OSErr                       err;
+;            Boolean                     mpIsAvailable           = false;
+;            CFragConnectionID           connID                  = kInvalidID;
+;            MPIsFullyInitializedProc    mpIsFullyInitialized    = NULL;
+;   
+;            err = GetSharedLibrary  ( "\pMPLibrary", kCompiledCFragArch, kReferenceCFrag,
+;                                      &connID, NULL, NULL );
+;   
+;            if ( err == noErr ) {
+;                err = FindSymbol    ( connID, "\p_MPIsFullyInitialized",
+;                                      (Ptr *) &mpIsFullyInitialized, NULL );
+;            }
+;   
+;            if ( err == noErr ) {
+;                mpIsAvailable = (* mpIsFullyInitialized) ();
+;            }
+;   
+;   ===========================================================================================
+
+
+
+
+
+; *  _MPIsFullyInitialized()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean _MPIsFullyInitialized(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPIsFullyInitialized
+	ENDIF
+
+
+;   ===========================================================================================
+;   The MPLibraryIsLoaded service is a macro under C that expands to the logical expression:
+;        ( (UInt32)MPProcessors != (UInt32)kUnresolvedCFragSymbolAddress )
+;   The intention is to check if the imported symbol MPProcessors is resolved.  For other
+;   languages use the equivalent expression.
+;   ===========================================================================================
+
+
+
+;   §
+;   ===========================================================================================
+;   Miscellaneous Services
+;   ======================
+
+
+
+
+
+; *  _MPLibraryVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void _MPLibraryVersion(const char **versionCString, UInt32 *major, UInt32 *minor, UInt32 *release, UInt32 *revision)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPLibraryVersion
+	ENDIF
+
+
+;   §
+;   ===========================================================================================
+;   Unofficial Services
+;   ===================
+
+
+
+
+
+;   ===========================================================================================
+;   *** WARNING ***
+;   These services are not part of the officially documented multiprocessing API.  They may not
+;   be avaliable in future versions of Mac OS multiprocessing support, or in environments that
+;   have a different underlying OS architecture such as Mac OS on top of a microkernel, the
+;   Mac OS Blue Box under Mac OS X, native MP support in Mac OS X, etc.
+;   ===========================================================================================
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  _MPAllocateSys()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern LogicalAddress _MPAllocateSys(ByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPAllocateSys
+	ENDIF
+
+;  Use MPAllocateAligned instead.
+
+; *  _MPRPC()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *_MPRPC(MPRemoteProcedure remoteProc, void *parameter)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPRPC
+	ENDIF
+
+;  Use _MPRemoteCall instead.
+
+; *  _MPTaskIsToolboxSafe()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean _MPTaskIsToolboxSafe(MPTaskID task)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPTaskIsToolboxSafe
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  _MPLibraryIsCompatible()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibrary 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean _MPLibraryIsCompatible(const char *versionCString, UInt32 major, UInt32 minor, UInt32 release, UInt32 revision)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPLibraryIsCompatible
+	ENDIF
+
+
+
+
+;   §
+;   ===========================================================================================
+;   Defunct Services
+;   ================
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+	IF &TYPE('MPIncludeDefunctServices') = 'UNDEFINED' THEN
+	MPIncludeDefunctServices: SET 0
+	ENDIF
+	IF MPIncludeDefunctServices THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  _MPDebugStr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibraryObsolete 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void _MPDebugStr(ConstStr255Param msg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPDebugStr
+	ENDIF
+
+
+; *  _MPStatusPString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibraryObsolete 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern StringPtr _MPStatusPString(OSStatus status)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPStatusPString
+	ENDIF
+
+
+; *  _MPStatusCString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MPLibraryObsolete 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern const char *_MPStatusCString(OSStatus status)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION _MPStatusCString
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; MPIncludeDefunctServices
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ===========================================================================================
+
+
+	ENDIF ; __MULTIPROCESSING__ 
+

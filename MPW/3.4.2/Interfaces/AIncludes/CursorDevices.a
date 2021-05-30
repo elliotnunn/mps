@@ -1,0 +1,320 @@
+;
+;	File:		CursorDevices.a
+;
+;	Contains:	Cursor Devices (mouse/trackball/etc) Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.5
+;
+;	Copyright:	© 1984-1997 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CURSORDEVICES__') = 'UNDEFINED' THEN
+__CURSORDEVICES__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+;
+;   					* * *  I M P O R T A N T  * * * 
+;   
+;   		You will need CursorDevicesGlue.o to use CDM from PowerPC
+;   
+;   
+;   In order to use the Cursor Devices Manager (CDM) on PowerPC systems, you must 
+;   link with the file CursorDevicesGlue.o and InterfaceLib 1.1.3.  This is necessary
+;   because the original MixedMode transition code for CDM in InterfaceLib in ROM
+;   was wrong.  The code in CursorDevicesGlue.o will check to see if the ROM has
+;   been fixed and calls through to it if so.  If it detects that the ROM has not
+;   been fixed, it uses its own implementation of the CDM MixedMode transition 
+;   routines. 
+;   
+;	
+;
+; typedef short 			ButtonOpcode
+; ButtonOpcodes 
+
+kButtonNoOp						EQU		0					; No action for this button 
+kButtonSingleClick				EQU		1					; Normal mouse button 
+kButtonDoubleClick				EQU		2					; Click-release-click when pressed 
+kButtonClickLock				EQU		3					; Click on press, release on next press 
+kButtonCustom					EQU		6					; Custom behavior, data = CursorDeviceCustomButtonUPP 
+
+; Device Classes 
+kDeviceClassAbsolute			EQU		0					; a flat-response device 
+kDeviceClassMouse				EQU		1					; mechanical or optical mouse 
+kDeviceClassTrackball			EQU		2					; trackball 
+kDeviceClassTrackPad			EQU		3
+kDeviceClass3D					EQU		6					; a 3D pointing device 
+
+; Structures used in Cursor Device Manager calls 
+CursorData 				RECORD	0
+nextCursorData			 ds.l   1		; offset: $0 (0)		; next in global list 
+displayInfo				 ds.l   1		; offset: $4 (4)		; unused (reserved for future) 
+whereX					 ds.l   1		; offset: $8 (8)		; horizontal position 
+whereY					 ds.l   1		; offset: $C (12)		; vertical position 
+where					 ds     Point	; offset: $10 (16)		; the pixel position 
+isAbs					 ds.b   1		; offset: $14 (20)		; has been stuffed with absolute coords 
+buttonCount				 ds.b   1		; offset: $15 (21)		; number of buttons currently pressed 
+screenRes				 ds.w   1		; offset: $16 (22)		; pixels per inch on the current display 
+privateFields			 ds.w   22		; offset: $18 (24)		; fields use internally by CDM 
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct CursorData  CursorData, *CursorDataPtr
+CursorDevice 			RECORD	0
+nextCursorDevice		 ds.l   1		; offset: $0 (0)		; pointer to next record in linked list 
+whichCursor				 ds.l   1		; offset: $4 (4)		; pointer to data for target cursor 
+refCon					 ds.l   1		; offset: $8 (8)		; application-defined 
+unused					 ds.l   1		; offset: $C (12)		; reserved for future 
+devID					 ds.l   1		; offset: $10 (16)		; device identifier (from ADB reg 1) 
+resolution				 ds.l   1		; offset: $14 (20)		; units/inch (orig. from ADB reg 1) 
+devClass				 ds.b   1		; offset: $18 (24)		; device class (from ADB reg 1) 
+cntButtons				 ds.b   1		; offset: $19 (25)		; number of buttons (from ADB reg 1) 
+filler1					 ds.b   1		; offset: $1A (26)		; reserved for future 
+buttons					 ds.b   1		; offset: $1B (27)		; state of all buttons 
+buttonOp				 ds.b   8		; offset: $1C (28)		; action performed per button 
+buttonTicks				 ds.l   8		; offset: $24 (36)		; ticks when button last went up (for debounce) 
+buttonData				 ds.l   8		; offset: $44 (68)		; data for the button operation 
+doubleClickTime			 ds.l   1		; offset: $64 (100)		; device-specific double click speed 
+acceleration			 ds.l   1		; offset: $68 (104)		; current acceleration 
+privateFields			 ds.w   15		; offset: $6C (108)		; fields used internally to CDM 
+sizeof					 EQU *			; size:   $8A (138)
+						ENDR
+
+; typedef struct CursorDevice  CursorDevice, *CursorDevicePtr
+; for use with CursorDeviceButtonOp when opcode = kButtonCustom 
+;
+; pascal OSErr CursorDeviceMove(CursorDevicePtr ourDevice, long deltaX, long deltaY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceMove
+			moveq	#0,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceMove
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceMoveTo(CursorDevicePtr ourDevice, long absX, long absY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceMoveTo
+			moveq	#1,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceMoveTo
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceFlush(CursorDevicePtr ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceFlush
+			moveq	#2,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceFlush
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceButtons(CursorDevicePtr ourDevice, short buttons)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceButtons
+			moveq	#3,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceButtons
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceButtonDown(CursorDevicePtr ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceButtonDown
+			moveq	#4,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceButtonDown
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceButtonUp(CursorDevicePtr ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceButtonUp
+			moveq	#5,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceButtonUp
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceButtonOp(CursorDevicePtr ourDevice, short buttonNumber, ButtonOpcode opcode, long data)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceButtonOp
+			moveq	#6,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceButtonOp
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceSetButtons(CursorDevicePtr ourDevice, short numberOfButtons)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceSetButtons
+			moveq	#7,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceSetButtons
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceSetAcceleration(CursorDevicePtr ourDevice, Fixed acceleration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceSetAcceleration
+			moveq	#8,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceSetAcceleration
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceDoubleTime(CursorDevicePtr ourDevice, long durationTicks)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceDoubleTime
+			moveq	#9,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceDoubleTime
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceUnitsPerInch(CursorDevicePtr ourDevice, Fixed resolution)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceUnitsPerInch
+			moveq	#10,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceUnitsPerInch
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceNextDevice(CursorDevicePtr *ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceNextDevice
+			moveq	#11,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceNextDevice
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceNewDevice(CursorDevicePtr *ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceNewDevice
+			moveq	#12,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceNewDevice
+	ENDIF
+
+;
+; pascal OSErr CursorDeviceDisposeDevice(CursorDevicePtr ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CursorDeviceDisposeDevice
+			moveq	#13,d0
+			dc.w 	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CursorDeviceDisposeDevice
+	ENDIF
+
+
+;
+;   				   * * *  W A R N I N G  * * * 
+;   			
+;   The routines CrsrDevMoveTo and CrsrDevNextDevice are no longer needed.
+;   They were added as a work around until the glue code CursorDevicesGlue.o
+;   was created.  Please use the functions CursorDeviceMoveTo and
+;   CursorDeviceNextDevice instead.
+;
+;
+;
+;
+; pascal OSErr CrsrDevMoveTo(CursorDevicePtr ourDevice, long absX, long absY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CrsrDevMoveTo
+			moveq           	#1,D0
+			dc.w            	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION CrsrDevMoveTo
+	ENDIF
+
+;
+; pascal OSErr CrsrDevNextDevice(CursorDevicePtr *ourDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CrsrDevNextDevice
+			moveq           	#11,D0
+			dc.w            	$AADB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION CrsrDevNextDevice
+	ENDIF
+
+	ENDIF ; __CURSORDEVICES__ 

@@ -1,0 +1,1003 @@
+;
+;	File:		MIDI.a
+;
+;	Contains:	MIDI Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__MIDI__') = 'UNDEFINED' THEN
+__MIDI__ SET 1
+
+
+	IF &TYPE('__ERRORS__') = 'UNDEFINED' THEN
+	include 'Errors.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+;
+;						* * *  N O T E  * * * 
+;
+;	This file has been updated to include MIDI 2.0 interfaces.  
+;	
+;	The MIDI 2.0 interfaces were developed for the classic 68K runtime.
+;	Since then, Apple has created the PowerPC and CFM 68K runtimes.
+;	Currently, the extra functions in MIDI 2.0 are not in InterfaceLib
+;	and thus not callable from PowerPC and CFM 68K runtimes (you'll
+;	get a linker error).  
+;
+
+midiMaxNameLen					EQU		31					;maximum number of characters in port and client names
+; Time formats 
+midiFormatMSec					EQU		0					;milliseconds
+midiFormatBeats					EQU		1					;beats
+midiFormat24fpsBit				EQU		2					;24 frames/sec.
+midiFormat25fpsBit				EQU		3					;25 frames/sec.
+midiFormat30fpsDBit				EQU		4					;30 frames/sec. drop-frame
+midiFormat30fpsBit				EQU		5					;30 frames/sec.
+midiFormat24fpsQF				EQU		6					;24 frames/sec. longInt format 
+midiFormat25fpsQF				EQU		7					;25 frames/sec. longInt format 
+midiFormat30fpsDQF				EQU		8					;30 frames/sec. drop-frame longInt format 
+midiFormat30fpsQF				EQU		9					;30 frames/sec. longInt format 
+midiInternalSync				EQU		0					;internal sync
+midiExternalSync				EQU		1					;external sync
+; Port types
+midiPortTypeTime				EQU		0					;time port
+midiPortTypeInput				EQU		1					;input port
+midiPortTypeOutput				EQU		2					;output port
+midiPortTypeTimeInv				EQU		3					;invisible time port
+midiPortInvisible				EQU		$8000				;logical OR this to other types to make invisible ports
+midiPortTypeMask				EQU		$0007				;logical AND with this to convert new port types to old,
+;									  ie. to strip the property bits
+; OffsetTimes  
+midiGetEverything				EQU		$7FFFFFFF			;get all packets, regardless of time stamps
+midiGetNothing					EQU		$80000000			;get no packets, regardless of time stamps
+midiGetCurrent					EQU		$00000000			;get current packets only
+
+;    MIDI data and messages are passed in MIDIPacket records (see below).
+;    The first byte of every MIDIPacket contains a set of flags
+;
+;    bits 0-1    00 = new MIDIPacket, not continued
+;                     01 = begining of continued MIDIPacket
+;                     10 = end of continued MIDIPacket
+;                     11 = continuation
+;    bits 2-3     reserved
+;
+;    bits 4-6      000 = packet contains MIDI data
+;
+;                  001 = packet contains MIDI Manager message
+;
+;    bit 7         0 = MIDIPacket has valid stamp
+;                  1 = stamp with current clock
+;
+midiContMask					EQU		$03
+midiNoCont						EQU		$00
+midiStartCont					EQU		$01
+midiMidCont						EQU		$03
+midiEndCont						EQU		$02
+midiTypeMask					EQU		$70
+midiMsgType						EQU		$00
+midiMgrType						EQU		$10
+midiTimeStampMask				EQU		$80
+midiTimeStampCurrent			EQU		$80
+midiTimeStampValid				EQU		$00
+; MIDIPacket command words (the first word in the data field for midiMgrType messages) 
+midiOverflowErr					EQU		$0001
+midiSCCErr						EQU		$0002
+midiPacketErr					EQU		$0003
+;all command words less than this value are error indicators
+midiMaxErr						EQU		$00FF
+; Valid results to be returned by readHooks 
+midiKeepPacket					EQU		0
+midiMorePacket					EQU		1
+midiNoMorePacket				EQU		2
+midiHoldPacket					EQU		3
+; Driver calls 
+midiOpenDriver					EQU		1
+midiCloseDriver					EQU		2
+
+mdvrAbortNotesOff				EQU		0					;abort previous mdvrNotesOff request
+mdvrChanNotesOff				EQU		1					;generate channel note off messages
+mdvrAllNotesOff					EQU		2					;generate all note off messages
+mdvrStopOut						EQU		0					;stop calling MDVROut temporarily
+mdvrStartOut					EQU		1					;resume calling MDVROut
+
+MIDIPacket 				RECORD	0
+flags					 ds.b   1		; offset: $0 (0)
+len						 ds.b   1		; offset: $1 (1)
+tStamp					 ds.l   1		; offset: $2 (2)
+data					 ds.b   249		; offset: $6 (6)
+						 ORG 256
+sizeof					 EQU *			; size:   $100 (256)
+						ENDR
+
+; typedef struct MIDIPacket  MIDIPacket
+; typedef MIDIPacket 		*MIDIPacketPtr
+MIDIClkInfo 			RECORD	0
+syncType				 ds.w   1		; offset: $0 (0)		;synchronization external/internal
+curTime					 ds.l   1		; offset: $2 (2)		;current value of port's clock
+format					 ds.w   1		; offset: $6 (6)		;time code format
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct MIDIClkInfo  MIDIClkInfo
+MIDIIDRec 				RECORD	0
+clientID				 ds.l   1		; offset: $0 (0)
+portID					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct MIDIIDRec 	MIDIIDRec
+MIDIPortInfo 			RECORD	0
+portType				 ds.w   1		; offset: $0 (0)		;type of port
+timeBase				 ds     MIDIIDRec ; offset: $2 (2)		;MIDIIDRec for time base
+numConnects				 ds.w   1		; offset: $A (10)		;number of connections
+cList					 ds     MIDIIDRec ; offset: $C (12)		;ARRAY [1..numConnects] of MIDIIDRec
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct MIDIPortInfo  MIDIPortInfo
+; typedef MIDIPortInfo 		*MIDIPortInfoPtr, **MIDIPortInfoHdl, **MIDIPortInfoHandle
+MIDIPortParams 			RECORD	0
+portID					 ds.l   1		; offset: $0 (0)		;ID of port, unique within client
+portType				 ds.w   1		; offset: $4 (4)		;Type of port - input, output, time, etc.
+timeBase				 ds.w   1		; offset: $6 (6)		;refnum of time base, 0 if none
+offsetTime				 ds.l   1		; offset: $8 (8)		;offset for current time stamps
+readHook				 ds.l   1		; offset: $C (12)		;routine to call when input data is valid
+refCon					 ds.l   1		; offset: $10 (16)		;refcon for port (for client use)
+initClock				 ds     MIDIClkInfo ; offset: $14 (20)	;initial settings for a time base
+name					 ds.l   64		; offset: $1C (28)		;name of the port, This is a real live string, not a ptr.
+sizeof					 EQU *			; size:   $11C (284)
+						ENDR
+
+; typedef struct MIDIPortParams  MIDIPortParams
+; typedef MIDIPortParams 	*MIDIPortParamsPtr
+MIDIIDList 				RECORD	0
+numIDs					 ds.w   1		; offset: $0 (0)
+list					 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct MIDIIDList  MIDIIDList
+; typedef MIDIIDList 		*MIDIIDListPtr, **MIDIIDListHdl, **MIDIIDListHandle
+; MDVR Control structs
+MDVRInCtlRec 			RECORD	0
+timeCodeClock			 ds.w   1		; offset: $0 (0)		;refnum of time base for time code
+timeCodeFormat			 ds.w   1		; offset: $2 (2)		;format of time code output
+readProc				 ds.l   1		; offset: $4 (4)		;proc to call with intput characters
+commProc				 ds.l   1		; offset: $8 (8)		;proc to call for handshaking
+refCon					 ds.l   1		; offset: $C (12)		;refCon passed to readProc, commProc
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct MDVRInCtlRec  *MDVRInCtlPtr
+MDVROutCtlRec 			RECORD	0
+timeCodeClock			 ds.w   1		; offset: $0 (0)		;time base driven by time code
+timeCodeFormat			 ds.w   1		; offset: $2 (2)		;format of time code to listen to
+timeCodeProc			 ds.l   1		; offset: $4 (4)		;proc called on time code fmt change
+commProc				 ds.l   1		; offset: $8 (8)		;proc called for handshaking
+refCon					 ds.l   1		; offset: $C (12)		;refCon passed to timeCodeProc
+timeCodeFilter			 ds.b   1		; offset: $10 (16)		;filter time code if true
+padding					 ds.b   1		; offset: $11 (17)		;unused pad byte
+midiMsgTicks			 ds.l   1		; offset: $12 (18)		;value of Ticks when MIDI msg rcvd
+timeCodeTicks			 ds.l   1		; offset: $16 (22)		;value of Ticks when time code rcvd
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct MDVROutCtlRec  *MDVROutCtlPtr
+; typedef void 				*MDVRPtr
+; MIDIVersion() return a NumVersion
+;
+; pascal unsigned long MIDIVersion(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIVersion
+			dc.w 	$203C
+			dc.w 	$0000
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIVersion
+	ENDIF
+
+;
+; pascal OSErr MIDISignIn(OSType clientID, long refCon, Handle icon, ConstStr255Param name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISignIn
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISignIn
+	ENDIF
+
+;
+; pascal void MIDISignOut(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISignOut
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISignOut
+	ENDIF
+
+;
+; pascal MIDIIDListHandle MIDIGetClients(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetClients
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetClients
+	ENDIF
+
+;
+; pascal void MIDIGetClientName(OSType clientID, Str255 name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetClientName
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetClientName
+	ENDIF
+
+;
+; pascal void MIDISetClientName(OSType clientID, ConstStr255Param name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetClientName
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetClientName
+	ENDIF
+
+;
+; pascal MIDIIDListHandle MIDIGetPorts(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetPorts
+			dc.w 	$203C
+			dc.w 	$0018
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetPorts
+	ENDIF
+
+;
+; pascal OSErr MIDIAddPort(OSType clientID, short BufSize, short *refnum, MIDIPortParamsPtr init)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIAddPort
+			dc.w 	$203C
+			dc.w 	$001C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIAddPort
+	ENDIF
+
+;
+; pascal MIDIPortInfoHandle MIDIGetPortInfo(OSType clientID, OSType portID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetPortInfo
+			dc.w 	$203C
+			dc.w 	$0020
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetPortInfo
+	ENDIF
+
+;
+; pascal OSErr MIDIConnectData(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIConnectData
+			dc.w 	$203C
+			dc.w 	$0024
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIConnectData
+	ENDIF
+
+;
+; pascal OSErr MIDIUnConnectData(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIUnConnectData
+			dc.w 	$203C
+			dc.w 	$0028
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIUnConnectData
+	ENDIF
+
+;
+; pascal OSErr MIDIConnectTime(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIConnectTime
+			dc.w 	$203C
+			dc.w 	$002C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIConnectTime
+	ENDIF
+
+;
+; pascal OSErr MIDIUnConnectTime(OSType srcClID, OSType srcPortID, OSType dstClID, OSType dstPortID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIUnConnectTime
+			dc.w 	$203C
+			dc.w 	$0030
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIUnConnectTime
+	ENDIF
+
+;
+; pascal void MIDIFlush(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIFlush
+			dc.w 	$203C
+			dc.w 	$0034
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIFlush
+	ENDIF
+
+;
+; pascal ProcPtr MIDIGetReadHook(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetReadHook
+			dc.w 	$203C
+			dc.w 	$0038
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetReadHook
+	ENDIF
+
+;
+; pascal void MIDISetReadHook(short refnum, ProcPtr hook)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetReadHook
+			dc.w 	$203C
+			dc.w 	$003C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetReadHook
+	ENDIF
+
+;
+; pascal void MIDIGetPortName(OSType clientID, OSType portID, Str255 name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetPortName
+			dc.w 	$203C
+			dc.w 	$0040
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetPortName
+	ENDIF
+
+;
+; pascal void MIDISetPortName(OSType clientID, OSType portID, ConstStr255Param name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetPortName
+			dc.w 	$203C
+			dc.w 	$0044
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetPortName
+	ENDIF
+
+;
+; pascal void MIDIWakeUp(short refnum, long time, long period, MIDITimeUPP timeProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIWakeUp
+			dc.w 	$203C
+			dc.w 	$0048
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIWakeUp
+	ENDIF
+
+;
+; pascal void MIDIRemovePort(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIRemovePort
+			dc.w 	$203C
+			dc.w 	$004C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIRemovePort
+	ENDIF
+
+;
+; pascal short MIDIGetSync(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetSync
+			dc.w 	$203C
+			dc.w 	$0050
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetSync
+	ENDIF
+
+;
+; pascal void MIDISetSync(short refnum, short sync)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetSync
+			dc.w 	$203C
+			dc.w 	$0054
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetSync
+	ENDIF
+
+;
+; pascal long MIDIGetCurTime(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetCurTime
+			dc.w 	$203C
+			dc.w 	$0058
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetCurTime
+	ENDIF
+
+;
+; pascal void MIDISetCurTime(short refnum, long time)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetCurTime
+			dc.w 	$203C
+			dc.w 	$005C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetCurTime
+	ENDIF
+
+;
+; pascal void MIDIStartTime(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIStartTime
+			dc.w 	$203C
+			dc.w 	$0060
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIStartTime
+	ENDIF
+
+;
+; pascal void MIDIStopTime(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIStopTime
+			dc.w 	$203C
+			dc.w 	$0064
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIStopTime
+	ENDIF
+
+;
+; pascal void MIDIPoll(short refnum, long offsetTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIPoll
+			dc.w 	$203C
+			dc.w 	$0068
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIPoll
+	ENDIF
+
+;
+; pascal OSErr MIDIWritePacket(short refnum, MIDIPacketPtr packet)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIWritePacket
+			dc.w 	$203C
+			dc.w 	$006C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIWritePacket
+	ENDIF
+
+;
+; pascal Boolean MIDIWorldChanged(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIWorldChanged
+			dc.w 	$203C
+			dc.w 	$0070
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIWorldChanged
+	ENDIF
+
+;
+; pascal long MIDIGetOffsetTime(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetOffsetTime
+			dc.w 	$203C
+			dc.w 	$0074
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetOffsetTime
+	ENDIF
+
+;
+; pascal void MIDISetOffsetTime(short refnum, long offsetTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetOffsetTime
+			dc.w 	$203C
+			dc.w 	$0078
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetOffsetTime
+	ENDIF
+
+;
+; pascal long MIDIConvertTime(short srcFormat, short dstFormat, long time)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIConvertTime
+			dc.w 	$203C
+			dc.w 	$007C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIConvertTime
+	ENDIF
+
+;
+; pascal long MIDIGetRefCon(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetRefCon
+			dc.w 	$203C
+			dc.w 	$0080
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetRefCon
+	ENDIF
+
+;
+; pascal void MIDISetRefCon(short refnum, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetRefCon
+			dc.w 	$203C
+			dc.w 	$0084
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetRefCon
+	ENDIF
+
+;
+; pascal long MIDIGetClRefCon(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetClRefCon
+			dc.w 	$203C
+			dc.w 	$0088
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetClRefCon
+	ENDIF
+
+;
+; pascal void MIDISetClRefCon(OSType clientID, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetClRefCon
+			dc.w 	$203C
+			dc.w 	$008C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetClRefCon
+	ENDIF
+
+;
+; pascal short MIDIGetTCFormat(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetTCFormat
+			dc.w 	$203C
+			dc.w 	$0090
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetTCFormat
+	ENDIF
+
+;
+; pascal void MIDISetTCFormat(short refnum, short format)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetTCFormat
+			dc.w 	$203C
+			dc.w 	$0094
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetTCFormat
+	ENDIF
+
+;
+; pascal void MIDISetRunRate(short refnum, short rate, long time)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetRunRate
+			dc.w 	$203C
+			dc.w 	$0098
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetRunRate
+	ENDIF
+
+;
+; pascal Handle MIDIGetClientIcon(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetClientIcon
+			dc.w 	$203C
+			dc.w 	$009C
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetClientIcon
+	ENDIF
+
+;
+; pascal ProcPtr MIDICallAddress(short callNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDICallAddress
+			dc.w 	$203C
+			dc.w 	$00A4
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDICallAddress
+	ENDIF
+
+;
+; pascal void MIDISetConnectionProc(short refNum, ProcPtr connectionProc, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDISetConnectionProc
+			dc.w 	$203C
+			dc.w 	$00A8
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDISetConnectionProc
+	ENDIF
+
+;
+; pascal void MIDIGetConnectionProc(short refnum, ProcPtr *connectionProc, long *refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIGetConnectionProc
+			dc.w 	$203C
+			dc.w 	$00AC
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIGetConnectionProc
+	ENDIF
+
+;
+; pascal void MIDIDiscardPacket(short refnum, MIDIPacketPtr packet)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MIDIDiscardPacket
+			dc.w 	$203C
+			dc.w 	$00B0
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MIDIDiscardPacket
+	ENDIF
+
+;
+; pascal OSErr MDVRSignIn(OSType clientID, long refCon, Handle icon, Str255 name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRSignIn
+			dc.w 	$203C
+			dc.w 	$00B4
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRSignIn
+	ENDIF
+
+;
+; pascal void MDVRSignOut(OSType clientID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRSignOut
+			dc.w 	$203C
+			dc.w 	$00B8
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRSignOut
+	ENDIF
+
+;
+; pascal MDVRPtr MDVROpen(short portType, short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVROpen
+			dc.w 	$203C
+			dc.w 	$00BC
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVROpen
+	ENDIF
+
+;
+; pascal void MDVRClose(MDVRPtr driverPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRClose
+			dc.w 	$203C
+			dc.w 	$00C0
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRClose
+	ENDIF
+
+;
+; pascal void MDVRControlIn(MDVRPtr portPtr, MDVRInCtlPtr inputCtl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRControlIn
+			dc.w 	$203C
+			dc.w 	$00C4
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRControlIn
+	ENDIF
+
+;
+; pascal void MDVRControlOut(MDVRPtr portPtr, MDVROutCtlPtr outputCtl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRControlOut
+			dc.w 	$203C
+			dc.w 	$00C8
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRControlOut
+	ENDIF
+
+;
+; pascal void MDVRIn(MDVRPtr portPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRIn
+			dc.w 	$203C
+			dc.w 	$00CC
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRIn
+	ENDIF
+
+;
+; pascal void MDVROut(MDVRPtr portPtr, char *dataPtr, short length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVROut
+			dc.w 	$203C
+			dc.w 	$00D0
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVROut
+	ENDIF
+
+;
+; pascal void MDVRNotesOff(MDVRPtr portPtr, short mode)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MDVRNotesOff
+			dc.w 	$203C
+			dc.w 	$00D4
+			dc.w 	$0004
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MDVRNotesOff
+	ENDIF
+
+	ENDIF ; __MIDI__

@@ -1,0 +1,618 @@
+;
+;	File:		Editions.a
+;
+;	Contains:	Edition Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__EDITIONS__') = 'UNDEFINED' THEN
+__EDITIONS__ SET 1
+
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;		include 'Finder.a'											;
+
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+	include 'Aliases.a'
+	ENDIF
+;		include 'AppleTalk.a'										;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Menus.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'Controls.a'										;
+;		include 'Windows.a'										;
+;			include 'Events.a'										;
+;		include 'TextEdit.a'										;
+
+; resource types  
+rSectionType					EQU		'sect'				; ResType of saved SectionRecords 
+; Finder types for edition files 
+kPICTEditionFileType			EQU		'edtp'
+kTEXTEditionFileType			EQU		'edtt'
+ksndEditionFileType				EQU		'edts'
+kUnknownEditionFileType			EQU		'edtu'
+kPublisherDocAliasFormat		EQU		'alis'
+kPreviewFormat					EQU		'prvw'
+kFormatListFormat				EQU		'fmts'
+
+; section types 
+stSubscriber					EQU		$01
+stPublisher						EQU		$0A
+sumAutomatic					EQU		0					; subscriber update mode - Automatically     
+sumManual						EQU		1					; subscriber update mode - Manually 
+pumOnSave						EQU		0					; publisher update mode - OnSave            
+pumManual						EQU		1					; publisher update mode - Manually 
+kPartsNotUsed					EQU		0
+kPartNumberUnknown				EQU		-1					; misc 
+kPreviewWidth					EQU		120
+kPreviewHeight					EQU		120
+; bits for formatsMask 
+kPICTformatMask					EQU		1
+kTEXTformatMask					EQU		2
+ksndFormatMask					EQU		4
+; pseudo-item hits for dialogHooks 
+; the first if for NewPublisher or NewSubscriber Dialogs 
+emHookRedrawPreview				EQU		150
+; the following are for SectionOptions Dialog 
+emHookCancelSection				EQU		160
+emHookGoToPublisher				EQU		161
+emHookGetEditionNow				EQU		162
+emHookSendEditionNow			EQU		162
+emHookManualUpdateMode			EQU		163
+emHookAutoUpdateMode			EQU		164
+
+; the refcon field of the dialog record during a modalfilter 
+; or dialoghook contains one the following 
+emOptionsDialogRefCon			EQU		'optn'
+emCancelSectionDialogRefCon		EQU		'cncl'
+emGoToPubErrDialogRefCon		EQU		'gerr'
+kFormatLengthUnknown			EQU		-1
+
+; one byte, stSubscriber or stPublisher 
+; typedef SignedByte 		SectionType
+; seconds since 1904 
+; typedef unsigned long 	TimeStamp
+; similar to ResType 
+; typedef FourCharCode 		FormatType
+; used in Edition I/O 
+; typedef Handle 			EditionRefNum
+; update modes 
+; sumAutomatic, pumSuspend, etc 
+; typedef short 			UpdateMode
+; typedef struct SectionRecord  SectionRecord
+; typedef SectionRecord 	*SectionPtr, **SectionHandle
+SectionRecord 			RECORD	0
+version					 ds.b   1		; offset: $0 (0)		; always 0x01 in system 7.0 
+kind					 ds.b   1		; offset: $1 (1)		; stSubscriber or stPublisher 
+mode					 ds.w   1		; offset: $2 (2)		; auto or manual 
+mdDate					 ds.l   1		; offset: $4 (4)		; last change in document 
+sectionID				 ds.l   1		; offset: $8 (8)		; app. specific, unique per document 
+refCon					 ds.l   1		; offset: $C (12)		; application specific 
+alias					 ds.l   1		; offset: $10 (16)		; handle to Alias Record 
+subPart					 ds.l   1		; offset: $14 (20)		; which part of container file 
+nextSection				 ds.l   1		; offset: $18 (24)		; for linked list of app's Sections 
+controlBlock			 ds.l   1		; offset: $1C (28)		; used internally 
+refNum					 ds.l   1		; offset: $20 (32)		; used internally 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+EditionContainerSpec 	RECORD	0
+theFile					 ds     FSSpec	; offset: $0 (0)
+theFileScript			 ds.w   1		; offset: $46 (70)
+thePart					 ds.l   1		; offset: $48 (72)
+thePartName				 ds.l   8		; offset: $4C (76)
+thePartScript			 ds.w   1		; offset: $6C (108)
+sizeof					 EQU *			; size:   $6E (110)
+						ENDR
+
+; typedef struct EditionContainerSpec  EditionContainerSpec
+; typedef EditionContainerSpec  *EditionContainerSpecPtr
+EditionInfoRecord 		RECORD	0
+crDate					 ds.l   1		; offset: $0 (0)		; date EditionContainer was created 
+mdDate					 ds.l   1		; offset: $4 (4)		; date of last change 
+fdCreator				 ds.l   1		; offset: $8 (8)		; file creator 
+fdType					 ds.l   1		; offset: $C (12)		; file type 
+container				 ds     EditionContainerSpec ; offset: $10 (16) ; the Edition 
+sizeof					 EQU *			; size:   $7E (126)
+						ENDR
+
+; typedef struct EditionInfoRecord  EditionInfoRecord
+NewPublisherReply 		RECORD	0
+canceled				 ds.b   1		; offset: $0 (0)		; O 
+replacing				 ds.b   1		; offset: $1 (1)
+usePart					 ds.b   1		; offset: $2 (2)		; I 
+filler					 ds.b   1		; offset: $3 (3)
+preview					 ds.l   1		; offset: $4 (4)		; I 
+previewFormat			 ds.l   1		; offset: $8 (8)		; I 
+container				 ds     EditionContainerSpec ; offset: $C (12) ; I/O 
+sizeof					 EQU *			; size:   $7A (122)
+						ENDR
+
+; typedef struct NewPublisherReply  NewPublisherReply
+NewSubscriberReply 		RECORD	0
+canceled				 ds.b   1		; offset: $0 (0)		; O 
+formatsMask				 ds.b   1		; offset: $1 (1)
+container				 ds     EditionContainerSpec ; offset: $2 (2) ;I/O
+sizeof					 EQU *			; size:   $70 (112)
+						ENDR
+
+; typedef struct NewSubscriberReply  NewSubscriberReply
+SectionOptionsReply 	RECORD	0
+canceled				 ds.b   1		; offset: $0 (0)		; O 
+changed					 ds.b   1		; offset: $1 (1)		; O 
+sectionH				 ds.l   1		; offset: $2 (2)		; I 
+action					 ds.l   1		; offset: $6 (6)		; O 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct SectionOptionsReply  SectionOptionsReply
+
+ioHasFormat						EQU		0
+ioReadFormat					EQU		1
+ioNewFormat						EQU		2
+ioWriteFormat					EQU		3
+
+; typedef SignedByte 		FormatIOVerb
+
+eoOpen							EQU		0
+eoClose							EQU		1
+eoOpenNew						EQU		2
+eoCloseNew						EQU		3
+eoCanSubscribe					EQU		4
+
+; typedef SignedByte 		EditionOpenerVerb
+FormatIOParamBlock 		RECORD	0
+ioRefNum				 ds.l   1		; offset: $0 (0)
+format					 ds.l   1		; offset: $4 (4)
+formatIndex				 ds.l   1		; offset: $8 (8)
+offset					 ds.l   1		; offset: $C (12)
+buffPtr					 ds.l   1		; offset: $10 (16)
+buffLen					 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct FormatIOParamBlock  FormatIOParamBlock
+; typedef struct EditionOpenerParamBlock  EditionOpenerParamBlock
+EditionOpenerParamBlock RECORD	0
+info					 ds     EditionInfoRecord ; offset: $0 (0)
+sectionH				 ds.l   1		; offset: $7E (126)
+document				 ds.l   1		; offset: $82 (130)
+fdCreator				 ds.l   1		; offset: $86 (134)
+ioRefNum				 ds.l   1		; offset: $8A (138)
+ioProc					 ds.l   1		; offset: $8E (142)
+success					 ds.b   1		; offset: $92 (146)
+formatsMask				 ds.b   1		; offset: $93 (147)
+sizeof					 EQU *			; size:   $94 (148)
+						ENDR
+
+
+sectionEventMsgClass			EQU		'sect'
+sectionReadMsgID				EQU		'read'
+sectionWriteMsgID				EQU		'writ'
+sectionScrollMsgID				EQU		'scrl'
+sectionCancelMsgID				EQU		'cncl'
+
+currentEditionMgrVers			EQU		$0011
+
+;
+; pascal OSErr InitEditionPackVersion(short curEditionMgrVers)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InitEditionPackVersion
+			move.w	#$0100,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InitEditionPackVersion
+	ENDIF
+
+;
+; pascal OSErr NewSection(const EditionContainerSpec *container, ConstFSSpecPtr sectionDocument, SectionType kind, long sectionID, UpdateMode initalMode, SectionHandle *sectionH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewSection
+			move.w	#$0A02,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewSection
+	ENDIF
+
+;
+; pascal OSErr RegisterSection(const FSSpec *sectionDocument, SectionHandle sectionH, Boolean *aliasWasUpdated)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RegisterSection
+			move.w	#$0604,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RegisterSection
+	ENDIF
+
+;
+; pascal OSErr UnRegisterSection(SectionHandle sectionH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UnRegisterSection
+			move.w	#$0206,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UnRegisterSection
+	ENDIF
+
+;
+; pascal OSErr IsRegisteredSection(SectionHandle sectionH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IsRegisteredSection
+			move.w	#$0208,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsRegisteredSection
+	ENDIF
+
+;
+; pascal OSErr AssociateSection(SectionHandle sectionH, const FSSpec *newSectionDocument)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AssociateSection
+			move.w	#$040C,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AssociateSection
+	ENDIF
+
+;
+; pascal OSErr CreateEditionContainerFile(const FSSpec *editionFile, OSType fdCreator, ScriptCode editionFileNameScript)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CreateEditionContainerFile
+			move.w	#$050E,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CreateEditionContainerFile
+	ENDIF
+
+;
+; pascal OSErr DeleteEditionContainerFile(const FSSpec *editionFile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteEditionContainerFile
+			move.w	#$0210,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteEditionContainerFile
+	ENDIF
+
+;
+; pascal OSErr OpenEdition(SectionHandle subscriberSectionH, EditionRefNum *refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenEdition
+			move.w	#$0412,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenEdition
+	ENDIF
+
+;
+; pascal OSErr OpenNewEdition(SectionHandle publisherSectionH, OSType fdCreator, ConstFSSpecPtr publisherSectionDocument, EditionRefNum *refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenNewEdition
+			move.w	#$0814,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenNewEdition
+	ENDIF
+
+;
+; pascal OSErr CloseEdition(EditionRefNum whichEdition, Boolean successful)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseEdition
+			move.w	#$0316,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseEdition
+	ENDIF
+
+;
+; pascal OSErr EditionHasFormat(EditionRefNum whichEdition, FormatType whichFormat, Size *formatSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EditionHasFormat
+			move.w	#$0618,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EditionHasFormat
+	ENDIF
+
+;
+; pascal OSErr ReadEdition(EditionRefNum whichEdition, FormatType whichFormat, void *buffPtr, Size *buffLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ReadEdition
+			move.w	#$081A,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ReadEdition
+	ENDIF
+
+;
+; pascal OSErr WriteEdition(EditionRefNum whichEdition, FormatType whichFormat, const void *buffPtr, Size buffLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_WriteEdition
+			move.w	#$081C,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	WriteEdition
+	ENDIF
+
+;
+; pascal OSErr GetEditionFormatMark(EditionRefNum whichEdition, FormatType whichFormat, unsigned long *currentMark)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetEditionFormatMark
+			move.w	#$061E,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetEditionFormatMark
+	ENDIF
+
+;
+; pascal OSErr SetEditionFormatMark(EditionRefNum whichEdition, FormatType whichFormat, unsigned long setMarkTo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetEditionFormatMark
+			move.w	#$0620,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetEditionFormatMark
+	ENDIF
+
+;
+; pascal OSErr GetEditionInfo(SectionHandle sectionH, EditionInfoRecord *editionInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetEditionInfo
+			move.w	#$0422,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetEditionInfo
+	ENDIF
+
+;
+; pascal OSErr GoToPublisherSection(const EditionContainerSpec *container)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GoToPublisherSection
+			move.w	#$0224,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GoToPublisherSection
+	ENDIF
+
+;
+; pascal OSErr GetLastEditionContainerUsed(EditionContainerSpec *container)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetLastEditionContainerUsed
+			move.w	#$0226,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetLastEditionContainerUsed
+	ENDIF
+
+;
+; pascal OSErr GetStandardFormats(const EditionContainerSpec *container, FormatType *previewFormat, Handle preview, Handle publisherAlias, Handle formats)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetStandardFormats
+			move.w	#$0A28,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetStandardFormats
+	ENDIF
+
+;
+; pascal OSErr GetEditionOpenerProc(EditionOpenerUPP *opener)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetEditionOpenerProc
+			move.w	#$022A,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetEditionOpenerProc
+	ENDIF
+
+;
+; pascal OSErr SetEditionOpenerProc(EditionOpenerUPP opener)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetEditionOpenerProc
+			move.w	#$022C,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetEditionOpenerProc
+	ENDIF
+
+;
+; pascal OSErr CallEditionOpenerProc(EditionOpenerVerb selector, EditionOpenerParamBlock *PB, EditionOpenerUPP routine)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CallEditionOpenerProc
+			move.w	#$052E,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CallEditionOpenerProc
+	ENDIF
+
+;
+; pascal OSErr CallFormatIOProc(FormatIOVerb selector, FormatIOParamBlock *PB, FormatIOUPP routine)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CallFormatIOProc
+			move.w	#$0530,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CallFormatIOProc
+	ENDIF
+
+;
+; pascal OSErr NewSubscriberDialog(NewSubscriberReply *reply)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewSubscriberDialog
+			move.w	#$0232,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewSubscriberDialog
+	ENDIF
+
+;
+; pascal OSErr NewSubscriberExpDialog(NewSubscriberReply *reply, Point where, short expansionDITLresID, ExpDlgHookUPP dlgHook, ExpModalFilterUPP filter, void *yourDataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewSubscriberExpDialog
+			move.w	#$0B34,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewSubscriberExpDialog
+	ENDIF
+
+;
+; pascal OSErr NewPublisherDialog(NewPublisherReply *reply)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewPublisherDialog
+			move.w	#$0236,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewPublisherDialog
+	ENDIF
+
+;
+; pascal OSErr NewPublisherExpDialog(NewPublisherReply *reply, Point where, short expansionDITLresID, ExpDlgHookUPP dlgHook, ExpModalFilterUPP filter, void *yourDataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewPublisherExpDialog
+			move.w	#$0B38,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewPublisherExpDialog
+	ENDIF
+
+;
+; pascal OSErr SectionOptionsDialog(SectionOptionsReply *reply)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SectionOptionsDialog
+			move.w	#$023A,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SectionOptionsDialog
+	ENDIF
+
+;
+; pascal OSErr SectionOptionsExpDialog(SectionOptionsReply *reply, Point where, short expansionDITLresID, ExpDlgHookUPP dlgHook, ExpModalFilterUPP filter, void *yourDataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SectionOptionsExpDialog
+			move.w	#$0B3C,d0
+			dc.w 	$A82D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SectionOptionsExpDialog
+	ENDIF
+
+	ENDIF ; __EDITIONS__

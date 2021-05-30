@@ -1,0 +1,693 @@
+;
+;    File:       QD3DPick.a
+;
+;    Contains:   Q3Pick methods
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QD3DPICK__') = 'UNDEFINED' THEN
+__QD3DPICK__ SET 1
+
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+	include 'QD3D.a'
+	ENDIF
+
+	IF &TYPE('__QD3DSTYLE__') = 'UNDEFINED' THEN
+	include 'QD3DStyle.a'
+	ENDIF
+	IF &TYPE('__QD3DGEOMETRY__') = 'UNDEFINED' THEN
+	include 'QD3DGeometry.a'
+	ENDIF
+
+; *****************************************************************************
+; **                                                                         **
+; **                         Mask bits for hit information                   **
+; **                                                                         **
+; ****************************************************************************
+
+
+; typedef long							TQ3PickDetailMasks
+kQ3PickDetailNone				EQU		0
+kQ3PickDetailMaskPickID			EQU		$01
+kQ3PickDetailMaskPath			EQU		$02
+kQ3PickDetailMaskObject			EQU		$04
+kQ3PickDetailMaskLocalToWorldMatrix EQU	$08
+kQ3PickDetailMaskXYZ			EQU		$10
+kQ3PickDetailMaskDistance		EQU		$20
+kQ3PickDetailMaskNormal			EQU		$40
+kQ3PickDetailMaskShapePart		EQU		$80
+kQ3PickDetailMaskPickPart		EQU		$0100
+kQ3PickDetailMaskUV				EQU		$0200
+; typedef unsigned long 				TQ3PickDetail
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Hitlist sorting                              **
+; **                                                                          **
+; ****************************************************************************
+
+
+; typedef long							TQ3PickSort
+kQ3PickSortNone					EQU		0
+kQ3PickSortNearToFar			EQU		1
+kQ3PickSortFarToNear			EQU		2
+
+; ******************************************************************************
+; **                                                                          **
+; **                 Data structures to set up the pick object                **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3PickData				RECORD 0
+sort					 ds.l	1				; offset: $0 (0)
+mask					 ds.l	1				; offset: $4 (4)
+numHitsToReturn			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TQ3WindowPointPickData	RECORD 0
+data					 ds		TQ3PickData		; offset: $0 (0)
+point					 ds		TQ3Point2D		; offset: $C (12)
+vertexTolerance			 ds		Float32			; offset: $14 (20)
+edgeTolerance			 ds		Float32			; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+TQ3WindowRectPickData	RECORD 0
+data					 ds		TQ3PickData		; offset: $0 (0)
+rect					 ds		TQ3Area			; offset: $C (12)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+TQ3WorldRayPickData		RECORD 0
+data					 ds		TQ3PickData		; offset: $0 (0)
+ray						 ds		TQ3Ray3D		; offset: $C (12)
+vertexTolerance			 ds		Float32			; offset: $24 (36)
+edgeTolerance			 ds		Float32			; offset: $28 (40)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+
+; ******************************************************************************
+; **                                                                          **
+; **                                 Hit data                                 **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3HitPath				RECORD 0
+rootGroup				 ds.l	1				; offset: $0 (0)
+depth					 ds.l	1				; offset: $4 (4)
+positions				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                             Pick class methods                           **
+; **                                                                          **
+; ****************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3Pick_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Pick_GetType(TQ3PickObject pick)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetType
+	ENDIF
+
+
+; *  Q3Pick_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetData(TQ3PickObject pick, TQ3PickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetData
+	ENDIF
+
+
+; *  Q3Pick_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_SetData(TQ3PickObject pick, const TQ3PickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_SetData
+	ENDIF
+
+
+; *  Q3Pick_GetVertexTolerance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetVertexTolerance(TQ3PickObject pick, float *vertexTolerance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetVertexTolerance
+	ENDIF
+
+
+; *  Q3Pick_GetEdgeTolerance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetEdgeTolerance(TQ3PickObject pick, float *edgeTolerance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetEdgeTolerance
+	ENDIF
+
+
+; *  Q3Pick_SetVertexTolerance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_SetVertexTolerance(TQ3PickObject pick, float vertexTolerance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_SetVertexTolerance
+	ENDIF
+
+
+; *  Q3Pick_SetEdgeTolerance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_SetEdgeTolerance(TQ3PickObject pick, float edgeTolerance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_SetEdgeTolerance
+	ENDIF
+
+
+; *  Q3Pick_GetNumHits()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetNumHits(TQ3PickObject pick, unsigned long *numHits)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetNumHits
+	ENDIF
+
+
+; *  Q3Pick_EmptyHitList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_EmptyHitList(TQ3PickObject pick)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_EmptyHitList
+	ENDIF
+
+
+; *  Q3Pick_GetPickDetailValidMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetPickDetailValidMask(TQ3PickObject pick, unsigned long index, TQ3PickDetail *pickDetailValidMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetPickDetailValidMask
+	ENDIF
+
+
+; *  Q3Pick_GetPickDetailData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Pick_GetPickDetailData(TQ3PickObject pick, unsigned long index, TQ3PickDetail pickDetailValue, void *detailData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Pick_GetPickDetailData
+	ENDIF
+
+
+; *  Q3HitPath_EmptyData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3HitPath_EmptyData(TQ3HitPath *hitPath)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3HitPath_EmptyData
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; ******************************************************************************
+; **                                                                          **
+; **                         Window point pick methods                        **
+; **                                                                          **
+; ****************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3WindowPointPick_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3PickObject Q3WindowPointPick_New(const TQ3WindowPointPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowPointPick_New
+	ENDIF
+
+
+; *  Q3WindowPointPick_GetPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowPointPick_GetPoint(TQ3PickObject pick, TQ3Point2D *point)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowPointPick_GetPoint
+	ENDIF
+
+
+; *  Q3WindowPointPick_SetPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowPointPick_SetPoint(TQ3PickObject pick, const TQ3Point2D *point)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowPointPick_SetPoint
+	ENDIF
+
+
+; *  Q3WindowPointPick_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowPointPick_GetData(TQ3PickObject pick, TQ3WindowPointPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowPointPick_GetData
+	ENDIF
+
+
+; *  Q3WindowPointPick_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowPointPick_SetData(TQ3PickObject pick, const TQ3WindowPointPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowPointPick_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Window rect pick methods                         **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3WindowRectPick_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3PickObject Q3WindowRectPick_New(const TQ3WindowRectPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowRectPick_New
+	ENDIF
+
+
+; *  Q3WindowRectPick_GetRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowRectPick_GetRect(TQ3PickObject pick, TQ3Area *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowRectPick_GetRect
+	ENDIF
+
+
+; *  Q3WindowRectPick_SetRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowRectPick_SetRect(TQ3PickObject pick, const TQ3Area *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowRectPick_SetRect
+	ENDIF
+
+
+; *  Q3WindowRectPick_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowRectPick_GetData(TQ3PickObject pick, TQ3WindowRectPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowRectPick_GetData
+	ENDIF
+
+
+; *  Q3WindowRectPick_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WindowRectPick_SetData(TQ3PickObject pick, const TQ3WindowRectPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WindowRectPick_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         World ray pick methods                           **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3WorldRayPick_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3PickObject Q3WorldRayPick_New(const TQ3WorldRayPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WorldRayPick_New
+	ENDIF
+
+
+; *  Q3WorldRayPick_GetRay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WorldRayPick_GetRay(TQ3PickObject pick, TQ3Ray3D *ray)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WorldRayPick_GetRay
+	ENDIF
+
+
+; *  Q3WorldRayPick_SetRay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WorldRayPick_SetRay(TQ3PickObject pick, const TQ3Ray3D *ray)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WorldRayPick_SetRay
+	ENDIF
+
+
+; *  Q3WorldRayPick_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WorldRayPick_GetData(TQ3PickObject pick, TQ3WorldRayPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WorldRayPick_GetData
+	ENDIF
+
+
+; *  Q3WorldRayPick_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3WorldRayPick_SetData(TQ3PickObject pick, const TQ3WorldRayPickData *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3WorldRayPick_SetData
+	ENDIF
+
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Shape Part methods                           **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3ShapePart_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3ShapePart_GetType(TQ3ShapePartObject shapePartObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ShapePart_GetType
+	ENDIF
+
+
+; *  Q3MeshPart_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3MeshPart_GetType(TQ3MeshPartObject meshPartObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3MeshPart_GetType
+	ENDIF
+
+
+; *  Q3ShapePart_GetShape()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ShapePart_GetShape(TQ3ShapePartObject shapePartObject, TQ3ShapeObject *shapeObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ShapePart_GetShape
+	ENDIF
+
+
+; *  Q3MeshPart_GetComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3MeshPart_GetComponent(TQ3MeshPartObject meshPartObject, TQ3MeshComponent *component)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3MeshPart_GetComponent
+	ENDIF
+
+
+; *  Q3MeshFacePart_GetFace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3MeshFacePart_GetFace(TQ3MeshFacePartObject meshFacePartObject, TQ3MeshFace *face)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3MeshFacePart_GetFace
+	ENDIF
+
+
+; *  Q3MeshEdgePart_GetEdge()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3MeshEdgePart_GetEdge(TQ3MeshEdgePartObject meshEdgePartObject, TQ3MeshEdge *edge)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3MeshEdgePart_GetEdge
+	ENDIF
+
+
+; *  Q3MeshVertexPart_GetVertex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3MeshVertexPart_GetVertex(TQ3MeshVertexPartObject meshVertexPartObject, TQ3MeshVertex *vertex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3MeshVertexPart_GetVertex
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __QD3DPICK__ 
+

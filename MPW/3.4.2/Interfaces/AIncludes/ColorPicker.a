@@ -1,0 +1,677 @@
+;
+;	File:		ColorPicker.a
+;
+;	Contains:	Color Picker package Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__COLORPICKER__') = 'UNDEFINED' THEN
+__COLORPICKER__ SET 1
+
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Memory.a'											;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'TextEdit.a'										;
+
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+	include 'CMApplication.a'
+	ENDIF
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+;		include 'Printing.a'										;
+;		include 'CMICCProfile.a'									;
+
+	IF &TYPE('__BALLOONS__') = 'UNDEFINED' THEN
+	include 'Balloons.a'
+	ENDIF
+
+;Maximum small fract value, as long
+MaxSmallFract					EQU		$0000FFFF
+
+kDefaultWidth					EQU		383
+kDefaultHeight					EQU		238
+
+kDidNothing						EQU		0
+kColorChanged					EQU		1
+kOkHit							EQU		2
+kCancelHit						EQU		3
+kNewPickerChosen				EQU		4
+kApplItemHit					EQU		5
+
+; typedef short 			PickerAction
+
+kOriginalColor					EQU		0
+kNewColor						EQU		1
+
+; typedef short 			ColorType
+
+kCut							EQU		0
+kCopy							EQU		1
+kPaste							EQU		2
+kClear							EQU		3
+kUndo							EQU		4
+
+; typedef short 			EditOperation
+
+kMouseDown						EQU		0
+kKeyDown						EQU		1
+kFieldEntered					EQU		2
+kFieldLeft						EQU		3
+kCutOp							EQU		4
+kCopyOp							EQU		5
+kPasteOp						EQU		6
+kClearOp						EQU		7
+kUndoOp							EQU		8
+
+; typedef short 			ItemModifier
+
+kAtSpecifiedOrigin				EQU		0
+kDeepestColorScreen				EQU		1
+kCenterOnMainScreen				EQU		2
+
+; typedef short 			DialogPlacementSpec
+
+DialogIsMoveable				EQU		1
+DialogIsModal					EQU		2
+CanModifyPalette				EQU		4
+CanAnimatePalette				EQU		8
+AppIsColorSyncAware				EQU		16
+InSystemDialog					EQU		32
+InApplicationDialog				EQU		64
+InPickerDialog					EQU		128
+DetachedFromChoices				EQU		256
+CanDoColor						EQU		1
+CanDoBlackWhite					EQU		2
+AlwaysModifiesPalette			EQU		4
+MayModifyPalette				EQU		8
+PickerIsColorSyncAware			EQU		16
+CanDoSystemDialog				EQU		32
+CanDoApplDialog					EQU		64
+HasOwnDialog					EQU		128
+CanDetach						EQU		256
+
+kNoForcast						EQU		0
+kMenuChoice						EQU		1
+kDialogAccept					EQU		2
+kDialogCancel					EQU		3
+kLeaveFocus						EQU		4
+kPickerSwitch					EQU		5
+kNormalKeyDown					EQU		6
+kNormalMouseDown				EQU		7
+
+; typedef short 			EventForcaster
+; A SmallFract value is just the fractional part of a Fixed number,
+;which is the low order word.  SmallFracts are used to save room,
+;and to be compatible with Quickdraw's RGBColor.  They can be
+;assigned directly to and from INTEGERs. 
+; Unsigned fraction between 0 and 1 
+; typedef unsigned short 	SmallFract
+; For developmental simplicity in switching between the HLS and HSV
+;models, HLS is reordered into HSL. Thus both models start with
+;hue and saturation values; value/lightness/brightness is last. 
+HSVColor 				RECORD	0
+hue						 ds.w   1		; offset: $0 (0)		;Fraction of circle, red at 0
+saturation				 ds.w   1		; offset: $2 (2)		;0-1, 0 for gray, 1 for pure color
+value					 ds.w   1		; offset: $4 (4)		;0-1, 0 for black, 1 for max intensity
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct HSVColor 	HSVColor
+HSLColor 				RECORD	0
+hue						 ds.w   1		; offset: $0 (0)		;Fraction of circle, red at 0
+saturation				 ds.w   1		; offset: $2 (2)		;0-1, 0 for gray, 1 for pure color
+lightness				 ds.w   1		; offset: $4 (4)		;0-1, 0 for black, 1 for white
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct HSLColor 	HSLColor
+CMYColor 				RECORD	0
+cyan					 ds.w   1		; offset: $0 (0)
+magenta					 ds.w   1		; offset: $2 (2)
+yellow					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMYColor 	CMYColor
+PMColor 				RECORD	0
+profile					 ds.l   1		; offset: $0 (0)
+color					 ds.l   2		; offset: $4 (4)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct PMColor 	PMColor, *PMColorPtr
+PickerIconData 			RECORD	0
+scriptCode				 ds.w   1		; offset: $0 (0)
+iconSuiteID				 ds.w   1		; offset: $2 (2)
+helpResType				 ds.l   1		; offset: $4 (4)
+helpResID				 ds.w   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct PickerIconData  PickerIconData
+PickerInitData 			RECORD	0
+pickerDialog			 ds.l   1		; offset: $0 (0)
+choicesDialog			 ds.l   1		; offset: $4 (4)
+flags					 ds.l   1		; offset: $8 (8)
+yourself				 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct PickerInitData  PickerInitData
+PickerMenuItemInfo 		RECORD	0
+editMenuID				 ds.w   1		; offset: $0 (0)
+cutItem					 ds.w   1		; offset: $2 (2)
+copyItem				 ds.w   1		; offset: $4 (4)
+pasteItem				 ds.w   1		; offset: $6 (6)
+clearItem				 ds.w   1		; offset: $8 (8)
+undoItem				 ds.w   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct PickerMenuItemInfo  PickerMenuItemInfo
+PickerMenuState 		RECORD	0
+cutEnabled				 ds.b   1		; offset: $0 (0)
+copyEnabled				 ds.b   1		; offset: $1 (1)
+pasteEnabled			 ds.b   1		; offset: $2 (2)
+clearEnabled			 ds.b   1		; offset: $3 (3)
+undoEnabled				 ds.b   1		; offset: $4 (4)
+undoString				 ds.l   64		; offset: $5 (5)
+						 ORG 262
+sizeof					 EQU *			; size:   $106 (262)
+						ENDR
+
+; typedef struct PickerMenuState  PickerMenuState
+ColorPickerInfo 		RECORD	0
+theColor				 ds     PMColor	; offset: $0 (0)
+dstProfile				 ds.l   1		; offset: $C (12)
+flags					 ds.l   1		; offset: $10 (16)
+placeWhere				 ds.w   1		; offset: $14 (20)
+dialogOrigin			 ds     Point	; offset: $16 (22)
+pickerType				 ds.l   1		; offset: $1A (26)
+eventProc				 ds.l   1		; offset: $1E (30)
+colorProc				 ds.l   1		; offset: $22 (34)
+colorProcData			 ds.l   1		; offset: $26 (38)
+prompt					 ds.l   64		; offset: $2A (42)
+mInfo					 ds     PickerMenuItemInfo ; offset: $12A (298)
+newColorChosen			 ds.b   1		; offset: $136 (310)
+filler					 ds.b   1		; offset: $137 (311)
+sizeof					 EQU *			; size:   $138 (312)
+						ENDR
+
+; typedef struct ColorPickerInfo  ColorPickerInfo
+SystemDialogInfo 		RECORD	0
+flags					 ds.l   1		; offset: $0 (0)
+pickerType				 ds.l   1		; offset: $4 (4)
+placeWhere				 ds.w   1		; offset: $8 (8)
+dialogOrigin			 ds     Point	; offset: $A (10)
+mInfo					 ds     PickerMenuItemInfo ; offset: $E (14)
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct SystemDialogInfo  SystemDialogInfo
+PickerDialogInfo 		RECORD	0
+flags					 ds.l   1		; offset: $0 (0)
+pickerType				 ds.l   1		; offset: $4 (4)
+dialogOrigin			 ds.l   1		; offset: $8 (8)
+mInfo					 ds     PickerMenuItemInfo ; offset: $C (12)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct PickerDialogInfo  PickerDialogInfo
+ApplicationDialogInfo 	RECORD	0
+flags					 ds.l   1		; offset: $0 (0)
+pickerType				 ds.l   1		; offset: $4 (4)
+theDialog				 ds.l   1		; offset: $8 (8)
+pickerOrigin			 ds     Point	; offset: $C (12)
+mInfo					 ds     PickerMenuItemInfo ; offset: $10 (16)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct ApplicationDialogInfo  ApplicationDialogInfo
+EventData 				RECORD	0
+event					 ds.l   1		; offset: $0 (0)
+action					 ds.w   1		; offset: $4 (4)
+itemHit					 ds.w   1		; offset: $6 (6)
+handled					 ds.b   1		; offset: $8 (8)
+filler					 ds.b   1		; offset: $9 (9)
+colorProc				 ds.l   1		; offset: $A (10)
+colorProcData			 ds.l   1		; offset: $E (14)
+forcast					 ds.w   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct EventData 	EventData
+EditData 				RECORD	0
+theEdit					 ds.w   1		; offset: $0 (0)
+action					 ds.w   1		; offset: $2 (2)
+handled					 ds.b   1		; offset: $4 (4)
+filler					 ds.b   1		; offset: $5 (5)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct EditData 	EditData
+ItemHitData 			RECORD	0
+itemHit					 ds.w   1		; offset: $0 (0)
+iMod					 ds.w   1		; offset: $2 (2)
+action					 ds.w   1		; offset: $4 (4)
+colorProc				 ds.l   1		; offset: $6 (6)
+colorProcData			 ds.l   1		; offset: $A (10)
+where					 ds     Point	; offset: $E (14)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct ItemHitData  ItemHitData
+HelpItemInfo 			RECORD	0
+options					 ds.l   1		; offset: $0 (0)
+tip						 ds     Point	; offset: $4 (4)
+altRect					 ds     Rect	; offset: $8 (8)
+theProc					 ds.w   1		; offset: $10 (16)
+helpVariant				 ds.w   1		; offset: $12 (18)
+helpMessage				 ds.w   129		; offset: $14 (20)
+sizeof					 EQU *			; size:   $116 (278)
+						ENDR
+
+; typedef struct HelpItemInfo  HelpItemInfo
+;	Below are the color conversion routines.
+;
+; pascal SmallFract Fix2SmallFract(Fixed f)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Fix2SmallFract
+			move.w	#$0001,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Fix2SmallFract
+	ENDIF
+
+;
+; pascal Fixed SmallFract2Fix(SmallFract s)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SmallFract2Fix
+			move.w	#$0002,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SmallFract2Fix
+	ENDIF
+
+;
+; pascal void CMY2RGB(const CMYColor *cColor, RGBColor *rColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMY2RGB
+			move.w	#$0003,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMY2RGB
+	ENDIF
+
+;
+; pascal void RGB2CMY(const RGBColor *rColor, CMYColor *cColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RGB2CMY
+			move.w	#$0004,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RGB2CMY
+	ENDIF
+
+;
+; pascal void HSL2RGB(const HSLColor *hColor, RGBColor *rColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HSL2RGB
+			move.w	#$0005,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HSL2RGB
+	ENDIF
+
+;
+; pascal void RGB2HSL(const RGBColor *rColor, HSLColor *hColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RGB2HSL
+			move.w	#$0006,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RGB2HSL
+	ENDIF
+
+;
+; pascal void HSV2RGB(const HSVColor *hColor, RGBColor *rColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HSV2RGB
+			move.w	#$0007,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HSV2RGB
+	ENDIF
+
+;
+; pascal void RGB2HSV(const RGBColor *rColor, HSVColor *hColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RGB2HSV
+			move.w	#$0008,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RGB2HSV
+	ENDIF
+
+;	Below brings up the ColorPicker 1.0 Dialog
+;
+; pascal Boolean GetColor(Point where, ConstStr255Param prompt, const RGBColor *inColor, RGBColor *outColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetColor
+			move.w	#$0009,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetColor
+	ENDIF
+
+;	Below are the ColorPicker 2.0 routines.
+;
+; pascal OSErr PickColor(ColorPickerInfo *theColorInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PickColor
+			move.w	#$0213,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PickColor
+	ENDIF
+
+;
+; pascal OSErr AddPickerToDialog(ApplicationDialogInfo *info, picker *thePicker)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddPickerToDialog
+			move.w	#$0414,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddPickerToDialog
+	ENDIF
+
+;
+; pascal OSErr CreateColorDialog(SystemDialogInfo *info, picker *thePicker)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CreateColorDialog
+			move.w	#$0415,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CreateColorDialog
+	ENDIF
+
+;
+; pascal OSErr CreatePickerDialog(PickerDialogInfo *info, picker *thePicker)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CreatePickerDialog
+			move.w	#$0416,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CreatePickerDialog
+	ENDIF
+
+;
+; pascal OSErr DisposeColorPicker(picker thePicker)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeColorPicker
+			move.w	#$0217,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeColorPicker
+	ENDIF
+
+;
+; pascal OSErr GetPickerVisibility(picker thePicker, Boolean *visible)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPickerVisibility
+			move.w	#$0418,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPickerVisibility
+	ENDIF
+
+;
+; pascal OSErr SetPickerVisibility(picker thePicker, short visible)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPickerVisibility
+			move.w	#$0319,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPickerVisibility
+	ENDIF
+
+;
+; pascal OSErr SetPickerPrompt(picker thePicker, Str255 promptString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPickerPrompt
+			move.w	#$041a,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPickerPrompt
+	ENDIF
+
+;
+; pascal OSErr DoPickerEvent(picker thePicker, EventData *data)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DoPickerEvent
+			move.w	#$041b,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DoPickerEvent
+	ENDIF
+
+;
+; pascal OSErr DoPickerEdit(picker thePicker, EditData *data)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DoPickerEdit
+			move.w	#$041c,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DoPickerEdit
+	ENDIF
+
+;
+; pascal OSErr DoPickerDraw(picker thePicker)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DoPickerDraw
+			move.w	#$021d,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DoPickerDraw
+	ENDIF
+
+;
+; pascal OSErr GetPickerColor(picker thePicker, ColorType whichColor, PMColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPickerColor
+			move.w	#$051e,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPickerColor
+	ENDIF
+
+;
+; pascal OSErr SetPickerColor(picker thePicker, ColorType whichColor, PMColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPickerColor
+			move.w	#$051f,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPickerColor
+	ENDIF
+
+;
+; pascal OSErr GetPickerOrigin(picker thePicker, Point *where)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPickerOrigin
+			move.w	#$0420,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPickerOrigin
+	ENDIF
+
+;
+; pascal OSErr SetPickerOrigin(picker thePicker, Point where)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPickerOrigin
+			move.w	#$0421,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPickerOrigin
+	ENDIF
+
+;
+; pascal OSErr GetPickerProfile(picker thePicker, CMProfileHandle *profile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPickerProfile
+			move.w	#$0422,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPickerProfile
+	ENDIF
+
+;
+; pascal OSErr SetPickerProfile(picker thePicker, CMProfileHandle profile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPickerProfile
+			move.w	#$0423,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPickerProfile
+	ENDIF
+
+;
+; pascal OSErr GetPickerEditMenuState(picker thePicker, PickerMenuState *mState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPickerEditMenuState
+			move.w	#$0424,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPickerEditMenuState
+	ENDIF
+
+;
+; pascal OSErr ExtractPickerHelpItem(picker thePicker, short itemNo, short whichState, HelpItemInfo *helpInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ExtractPickerHelpItem
+			move.w	#$0625,-(sp)
+			dc.w 	$A82E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ExtractPickerHelpItem
+	ENDIF
+
+	ENDIF ; __COLORPICKER__

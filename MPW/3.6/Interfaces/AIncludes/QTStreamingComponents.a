@@ -1,0 +1,2998 @@
+;
+;    File:       QTStreamingComponents.a
+;
+;    Contains:   QuickTime Interfaces.
+;
+;    Version:    Technology: 
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QTSTREAMINGCOMPONENTS__') = 'UNDEFINED' THEN
+__QTSTREAMINGCOMPONENTS__ SET 1
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+	IF &TYPE('__QUICKTIMESTREAMING__') = 'UNDEFINED' THEN
+	include 'QuickTimeStreaming.a'
+	ENDIF
+
+; ============================================================================
+;        Stream Sourcer
+;============================================================================
+
+
+kQTSSourcerType					EQU		'srcr'
+; typedef ComponentInstance 			QTSSourcer
+
+
+kQTSSGChannelSourcerType		EQU		'sgch'
+kQTSMovieTrackSourcerType		EQU		'trak'
+kQTSPushDataSourcerType			EQU		'push'
+;  flags for sourcer data 
+
+kQTSSourcerDataFlag_SyncSample	EQU		$00000001
+
+
+kQTSSourcerInitParamsVersion1	EQU		1
+QTSSourcerInitParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+dataType				 ds.l	1				; offset: $8 (8)
+data					 ds.l	1				; offset: $C (12)
+dataLength				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+; *  QTSNewSourcer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSNewSourcer(void *params, const QTSSourcerInitParams *inInitParams, SInt32 inFlags, ComponentInstance *outSourcer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewSourcer
+	ENDIF
+
+;  info selectors for sourcers - get and set 
+
+kQTSInfo_Track					EQU		'trak'				; QTSTrackParams* 
+kQTSInfo_Loop					EQU		'loop'				; QTSLoopParams* 
+kQTSInfo_SourcerTiming			EQU		'stim'				; QTSSourcerTimingParams* 
+kQTSInfo_TargetFrameRate		EQU		'tfps'				; Fixed * in frames per second 
+kQTSInfo_PushData				EQU		'push'				; QTSPushDataParams* 
+kQTSInfo_SourcerCallbackProc	EQU		'scbp'				; QTSSourcerCallbackProcParams* 
+kQTSInfo_TargetDataRate			EQU		'tdrt'				; UInt32 * in bytes per second 
+kQTSInfo_AudioAutoGainOnOff		EQU		'agc '				; Boolean*  - error if unavailable
+kQTSInfo_AudioGain				EQU		'gain'				; Fixed* kFixed1 is unity gain 
+kQTSInfo_CroppedInputRect		EQU		'crpr'				; Rect* - defined relative to kQTSInfo_FullInputRect below 
+kQTSInfo_SpatialSettings		EQU		'sptl'				; pointer to SCSpatialSettings struct
+kQTSInfo_TemporalSettings		EQU		'tprl'				; pointer to SCTemporalSettings struct
+kQTSInfo_DataRateSettings		EQU		'drat'				; pointer to SCDataRateSettings struct
+kQTSInfo_CodecFlags				EQU		'cflg'				; pointer to CodecFlags
+kQTSInfo_CodecSettings			EQU		'cdec'				; pointer to Handle
+kQTSInfo_ForceKeyValue			EQU		'ksim'				; pointer to long
+kQTSInfo_SoundSampleRate		EQU		'ssrt'				; pointer to UnsignedFixed
+kQTSInfo_SoundSampleSize		EQU		'ssss'				; pointer to short
+kQTSInfo_SoundChannelCount		EQU		'sscc'				; pointer to short
+kQTSInfo_SoundCompression		EQU		'ssct'				; pointer to OSType
+kQTSInfo_CompressionList		EQU		'ctyl'				; pointer to OSType Handle
+kQTSInfo_VideoHue				EQU		'hue '				; UInt16* 
+kQTSInfo_VideoSaturation		EQU		'satr'				; UInt16* 
+kQTSInfo_VideoContrast			EQU		'trst'				; UInt16* 
+kQTSInfo_VideoBrightness		EQU		'brit'				; UInt16* 
+kQTSInfo_VideoSharpness			EQU		'shrp'				; UInt16* 
+kQTSInfo_TimeScale				EQU		'scal'				; UInt32* 
+;  info selectors for sourcers - get only
+
+kQTSInfo_SGChannel				EQU		'sgch'				; SGChannel* 
+kQTSInfo_InputDeviceName		EQU		'innm'				; Handle* 
+kQTSInfo_InputSourceName		EQU		'srnm'				; Handle* 
+kQTSInfo_FullInputRect			EQU		'fulr'				; Rect* 
+;  loop flags 
+
+kQTSLoopFlag_Loop				EQU		$00000001
+
+kQTSLoopParamsVersion1			EQU		1
+QTSLoopParams			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+loopFlags				 ds.l	1				; offset: $8 (8)
+flagsMask				 ds.l	1				; offset: $C (12)
+numLoops				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+kQTSTrackParamsVersion1			EQU		1
+QTSTrackParams			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+track					 ds.l	1				; offset: $8 (8)
+trackStartOffset		 ds		TimeValue64		; offset: $C (12)		;  to start other than at the beginning otherwise set to 0
+duration				 ds		TimeValue64		; offset: $14 (20)		;  to limit the duration otherwise set to 0
+loopParams				 ds.l	1				; offset: $1C (28)		;  set to NULL if not using; default is no looping 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+kQTSSourcerTimingParamsVersion1	EQU		1
+QTSSourcerTimingParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+timeScale				 ds.l	1				; offset: $8 (8)
+presentationStartTime	 ds		TimeValue64		; offset: $C (12)
+presentationEndTime		 ds		TimeValue64		; offset: $14 (20)
+presentationCurrentTime	 ds		TimeValue64		; offset: $1C (28)
+localStartTime			 ds		TimeValue64		; offset: $24 (36)
+localEndTime			 ds		TimeValue64		; offset: $2C (44)
+localCurrentTime		 ds		TimeValue64		; offset: $34 (52)
+sizeof					 EQU *					; size:   $3C (60)
+						ENDR
+
+kQTSPushDataParamsVersion1		EQU		1
+
+kQTSPushDataFlag_SampleTimeIsValid EQU	$00000001
+kQTSPushDataFlag_DurationIsValid EQU	$00000002
+QTSPushDataParams		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+sampleDescription		 ds.l	1				; offset: $8 (8)		;  caller owns the handle 
+sampleDescSeed			 ds.l	1				; offset: $C (12)
+sampleTime				 ds		TimeValue64		; offset: $10 (16)		;  also set flag if you set this 
+duration				 ds		TimeValue64		; offset: $18 (24)		;  also set flag if you set this 
+dataLength				 ds.l	1				; offset: $20 (32)
+dataPtr					 ds.l	1				; offset: $24 (36)		;  this does not have to be a real macintosh Ptr 
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+
+kQTSSourcerCallbackProcParamsVersion1 EQU 1
+
+QTSSourcerCallbackProcParams RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+proc					 ds.l	1				; offset: $8 (8)
+refCon					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  track sourcer callback selectors
+
+kQTSSourcerCallback_Done		EQU		'done'				; QTSSourcerDoneParams* 
+
+;  push data sourcer callback selectors
+
+kQTSPushDataSourcerCallback_HasCharacteristic EQU $050D		; QTSPushDataHasCharacteristicParams* 
+kQTSPushDataSourcerCallback_SetInfo EQU	$0507				; QTSPushDataInfoParams* 
+kQTSPushDataSourcerCallback_GetInfo EQU	$0508				; QTSPushDataInfoParams* 
+QTSPushDataHasCharacteristicParams RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+characteristic			 ds.l	1				; offset: $8 (8)
+returnedHasIt			 ds.b	1				; offset: $C (12)
+reserved				 ds.b	3				; offset: $D (13)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+QTSPushDataInfoParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+selector				 ds.l	1				; offset: $8 (8)
+ioParams				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+kQTSSourcerDoneParamsVersion1	EQU		1
+QTSSourcerDoneParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+sourcer					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+; -----------------------------------------
+;    Stream Sourcer Selectors
+;-----------------------------------------
+
+
+kQTSSourcerInitializeSelect		EQU		$0500
+kQTSSourcerSetEnableSelect		EQU		$0503
+kQTSSourcerGetEnableSelect		EQU		$0504
+kQTSSourcerSetInfoSelect		EQU		$0507
+kQTSSourcerGetInfoSelect		EQU		$0508
+kQTSSourcerSetTimeScaleSelect	EQU		$050E
+kQTSSourcerGetTimeScaleSelect	EQU		$050F
+kQTSSourcerIdleSelect			EQU		$0516
+; -----------------------------------------
+;    Stream Sourcer Prototypes
+;-----------------------------------------
+
+
+; *  QTSSourcerInitialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; 
+
+;
+; pascal ComponentResult QTSSourcerInitialize(QTSSourcer inSourcer, const QTSSourcerInitParams *inInitParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerInitialize
+			move.l              #$00040500,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerInitialize
+	ENDIF
+
+
+; *  QTSSourcerIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerIdle(QTSSourcer inSourcer, const TimeValue64 *inTime, SInt32 inFlags, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerIdle
+			move.l              #$000C0516,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerIdle
+	ENDIF
+
+
+; *  QTSSourcerSetEnable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerSetEnable(QTSSourcer inSourcer, Boolean inEnableMode, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerSetEnable
+			move.l              #$00060503,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerSetEnable
+	ENDIF
+
+
+; *  QTSSourcerGetEnable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerGetEnable(QTSSourcer inSourcer, Boolean *outEnableMode, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerGetEnable
+			move.l              #$00080504,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerGetEnable
+	ENDIF
+
+
+; *  QTSSourcerSetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerSetTimeScale(QTSSourcer inSourcer, TimeScale inTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerSetTimeScale
+			move.l              #$0004050E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerSetTimeScale
+	ENDIF
+
+
+; *  QTSSourcerGetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerGetTimeScale(QTSSourcer inSourcer, TimeScale *outTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerGetTimeScale
+			move.l              #$0004050F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerGetTimeScale
+	ENDIF
+
+
+; *  QTSSourcerSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerSetInfo(QTSSourcer inSourcer, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerSetInfo
+			move.l              #$00080507,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerSetInfo
+	ENDIF
+
+
+; *  QTSSourcerGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult QTSSourcerGetInfo(QTSSourcer inSourcer, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTSSourcerGetInfo
+			move.l              #$00080508,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSourcerGetInfo
+	ENDIF
+
+
+; ============================================================================
+;        Stream Handler
+;============================================================================
+
+
+; 
+;    Server edits are only valid for the current chunk
+;
+
+SHServerEditParameters	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+editRate				 ds.l	1				; offset: $4 (4)
+dataStartTime_mediaAxis	 ds		TimeValue64		; offset: $8 (8)
+dataEndTime_mediaAxis	 ds		TimeValue64		; offset: $10 (16)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+kSHNoChunkDispatchFlags			EQU		0
+kSHChunkFlagSyncSample			EQU		$04
+kSHChunkFlagDataLoss			EQU		$10
+SHChunkRecord			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+reserved1				 ds.l	1				; offset: $4 (4)
+flags					 ds.l	1				; offset: $8 (8)
+dataSize				 ds.l	1				; offset: $C (12)
+dataPtr					 ds.l	1				; offset: $10 (16)
+reserved2				 ds.l	1				; offset: $14 (20)
+reserved3				 ds.l	1				; offset: $18 (24)
+presentationTime		 ds		TimeValue64		; offset: $1C (28)
+reserved4				 ds.l	1				; offset: $24 (36)
+reserved5				 ds.l	1				; offset: $28 (40)
+serverEditParameters	 ds.l	1				; offset: $2C (44)
+reserved6				 ds.l	1				; offset: $30 (48)
+reserved7				 ds.l	1				; offset: $34 (52)
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+
+; ============================================================================
+;        RTP Components
+;============================================================================
+
+; typedef UInt32 						RTPSSRC
+
+
+kRTPInvalidSSRC					EQU		0
+
+;  RTP standard content encodings for audio 
+
+kRTPPayload_PCMU				EQU		0					; 8kHz PCM mu-law mono 
+kRTPPayload_1016				EQU		1					; 8kHz CELP (Fed Std 1016) mono 
+kRTPPayload_G721				EQU		2					; 8kHz G.721 ADPCM mono 
+kRTPPayload_GSM					EQU		3					; 8kHz GSM mono 
+kRTPPayload_G723				EQU		4					; 8kHz G.723 ADPCM mono 
+kRTPPayload_DVI_8				EQU		5					; 8kHz Intel DVI ADPCM mono 
+kRTPPayload_DVI_16				EQU		6					; 16kHz Intel DVI ADPCM mono 
+kRTPPayload_LPC					EQU		7					; 8kHz LPC 
+kRTPPayload_PCMA				EQU		8					; 8kHz PCM a-law mono 
+kRTPPayload_L16_44_2			EQU		10					; 44.1kHz 16-bit linear stereo 
+kRTPPayload_L16_44_1			EQU		11					; 44.1kHz 16-bit linear mono 
+kRTPPayload_PureVoice			EQU		12					; 8kHz PureVoice mono (QCELP) 
+kRTPPayload_MPEGAUDIO			EQU		14					; MPEG I and II audio 
+kRTPPayload_DVI_11				EQU		16					; 11kHz Intel DVI ADPCM mono 
+kRTPPayload_DVI_22				EQU		17					; 22kHz Intel DVI ADPCM mono 
+;  RTP standard content encodings for video 
+
+kRTPPayload_CELLB				EQU		25					; Sun CellB 
+kRTPPayload_JPEG				EQU		26					; JPEG 
+kRTPPayload_CUSEEME				EQU		27					; Cornell CU-SeeMe 
+kRTPPayload_NV					EQU		28					; Xerox PARC nv 
+kRTPPayload_PICWIN				EQU		29					; BBN Picture Window 
+kRTPPayload_CPV					EQU		30					; Bolter CPV 
+kRTPPayload_H261				EQU		31					; CCITT H.261 
+kRTPPayload_MPEGVIDEO			EQU		32					; MPEG I and II video 
+kRTPPayload_H263				EQU		34					; CCITT H.263 
+;  Other RTP standard content encodings 
+
+kRTPPayload_MPEG2T				EQU		33					; MPEG 2 Transport 
+;  Dynamic encodings 
+
+kRTPPayload_FirstDynamic		EQU		96
+kRTPPayload_LastDynamic			EQU		127
+kRTPPayload_Unknown				EQU		$FF
+
+
+; 
+;-----------------------------------------
+;    RTP Info selectors
+;-----------------------------------------
+;
+
+;  ----- these are get and set ----- 
+
+kRTPInfo_SSRC					EQU		'ssrc'				; UInt32* 
+kRTPInfo_NextSeqNum				EQU		'rnsn'				; UInt16* 
+; -----------------------------------------
+;    RTP Statistics
+;-----------------------------------------
+
+
+kRTPTotalReceivedPktsStat		EQU		'trcp'
+kRTPTotalLostPktsStat			EQU		'tlsp'
+kRTPTotalProcessedPktsStat		EQU		'tprp'
+kRTPTotalDroppedPktsStat		EQU		'tdrp'
+kRTPBadHeaderDroppedPktsStat	EQU		'bhdp'
+kRTPOurHeaderDroppedPktsStat	EQU		'ohdp'
+kRTPNotReceivingSenderDroppedPktsStat EQU 'nsdp'
+kRTPNotProcessingDroppedPktsStat EQU	'npdp'
+kRTPBadSeqDroppedPktsStat		EQU		'bsdp'
+kRTPArriveTooLatePktsStat		EQU		'artl'
+kRTPWaitForSeqDroppedPktsStat	EQU		'wsdp'
+kRTPBadStateDroppedPktsStat		EQU		'stdp'
+kRTPBadPayloadDroppedPktsStat	EQU		'bpdp'
+kRTPNoTimeScaleDroppedPktsStat	EQU		'ntdp'
+kRTPDupSeqNumDroppedPktsStat	EQU		'dsdp'
+kRTPLostPktsPercentStat			EQU		'lspp'
+kRTPDroppedPktsPercentStat		EQU		'dppp'
+kRTPTotalUnprocessedPktsPercentStat EQU	'tupp'
+kRTPRTCPDataRateStat			EQU		'rrcd'
+kRTPPayloadIDStat				EQU		'rpid'
+kRTPPayloadNameStat				EQU		'rpnm'
+kRTPNumPktsInQueueStat			EQU		'rnpq'
+kRTPTotalPktsInQueueStat		EQU		'rtpq'
+kRTPTotalOutOfOrderPktsStat		EQU		'rtoo'
+kRTPRetransmissionStat			EQU		'rrtx'
+
+; -----------------------------------------
+;    Payload Info
+;-----------------------------------------
+
+
+kRTPPayloadSpeedTag				EQU		'sped'				; 0-255, 255 is fastest
+kRTPPayloadLossRecoveryTag		EQU		'loss'				; 0-255, 0 can't handle any loss, 128 can handle 50% packet loss
+RTPPayloadCharacteristic RECORD 0
+tag						 ds.l	1				; offset: $0 (0)
+value					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;    pass RTPPayloadSortRequest to QTSFindMediaPacketizer or QTSFindMediaPacketizerForTrack.
+;    define the characteristics to sort by. tag is key to sort on. value is positive for ascending
+;    sort (low value first), negative for descending sort (high value first).
+;
+
+RTPPayloadSortRequest	RECORD 0
+characteristicCount		 ds.l	1				; offset: $0 (0)
+characteristic			 ds		RTPPayloadCharacteristic ; offset: $4 (4) <-- really an array of length one ;  tag is key to sort on, value is + for ascending, - for descending
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct RTPPayloadSortRequest * RTPPayloadSortRequestPtr
+
+;  flags for RTPPayloadInfo 
+
+kRTPPayloadTypeStaticFlag		EQU		$00000001
+kRTPPayloadTypeDynamicFlag		EQU		$00000002
+RTPPayloadInfo			RECORD 0
+payloadFlags			 ds.l	1				; offset: $0 (0)
+payloadID				 ds.b	1				; offset: $4 (4)
+unused					 ds.b	3				; offset: $5 (5)
+payloadName				 ds.b	1				; offset: $8 (8) <-- really an array of length one
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct RTPPayloadInfo *		RTPPayloadInfoPtr
+
+; typedef RTPPayloadInfoPtr *			RTPPayloadInfoHandle
+
+; ============================================================================
+;        RTP Reassembler
+;============================================================================
+
+; typedef ComponentInstance 			RTPReassembler
+
+
+kRTPReassemblerType				EQU		'rtpr'
+
+kRTPBaseReassemblerType			EQU		'gnrc'
+kRTP261ReassemblerType			EQU		'h261'
+kRTP263ReassemblerType			EQU		'h263'
+kRTP263PlusReassemblerType		EQU		'263+'
+kRTPAudioReassemblerType		EQU		'soun'
+kRTPQTReassemblerType			EQU		'qtim'
+kRTPPureVoiceReassemblerType	EQU		'Qclp'
+kRTPMp3ReassemblerType			EQU		'mp3 '
+kRTPJPEGReassemblerType			EQU		'jpeg'
+kRTPQDesign2ReassemblerType		EQU		'QDM2'
+kRTPSorensonReassemblerType		EQU		'SVQ1'
+RTPRssmInitParams		RECORD 0
+ssrc					 ds.l	1				; offset: $0 (0)
+payloadType				 ds.b	1				; offset: $4 (4)
+pad						 ds.b	3				; offset: $5 (5)
+timeBase				 ds.l	1				; offset: $8 (8)
+timeScale				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+RTPRssmPacket			RECORD 0
+next					 ds.l	1				; offset: $0 (0)
+prev					 ds.l	1				; offset: $4 (4)
+streamBuffer			 ds.l	1				; offset: $8 (8)
+paramsFilledIn			 ds.b	1				; offset: $C (12)
+pad						 ds.b	1				; offset: $D (13) <-- really an array of length one
+sequenceNum				 ds.w	1				; offset: $E (14)
+transportHeaderLength	 ds.l	1				; offset: $10 (16)		;  filled in by base
+payloadHeaderLength		 ds.l	1				; offset: $14 (20)		;  derived adjusts this 
+dataLength				 ds.l	1				; offset: $18 (24)
+serverEditParams		 ds		SHServerEditParameters ; offset: $1C (28)
+timeStamp				 ds		TimeValue64		; offset: $34 (52)		;  lower 32 bits is original rtp timestamp
+chunkFlags				 ds.l	1				; offset: $3C (60)		;  these are or'd together
+flags					 ds.l	1				; offset: $40 (64)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+;  flags for RTPRssmPacket struct
+
+kRTPRssmPacketHasMarkerBitSet	EQU		$00000001
+kRTPRssmPacketHasServerEditFlag	EQU		$00010000
+;  flags for RTPRssmSendStreamBufferRange
+
+kRTPRssmCanRefStreamBuffer		EQU		$00000001
+;  flags for RTPRssmSendPacketList
+
+kRTPRssmLostSomePackets			EQU		$00000001
+;  flags for RTPRssmSetFlags
+
+kRTPRssmEveryPacketAChunkFlag	EQU		$00000001
+kRTPRssmQueueAndUseMarkerBitFlag EQU	$00000002
+kRTPRssmTrackLostPacketsFlag	EQU		$00010000
+kRTPRssmNoReorderingRequiredFlag EQU	$00020000
+
+RTPSendStreamBufferRangeParams RECORD 0
+streamBuffer			 ds.l	1				; offset: $0 (0)
+presentationTime		 ds		TimeValue64		; offset: $4 (4)
+chunkStartPosition		 ds.l	1				; offset: $C (12)
+numDataBytes			 ds.l	1				; offset: $10 (16)
+chunkFlags				 ds.l	1				; offset: $14 (20)
+flags					 ds.l	1				; offset: $18 (24)
+serverEditParams		 ds.l	1				; offset: $1C (28)		;  NULL if no edit
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  characteristics
+
+kRTPCharacteristic_RequiresOrderedPackets EQU 'rrop'
+kRTPCharacteristic_TimeStampsNotMonoIncreasing EQU 'tsmi'
+
+
+kRTPReassemblerInfoResType		EQU		'rsmi'
+RTPReassemblerInfo		RECORD 0
+characteristicCount		 ds.l	1				; offset: $0 (0)
+characteristic			 ds		RTPPayloadCharacteristic ; offset: $4 (4) <-- really an array of length one
+;  after the last characteristic, the payload name (defined by the MediaPacketizerPayloadInfo
+;  structure) is present. 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct RTPReassemblerInfo *	RTPReassemblerInfoPtr
+
+; typedef RTPReassemblerInfoPtr *		RTPReassemblerInfoHandle
+
+;  RTPReassemblerInfoElement structs are padded to 32 bits 
+
+kRTPReassemblerInfoPadUpToBytes	EQU		4
+
+
+; *  QTSFindReassemblerForPayloadID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindReassemblerForPayloadID(UInt8 inPayloadID, RTPPayloadSortRequest *inSortInfo, QTAtomContainer *outReassemblerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindReassemblerForPayloadID
+	ENDIF
+
+
+; *  QTSFindReassemblerForPayloadName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindReassemblerForPayloadName(const char *inPayloadName, RTPPayloadSortRequest *inSortInfo, QTAtomContainer *outReassemblerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindReassemblerForPayloadName
+	ENDIF
+
+; -----------------------------------------
+;    RTP Reassembler Selectors
+;-----------------------------------------
+
+
+kRTPRssmSetCapabilitiesSelect	EQU		$0100
+kRTPRssmGetCapabilitiesSelect	EQU		$0101
+kRTPRssmSetPayloadHeaderLengthSelect EQU $0102
+kRTPRssmGetPayloadHeaderLengthSelect EQU $0103
+kRTPRssmSetTimeScaleSelect		EQU		$0104
+kRTPRssmGetTimeScaleSelect		EQU		$0105
+kRTPRssmNewStreamHandlerSelect	EQU		$0106
+kRTPRssmSetStreamHandlerSelect	EQU		$0107
+kRTPRssmGetStreamHandlerSelect	EQU		$0108
+kRTPRssmSendStreamHandlerChangedSelect EQU $0109
+kRTPRssmSetSampleDescriptionSelect EQU	$010A
+kRTPRssmGetChunkAndIncrRefCountSelect EQU $010D
+kRTPRssmSendChunkAndDecrRefCountSelect EQU $010E
+kRTPRssmSendLostChunkSelect		EQU		$010F
+kRTPRssmSendStreamBufferRangeSelect EQU	$0110
+kRTPRssmClearCachedPackets		EQU		$0111
+kRTPRssmFillPacketListParamsSelect EQU	$0113
+kRTPRssmReleasePacketListSelect	EQU		$0114
+kRTPRssmIncrChunkRefCountSelect	EQU		$0115
+kRTPRssmDecrChunkRefCountSelect	EQU		$0116
+kRTPRssmInitializeSelect		EQU		$0500
+kRTPRssmHandleNewPacketSelect	EQU		$0501
+kRTPRssmComputeChunkSizeSelect	EQU		$0502
+kRTPRssmAdjustPacketParamsSelect EQU	$0503
+kRTPRssmCopyDataToChunkSelect	EQU		$0504
+kRTPRssmSendPacketListSelect	EQU		$0505
+kRTPRssmGetTimeScaleFromPacketSelect EQU $0506
+kRTPRssmSetInfoSelect			EQU		$0509
+kRTPRssmGetInfoSelect			EQU		$050A
+kRTPRssmHasCharacteristicSelect	EQU		$050B
+kRTPRssmResetSelect				EQU		$050C
+; -----------------------------------------
+;    RTP Reassembler functions - base to derived
+;-----------------------------------------
+
+
+
+; *  RTPRssmInitialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmInitialize(RTPReassembler rtpr, RTPRssmInitParams *inInitParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmInitialize
+			move.l              #$00040500,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmInitialize
+	ENDIF
+
+
+; *  RTPRssmHandleNewPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmHandleNewPacket(RTPReassembler rtpr, QTSStreamBuffer *inStreamBuffer, SInt32 inNumWraparounds)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmHandleNewPacket
+			move.l              #$00080501,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmHandleNewPacket
+	ENDIF
+
+
+; *  RTPRssmComputeChunkSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmComputeChunkSize(RTPReassembler rtpr, RTPRssmPacket *inPacketListHead, SInt32 inFlags, UInt32 *outChunkDataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmComputeChunkSize
+			move.l              #$000C0502,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmComputeChunkSize
+	ENDIF
+
+
+; *  RTPRssmAdjustPacketParams()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmAdjustPacketParams(RTPReassembler rtpr, RTPRssmPacket *inPacket, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmAdjustPacketParams
+			move.l              #$00080503,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmAdjustPacketParams
+	ENDIF
+
+
+; *  RTPRssmCopyDataToChunk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmCopyDataToChunk(RTPReassembler rtpr, RTPRssmPacket *inPacketListHead, UInt32 inMaxChunkDataSize, SHChunkRecord *inChunk, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmCopyDataToChunk
+			move.l              #$00100504,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmCopyDataToChunk
+	ENDIF
+
+
+; *  RTPRssmSendPacketList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSendPacketList(RTPReassembler rtpr, RTPRssmPacket *inPacketListHead, const TimeValue64 *inLastChunkPresentationTime, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSendPacketList
+			move.l              #$000C0505,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSendPacketList
+	ENDIF
+
+
+; *  RTPRssmGetTimeScaleFromPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetTimeScaleFromPacket(RTPReassembler rtpr, QTSStreamBuffer *inStreamBuffer, TimeScale *outTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetTimeScaleFromPacket
+			move.l              #$00080506,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetTimeScaleFromPacket
+	ENDIF
+
+
+; *  RTPRssmSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetInfo(RTPReassembler rtpr, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetInfo
+			move.l              #$00080509,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetInfo
+	ENDIF
+
+
+; *  RTPRssmGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetInfo(RTPReassembler rtpr, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetInfo
+			move.l              #$0008050A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetInfo
+	ENDIF
+
+
+; *  RTPRssmHasCharacteristic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmHasCharacteristic(RTPReassembler rtpr, OSType inCharacteristic, Boolean *outHasIt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmHasCharacteristic
+			move.l              #$0008050B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmHasCharacteristic
+	ENDIF
+
+
+; *  RTPRssmReset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmReset(RTPReassembler rtpr, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmReset
+			move.l              #$0004050C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmReset
+	ENDIF
+
+; -----------------------------------------
+;    RTP Reassembler functions - derived to base
+;-----------------------------------------
+
+;  ----- setup
+
+; *  RTPRssmSetCapabilities()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetCapabilities(RTPReassembler rtpr, SInt32 inFlags, SInt32 inFlagsMask)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetCapabilities
+			move.l              #$00080100,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetCapabilities
+	ENDIF
+
+
+; *  RTPRssmGetCapabilities()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetCapabilities(RTPReassembler rtpr, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetCapabilities
+			move.l              #$00040101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetCapabilities
+	ENDIF
+
+
+; *  RTPRssmSetPayloadHeaderLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetPayloadHeaderLength(RTPReassembler rtpr, UInt32 inPayloadHeaderLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetPayloadHeaderLength
+			move.l              #$00040102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetPayloadHeaderLength
+	ENDIF
+
+
+; *  RTPRssmGetPayloadHeaderLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetPayloadHeaderLength(RTPReassembler rtpr, UInt32 *outPayloadHeaderLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetPayloadHeaderLength
+			move.l              #$00040103,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetPayloadHeaderLength
+	ENDIF
+
+
+; *  RTPRssmSetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetTimeScale(RTPReassembler rtpr, TimeScale inSHTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetTimeScale
+			move.l              #$00040104,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetTimeScale
+	ENDIF
+
+
+; *  RTPRssmGetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetTimeScale(RTPReassembler rtpr, TimeScale *outSHTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetTimeScale
+			move.l              #$00040105,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetTimeScale
+	ENDIF
+
+
+; *  RTPRssmNewStreamHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmNewStreamHandler(RTPReassembler rtpr, OSType inSHType, SampleDescriptionHandle inSampleDescription, TimeScale inSHTimeScale, ComponentInstance *outHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmNewStreamHandler
+			move.l              #$00100106,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmNewStreamHandler
+	ENDIF
+
+
+; *  RTPRssmSetStreamHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetStreamHandler(RTPReassembler rtpr, ComponentInstance inStreamHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetStreamHandler
+			move.l              #$00040107,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetStreamHandler
+	ENDIF
+
+
+; *  RTPRssmGetStreamHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetStreamHandler(RTPReassembler rtpr, ComponentInstance *outStreamHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetStreamHandler
+			move.l              #$00040108,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetStreamHandler
+	ENDIF
+
+
+
+; *  RTPRssmSendStreamHandlerChanged()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSendStreamHandlerChanged(RTPReassembler rtpr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSendStreamHandlerChanged
+			move.l              #$00000109,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSendStreamHandlerChanged
+	ENDIF
+
+
+; *  RTPRssmSetSampleDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSetSampleDescription(RTPReassembler rtpr, SampleDescriptionHandle inSampleDescription)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSetSampleDescription
+			move.l              #$0004010A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSetSampleDescription
+	ENDIF
+
+;  ----- manually sending chunks
+
+; *  RTPRssmGetChunkAndIncrRefCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmGetChunkAndIncrRefCount(RTPReassembler rtpr, UInt32 inChunkDataSize, const TimeValue64 *inChunkPresentationTime, SHChunkRecord **outChunk)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmGetChunkAndIncrRefCount
+			move.l              #$000C010D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmGetChunkAndIncrRefCount
+	ENDIF
+
+
+; *  RTPRssmSendChunkAndDecrRefCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSendChunkAndDecrRefCount(RTPReassembler rtpr, SHChunkRecord *inChunk, const SHServerEditParameters *inServerEdit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSendChunkAndDecrRefCount
+			move.l              #$0008010E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSendChunkAndDecrRefCount
+	ENDIF
+
+
+; *  RTPRssmSendLostChunk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSendLostChunk(RTPReassembler rtpr, const TimeValue64 *inChunkPresentationTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSendLostChunk
+			move.l              #$0004010F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSendLostChunk
+	ENDIF
+
+
+; *  RTPRssmSendStreamBufferRange()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmSendStreamBufferRange(RTPReassembler rtpr, RTPSendStreamBufferRangeParams *inParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmSendStreamBufferRange
+			move.l              #$00040110,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmSendStreamBufferRange
+	ENDIF
+
+
+; *  RTPRssmClearCachedPackets()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmClearCachedPackets(RTPReassembler rtpr, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmClearCachedPackets
+			move.l              #$00040111,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmClearCachedPackets
+	ENDIF
+
+
+; *  RTPRssmFillPacketListParams()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmFillPacketListParams(RTPReassembler rtpr, RTPRssmPacket *inPacketListHead, SInt32 inNumWraparounds, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmFillPacketListParams
+			move.l              #$000C0113,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmFillPacketListParams
+	ENDIF
+
+
+; *  RTPRssmReleasePacketList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmReleasePacketList(RTPReassembler rtpr, RTPRssmPacket *inPacketListHead)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmReleasePacketList
+			move.l              #$00040114,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmReleasePacketList
+	ENDIF
+
+
+; *  RTPRssmIncrChunkRefCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmIncrChunkRefCount(RTPReassembler rtpr, SHChunkRecord *inChunk)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmIncrChunkRefCount
+			move.l              #$00040115,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmIncrChunkRefCount
+	ENDIF
+
+
+; *  RTPRssmDecrChunkRefCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPRssmDecrChunkRefCount(RTPReassembler rtpr, SHChunkRecord *inChunk)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPRssmDecrChunkRefCount
+			move.l              #$00040116,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPRssmDecrChunkRefCount
+	ENDIF
+
+; ============================================================================
+;        RTP Media Packetizer
+;============================================================================
+
+
+kRTPMediaPacketizerType			EQU		'rtpm'
+; typedef ComponentInstance 			RTPMediaPacketizer
+
+
+kRTPBaseMediaPacketizerType		EQU		'gnrc'
+kRTP261MediaPacketizerType		EQU		'h261'
+kRTP263PlusMediaPacketizerType	EQU		'263+'
+kRTPAudioMediaPacketizerType	EQU		'soun'
+kRTPQTMediaPacketizerType		EQU		'qtim'
+kRTPPureVoiceMediaPacketizerType EQU	'Qclp'
+kRTPMp3MediaPacketizerType		EQU		'mp3 '
+kRTPJPEGMediaPacketizerType		EQU		'jpeg'
+kRTPQDesign2MediaPacketizerType	EQU		'QDM2'
+kRTPSorensonMediaPacketizerType	EQU		'SVQ1'
+; typedef UInt32 						RTPMPSampleRef
+
+
+kMediaPacketizerCanPackEditRate	EQU		$01
+kMediaPacketizerCanPackLayer	EQU		$02
+kMediaPacketizerCanPackVolume	EQU		$04
+kMediaPacketizerCanPackBalance	EQU		$08
+kMediaPacketizerCanPackGraphicsMode EQU	$10
+kMediaPacketizerCanPackEmptyEdit EQU	$20
+
+MediaPacketizerRequirements RECORD 0
+mediaType				 ds.l	1				; offset: $0 (0)		;  media type supported (0 for all)
+dataFormat				 ds.l	1				; offset: $4 (4)		;  data format (e.g., compression) supported (0 for all)
+capabilityFlags			 ds.l	1				; offset: $8 (8)		;  ability to handle non-standard track characteristics
+canPackMatrixType		 ds.b	1				; offset: $C (12)		;  can pack any matrix type up to this (identityMatrixType for identity only)
+pad						 ds.b	3				; offset: $D (13)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct MediaPacketizerRequirements * MediaPacketizerRequirementsPtr
+
+MediaPacketizerInfo		RECORD 0
+mediaType				 ds.l	1				; offset: $0 (0)		;  media type supported (0 for all)
+dataFormat				 ds.l	1				; offset: $4 (4)		;  data format (e.g., compression) supported (0 for all)
+vendor					 ds.l	1				; offset: $8 (8)		;  manufacturer of this packetizer (e.g., 'appl' for Apple)
+capabilityFlags			 ds.l	1				; offset: $C (12)		;  ability to handle non-standard track characteristics
+canPackMatrixType		 ds.b	1				; offset: $10 (16)		;  can pack any matrix type up to this (identityMatrixType for identity only)
+pad						 ds.b	3				; offset: $11 (17)
+characteristicCount		 ds.l	1				; offset: $14 (20)
+characteristic			 ds		RTPPayloadCharacteristic ; offset: $18 (24) <-- really an array of length one
+;  after the last characteristic, the payload name (defined by the RTPPayloadInfo
+;  structure) is present. 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct MediaPacketizerInfo *	MediaPacketizerInfoPtr
+
+; typedef MediaPacketizerInfoPtr *		MediaPacketizerInfoHandle
+
+;  MediaPacketizerInfo structs are padded to 32 bits 
+
+kMediaPacketizerInfoPadUpToBytes EQU	4
+
+; *  QTSFindMediaPacketizer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindMediaPacketizer(MediaPacketizerRequirementsPtr inPacketizerinfo, SampleDescriptionHandle inSampleDescription, RTPPayloadSortRequestPtr inSortInfo, QTAtomContainer *outPacketizerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindMediaPacketizer
+	ENDIF
+
+
+; *  QTSFindMediaPacketizerForTrack()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindMediaPacketizerForTrack(Track inTrack, long inSampleDescriptionIndex, RTPPayloadSortRequestPtr inSortInfo, QTAtomContainer *outPacketizerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindMediaPacketizerForTrack
+	ENDIF
+
+
+; *  QTSFindMediaPacketizerForPayloadID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindMediaPacketizerForPayloadID(long payloadID, RTPPayloadSortRequestPtr inSortInfo, QTAtomContainer *outPacketizerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindMediaPacketizerForPayloadID
+	ENDIF
+
+
+; *  QTSFindMediaPacketizerForPayloadName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSFindMediaPacketizerForPayloadName(const char *payloadName, RTPPayloadSortRequestPtr inSortInfo, QTAtomContainer *outPacketizerList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFindMediaPacketizerForPayloadName
+	ENDIF
+
+;  flags for RTPMPInitialize
+
+kRTPMPRealtimeModeFlag			EQU		$00000001
+;  flags for RTPMPSampleDataParams
+
+kRTPMPSyncSampleFlag			EQU		$00000001
+kRTPMPRespectDurationFlag		EQU		$00000002
+RTPMPSampleDataParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+timeStamp				 ds.l	1				; offset: $4 (4)
+duration				 ds.l	1				; offset: $8 (8)		;  0 = unknown duration
+playOffset				 ds.l	1				; offset: $C (12)
+playRate				 ds.l	1				; offset: $10 (16)
+flags					 ds.l	1				; offset: $14 (20)
+sampleDescSeed			 ds.l	1				; offset: $18 (24)
+sampleDescription		 ds.l	1				; offset: $1C (28)
+sampleRef				 ds.l	1				; offset: $20 (32)
+dataLength				 ds.l	1				; offset: $24 (36)
+data					 ds.l	1				; offset: $28 (40)
+releaseProc				 ds.l	1				; offset: $2C (44)
+refCon					 ds.l	1				; offset: $30 (48)
+sizeof					 EQU *					; size:   $34 (52)
+						ENDR
+;  out flags for idle, RTPMPSetSampleData, and RTPMPFlush
+
+kRTPMPStillProcessingData		EQU		$00000001			; not done with data you've got
+RTPMPPayloadTypeParams	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+payloadNumber			 ds.l	1				; offset: $4 (4)
+nameLength				 ds.w	1				; offset: $8 (8)		;  in: size of payloadName buffer (counting null terminator) -- this will be reset to needed length and paramErr returned if too small 
+payloadName				 ds.l	1				; offset: $A (10)		;  caller must provide buffer 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; -----------------------------------------
+;    RTP Media Packetizer Info selectors
+;-----------------------------------------
+
+;  info selectors - get only 
+
+kRTPMPPayloadTypeInfo			EQU		'rtpp'				; RTPMPPayloadTypeParams* 
+kRTPMPRTPTimeScaleInfo			EQU		'rtpt'				; TimeScale* 
+kRTPMPRequiredSampleDescriptionInfo EQU	'sdsc'				; SampleDescriptionHandle* 
+kRTPMPMinPayloadSize			EQU		'mins'				; UInt32* in bytes, does not include rtp header; default is 0 
+kRTPMPMinPacketDuration			EQU		'mind'				; UInt3* in milliseconds; default is no min required 
+kRTPMPSuggestedRepeatPktCountInfo EQU	'srpc'				; UInt32* 
+kRTPMPSuggestedRepeatPktSpacingInfo EQU	'srps'				; UInt32* in milliseconds 
+kRTPMPMaxPartialSampleSizeInfo	EQU		'mpss'				; UInt32* in bytes 
+kRTPMPPreferredBufferDelayInfo	EQU		'prbd'				; UInt32* in milliseconds 
+kRTPMPPayloadNameInfo			EQU		'name'				; StringPtr 
+; -----------------------------------------
+;    RTP Media Packetizer Characteristics
+;-----------------------------------------
+
+;  also supports relevant ones in Movies.h and QTSToolbox.h 
+
+kRTPMPNoSampleDataRequiredCharacteristic EQU 'nsdr'
+kRTPMPHasUserSettingsDialogCharacteristic EQU 'sdlg'
+kRTPMPPrefersReliableTransportCharacteristic EQU 'rely'
+kRTPMPRequiresOutOfBandDimensionsCharacteristic EQU 'robd'
+kRTPMPReadsPartialSamplesCharacteristic EQU 'rpsp'
+; -----------------------------------------
+;    RTP Media Packetizer selectors
+;-----------------------------------------
+
+
+kRTPMPInitializeSelect			EQU		$0500
+kRTPMPPreflightMediaSelect		EQU		$0501
+kRTPMPIdleSelect				EQU		$0502
+kRTPMPSetSampleDataSelect		EQU		$0503
+kRTPMPFlushSelect				EQU		$0504
+kRTPMPResetSelect				EQU		$0505
+kRTPMPSetInfoSelect				EQU		$0506
+kRTPMPGetInfoSelect				EQU		$0507
+kRTPMPSetTimeScaleSelect		EQU		$0508
+kRTPMPGetTimeScaleSelect		EQU		$0509
+kRTPMPSetTimeBaseSelect			EQU		$050A
+kRTPMPGetTimeBaseSelect			EQU		$050B
+kRTPMPHasCharacteristicSelect	EQU		$050C
+kRTPMPSetPacketBuilderSelect	EQU		$050E
+kRTPMPGetPacketBuilderSelect	EQU		$050F
+kRTPMPSetMediaTypeSelect		EQU		$0510
+kRTPMPGetMediaTypeSelect		EQU		$0511
+kRTPMPSetMaxPacketSizeSelect	EQU		$0512
+kRTPMPGetMaxPacketSizeSelect	EQU		$0513
+kRTPMPSetMaxPacketDurationSelect EQU	$0514
+kRTPMPGetMaxPacketDurationSelect EQU	$0515				; for export component and apps who want to
+															; access dialogs for Media-specific settings
+															; (such as Pure Voice interleave factor)
+kRTPMPDoUserDialogSelect		EQU		$0516
+kRTPMPSetSettingsFromAtomContainerAtAtomSelect EQU $0517
+kRTPMPGetSettingsIntoAtomContainerAtAtomSelect EQU $0518
+kRTPMPGetSettingsAsTextSelect	EQU		$0519
+kRTPMPGetSettingsSelect			EQU		$051A
+kRTPMPSetSettingsSelect			EQU		$051B
+; -----------------------------------------
+;    RTP Media Packetizer functions
+;-----------------------------------------
+
+
+
+; *  RTPMPInitialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPInitialize(RTPMediaPacketizer rtpm, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPInitialize
+			move.l              #$00040500,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPInitialize
+	ENDIF
+
+;  return noErr if you can handle this media 
+
+; *  RTPMPPreflightMedia()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPPreflightMedia(RTPMediaPacketizer rtpm, OSType inMediaType, SampleDescriptionHandle inSampleDescription)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPPreflightMedia
+			move.l              #$00080501,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPPreflightMedia
+	ENDIF
+
+
+;   do work here if you need to - give up time periodically
+;   if you're doing time consuming operations
+
+
+
+; *  RTPMPIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPIdle(RTPMediaPacketizer rtpm, SInt32 inFlags, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPIdle
+			move.l              #$00080502,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPIdle
+	ENDIF
+
+
+;   caller owns the RTPMPSampleDataParams struct
+;   media Packetizer must copy any fields of the struct it wants to keep
+;   media Packetizer must call release proc when done with the data
+;   you can do the processing work here if it does not take up too
+;   much cpu time - otherwise do it in idle
+
+
+
+; *  RTPMPSetSampleData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetSampleData(RTPMediaPacketizer rtpm, const RTPMPSampleDataParams *inSampleData, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetSampleData
+			move.l              #$00080503,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetSampleData
+	ENDIF
+
+
+;   send everything you have buffered - you will get idles while
+;   you set the kRTPMPStillProcessingData flag here and in idle
+
+
+
+; *  RTPMPFlush()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPFlush(RTPMediaPacketizer rtpm, SInt32 inFlags, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPFlush
+			move.l              #$00080504,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPFlush
+	ENDIF
+
+
+;   dispose of anything buffered and get rid of state
+;   do not send the buffered data (because presumably
+;   there is no connection for you to send on)
+;   state should be the same as if you were just initialized
+
+
+
+; *  RTPMPReset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPReset(RTPMediaPacketizer rtpm, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPReset
+			move.l              #$00040505,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPReset
+	ENDIF
+
+; -----------------------------------------
+;    RTP Media Packetizer get / set functions
+;-----------------------------------------
+
+
+; *  RTPMPSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetInfo(RTPMediaPacketizer rtpm, OSType inSelector, const void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetInfo
+			move.l              #$00080506,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetInfo
+	ENDIF
+
+
+; *  RTPMPGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetInfo(RTPMediaPacketizer rtpm, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetInfo
+			move.l              #$00080507,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetInfo
+	ENDIF
+
+
+; *  RTPMPSetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetTimeScale(RTPMediaPacketizer rtpm, TimeScale inTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetTimeScale
+			move.l              #$00040508,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetTimeScale
+	ENDIF
+
+
+; *  RTPMPGetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetTimeScale(RTPMediaPacketizer rtpm, TimeScale *outTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetTimeScale
+			move.l              #$00040509,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetTimeScale
+	ENDIF
+
+
+; *  RTPMPSetTimeBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetTimeBase(RTPMediaPacketizer rtpm, TimeBase inTimeBase)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetTimeBase
+			move.l              #$0004050A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetTimeBase
+	ENDIF
+
+
+; *  RTPMPGetTimeBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetTimeBase(RTPMediaPacketizer rtpm, TimeBase *outTimeBase)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetTimeBase
+			move.l              #$0004050B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetTimeBase
+	ENDIF
+
+
+; *  RTPMPHasCharacteristic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPHasCharacteristic(RTPMediaPacketizer rtpm, OSType inSelector, Boolean *outHasIt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPHasCharacteristic
+			move.l              #$0008050C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPHasCharacteristic
+	ENDIF
+
+
+; *  RTPMPSetPacketBuilder()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetPacketBuilder(RTPMediaPacketizer rtpm, ComponentInstance inPacketBuilder)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetPacketBuilder
+			move.l              #$0004050E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetPacketBuilder
+	ENDIF
+
+
+; *  RTPMPGetPacketBuilder()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetPacketBuilder(RTPMediaPacketizer rtpm, ComponentInstance *outPacketBuilder)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetPacketBuilder
+			move.l              #$0004050F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetPacketBuilder
+	ENDIF
+
+
+; *  RTPMPSetMediaType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetMediaType(RTPMediaPacketizer rtpm, OSType inMediaType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetMediaType
+			move.l              #$00040510,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetMediaType
+	ENDIF
+
+
+; *  RTPMPGetMediaType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetMediaType(RTPMediaPacketizer rtpm, OSType *outMediaType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetMediaType
+			move.l              #$00040511,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetMediaType
+	ENDIF
+
+;  size is in bytes
+
+; *  RTPMPSetMaxPacketSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetMaxPacketSize(RTPMediaPacketizer rtpm, UInt32 inMaxPacketSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetMaxPacketSize
+			move.l              #$00040512,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetMaxPacketSize
+	ENDIF
+
+
+; *  RTPMPGetMaxPacketSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetMaxPacketSize(RTPMediaPacketizer rtpm, UInt32 *outMaxPacketSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetMaxPacketSize
+			move.l              #$00040513,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetMaxPacketSize
+	ENDIF
+
+;  duration is in milliseconds
+
+; *  RTPMPSetMaxPacketDuration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetMaxPacketDuration(RTPMediaPacketizer rtpm, UInt32 inMaxPacketDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetMaxPacketDuration
+			move.l              #$00040514,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetMaxPacketDuration
+	ENDIF
+
+
+; *  RTPMPGetMaxPacketDuration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetMaxPacketDuration(RTPMediaPacketizer rtpm, UInt32 *outMaxPacketDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetMaxPacketDuration
+			move.l              #$00040515,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetMaxPacketDuration
+	ENDIF
+
+
+; *  RTPMPDoUserDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPDoUserDialog(RTPMediaPacketizer rtpm, ModalFilterUPP inFilterUPP, Boolean *canceled)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPDoUserDialog
+			move.l              #$00080516,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPDoUserDialog
+	ENDIF
+
+
+; *  RTPMPSetSettingsFromAtomContainerAtAtom()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetSettingsFromAtomContainerAtAtom(RTPMediaPacketizer rtpm, QTAtomContainer inContainer, QTAtom inParentAtom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetSettingsFromAtomContainerAtAtom
+			move.l              #$00080517,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetSettingsFromAtomContainerAtAtom
+	ENDIF
+
+
+; *  RTPMPGetSettingsIntoAtomContainerAtAtom()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetSettingsIntoAtomContainerAtAtom(RTPMediaPacketizer rtpm, QTAtomContainer inOutContainer, QTAtom inParentAtom)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetSettingsIntoAtomContainerAtAtom
+			move.l              #$00080518,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetSettingsIntoAtomContainerAtAtom
+	ENDIF
+
+
+; *  RTPMPGetSettingsAsText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetSettingsAsText(RTPMediaPacketizer rtpm, Handle *text)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetSettingsAsText
+			move.l              #$00040519,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetSettingsAsText
+	ENDIF
+
+
+
+; *  RTPMPGetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPGetSettings(RTPMediaPacketizer rtpm, QTAtomContainer *outSettings, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPGetSettings
+			move.l              #$0008051A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPGetSettings
+	ENDIF
+
+
+; *  RTPMPSetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPMPSetSettings(RTPMediaPacketizer rtpm, QTAtomSpecPtr inSettings, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPMPSetSettings
+			move.l              #$0008051B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPMPSetSettings
+	ENDIF
+
+; ============================================================================
+;        RTP Packet Builder
+;============================================================================
+
+
+kRTPPacketBuilderType			EQU		'rtpb'
+; typedef ComponentInstance 			RTPPacketBuilder
+
+
+
+
+
+
+
+;  flags for RTPPBBegin/EndPacket, RTPPBBegin/EndPacketGroup
+
+kRTPPBSetMarkerFlag				EQU		$00000001
+kRTPPBRepeatPacketFlag			EQU		$00000002
+kRTPPBSyncSampleFlag			EQU		$00010000
+kRTPPBBFrameFlag				EQU		$00020000
+kRTPPBDontSendFlag				EQU		$10000000			; when set in EndPacketGroup, will not add group
+
+kRTPPBUnknownPacketMediaDataLength EQU	0
+;  flags for RTPPBGetSampleData
+
+kRTPPBEndOfDataFlag				EQU		$00000001
+
+; -----------------------------------------
+;    RTP Packet Builder selectors
+;-----------------------------------------
+
+
+kRTPPBBeginPacketGroupSelect	EQU		$0500
+kRTPPBEndPacketGroupSelect		EQU		$0501
+kRTPPBBeginPacketSelect			EQU		$0502
+kRTPPBEndPacketSelect			EQU		$0503
+kRTPPBAddPacketLiteralDataSelect EQU	$0504
+kRTPPBAddPacketSampleDataSelect	EQU		$0505
+kRTPPBAddPacketRepeatedDataSelect EQU	$0506
+kRTPPBReleaseRepeatedDataSelect	EQU		$0507
+kRTPPBSetPacketSequenceNumberSelect EQU	$0508
+kRTPPBGetPacketSequenceNumberSelect EQU	$0509
+kRTPPBSetCallbackSelect			EQU		$050A
+kRTPPBGetCallbackSelect			EQU		$050B
+kRTPPBSetInfoSelect				EQU		$050C
+kRTPPBGetInfoSelect				EQU		$050D
+kRTPPBSetPacketTimeStampOffsetSelect EQU $050E
+kRTPPBGetPacketTimeStampOffsetSelect EQU $050F
+kRTPPBAddPacketSampleData64Select EQU	$0510
+kRTPPBGetSampleDataSelect		EQU		$0511
+kRTPPBAddRepeatPacketSelect		EQU		$0512
+; -----------------------------------------
+;    RTP Packet Builder functions
+;-----------------------------------------
+
+
+; *  RTPPBBeginPacketGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBBeginPacketGroup(RTPPacketBuilder rtpb, SInt32 inFlags, UInt32 inTimeStamp, RTPPacketGroupRef *outPacketGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBBeginPacketGroup
+			move.l              #$000C0500,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBBeginPacketGroup
+	ENDIF
+
+
+; *  RTPPBEndPacketGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBEndPacketGroup(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBEndPacketGroup
+			move.l              #$00080501,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBEndPacketGroup
+	ENDIF
+
+
+; *  RTPPBBeginPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBBeginPacket(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, UInt32 inPacketMediaDataLength, RTPPacketRef *outPacket)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBBeginPacket
+			move.l              #$00100502,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBBeginPacket
+	ENDIF
+
+
+; *  RTPPBEndPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBEndPacket(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, UInt32 inTransmissionTimeOffset, UInt32 inDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBEndPacket
+			move.l              #$00140503,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBEndPacket
+	ENDIF
+
+
+;   non-NULL RTPPacketRepeatedDataRef means this data will be repeated later
+;   pb must return a repeated data ref
+
+
+
+; *  RTPPBAddPacketLiteralData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBAddPacketLiteralData(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, UInt8 *inData, UInt32 inDataLength, RTPPacketRepeatedDataRef *outDataRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBAddPacketLiteralData
+			move.l              #$00180504,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBAddPacketLiteralData
+	ENDIF
+
+
+;   non-NULL RTPPacketRepeatedDataRef means this data will be repeated later
+;   pb must return a repeated data ref
+
+
+
+; *  RTPPBAddPacketSampleData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBAddPacketSampleData(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, RTPMPSampleDataParams *inSampleDataParams, UInt32 inSampleOffset, UInt32 inSampleDataLength, RTPPacketRepeatedDataRef *outDataRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBAddPacketSampleData
+			move.l              #$001C0505,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBAddPacketSampleData
+	ENDIF
+
+
+;   non-NULL RTPPacketRepeatedDataRef means this data will be repeated later
+;   pb must return a repeated data ref
+
+
+
+; *  RTPPBAddPacketSampleData64()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBAddPacketSampleData64(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, RTPMPSampleDataParams *inSampleDataParams, const UInt64 *inSampleOffset, UInt32 inSampleDataLength, RTPPacketRepeatedDataRef *outDataRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBAddPacketSampleData64
+			move.l              #$001C0510,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBAddPacketSampleData64
+	ENDIF
+
+
+;   call to add the repeated data using the ref you got from
+;   RTPPBAddPacketLiteralData or RTPPBAddPacketSampleData
+
+
+
+; *  RTPPBAddPacketRepeatedData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBAddPacketRepeatedData(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, RTPPacketRepeatedDataRef inDataRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBAddPacketRepeatedData
+			move.l              #$00100506,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBAddPacketRepeatedData
+	ENDIF
+
+;  call when done with repeated data
+
+; *  RTPPBReleaseRepeatedData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBReleaseRepeatedData(RTPPacketBuilder rtpb, RTPPacketRepeatedDataRef inDataRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBReleaseRepeatedData
+			move.l              #$00040507,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBReleaseRepeatedData
+	ENDIF
+
+
+;   seq number is just relative seq number
+;   don't call if you don't care when seq # is used
+
+
+
+; *  RTPPBSetPacketSequenceNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBSetPacketSequenceNumber(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, UInt32 inSequenceNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBSetPacketSequenceNumber
+			move.l              #$00100508,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBSetPacketSequenceNumber
+	ENDIF
+
+
+; *  RTPPBGetPacketSequenceNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBGetPacketSequenceNumber(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, UInt32 *outSequenceNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBGetPacketSequenceNumber
+			move.l              #$00100509,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBGetPacketSequenceNumber
+	ENDIF
+
+
+; *  RTPPBSetPacketTimeStampOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBSetPacketTimeStampOffset(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, SInt32 inTimeStampOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBSetPacketTimeStampOffset
+			move.l              #$0010050E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBSetPacketTimeStampOffset
+	ENDIF
+
+
+; *  RTPPBGetPacketTimeStampOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBGetPacketTimeStampOffset(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, SInt32 *outTimeStampOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBGetPacketTimeStampOffset
+			move.l              #$0010050F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBGetPacketTimeStampOffset
+	ENDIF
+
+
+; *  RTPPBAddRepeatPacket()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBAddRepeatPacket(RTPPacketBuilder rtpb, SInt32 inFlags, RTPPacketGroupRef inPacketGroup, RTPPacketRef inPacket, TimeValue inTransmissionOffset, UInt32 inSequenceNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBAddRepeatPacket
+			move.l              #$00140512,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBAddRepeatPacket
+	ENDIF
+
+
+;   used for communicating with the caller of the media packetizers if needed
+;   NOT used for communicating with the media packetizers themselves
+
+
+
+; *  RTPPBSetCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBSetCallback(RTPPacketBuilder rtpb, RTPPBCallbackUPP inCallback, void *inRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBSetCallback
+			move.l              #$0008050A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBSetCallback
+	ENDIF
+
+
+; *  RTPPBGetCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBGetCallback(RTPPacketBuilder rtpb, RTPPBCallbackUPP *outCallback, void **outRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBGetCallback
+			move.l              #$0008050B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBGetCallback
+	ENDIF
+
+
+; *  RTPPBSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBSetInfo(RTPPacketBuilder rtpb, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBSetInfo
+			move.l              #$0008050C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBSetInfo
+	ENDIF
+
+
+; *  RTPPBGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBGetInfo(RTPPacketBuilder rtpb, OSType inSelector, void *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBGetInfo
+			move.l              #$0008050D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBGetInfo
+	ENDIF
+
+
+; *  RTPPBGetSampleData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult RTPPBGetSampleData(RTPPacketBuilder rtpb, RTPMPSampleDataParams *inParams, const UInt64 *inStartOffset, UInt8 *outDataBuffer, UInt32 inBytesToRead, UInt32 *outBytesRead, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RTPPBGetSampleData
+			move.l              #$00180511,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RTPPBGetSampleData
+	ENDIF
+
+
+;  UPP call backs 
+
+; *  NewRTPMPDataReleaseUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewRTPPBCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeRTPMPDataReleaseUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeRTPPBCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeRTPMPDataReleaseUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeRTPPBCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	ENDIF ; __QTSTREAMINGCOMPONENTS__ 
+

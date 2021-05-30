@@ -1,0 +1,2027 @@
+;
+;    File:       QD3DIO.a
+;
+;    Contains:   QuickDraw 3D IO API
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QD3DIO__') = 'UNDEFINED' THEN
+__QD3DIO__ SET 1
+
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+	include 'QD3D.a'
+	ENDIF
+
+	IF &TYPE('__QD3DDRAWCONTEXT__') = 'UNDEFINED' THEN
+	include 'QD3DDrawContext.a'
+	ENDIF
+	IF &TYPE('__QD3DVIEW__') = 'UNDEFINED' THEN
+	include 'QD3DView.a'
+	ENDIF
+
+; ******************************************************************************
+; **                                                                          **
+; **                                 Basic Types                              **                                                 
+; **                                                                          **
+; ****************************************************************************
+
+; typedef unsigned char 				TQ3Uns8
+
+; typedef signed char 					TQ3Int8
+
+; typedef unsigned short 				TQ3Uns16
+
+; typedef signed short 					TQ3Int16
+
+; typedef unsigned long 				TQ3Uns32
+
+; typedef signed long 					TQ3Int32
+
+	IF TARGET_RT_BIG_ENDIAN THEN
+TQ3Uns64				RECORD 0
+hi						 ds.l	1				; offset: $0 (0)
+lo						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3Int64				RECORD 0
+hi						 ds.l	1				; offset: $0 (0)
+lo						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+	ELSE
+TQ3Uns64				RECORD 0
+lo						 ds.l	1				; offset: $0 (0)
+hi						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3Int64				RECORD 0
+lo						 ds.l	1				; offset: $0 (0)
+hi						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+	ENDIF	; TARGET_RT_BIG_ENDIAN
+; typedef float 						TQ3Float32
+
+; typedef double 						TQ3Float64
+
+; typedef TQ3Uns32 						TQ3Size
+
+; ******************************************************************************
+; **                                                                          **
+; **                                 File Types                               **
+; **                                                                          **
+; ****************************************************************************
+
+
+; typedef long							TQ3FileModeMasks
+kQ3FileModeNormal				EQU		0
+kQ3FileModeStream				EQU		$01
+kQ3FileModeDatabase				EQU		$02
+kQ3FileModeText					EQU		$04
+; typedef unsigned long 				TQ3FileMode
+
+; ******************************************************************************
+; **                                                                          **
+; **                                 Method Types                             **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; *  IO Methods
+; *
+; *  The IO system treats all objects as groups of typed information.
+; *  When you register your element or attribute, the "elementType" is the 
+; *  binary type of your object, the "elementName" the ascii type.
+; *  
+; *  All objects in the metafile are made up of a "root" or parent object which
+; *  defines the instantiated object type. You may define the format of your 
+; *  data any way you wish as long as you use the primitives types above and the
+; *  routines below.
+; *
+; *  Root Objects are often appended with additional child objects, called 
+; *  subobjects. You may append your object with other QuickDraw 3D objects.
+; *  
+; *  Writing is straightforward: an object traverses itself any other objects 
+; *  that make it up, then writes its own data. Writing uses two methods: 
+; *  TQ3XObjectTraverseMethod and TQ3XObjectWriteMethod.
+; *
+; *  The TQ3XObjectTraverseMethod method should:
+; *  + First, Determine if the data should be written 
+; *      - if you don't want to write out your object after examining your
+; *          data, return kQ3Success in your Traverse method without calling
+; *          any other submit calls.
+; *  + Next, calculate the size of your object on disk
+; *  + Gather whatever state from the view you need to preserve
+; *      - you may access the view state NOW, as the state of the
+; *          view duing your TQ3XObjectWriteMethod will not be valid. You may
+; *          pass a temporary buffer to your write method.
+; *  + Submit your view write data using Q3View_SubmitWriteData
+; *      - note that you MUST call this before any other "_Submit" call.
+; *      - you may pass in a "deleteMethod" for your data. This method
+; *          will be called whether or not your write method succeeds or fails.
+; *  + Submit your subobjects to the view
+; *  
+; *  The TQ3XObjectWriteMethod method should:
+; *  + Write your data format to the file using the primitives routines below.
+; *      - If you passed a "deleteMethod" in your Q3View_SubmitWriteData, that
+; *          method will be called upon exit of your write method.
+; *
+; *  Reading is less straightforward because your root object and
+; *  any subobjects must be read inside of your TQ3XObjectReadDataMethod. There 
+; *  is an implicit state contained in the file while reading, which you must 
+; *  be aware of. When you first enter the read method, you must physically 
+; *  read in your data format using the primitives routines until
+; *  
+; *  Q3File_IsEndOfData(file) == kQ3True
+; *  
+; *  Generally, your data format should be self-descriptive such that you do not
+; *  need to call Q3File_IsEndOfData to determine if you are done reading. 
+; *  However, this call is useful for determining zero-sized object or 
+; *  determining the end of an object's data.
+; *  
+; *  Once you have read in all the data, you may collect subobjects. A metafile
+; *  object ONLY has subobjects if it is in a container. The call
+; *  
+; *  Q3File_IsEndOfContainer(file)
+; *  
+; *  returns kQ3False if subobjects exist, and kQ3True if subobjects do not 
+; *  exist.
+; *  
+; *  At this point, you may use
+; *  
+; *  Q3File_GetNextObjectType
+; *  Q3File_IsNextObjectOfType
+; *  Q3File_ReadObject
+; *  Q3File_SkipObject
+; *  
+; *  to iterate through the subobjects until Q3File_IsEndOfContainer(file) 
+; *  is kQ3True.
+; * 
+; 
+
+
+; 
+; * IO Methods
+; 
+
+
+kQ3XMethodTypeObjectFileVersion	EQU		'vers'				; version 
+kQ3XMethodTypeObjectTraverse	EQU		'trvs'				; byte count 
+kQ3XMethodTypeObjectTraverseData EQU	'trvd'				; byte count 
+kQ3XMethodTypeObjectWrite		EQU		'writ'				; Dump info to file 
+kQ3XMethodTypeObjectReadData	EQU		'rddt'				; Read info from file into buffer or, attach read data to parent 
+kQ3XMethodTypeObjectRead		EQU		'read'
+kQ3XMethodTypeObjectAttach		EQU		'attc'
+; 
+; *  TQ3XObjectTraverseMethod
+; *
+; *  For "elements" (meaning "attributes, too), you will be passed NULL for 
+; *  object. Sorry, custom objects will be available in the next major revision.
+; *
+; *  The "data" is a pointer to your internal element data.
+; *
+; *  The view is the current traversal view.
+; 
+
+; 
+; *  TQ3XObjectTraverseDataMethod
+; 
+
+; 
+; *  TQ3XObjectWriteMethod
+; 
+
+; 
+; *  Custom object writing 
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3XView_SubmitWriteData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3XView_SubmitWriteData(TQ3ViewObject view, TQ3Size size, void *data, TQ3XDataDeleteMethod deleteData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3XView_SubmitWriteData
+	ENDIF
+
+
+; *  Q3XView_SubmitSubObjectData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3XView_SubmitSubObjectData(TQ3ViewObject view, TQ3XObjectClass objectClass, unsigned long size, void *data, TQ3XDataDeleteMethod deleteData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3XView_SubmitSubObjectData
+	ENDIF
+
+; 
+; *  TQ3XObjectReadMethod
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+; *  TQ3XObjectReadDataMethod
+; *
+; *  For "elements" (meaning "attributes", too), you must allocate stack space 
+; *  and call Q3Set_Add on "parentObject", which is an TQ3SetObject.
+; *
+; *  Otherwise, parentObject is whatever object your element is a subobject of...
+; 
+
+; 
+; *  TQ3XObjectAttachMethod
+; 
+
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Versioning                                   **
+; **                                                                          **
+; ****************************************************************************
+
+; typedef unsigned long 				TQ3FileVersion
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             File Routines                                **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; * Creation and accessors
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3File_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3FileObject Q3File_New(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_New
+	ENDIF
+
+
+; *  Q3File_GetStorage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_GetStorage(TQ3FileObject theFile, TQ3StorageObject *storage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetStorage
+	ENDIF
+
+
+; *  Q3File_SetStorage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_SetStorage(TQ3FileObject theFile, TQ3StorageObject storage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_SetStorage
+	ENDIF
+
+; 
+; * Opening, and accessing "open" state, closing/cancelling
+; 
+
+
+; *  Q3File_OpenRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_OpenRead(TQ3FileObject theFile, TQ3FileMode *mode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_OpenRead
+	ENDIF
+
+
+; *  Q3File_OpenWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_OpenWrite(TQ3FileObject theFile, TQ3FileMode mode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_OpenWrite
+	ENDIF
+
+
+; *  Q3File_IsOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_IsOpen(TQ3FileObject theFile, TQ3Boolean *isOpen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_IsOpen
+	ENDIF
+
+
+; *  Q3File_GetMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_GetMode(TQ3FileObject theFile, TQ3FileMode *mode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetMode
+	ENDIF
+
+
+; *  Q3File_GetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_GetVersion(TQ3FileObject theFile, TQ3FileVersion *version)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetVersion
+	ENDIF
+
+
+; *  Q3File_Close()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_Close(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_Close
+	ENDIF
+
+
+; *  Q3File_Cancel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_Cancel(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_Cancel
+	ENDIF
+
+; 
+; * Writing (Application)
+; 
+
+
+; *  Q3View_StartWriting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3View_StartWriting(TQ3ViewObject view, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3View_StartWriting
+	ENDIF
+
+
+; *  Q3View_EndWriting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ViewStatus Q3View_EndWriting(TQ3ViewObject view)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3View_EndWriting
+	ENDIF
+
+; 
+; * Reading (Application)
+; 
+
+
+; *  Q3File_GetNextObjectType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3File_GetNextObjectType(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetNextObjectType
+	ENDIF
+
+
+; *  Q3File_IsNextObjectOfType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3File_IsNextObjectOfType(TQ3FileObject theFile, TQ3ObjectType ofType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_IsNextObjectOfType
+	ENDIF
+
+
+; *  Q3File_ReadObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Object Q3File_ReadObject(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_ReadObject
+	ENDIF
+
+
+; *  Q3File_SkipObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_SkipObject(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_SkipObject
+	ENDIF
+
+
+; *  Q3File_IsEndOfData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3File_IsEndOfData(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_IsEndOfData
+	ENDIF
+
+
+; *  Q3File_IsEndOfContainer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3File_IsEndOfContainer(TQ3FileObject theFile, TQ3Object rootObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_IsEndOfContainer
+	ENDIF
+
+
+; *  Q3File_IsEndOfFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3File_IsEndOfFile(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_IsEndOfFile
+	ENDIF
+
+;     
+; *  External file references
+; 
+
+
+; *  Q3File_MarkAsExternalReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_MarkAsExternalReference(TQ3FileObject theFile, TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_MarkAsExternalReference
+	ENDIF
+
+
+; *  Q3File_GetExternalReferences()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3GroupObject Q3File_GetExternalReferences(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetExternalReferences
+	ENDIF
+
+;     
+; *  Tracking editing in read-in objects with custom elements
+; 
+
+
+; *  Q3Shared_ClearEditTracking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shared_ClearEditTracking(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_ClearEditTracking
+	ENDIF
+
+
+; *  Q3Shared_GetEditTrackingState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Shared_GetEditTrackingState(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_GetEditTrackingState
+	ENDIF
+
+;     
+; *  Reading objects inside a group one-by-one
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; typedef long							TQ3FileReadGroupStateMasks
+kQ3FileReadWholeGroup			EQU		0
+kQ3FileReadObjectsInGroup		EQU		$01
+kQ3FileCurrentlyInsideGroup		EQU		$02
+; typedef unsigned long 				TQ3FileReadGroupState
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3File_SetReadInGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_SetReadInGroup(TQ3FileObject theFile, TQ3FileReadGroupState readGroupState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_SetReadInGroup
+	ENDIF
+
+
+; *  Q3File_GetReadInGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_GetReadInGroup(TQ3FileObject theFile, TQ3FileReadGroupState *readGroupState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_GetReadInGroup
+	ENDIF
+
+
+; 
+; * Idling
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3File_SetIdleMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3File_SetIdleMethod(TQ3FileObject theFile, TQ3FileIdleMethod idle, const void *idleData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3File_SetIdleMethod
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Primitives Routines                          **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3NewLine_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3NewLine_Write(TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3NewLine_Write
+	ENDIF
+
+
+; *  Q3Uns8_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns8_Read(TQ3Uns8 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns8_Read
+	ENDIF
+
+
+; *  Q3Uns8_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns8_Write(TQ3Uns8 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns8_Write
+	ENDIF
+
+
+; *  Q3Uns16_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns16_Read(TQ3Uns16 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns16_Read
+	ENDIF
+
+
+; *  Q3Uns16_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns16_Write(TQ3Uns16 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns16_Write
+	ENDIF
+
+
+; *  Q3Uns32_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns32_Read(TQ3Uns32 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns32_Read
+	ENDIF
+
+
+; *  Q3Uns32_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns32_Write(TQ3Uns32 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns32_Write
+	ENDIF
+
+
+; *  Q3Int8_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int8_Read(TQ3Int8 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int8_Read
+	ENDIF
+
+
+; *  Q3Int8_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int8_Write(TQ3Int8 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int8_Write
+	ENDIF
+
+
+; *  Q3Int16_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int16_Read(TQ3Int16 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int16_Read
+	ENDIF
+
+
+; *  Q3Int16_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int16_Write(TQ3Int16 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int16_Write
+	ENDIF
+
+
+; *  Q3Int32_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int32_Read(TQ3Int32 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int32_Read
+	ENDIF
+
+
+; *  Q3Int32_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int32_Write(TQ3Int32 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int32_Write
+	ENDIF
+
+
+; *  Q3Uns64_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns64_Read(TQ3Uns64 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns64_Read
+	ENDIF
+
+
+; *  Q3Uns64_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Uns64_Write(TQ3Uns64 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Uns64_Write
+	ENDIF
+
+
+; *  Q3Int64_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int64_Read(TQ3Int64 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int64_Read
+	ENDIF
+
+
+; *  Q3Int64_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Int64_Write(TQ3Int64 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Int64_Write
+	ENDIF
+
+
+; *  Q3Float32_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Float32_Read(TQ3Float32 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Float32_Read
+	ENDIF
+
+
+; *  Q3Float32_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Float32_Write(TQ3Float32 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Float32_Write
+	ENDIF
+
+
+; *  Q3Float64_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Float64_Read(TQ3Float64 *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Float64_Read
+	ENDIF
+
+
+; *  Q3Float64_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Float64_Write(TQ3Float64 data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Float64_Write
+	ENDIF
+
+
+; *  Q3Size_Pad()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Size Q3Size_Pad(TQ3Size size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Size_Pad
+	ENDIF
+
+; 
+; * Pass a pointer to a buffer of kQ3StringMaximumLength bytes
+; 
+
+
+; *  Q3String_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3String_Read(char *data, unsigned long *length, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3String_Read
+	ENDIF
+
+
+; *  Q3String_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3String_Write(const char *data, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3String_Write
+	ENDIF
+
+;  
+; * This call will read Q3Size_Pad(size) bytes,
+; *  but only place size bytes into data.
+; 
+
+
+; *  Q3RawData_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RawData_Read(unsigned char *data, unsigned long size, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RawData_Read
+	ENDIF
+
+;  
+; * This call will write Q3Size_Pad(size) bytes,
+; *  adding 0's to pad to the nearest 4 byte boundary.
+; 
+
+
+; *  Q3RawData_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RawData_Write(const unsigned char *data, unsigned long size, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RawData_Write
+	ENDIF
+
+; ******************************************************************************
+; **                                                                          **
+; **                     Convenient Primitives Routines                       **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Point2D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Point2D_Read(TQ3Point2D *point2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Point2D_Read
+	ENDIF
+
+
+; *  Q3Point2D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Point2D_Write(const TQ3Point2D *point2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Point2D_Write
+	ENDIF
+
+
+; *  Q3Point3D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Point3D_Read(TQ3Point3D *point3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Point3D_Read
+	ENDIF
+
+
+; *  Q3Point3D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Point3D_Write(const TQ3Point3D *point3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Point3D_Write
+	ENDIF
+
+
+; *  Q3RationalPoint3D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RationalPoint3D_Read(TQ3RationalPoint3D *point3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RationalPoint3D_Read
+	ENDIF
+
+
+; *  Q3RationalPoint3D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RationalPoint3D_Write(const TQ3RationalPoint3D *point3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RationalPoint3D_Write
+	ENDIF
+
+
+; *  Q3RationalPoint4D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RationalPoint4D_Read(TQ3RationalPoint4D *point4D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RationalPoint4D_Read
+	ENDIF
+
+
+; *  Q3RationalPoint4D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3RationalPoint4D_Write(const TQ3RationalPoint4D *point4D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3RationalPoint4D_Write
+	ENDIF
+
+
+; *  Q3Vector2D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Vector2D_Read(TQ3Vector2D *vector2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Vector2D_Read
+	ENDIF
+
+
+; *  Q3Vector2D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Vector2D_Write(const TQ3Vector2D *vector2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Vector2D_Write
+	ENDIF
+
+
+; *  Q3Vector3D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Vector3D_Read(TQ3Vector3D *vector3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Vector3D_Read
+	ENDIF
+
+
+; *  Q3Vector3D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Vector3D_Write(const TQ3Vector3D *vector3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Vector3D_Write
+	ENDIF
+
+
+; *  Q3Matrix4x4_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Matrix4x4_Read(TQ3Matrix4x4 *matrix4x4, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Matrix4x4_Read
+	ENDIF
+
+
+; *  Q3Matrix4x4_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Matrix4x4_Write(const TQ3Matrix4x4 *matrix4x4, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Matrix4x4_Write
+	ENDIF
+
+
+; *  Q3Tangent2D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Tangent2D_Read(TQ3Tangent2D *tangent2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Tangent2D_Read
+	ENDIF
+
+
+; *  Q3Tangent2D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Tangent2D_Write(const TQ3Tangent2D *tangent2D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Tangent2D_Write
+	ENDIF
+
+
+; *  Q3Tangent3D_Read()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Tangent3D_Read(TQ3Tangent3D *tangent3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Tangent3D_Read
+	ENDIF
+
+
+; *  Q3Tangent3D_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Tangent3D_Write(const TQ3Tangent3D *tangent3D, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Tangent3D_Write
+	ENDIF
+
+;   This call affects only text Files - it is a no-op in binary files 
+
+; *  Q3Comment_Write()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Comment_Write(char *comment, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Comment_Write
+	ENDIF
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Unknown Object                               **
+; **                                                                          **
+; **     Unknown objects are generated when reading files which contain       **
+; **     custom data which has not been registered in the current             **
+; **     instantiation of QuickDraw 3D.                                       **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Unknown_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Unknown_GetType(TQ3UnknownObject unknownObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Unknown_GetType
+	ENDIF
+
+
+; *  Q3Unknown_GetDirtyState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Unknown_GetDirtyState(TQ3UnknownObject unknownObject, TQ3Boolean *isDirty)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Unknown_GetDirtyState
+	ENDIF
+
+
+; *  Q3Unknown_SetDirtyState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Unknown_SetDirtyState(TQ3UnknownObject unknownObject, TQ3Boolean isDirty)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Unknown_SetDirtyState
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Unknown Text Routines                            **
+; **                                                                          **
+; ****************************************************************************
+
+	ENDIF	; CALL_NOT_IN_CARBON
+TQ3UnknownTextData		RECORD 0
+objectName				 ds.l	1				; offset: $0 (0)		;  '\0' terminated 
+contents				 ds.l	1				; offset: $4 (4)		;  '\0' terminated 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3UnknownText_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownText_GetData(TQ3UnknownObject unknownObject, TQ3UnknownTextData *unknownTextData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownText_GetData
+	ENDIF
+
+
+; *  Q3UnknownText_EmptyData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownText_EmptyData(TQ3UnknownTextData *unknownTextData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownText_EmptyData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Unknown Binary Routines                          **
+; **                                                                          **
+; ****************************************************************************
+
+	ENDIF	; CALL_NOT_IN_CARBON
+TQ3UnknownBinaryData	RECORD 0
+objectType				 ds.l	1				; offset: $0 (0)
+size					 ds.l	1				; offset: $4 (4)
+byteOrder				 ds.l	1				; offset: $8 (8)
+contents				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3UnknownBinary_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownBinary_GetData(TQ3UnknownObject unknownObject, TQ3UnknownBinaryData *unknownBinaryData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownBinary_GetData
+	ENDIF
+
+
+; *  Q3UnknownBinary_EmptyData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownBinary_EmptyData(TQ3UnknownBinaryData *unknownBinaryData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownBinary_EmptyData
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3UnknownBinary_GetTypeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownBinary_GetTypeString(TQ3UnknownObject unknownObject, char **typeString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownBinary_GetTypeString
+	ENDIF
+
+
+; *  Q3UnknownBinary_EmptyTypeString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3UnknownBinary_EmptyTypeString(char **typeString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3UnknownBinary_EmptyTypeString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; ******************************************************************************
+; **                                                                          **
+; **                         ViewHints routines                               **
+; **                                                                          **
+; **     ViewHints are an object in a metafile to give you some hints on how  **
+; **     to render a scene.  You may create a view with any of the objects    **
+; **     retrieved from it, or you can just throw it away.                    **
+; **                                                                          **
+; **     To write a view hints to a file, create a view hints object from a   **
+; **     view and write the view hints.                                       **
+; **                                                                          **
+; ****************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3ViewHints_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ViewHintsObject Q3ViewHints_New(TQ3ViewObject view)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_New
+	ENDIF
+
+
+; *  Q3ViewHints_SetRenderer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetRenderer(TQ3ViewHintsObject viewHints, TQ3RendererObject renderer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetRenderer
+	ENDIF
+
+
+; *  Q3ViewHints_GetRenderer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetRenderer(TQ3ViewHintsObject viewHints, TQ3RendererObject *renderer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetRenderer
+	ENDIF
+
+
+; *  Q3ViewHints_SetCamera()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetCamera(TQ3ViewHintsObject viewHints, TQ3CameraObject camera)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetCamera
+	ENDIF
+
+
+; *  Q3ViewHints_GetCamera()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetCamera(TQ3ViewHintsObject viewHints, TQ3CameraObject *camera)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetCamera
+	ENDIF
+
+
+; *  Q3ViewHints_SetLightGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetLightGroup(TQ3ViewHintsObject viewHints, TQ3GroupObject lightGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetLightGroup
+	ENDIF
+
+
+; *  Q3ViewHints_GetLightGroup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetLightGroup(TQ3ViewHintsObject viewHints, TQ3GroupObject *lightGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetLightGroup
+	ENDIF
+
+
+; *  Q3ViewHints_SetAttributeSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetAttributeSet(TQ3ViewHintsObject viewHints, TQ3AttributeSet attributeSet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetAttributeSet
+	ENDIF
+
+
+; *  Q3ViewHints_GetAttributeSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetAttributeSet(TQ3ViewHintsObject viewHints, TQ3AttributeSet *attributeSet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetAttributeSet
+	ENDIF
+
+
+; *  Q3ViewHints_SetDimensionsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetDimensionsState(TQ3ViewHintsObject viewHints, TQ3Boolean isValid)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetDimensionsState
+	ENDIF
+
+
+; *  Q3ViewHints_GetDimensionsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetDimensionsState(TQ3ViewHintsObject viewHints, TQ3Boolean *isValid)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetDimensionsState
+	ENDIF
+
+
+; *  Q3ViewHints_SetDimensions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetDimensions(TQ3ViewHintsObject viewHints, unsigned long width, unsigned long height)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetDimensions
+	ENDIF
+
+
+; *  Q3ViewHints_GetDimensions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetDimensions(TQ3ViewHintsObject viewHints, unsigned long *width, unsigned long *height)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetDimensions
+	ENDIF
+
+
+; *  Q3ViewHints_SetMaskState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetMaskState(TQ3ViewHintsObject viewHints, TQ3Boolean isValid)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetMaskState
+	ENDIF
+
+
+; *  Q3ViewHints_GetMaskState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetMaskState(TQ3ViewHintsObject viewHints, TQ3Boolean *isValid)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetMaskState
+	ENDIF
+
+
+; *  Q3ViewHints_SetMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetMask(TQ3ViewHintsObject viewHints, const TQ3Bitmap *mask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetMask
+	ENDIF
+
+
+; *  Q3ViewHints_GetMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetMask(TQ3ViewHintsObject viewHints, TQ3Bitmap *mask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetMask
+	ENDIF
+
+;  Call Q3Bitmap_Empty when done with the mask  
+
+; *  Q3ViewHints_SetClearImageMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetClearImageMethod(TQ3ViewHintsObject viewHints, TQ3DrawContextClearImageMethod clearMethod)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetClearImageMethod
+	ENDIF
+
+
+; *  Q3ViewHints_GetClearImageMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetClearImageMethod(TQ3ViewHintsObject viewHints, TQ3DrawContextClearImageMethod *clearMethod)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetClearImageMethod
+	ENDIF
+
+
+; *  Q3ViewHints_SetClearImageColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_SetClearImageColor(TQ3ViewHintsObject viewHints, const TQ3ColorARGB *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_SetClearImageColor
+	ENDIF
+
+
+; *  Q3ViewHints_GetClearImageColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ViewHints_GetClearImageColor(TQ3ViewHintsObject viewHints, TQ3ColorARGB *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ViewHints_GetClearImageColor
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __QD3DIO__ 
+

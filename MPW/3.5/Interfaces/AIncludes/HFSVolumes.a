@@ -1,0 +1,454 @@
+;
+;    File:       HFSVolumes.a
+;
+;    Contains:   On-disk data structures for HFS and HFS Plus volumes.
+;
+;    Version:    Technology: Mac OS 8.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1984-2001 by Apple Computer, Inc.  All rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__HFSVOLUMES__') = 'UNDEFINED' THEN
+__HFSVOLUMES__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__FINDER__') = 'UNDEFINED' THEN
+	include 'Finder.a'
+	ENDIF
+
+;  Signatures used to differentiate between HFS and HFS Plus volumes 
+
+kHFSSigWord						EQU		$4244				; 'BD' in ASCII 
+kHFSPlusSigWord					EQU		$482B				; 'H+' in ASCII 
+kHFSPlusVersion					EQU		$0004				; will change as format changes (version 4 shipped with Mac OS 8.1) 
+kHFSPlusMountVersion			EQU		'8.10'				; will change as implementations change ('8.10' in Mac OS 8.1) 
+
+;  CatalogNodeID is used to track catalog objects 
+; typedef UInt32 						HFSCatalogNodeID
+
+
+kHFSMaxVolumeNameChars			EQU		27
+kHFSMaxFileNameChars			EQU		31
+kHFSPlusMaxFileNameChars		EQU		255
+
+;  Extent overflow file data structures 
+;  HFS Extent key 
+HFSExtentKey			RECORD 0
+keyLength				 ds.b	1				; offset: $0 (0)		;  length of key, excluding this field 
+forkType				 ds.b	1				; offset: $1 (1)		;  0 = data fork, FF = resource fork 
+fileID					 ds.l	1				; offset: $2 (2)		;  file ID 
+startBlock				 ds.w	1				; offset: $6 (6)		;  first file allocation block number in this extent 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  HFS Plus Extent key 
+HFSPlusExtentKey		RECORD 0
+keyLength				 ds.w	1				; offset: $0 (0)		;  length of key, excluding this field 
+forkType				 ds.b	1				; offset: $2 (2)		;  0 = data fork, FF = resource fork 
+pad						 ds.b	1				; offset: $3 (3)		;  make the other fields align on 32-bit boundary 
+fileID					 ds.l	1				; offset: $4 (4)		;  file ID 
+startBlock				 ds.l	1				; offset: $8 (8)		;  first file allocation block number in this extent 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  Number of extent descriptors per extent record 
+
+kHFSExtentDensity				EQU		3
+kHFSPlusExtentDensity			EQU		8
+;  HFS extent descriptor 
+HFSExtentDescriptor		RECORD 0
+startBlock				 ds.w	1				; offset: $0 (0)		;  first allocation block 
+blockCount				 ds.w	1				; offset: $2 (2)		;  number of allocation blocks 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  HFS Plus extent descriptor 
+HFSPlusExtentDescriptor	RECORD 0
+startBlock				 ds.l	1				; offset: $0 (0)		;  first allocation block 
+blockCount				 ds.l	1				; offset: $4 (4)		;  number of allocation blocks 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  HFS extent record 
+HFSExtentRecord			RECORD 0
+elements				 ds.b	3 * HFSExtentDescriptor.sizeof
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+;  HFS Plus extent record 
+HFSPlusExtentRecord		RECORD 0
+elements				 ds.b	8 * HFSPlusExtentDescriptor.sizeof
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+
+
+
+;  Fork data info (HFS Plus only) - 80 bytes 
+HFSPlusForkData			RECORD 0
+logicalSize				 ds		UInt64			; offset: $0 (0)		;  fork's logical size in bytes 
+clumpSize				 ds.l	1				; offset: $8 (8)		;  fork's clump size in bytes 
+totalBlocks				 ds.l	1				; offset: $C (12)		;  total blocks used by this fork 
+extents					 ds		HFSPlusExtentRecord ; offset: $10 (16) ;  initial set of extents 
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+;  Permissions info (HFS Plus only) - 16 bytes 
+HFSPlusPermissions		RECORD 0
+ownerID					 ds.l	1				; offset: $0 (0)		;  user or group ID of file/folder owner 
+groupID					 ds.l	1				; offset: $4 (4)		;  additional user of group ID 
+permissions				 ds.l	1				; offset: $8 (8)		;  permissions (bytes: unused, owner, group, everyone) 
+specialDevice			 ds.l	1				; offset: $C (12)		;  UNIX: device for character or block special file 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  Catalog file data structures 
+
+kHFSRootParentID				EQU		1					; Parent ID of the root folder 
+kHFSRootFolderID				EQU		2					; Folder ID of the root folder 
+kHFSExtentsFileID				EQU		3					; File ID of the extents file 
+kHFSCatalogFileID				EQU		4					; File ID of the catalog file 
+kHFSBadBlockFileID				EQU		5					; File ID of the bad allocation block file 
+kHFSAllocationFileID			EQU		6					; File ID of the allocation file (HFS Plus only) 
+kHFSStartupFileID				EQU		7					; File ID of the startup file (HFS Plus only) 
+kHFSAttributesFileID			EQU		8					; File ID of the attribute file (HFS Plus only) 
+kHFSBogusExtentFileID			EQU		15					; Used for exchanging extents in extents file 
+kHFSFirstUserCatalogNodeID		EQU		16
+
+;  HFS catalog key 
+HFSCatalogKey			RECORD 0
+keyLength				 ds.b	1				; offset: $0 (0)		;  key length (in bytes) 
+reserved				 ds.b	1				; offset: $1 (1)		;  reserved (set to zero) 
+parentID				 ds.l	1				; offset: $2 (2)		;  parent folder ID 
+nodeName				 ds		Str31			; offset: $6 (6)		;  catalog node name 
+sizeof					 EQU *					; size:   $26 (38)
+						ENDR
+;  HFS Plus catalog key 
+HFSPlusCatalogKey		RECORD 0
+keyLength				 ds.w	1				; offset: $0 (0)		;  key length (in bytes) 
+parentID				 ds.l	1				; offset: $2 (2)		;  parent folder ID 
+nodeName				 ds		HFSUniStr255	; offset: $6 (6)		;  catalog node name 
+sizeof					 EQU *					; size:   $206 (518)
+						ENDR
+
+;  Catalog record types 
+
+															; HFS Catalog Records 
+kHFSFolderRecord				EQU		$0100				; Folder record 
+kHFSFileRecord					EQU		$0200				; File record 
+kHFSFolderThreadRecord			EQU		$0300				; Folder thread record 
+kHFSFileThreadRecord			EQU		$0400				; File thread record 
+															; HFS Plus Catalog Records 
+kHFSPlusFolderRecord			EQU		1					; Folder record 
+kHFSPlusFileRecord				EQU		2					; File record 
+kHFSPlusFolderThreadRecord		EQU		3					; Folder thread record 
+kHFSPlusFileThreadRecord		EQU		4					; File thread record 
+
+;  Catalog file record flags 
+
+kHFSFileLockedBit				EQU		$0000				; file is locked and cannot be written to 
+kHFSFileLockedMask				EQU		$0001
+kHFSThreadExistsBit				EQU		$0001				; a file thread record exists for this file 
+kHFSThreadExistsMask			EQU		$0002
+
+;  HFS catalog folder record - 70 bytes 
+HFSCatalogFolder		RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type 
+flags					 ds.w	1				; offset: $2 (2)		;  folder flags 
+valence					 ds.w	1				; offset: $4 (4)		;  folder valence 
+folderID				 ds.l	1				; offset: $6 (6)		;  folder ID 
+createDate				 ds.l	1				; offset: $A (10)		;  date and time of creation 
+modifyDate				 ds.l	1				; offset: $E (14)		;  date and time of last modification 
+backupDate				 ds.l	1				; offset: $12 (18)		;  date and time of last backup 
+userInfo				 ds		DInfo			; offset: $16 (22)		;  Finder information 
+finderInfo				 ds		DXInfo			; offset: $26 (38)		;  additional Finder information 
+reserved				 ds.l	4				; offset: $36 (54)		;  reserved - set to zero 
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+;  HFS Plus catalog folder record - 88 bytes 
+HFSPlusCatalogFolder	RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type = HFS Plus folder record 
+flags					 ds.w	1				; offset: $2 (2)		;  file flags 
+valence					 ds.l	1				; offset: $4 (4)		;  folder's valence (limited to 2^16 in Mac OS) 
+folderID				 ds.l	1				; offset: $8 (8)		;  folder ID 
+createDate				 ds.l	1				; offset: $C (12)		;  date and time of creation 
+contentModDate			 ds.l	1				; offset: $10 (16)		;  date and time of last content modification 
+attributeModDate		 ds.l	1				; offset: $14 (20)		;  date and time of last attribute modification 
+accessDate				 ds.l	1				; offset: $18 (24)		;  date and time of last access (Rhapsody only) 
+backupDate				 ds.l	1				; offset: $1C (28)		;  date and time of last backup 
+permissions				 ds		HFSPlusPermissions ; offset: $20 (32)	;  permissions (for Rhapsody) 
+userInfo				 ds		DInfo			; offset: $30 (48)		;  Finder information 
+finderInfo				 ds		DXInfo			; offset: $40 (64)		;  additional Finder information 
+textEncoding			 ds.l	1				; offset: $50 (80)		;  hint for name conversions 
+reserved				 ds.l	1				; offset: $54 (84)		;  reserved - set to zero 
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+;  HFS catalog file record - 102 bytes 
+HFSCatalogFile			RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type 
+flags					 ds.b	1				; offset: $2 (2)		;  file flags 
+fileType				 ds.b	1				; offset: $3 (3)		;  file type (unused ?) 
+userInfo				 ds		FInfo			; offset: $4 (4)		;  Finder information 
+fileID					 ds.l	1				; offset: $14 (20)		;  file ID 
+dataStartBlock			 ds.w	1				; offset: $18 (24)		;  not used - set to zero 
+dataLogicalSize			 ds.l	1				; offset: $1A (26)		;  logical EOF of data fork 
+dataPhysicalSize		 ds.l	1				; offset: $1E (30)		;  physical EOF of data fork 
+rsrcStartBlock			 ds.w	1				; offset: $22 (34)		;  not used - set to zero 
+rsrcLogicalSize			 ds.l	1				; offset: $24 (36)		;  logical EOF of resource fork 
+rsrcPhysicalSize		 ds.l	1				; offset: $28 (40)		;  physical EOF of resource fork 
+createDate				 ds.l	1				; offset: $2C (44)		;  date and time of creation 
+modifyDate				 ds.l	1				; offset: $30 (48)		;  date and time of last modification 
+backupDate				 ds.l	1				; offset: $34 (52)		;  date and time of last backup 
+finderInfo				 ds		FXInfo			; offset: $38 (56)		;  additional Finder information 
+clumpSize				 ds.w	1				; offset: $48 (72)		;  file clump size (not used) 
+dataExtents				 ds		HFSExtentRecord ; offset: $4A (74)		;  first data fork extent record 
+rsrcExtents				 ds		HFSExtentRecord ; offset: $56 (86)		;  first resource fork extent record 
+reserved				 ds.l	1				; offset: $62 (98)		;  reserved - set to zero 
+sizeof					 EQU *					; size:   $66 (102)
+						ENDR
+;  HFS Plus catalog file record - 248 bytes 
+HFSPlusCatalogFile		RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type = HFS Plus file record 
+flags					 ds.w	1				; offset: $2 (2)		;  file flags 
+reserved1				 ds.l	1				; offset: $4 (4)		;  reserved - set to zero 
+fileID					 ds.l	1				; offset: $8 (8)		;  file ID 
+createDate				 ds.l	1				; offset: $C (12)		;  date and time of creation 
+contentModDate			 ds.l	1				; offset: $10 (16)		;  date and time of last content modification 
+attributeModDate		 ds.l	1				; offset: $14 (20)		;  date and time of last attribute modification 
+accessDate				 ds.l	1				; offset: $18 (24)		;  date and time of last access (Rhapsody only) 
+backupDate				 ds.l	1				; offset: $1C (28)		;  date and time of last backup 
+permissions				 ds		HFSPlusPermissions ; offset: $20 (32)	;  permissions (for Rhapsody) 
+userInfo				 ds		FInfo			; offset: $30 (48)		;  Finder information 
+finderInfo				 ds		FXInfo			; offset: $40 (64)		;  additional Finder information 
+textEncoding			 ds.l	1				; offset: $50 (80)		;  hint for name conversions 
+reserved2				 ds.l	1				; offset: $54 (84)		;  reserved - set to zero 
+;  start on double long (64 bit) boundry 
+dataFork				 ds		HFSPlusForkData ; offset: $58 (88)		;  size and block data for data fork 
+resourceFork			 ds		HFSPlusForkData ; offset: $A8 (168)		;  size and block data for resource fork 
+sizeof					 EQU *					; size:   $F8 (248)
+						ENDR
+;  HFS catalog thread record - 46 bytes 
+HFSCatalogThread		RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type 
+reserved				 ds.l	2				; offset: $2 (2)		;  reserved - set to zero 
+parentID				 ds.l	1				; offset: $A (10)		;  parent ID for this catalog node 
+nodeName				 ds		Str31			; offset: $E (14)		;  name of this catalog node 
+sizeof					 EQU *					; size:   $2E (46)
+						ENDR
+;  HFS Plus catalog thread record -- 264 bytes 
+HFSPlusCatalogThread	RECORD 0
+recordType				 ds.w	1				; offset: $0 (0)		;  record type 
+reserved				 ds.w	1				; offset: $2 (2)		;  reserved - set to zero 
+parentID				 ds.l	1				; offset: $4 (4)		;  parent ID for this catalog node 
+nodeName				 ds		HFSUniStr255	; offset: $8 (8)		;  name of this catalog node (variable length) 
+sizeof					 EQU *					; size:   $208 (520)
+						ENDR
+
+
+;    These are the types of records in the attribute B-tree.  The values were chosen
+;    so that they wouldn't conflict with the catalog record types.
+
+
+
+kHFSPlusAttrInlineData			EQU		$10					; if size <  kAttrOverflowSize 
+kHFSPlusAttrForkData			EQU		$20					; if size >= kAttrOverflowSize 
+kHFSPlusAttrExtents				EQU		$30					; overflow extents for large attributes 
+
+
+;    HFSPlusAttrInlineData
+;    For small attributes, whose entire value is stored within this one
+;    B-tree record.
+;    There would not be any other records for this attribute.
+
+
+HFSPlusAttrInlineData	RECORD 0
+recordType				 ds.l	1				; offset: $0 (0)		;     = kHFSPlusAttrInlineData
+reserved				 ds.l	1				; offset: $4 (4)
+logicalSize				 ds.l	1				; offset: $8 (8)		;     size in bytes of userData
+userData				 ds.b	2				; offset: $C (12)		;     variable length; space allocated is a multiple of 2 bytes
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+;    HFSPlusAttrForkData
+;    For larger attributes, whose value is stored in allocation blocks.
+;    If the attribute has more than 8 extents, there will be additonal
+;    records (of type HFSPlusAttrExtents) for this attribute.
+
+
+HFSPlusAttrForkData		RECORD 0
+recordType				 ds.l	1				; offset: $0 (0)		;     = kHFSPlusAttrForkData
+reserved				 ds.l	1				; offset: $4 (4)
+theFork					 ds		HFSPlusForkData ; offset: $8 (8)		;     size and first extents of value
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+
+;    HFSPlusAttrExtents
+;    This record contains information about overflow extents for large,
+;    fragmented attributes.
+
+
+HFSPlusAttrExtents		RECORD 0
+recordType				 ds.l	1				; offset: $0 (0)		;     = kHFSPlusAttrExtents
+reserved				 ds.l	1				; offset: $4 (4)
+extents					 ds		HFSPlusExtentRecord ; offset: $8 (8)	;     additional extents
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+;   A generic Attribute Record
+HFSPlusAttrRecord		RECORD 0
+recordType				 ds.l	1				; offset: $0 (0)
+						 ORG 0
+inlineData				 ds		HFSPlusAttrInlineData ; offset: $0 (0)
+						 ORG 0
+forkData				 ds		HFSPlusAttrForkData ; offset: $0 (0)
+						 ORG 0
+overflowExtents			 ds		HFSPlusAttrExtents ; offset: $0 (0)
+						 ORG 88
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+;  Key and node lengths 
+
+kHFSPlusExtentKeyMaximumLength	EQU		10
+kHFSExtentKeyMaximumLength		EQU		7
+kHFSPlusCatalogKeyMaximumLength	EQU		516
+kHFSPlusCatalogKeyMinimumLength	EQU		6
+kHFSCatalogKeyMaximumLength		EQU		37
+kHFSCatalogKeyMinimumLength		EQU		6
+kHFSPlusCatalogMinNodeSize		EQU		4096
+kHFSPlusExtentMinNodeSize		EQU		512
+kHFSPlusAttrMinNodeSize			EQU		4096
+
+;  HFS and HFS Plus volume attribute bits 
+
+															; Bits 0-6 are reserved (always cleared by MountVol call) 
+kHFSVolumeHardwareLockBit		EQU		7					; volume is locked by hardware 
+kHFSVolumeUnmountedBit			EQU		8					; volume was successfully unmounted 
+kHFSVolumeSparedBlocksBit		EQU		9					; volume has bad blocks spared 
+kHFSVolumeNoCacheRequiredBit	EQU		10					; don't cache volume blocks (i.e. RAM or ROM disk) 
+kHFSBootVolumeInconsistentBit	EQU		11					; boot volume is inconsistent (System 7.6 and later) 
+															; Bits 12-14 are reserved for future use 
+kHFSVolumeSoftwareLockBit		EQU		15					; volume is locked by software 
+kHFSVolumeHardwareLockMask		EQU		$80
+kHFSVolumeUnmountedMask			EQU		$0100
+kHFSVolumeSparedBlocksMask		EQU		$0200
+kHFSVolumeNoCacheRequiredMask	EQU		$0400
+kHFSBootVolumeInconsistentMask	EQU		$0800
+kHFSVolumeSoftwareLockMask		EQU		$8000
+kHFSMDBAttributesMask			EQU		$8380
+
+kHFSCatalogNodeIDsReusedBit		EQU		12					; nextCatalogID wrapped around 
+kHFSCatalogNodeIDsReusedMask	EQU		$1000
+;  Master Directory Block (HFS only) - 162 bytes 
+;  Stored at sector #2 (3rd sector) 
+HFSMasterDirectoryBlock	RECORD 0
+;  These first fields are also used by MFS 
+drSigWord				 ds.w	1				; offset: $0 (0)		;  volume signature 
+drCrDate				 ds.l	1				; offset: $2 (2)		;  date and time of volume creation 
+drLsMod					 ds.l	1				; offset: $6 (6)		;  date and time of last modification 
+drAtrb					 ds.w	1				; offset: $A (10)		;  volume attributes 
+drNmFls					 ds.w	1				; offset: $C (12)		;  number of files in root folder 
+drVBMSt					 ds.w	1				; offset: $E (14)		;  first block of volume bitmap 
+drAllocPtr				 ds.w	1				; offset: $10 (16)		;  start of next allocation search 
+drNmAlBlks				 ds.w	1				; offset: $12 (18)		;  number of allocation blocks in volume 
+drAlBlkSiz				 ds.l	1				; offset: $14 (20)		;  size (in bytes) of allocation blocks 
+drClpSiz				 ds.l	1				; offset: $18 (24)		;  default clump size 
+drAlBlSt				 ds.w	1				; offset: $1C (28)		;  first allocation block in volume 
+drNxtCNID				 ds.l	1				; offset: $1E (30)		;  next unused catalog node ID 
+drFreeBks				 ds.w	1				; offset: $22 (34)		;  number of unused allocation blocks 
+drVN					 ds		Str27			; offset: $24 (36)		;  volume name 
+;  Master Directory Block extensions for HFS 
+drVolBkUp				 ds.l	1				; offset: $40 (64)		;  date and time of last backup 
+drVSeqNum				 ds.w	1				; offset: $44 (68)		;  volume backup sequence number 
+drWrCnt					 ds.l	1				; offset: $46 (70)		;  volume write count 
+drXTClpSiz				 ds.l	1				; offset: $4A (74)		;  clump size for extents overflow file 
+drCTClpSiz				 ds.l	1				; offset: $4E (78)		;  clump size for catalog file 
+drNmRtDirs				 ds.w	1				; offset: $52 (82)		;  number of directories in root folder 
+drFilCnt				 ds.l	1				; offset: $54 (84)		;  number of files in volume 
+drDirCnt				 ds.l	1				; offset: $58 (88)		;  number of directories in volume 
+drFndrInfo				 ds.l	8				; offset: $5C (92)		;  information used by the Finder 
+drEmbedSigWord			 ds.w	1				; offset: $7C (124)		;  embedded volume signature (formerly drVCSize) 
+drEmbedExtent			 ds		HFSExtentDescriptor ; offset: $7E (126) ;  embedded volume location and size (formerly drVBMCSize and drCtlCSize) 
+drXTFlSize				 ds.l	1				; offset: $82 (130)		;  size of extents overflow file 
+drXTExtRec				 ds		HFSExtentRecord ; offset: $86 (134)		;  extent record for extents overflow file 
+drCTFlSize				 ds.l	1				; offset: $92 (146)		;  size of catalog file 
+drCTExtRec				 ds		HFSExtentRecord ; offset: $96 (150)		;  extent record for catalog file 
+sizeof					 EQU *					; size:   $A2 (162)
+						ENDR
+;  HFSPlusVolumeHeader (HFS Plus only) - 512 bytes 
+;  Stored at sector #2 (3rd sector) and second-to-last sector. 
+HFSPlusVolumeHeader		RECORD 0
+signature				 ds.w	1				; offset: $0 (0)		;  volume signature == 'H+' 
+version					 ds.w	1				; offset: $2 (2)		;  current version is kHFSPlusVersion 
+attributes				 ds.l	1				; offset: $4 (4)		;  volume attributes 
+lastMountedVersion		 ds.l	1				; offset: $8 (8)		;  implementation version which last mounted volume 
+reserved				 ds.l	1				; offset: $C (12)		;  reserved - set to zero 
+createDate				 ds.l	1				; offset: $10 (16)		;  date and time of volume creation 
+modifyDate				 ds.l	1				; offset: $14 (20)		;  date and time of last modification 
+backupDate				 ds.l	1				; offset: $18 (24)		;  date and time of last backup 
+checkedDate				 ds.l	1				; offset: $1C (28)		;  date and time of last disk check 
+fileCount				 ds.l	1				; offset: $20 (32)		;  number of files in volume 
+folderCount				 ds.l	1				; offset: $24 (36)		;  number of directories in volume 
+blockSize				 ds.l	1				; offset: $28 (40)		;  size (in bytes) of allocation blocks 
+totalBlocks				 ds.l	1				; offset: $2C (44)		;  number of allocation blocks in volume (includes this header and VBM
+freeBlocks				 ds.l	1				; offset: $30 (48)		;  number of unused allocation blocks 
+nextAllocation			 ds.l	1				; offset: $34 (52)		;  start of next allocation search 
+rsrcClumpSize			 ds.l	1				; offset: $38 (56)		;  default resource fork clump size 
+dataClumpSize			 ds.l	1				; offset: $3C (60)		;  default data fork clump size 
+nextCatalogID			 ds.l	1				; offset: $40 (64)		;  next unused catalog node ID 
+writeCount				 ds.l	1				; offset: $44 (68)		;  volume write count 
+encodingsBitmap			 ds		UInt64			; offset: $48 (72)		;  which encodings have been use  on this volume 
+finderInfo				 ds.b	32				; offset: $50 (80)		;  information used by the Finder 
+allocationFile			 ds		HFSPlusForkData ; offset: $70 (112)		;  allocation bitmap file 
+extentsFile				 ds		HFSPlusForkData ; offset: $C0 (192)		;  extents B-tree file 
+catalogFile				 ds		HFSPlusForkData ; offset: $110 (272)	;  catalog B-tree file 
+attributesFile			 ds		HFSPlusForkData ; offset: $160 (352)	;  extended attributes B-tree file 
+startupFile				 ds		HFSPlusForkData ; offset: $1B0 (432)	;  boot file 
+sizeof					 EQU *					; size:   $200 (512)
+						ENDR
+;  ---------- HFS and HFS Plus B-tree structures ---------- 
+;  BTNodeDescriptor -- Every B-tree node starts with these fields. 
+BTNodeDescriptor		RECORD 0
+fLink					 ds.l	1				; offset: $0 (0)		;     next node at this level
+bLink					 ds.l	1				; offset: $4 (4)		;     previous node at this level
+kind					 ds.b	1				; offset: $8 (8)		;     kind of node (leaf, index, header, map)
+height					 ds.b	1				; offset: $9 (9)		;     zero for header, map; child is one more than parent
+numRecords				 ds.w	1				; offset: $A (10)		;     number of records in this node
+reserved				 ds.w	1				; offset: $C (12)		;     reserved; set to zero
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+;  Constants for BTNodeDescriptor kind 
+
+kBTLeafNode						EQU		-1
+kBTIndexNode					EQU		0
+kBTHeaderNode					EQU		1
+kBTMapNode						EQU		2
+;  BTHeaderRec -- The first record of a B-tree header node 
+BTHeaderRec				RECORD 0
+treeDepth				 ds.w	1				; offset: $0 (0)		;     maximum height (usually leaf nodes)
+rootNode				 ds.l	1				; offset: $2 (2)		;     node number of root node
+leafRecords				 ds.l	1				; offset: $6 (6)		;     number of leaf records in all leaf nodes
+firstLeafNode			 ds.l	1				; offset: $A (10)		;     node number of first leaf node
+lastLeafNode			 ds.l	1				; offset: $E (14)		;     node number of last leaf node
+nodeSize				 ds.w	1				; offset: $12 (18)		;     size of a node, in bytes
+maxKeyLength			 ds.w	1				; offset: $14 (20)		;     reserved
+totalNodes				 ds.l	1				; offset: $16 (22)		;     total number of nodes in tree
+freeNodes				 ds.l	1				; offset: $1A (26)		;     number of unused (free) nodes in tree
+reserved1				 ds.w	1				; offset: $1E (30)		;     unused
+clumpSize				 ds.l	1				; offset: $20 (32)		;     reserved
+btreeType				 ds.b	1				; offset: $24 (36)		;     reserved
+reserved2				 ds.b	1				; offset: $25 (37)		;     reserved
+attributes				 ds.l	1				; offset: $26 (38)		;     persistent attributes about the tree
+reserved3				 ds.l	16				; offset: $2A (42)		;     reserved
+sizeof					 EQU *					; size:   $6A (106)
+						ENDR
+;  Constants for BTHeaderRec attributes 
+
+kBTBadCloseMask					EQU		$00000001			;    reserved
+kBTBigKeysMask					EQU		$00000002			;    key length field is 16 bits
+kBTVariableIndexKeysMask		EQU		$00000004			;    keys in index nodes are variable length
+	ENDIF ; __HFSVOLUMES__ 
+

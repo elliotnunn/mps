@@ -1,0 +1,1110 @@
+;
+;    File:       TextServices.a
+;
+;    Contains:   Text Services Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1991-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TEXTSERVICES__') = 'UNDEFINED' THEN
+__TEXTSERVICES__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+	IF &TYPE('__AEDATAMODEL__') = 'UNDEFINED' THEN
+	include 'AEDataModel.a'
+	ENDIF
+	IF &TYPE('__AEREGISTRY__') = 'UNDEFINED' THEN
+	include 'AERegistry.a'
+	ENDIF
+	IF &TYPE('__AEINTERACTION__') = 'UNDEFINED' THEN
+	include 'AEInteraction.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+	IF &TYPE('__CARBONEVENTS__') = 'UNDEFINED' THEN
+	include 'CarbonEvents.a'
+	ENDIF
+
+kTextService					EQU		'tsvc'				; component type for the component description 
+kInputMethodService				EQU		'inpm'				; component subtype for the component description 
+kTSMVersion						EQU		$0150				; Version of the Text Services Manager is 1.5 
+
+kUnicodeDocument				EQU		'udoc'				; TSM Document type for Unicode-savvy application 
+kUnicodeTextService				EQU		'utsv'				; Component type for Unicode Text Service 
+;  Language and Script constants
+
+kUnknownLanguage				EQU		$FFFF
+kUnknownScript					EQU		$FFFF
+kNeutralScript					EQU		$FFFF
+
+
+															; Component Flags in ComponentDescription 
+bTakeActiveEvent				EQU		15					; bit set if the component takes active event 
+bHandleAERecording				EQU		16					; bit set if the component takes care of recording Apple Events <new in vers2.0> 
+bScriptMask						EQU		$00007F00			; bit 8 - 14 
+bLanguageMask					EQU		$000000FF			; bit 0 - 7  
+bScriptLanguageMask				EQU		$00007FFF			; bit 0 - 14  
+
+															; Typing method property constants for Input Methods 
+kIMJaTypingMethodProperty		EQU		'jtyp'				; Typing method property for Japanese input methods
+kIMJaTypingMethodRoman			EQU		'roma'				; Roman typing
+kIMJaTypingMethodKana			EQU		'kana'				; Kana typing
+
+															; Low level routines which are dispatched directly to the Component Manager 
+kCMGetScriptLangSupport			EQU		$0001				; Component Manager call selector 1 
+kCMInitiateTextService			EQU		$0002				; Component Manager call selector 2 
+kCMTerminateTextService			EQU		$0003				; Component Manager call selector 3 
+kCMActivateTextService			EQU		$0004				; Component Manager call selector 4 
+kCMDeactivateTextService		EQU		$0005				; Component Manager call selector 5 
+kCMTextServiceEvent				EQU		$0006				; Component Manager call selector 6 
+kCMGetTextServiceMenu			EQU		$0007				; Component Manager call selector 7 
+kCMTextServiceMenuSelect		EQU		$0008				; Component Manager call selector 8 
+kCMFixTextService				EQU		$0009				; Component Manager call selector 9 
+kCMSetTextServiceCursor			EQU		$000A				; Component Manager call selector 10 
+kCMHidePaletteWindows			EQU		$000B				; Component Manager call selector 11 
+kCMGetTextServiceProperty		EQU		$000C				; Component Manager call selector 12 
+kCMSetTextServiceProperty		EQU		$000D				; Component Manager call selector 13 
+
+															; New low level routines which are dispatched directly to the Component Manager 
+kCMUCTextServiceEvent			EQU		$000E				; Component Manager call selector 14 
+
+
+;  New opaque definitions for types 
+
+
+InterfaceTypeList		RECORD 0
+elements				 ds.l	1
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+
+
+;  Text Service Info List 
+TextServiceInfo			RECORD 0
+fComponent				 ds.l	1				; offset: $0 (0)
+fItemName				 ds		Str255			; offset: $4 (4)
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+; typedef struct TextServiceInfo *		TextServiceInfoPtr
+
+TextServiceList			RECORD 0
+fTextServiceCount		 ds.w	1				; offset: $0 (0)		;  number of entries in the 'fServices' array 
+fServices				 ds		TextServiceInfo ; offset: $2 (2) <-- really an array of length one ;  Note: array of 'TextServiceInfo' records follows 
+sizeof					 EQU *					; size:   $106 (262)
+						ENDR
+; typedef struct TextServiceList *		TextServiceListPtr
+
+; typedef TextServiceListPtr *			TextServiceListHandle
+
+ScriptLanguageRecord	RECORD 0
+fScript					 ds.w	1				; offset: $0 (0)
+fLanguage				 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+ScriptLanguageSupport	RECORD 0
+fScriptLanguageCount	 ds.w	1				; offset: $0 (0)		;  number of entries in the 'fScriptLanguageArray' array 
+fScriptLanguageArray	 ds		ScriptLanguageRecord ; offset: $2 (2) <-- really an array of length one ;  Note: array of 'ScriptLanguageRecord' records follows 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct ScriptLanguageSupport * ScriptLanguageSupportPtr
+
+; typedef ScriptLanguageSupportPtr *	ScriptLanguageSupportHandle
+
+;  High level TSM Doucment routines 
+
+; *  NewTSMDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NewTSMDocument(short numOfInterface, InterfaceTypeList supportedInterfaceTypes, TSMDocumentID *idocID, long refcon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewTSMDocument
+			moveq           	#0,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewTSMDocument
+	ENDIF
+
+
+; *  DeleteTSMDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DeleteTSMDocument(TSMDocumentID idocID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DeleteTSMDocument
+			moveq           	#1,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteTSMDocument
+	ENDIF
+
+
+; *  ActivateTSMDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ActivateTSMDocument(TSMDocumentID idocID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ActivateTSMDocument
+			moveq           	#2,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ActivateTSMDocument
+	ENDIF
+
+
+; *  DeactivateTSMDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DeactivateTSMDocument(TSMDocumentID idocID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DeactivateTSMDocument
+			moveq           	#3,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeactivateTSMDocument
+	ENDIF
+
+
+; *  FixTSMDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr FixTSMDocument(TSMDocumentID idocID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FixTSMDocument
+			moveq           	#7,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FixTSMDocument
+	ENDIF
+
+
+; *  GetServiceList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetServiceList(short numOfInterface, OSType *supportedInterfaceTypes, TextServiceListHandle *serviceInfo, long *seedValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetServiceList
+			moveq           	#8,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetServiceList
+	ENDIF
+
+
+; *  OpenTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr OpenTextService(TSMDocumentID idocID, Component aComponent, ComponentInstance *aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenTextService
+			moveq           	#9,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenTextService
+	ENDIF
+
+
+; *  CloseTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CloseTextService(TSMDocumentID idocID, ComponentInstance aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseTextService
+			moveq           	#10,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseTextService
+	ENDIF
+
+
+; *  SendAEFromTSMComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SendAEFromTSMComponent(const AppleEvent *theAppleEvent, AppleEvent *reply, AESendMode sendMode, AESendPriority sendPriority, long timeOutInTicks, AEIdleUPP idleProc, AEFilterUPP filterProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SendAEFromTSMComponent
+			moveq           	#11,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SendAEFromTSMComponent
+	ENDIF
+
+
+; *  SendTextInputEvent()
+; *  
+; *  Discussion:
+; *    This API replaces SendAEFromTSMComponent on Mac OS X only. Input
+; *    Methods on Mac OS X are Carbon Event based instead of AppleEvent
+; *    based.  The Carbon TextInput events which they generate are
+; *    provided to TSM for dispatching via this API.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib N.e.v.e.r and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SendTextInputEvent(EventRef inEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SendTextInputEvent
+	ENDIF
+
+
+; *  SetDefaultInputMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDefaultInputMethod(Component ts, ScriptLanguageRecord *slRecordPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDefaultInputMethod
+			moveq           	#12,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDefaultInputMethod
+	ENDIF
+
+
+; *  GetDefaultInputMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDefaultInputMethod(Component *ts, ScriptLanguageRecord *slRecordPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDefaultInputMethod
+			moveq           	#13,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDefaultInputMethod
+	ENDIF
+
+
+; *  SetTextServiceLanguage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetTextServiceLanguage(ScriptLanguageRecord *slRecordPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetTextServiceLanguage
+			moveq           	#14,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTextServiceLanguage
+	ENDIF
+
+
+; *  GetTextServiceLanguage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetTextServiceLanguage(ScriptLanguageRecord *slRecordPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetTextServiceLanguage
+			moveq           	#15,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetTextServiceLanguage
+	ENDIF
+
+
+; *  UseInputWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr UseInputWindow(TSMDocumentID idocID, Boolean useWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UseInputWindow
+			moveq           	#16,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UseInputWindow
+	ENDIF
+
+
+; *  TSMSetInlineInputRegion()
+; *  
+; *  Discussion:
+; *    Tell TSM about the region occupied by an inline input session. If
+; *    the location of certain mouse events (clicks, mouse moved) occur
+; *    within the specified inline input region, TSM will forward these
+; *    events to the current Input Method so that it can interact with
+; *    the user. Note: If you do not specify this information, TSM will
+; *    need to intercept mouse events in the entire content region as
+; *    the default, when an input method is active, in order to ensure
+; *    that input methods can manage user interaction properly.
+; *  
+; *  Parameters:
+; *    
+; *    inTSMDocument:
+; *      The document.
+; *    
+; *    inWindow:
+; *      The window that contains the inline input session. You can pass
+; *      NULL for this parameter to indicate the user focus window.
+; *    
+; *    inRegion:
+; *      The region occupied by the current inline input region. This
+; *      should be in the coordinates of the port associated with the
+; *      window you passed to inPort. It will need to be recomputed when
+; *      the text content of the inline input session content changes
+; *      (i.e. due to Update Active Input Area events) and when the
+; *      region moves for other reasons, such as window resized,
+; *      scrolling, etc. If you pass a NULL region for this parameter,
+; *      TSM will default to intercept mouse events in the focus
+; *      window's content region.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TSMSetInlineInputRegion(TSMDocumentID inTSMDocument, WindowRef inWindow, RgnHandle inRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TSMSetInlineInputRegion
+	ENDIF
+
+
+;  Following calls from Classic event loops not needed for Carbon clients. 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  TSMEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TSMEvent(EventRecord *event)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TSMEvent
+			moveq           	#4,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TSMEvent
+	ENDIF
+
+
+; *  TSMMenuSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TSMMenuSelect(long menuResult)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TSMMenuSelect
+			moveq           	#5,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TSMMenuSelect
+	ENDIF
+
+
+; *  SetTSMCursor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean SetTSMCursor(Point mousePos)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetTSMCursor
+			moveq           	#6,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTSMCursor
+	ENDIF
+
+;  Following ServiceWindow API replaced by Window Manager API in Carbon. 
+
+; *  NewServiceWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr NewServiceWindow(void *wStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, short theProc, WindowRef behind, Boolean goAwayFlag, ComponentInstance ts, WindowRef *window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewServiceWindow
+			moveq           	#17,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewServiceWindow
+	ENDIF
+
+
+; *  CloseServiceWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CloseServiceWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseServiceWindow
+			moveq           	#18,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseServiceWindow
+	ENDIF
+
+
+; *  GetFrontServiceWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetFrontServiceWindow(WindowRef *window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFrontServiceWindow
+			moveq           	#19,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFrontServiceWindow
+	ENDIF
+
+
+; *  FindServiceWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short FindServiceWindow(Point thePoint, WindowRef *theWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindServiceWindow
+			moveq           	#23,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindServiceWindow
+	ENDIF
+
+
+; *  NewCServiceWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr NewCServiceWindow(void *wStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, short theProc, WindowRef behind, Boolean goAwayFlag, ComponentInstance ts, WindowRef *window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewCServiceWindow
+			moveq           	#26,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewCServiceWindow
+	ENDIF
+
+;  Explicit initialization not needed for Carbon clients, since TSM is 
+;  instanciated per-context. 
+
+; *  InitTSMAwareApplication()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InitTSMAwareApplication(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitTSMAwareApplication
+			moveq           	#20,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitTSMAwareApplication
+	ENDIF
+
+
+; *  CloseTSMAwareApplication()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CloseTSMAwareApplication(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseTSMAwareApplication
+			moveq           	#21,D0
+			dc.w            	$AA54
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseTSMAwareApplication
+	ENDIF
+
+
+;  Component Manager Interfaces to Input Methods 
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  GetScriptLanguageSupport()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult GetScriptLanguageSupport(ComponentInstance ts, ScriptLanguageSupportHandle *scriptHdl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetScriptLanguageSupport
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetScriptLanguageSupport
+	ENDIF
+
+
+; *  InitiateTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult InitiateTextService(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitiateTextService
+			move.l              #$00000002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitiateTextService
+	ENDIF
+
+
+; *  TerminateTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult TerminateTextService(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TerminateTextService
+			move.l              #$00000003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TerminateTextService
+	ENDIF
+
+
+; *  ActivateTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult ActivateTextService(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ActivateTextService
+			move.l              #$00000004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ActivateTextService
+	ENDIF
+
+
+; *  DeactivateTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult DeactivateTextService(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DeactivateTextService
+			move.l              #$00000005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeactivateTextService
+	ENDIF
+
+
+; *  GetTextServiceMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult GetTextServiceMenu(ComponentInstance ts, MenuRef *serviceMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetTextServiceMenu
+			move.l              #$00040007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetTextServiceMenu
+	ENDIF
+
+;  New Text Service call in Carbon. 
+;  Note: Only Raw Key and Mouse-flavored events are passed to Text Services on MacOS X. 
+
+; *  TextServiceEventRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult TextServiceEventRef(ComponentInstance ts, EventRef event)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TextServiceEventRef
+			move.l              #$00060006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextServiceEventRef
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  TextServiceEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult TextServiceEvent(ComponentInstance ts, short numOfEvents, EventRecord *event)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TextServiceEvent
+			move.l              #$00060006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextServiceEvent
+	ENDIF
+
+
+; *  UCTextServiceEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult UCTextServiceEvent(ComponentInstance ts, short numOfEvents, EventRecord *event, UniChar unicodeString[], UniCharCount unicodeStrLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UCTextServiceEvent
+			move.l              #$000E000E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UCTextServiceEvent
+	ENDIF
+
+
+; *  TextServiceMenuSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult TextServiceMenuSelect(ComponentInstance ts, MenuRef serviceMenu, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TextServiceMenuSelect
+			move.l              #$00060008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextServiceMenuSelect
+	ENDIF
+
+
+; *  SetTextServiceCursor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult SetTextServiceCursor(ComponentInstance ts, Point mousePos)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetTextServiceCursor
+			move.l              #$0004000A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTextServiceCursor
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  FixTextService()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult FixTextService(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FixTextService
+			move.l              #$00000009,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FixTextService
+	ENDIF
+
+
+; *  HidePaletteWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult HidePaletteWindows(ComponentInstance ts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HidePaletteWindows
+			move.l              #$0000000B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HidePaletteWindows
+	ENDIF
+
+
+; *  GetTextServiceProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult GetTextServiceProperty(ComponentInstance ts, OSType propertySelector, SInt32 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetTextServiceProperty
+			move.l              #$0008000C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetTextServiceProperty
+	ENDIF
+
+
+; *  SetTextServiceProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SetTextServiceProperty(ComponentInstance ts, OSType propertySelector, SInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetTextServiceProperty
+			move.l              #$0008000D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTextServiceProperty
+	ENDIF
+
+;  Get the active TSMDocument in the current application context.       
+;  If TSM has enabled bottom line input mode because no TSMDocument     
+;  is active, NULL will be returned.                                    
+
+; *  TSMGetActiveDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TSMDocumentID TSMGetActiveDocument(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TSMGetActiveDocument
+	ENDIF
+
+
+	ENDIF ; __TEXTSERVICES__ 
+

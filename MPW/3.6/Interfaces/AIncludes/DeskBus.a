@@ -1,0 +1,326 @@
+;
+;    File:       DeskBus.a
+;
+;    Contains:   Apple Desktop Bus (ADB) Interfaces.
+;
+;    Version:    Technology: System 8.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1987-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DESKBUS__') = 'UNDEFINED' THEN
+__DESKBUS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF TARGET_OS_MAC THEN
+; typedef SInt8 						ADBAddress
+
+; 
+;    TempADBServiceRoutineUPP is needed because of circular definition of
+;    ADBServiceRoutineProcPtr and ADBServiceRoutineUPP depending on each other.
+;
+
+; typedef ProcPtr 						TempADBServiceRoutineUPP
+
+ADBDataBlock			RECORD 0
+devType					 ds.b	1				; offset: $0 (0)		;  original handler ID 
+origADBAddr				 ds.b	1				; offset: $1 (1)		;  original ADB Address 
+dbServiceRtPtr			 ds.l	1				; offset: $2 (2)		;  service routine pointer 
+dbDataAreaAddr			 ds.l	1				; offset: $6 (6)		;  this field is passed as the refCon parameter to the service routine 
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct ADBDataBlock *			ADBDBlkPtr
+
+ADBSetInfoBlock			RECORD 0
+siService				 ds.l	1				; offset: $0 (0)		;  service routine pointer 
+siDataAreaAddr			 ds.l	1				; offset: $4 (4)		;  this field is passed as the refCon parameter to the service routine 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct ADBSetInfoBlock *		ADBSInfoPtr
+
+;  ADBOpBlock is only used when calling ADBOp from 68k assembly code 
+ADBOpBlock				RECORD 0
+dataBuffPtr				 ds.l	1				; offset: $0 (0)		;  buffer: pointer to variable length data buffer 
+opServiceRtPtr			 ds.l	1				; offset: $4 (4)		;  completionProc: completion routine pointer 
+opDataAreaPtr			 ds.l	1				; offset: $8 (8)		;  refCon: this field is passed as the refCon parameter to the completion routine 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct ADBOpBlock *			ADBOpBPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ADBReInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void ADBReInit(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ADBReInit:	OPWORD	$A07B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ADBReInit
+	ENDIF
+
+; 
+;    ADBOp has a different interface for 68k assembly than for everything else
+;    for 68k assembly the interface is 
+;    #pragma parameter __D0 ADBOp(__A0,__D0)
+;    OSErr ADBOp( ADBOpBlock * pb, short commandNum );
+;
+
+; 
+;    IMPORTANT NOTE:
+;    "Inside Macintosh: Devices" documents the completion routine for ADBOp will be called with
+;    four parameters using 68k register based calling conventions, specifically the completion routine
+;    passed in should be of type ADBServiceRoutineProcPtr. However, when upp types were first added
+;    to this interface file, the type ADBCompletionUPP was mistakenly used for the second parameter
+;    to ADBOp. Since applications have shipped using completion routines of type ADBCompletionUPP,
+;    the mistake cannot be corrected.
+;    The only difference between ADBServiceRoutineUPP and ADBCompletionUPP is the former takes an extra
+;    argument which is a pointer to itself, fortunately not needed for PowerPC code.
+;    For compatibility with existing 68k code, when an ADBOp completion routine is called,
+;    68k register A1 will point to the completion routine, as documented in Inside Mac.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ADBOp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ADBOp(Ptr refCon, ADBCompletionUPP compRout, Ptr buffer, short commandNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ADBOp:	OPWORD	$A07C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ADBOp
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CountADBs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CountADBs(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		_CountADBs:	OPWORD	$A077
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountADBs
+	ENDIF
+
+
+; *  GetIndADB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ADBAddress GetIndADB(ADBDataBlock *info, short devTableIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	info            => A0
+		;	devTableIndex   => D0
+		; returns:
+		;	ADBAddress      <= D0
+		_GetIndADB:	OPWORD	$A078
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIndADB
+	ENDIF
+
+
+; *  GetADBInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetADBInfo(ADBDataBlock *info, ADBAddress adbAddr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	info            => A0
+		;	adbAddr         => D0
+		; returns:
+		;	OSErr           <= D0
+		_GetADBInfo:	OPWORD	$A079
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetADBInfo
+	ENDIF
+
+
+; *  SetADBInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SetADBInfo(const ADBSetInfoBlock *info, ADBAddress adbAddr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	info            => A0
+		;	adbAddr         => D0
+		; returns:
+		;	OSErr           <= D0
+		_SetADBInfo:	OPWORD	$A07A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetADBInfo
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewADBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewADBDeviceDriverUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewADBServiceRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewADBInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeADBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeADBDeviceDriverUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeADBServiceRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeADBInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeADBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeADBDeviceDriverUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeADBServiceRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeADBInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_OS_MAC
+	ENDIF ; __DESKBUS__ 
+

@@ -1,0 +1,492 @@
+;
+;    File:       CMDeviceIntegration.a
+;
+;    Contains:   Color Management Device Interfaces - for MacOSX
+;
+;    Version:    Technology: ColorSync 3.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 2000-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CMDEVICEINTEGRATION__') = 'UNDEFINED' THEN
+__CMDEVICEINTEGRATION__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+	include 'CMApplication.a'
+	ENDIF
+	IF &TYPE('__CMICCPROFILE__') = 'UNDEFINED' THEN
+	include 'CMICCProfile.a'
+	ENDIF
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+	include 'CFString.a'
+	ENDIF
+
+	IF TARGET_API_MAC_OSX THEN
+; 
+;    The current versions of the data structure
+;    containing information on registered devices.
+;
+
+
+cmDeviceInfoVersion1			EQU		$00010000
+cmDeviceProfileInfoVersion1		EQU		$00010000
+
+cmCurrentDeviceInfoVersion		EQU		$00010000
+cmCurrentProfileInfoVersion		EQU		$00010000
+; 
+;    Certain APIs require a device ID or profile ID.  
+;    In some cases, a "default ID" can be used.
+;
+
+
+cmDefaultDeviceID				EQU		0
+cmDefaultProfileID				EQU		0
+; 
+;    Possible values for device states accessible by the
+;    CMGetDeviceState() and CMSetDeviceState() APIs.
+;
+
+
+cmDeviceStateDefault			EQU		$00000000
+cmDeviceStateOffline			EQU		$00000001
+cmDeviceStateBusy				EQU		$00000002
+cmDeviceStateForceNotify		EQU		$80000000
+cmDeviceStateDeviceRsvdBits		EQU		$00FF0000
+cmDeviceStateAppleRsvdBits		EQU		$FF00FFFF
+; 
+;    Possible values for flags passed to the
+;    CMIterateDeviceProfiles() API.
+;    
+;    "Factory" profiles are registered via the
+;    CMSetDeviceFactoryProfiles() API.
+;    
+;    "Custom" profiles are those which are meant to take
+;    the place of the factory profiles, as a result of
+;    customization or calibration.  These profiles are
+;    registered via the CMSetDeviceProfiles() API.
+;    
+;    To retrieve all of the the former for all devices,
+;    use cmIterateFactoryDeviceProfiles as the flags
+;    value when calling CMIterateDeviceProfiles().
+;    
+;    To retrieve only the latter for all devices, use
+;    the cmIterateCustomDeviceProfiles, as the flags
+;    value when calling CMIterateDeviceProfiles().
+;    
+;    To get the profiles in use for all devices, use
+;    cmIterateCurrentDeviceProfiles as the flags value.
+;    This will replace the factory profiles with any
+;    overrides, yielding the currently used set.
+;
+
+
+cmIterateFactoryDeviceProfiles	EQU		$00000001
+cmIterateCustomDeviceProfiles	EQU		$00000002
+cmIterateCurrentDeviceProfiles	EQU		$00000003
+cmIterateDeviceProfilesMask		EQU		$00000003
+
+kMaxDeviceNameLength			EQU		256
+kMaxProfileNameLength			EQU		256
+; 
+;    Errors returned by CMDeviceIntegration APIs
+;
+
+
+cmDeviceDBNotFoundErr			EQU		-4227				; Prefs not found/loaded 
+cmDeviceAlreadyRegistered		EQU		-4228				; Re-registration of device 
+cmDeviceNotRegistered			EQU		-4229				; Device not found 
+cmDeviceProfilesNotFound		EQU		-4230				; Profiles not found 
+cmInternalCFErr					EQU		-4231				; CoreFoundation failure 
+; 
+;    Device state data.
+;
+
+; typedef UInt32 						CMDeviceState
+
+; 
+;    A CMDeviceID must be unique within a device's class.
+;
+
+; typedef UInt32 						CMDeviceID
+
+; 
+;    A CMDeviceProfileID must only be unique per device.
+;
+
+; typedef UInt32 						CMDeviceProfileID
+
+; 
+;    DeviceClass type.
+;
+
+
+cmScannerDeviceClass			EQU		'scnr'
+cmCameraDeviceClass				EQU		'cmra'
+cmDisplayDeviceClass			EQU		'mntr'
+cmPrinterDeviceClass			EQU		'prtr'
+cmProofDeviceClass				EQU		'pruf'
+; typedef OSType 						CMDeviceClass
+
+; 
+;    CMDeviceScope
+;    Structure specifying a device's or a device setting's scope.
+;
+
+CMDeviceScope			RECORD 0
+deviceUser				 ds.l	1				; offset: $0 (0)		;  kCFPreferencesCurrentUser | _AnyUser 
+deviceHost				 ds.l	1				; offset: $4 (4)		;  kCFPreferencesCurrentHost | _AnyHost 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;    CMDeviceInfo
+;    Structure containing information on a given device.
+;
+
+CMDeviceInfo			RECORD 0
+dataVersion				 ds.l	1				; offset: $0 (0)		;  cmDeviceInfoVersion1 
+deviceClass				 ds.l	1				; offset: $4 (4)		;  device class 
+deviceID				 ds.l	1				; offset: $8 (8)		;  device ID 
+deviceScope				 ds		CMDeviceScope	; offset: $C (12)		;  device's scope 
+deviceState				 ds.l	1				; offset: $14 (20)		;  Device State flags 
+defaultProfileID		 ds.l	1				; offset: $18 (24)		;  Can change 
+deviceName				 ds.l	1				; offset: $1C (28)		;  Ptr to storage for CFDictionary of 
+;  localized device names (could be nil) 
+profileCount			 ds.l	1				; offset: $20 (32)		;  Count of registered profiles 
+reserved				 ds.l	1				; offset: $24 (36)		;  Reserved for use by ColorSync 
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+; typedef struct CMDeviceInfo *			CMDeviceInfoPtr
+
+; 
+;    CMDeviceProfileInfo
+;    Structure containing information on a device profile.
+;
+
+CMDeviceProfileInfo		RECORD 0
+dataVersion				 ds.l	1				; offset: $0 (0)		;  cmProfileInfoVersion1 
+profileID				 ds.l	1				; offset: $4 (4)		;  The identifier for this profile 
+profileLoc				 ds		CMProfileLocation ; offset: $8 (8)		;  The profile's location 
+profileName				 ds.l	1				; offset: $10A (266)	;  CFDictionary of localized device names 
+reserved				 ds.l	1				; offset: $10E (270)	;  Reserved for use by ColorSync 
+sizeof					 EQU *					; size:   $112 (274)
+						ENDR
+; 
+;    CMDeviceProfileArray
+;    Structure containing the profiles for a device.
+;
+
+CMDeviceProfileArray	RECORD 0
+profileCount			 ds.l	1				; offset: $0 (0)		;  Count of profiles in array 
+profiles				 ds		CMDeviceProfileInfo ; offset: $4 (4) <-- really an array of length one ;  The profile info records 
+sizeof					 EQU *					; size:   $116 (278)
+						ENDR
+; typedef struct CMDeviceProfileArray *	CMDeviceProfileArrayPtr
+
+; 
+;    Caller-supplied iterator functions
+;
+
+; 
+;    Device Registration
+;
+
+
+; *  CMRegisterColorDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMRegisterColorDevice(CMDeviceClass deviceClass, CMDeviceID deviceID, CFDictionaryRef deviceName, const CMDeviceScope *deviceScope)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMRegisterColorDevice
+	ENDIF
+
+
+; *  CMUnregisterColorDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMUnregisterColorDevice(CMDeviceClass deviceClass, CMDeviceID deviceID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMUnregisterColorDevice
+	ENDIF
+
+; 
+;    Default Device accessors
+;
+
+
+; *  CMSetDefaultDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDefaultDevice(CMDeviceClass deviceClass, CMDeviceID deviceID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDefaultDevice
+	ENDIF
+
+
+; *  CMGetDefaultDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDefaultDevice(CMDeviceClass deviceClass, CMDeviceID *deviceID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDefaultDevice
+	ENDIF
+
+; 
+;    Device Profile Registration & Access
+;
+
+
+; *  CMSetDeviceFactoryProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDeviceFactoryProfiles(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceProfileID defaultProfID, const CMDeviceProfileArray *deviceProfiles)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDeviceFactoryProfiles
+	ENDIF
+
+
+; *  CMGetDeviceFactoryProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceFactoryProfiles(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceProfileID *defaultProfID, UInt32 *arraySize, CMDeviceProfileArray *deviceProfiles)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceFactoryProfiles
+	ENDIF
+
+
+; *  CMSetDeviceProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDeviceProfiles(CMDeviceClass deviceClass, CMDeviceID deviceID, const CMDeviceScope *profileScope, const CMDeviceProfileArray *deviceProfiles)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDeviceProfiles
+	ENDIF
+
+
+; *  CMGetDeviceProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceProfiles(CMDeviceClass deviceClass, CMDeviceID deviceID, UInt32 *arraySize, CMDeviceProfileArray *deviceProfiles)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceProfiles
+	ENDIF
+
+
+; *  CMSetDeviceDefaultProfileID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDeviceDefaultProfileID(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceProfileID defaultProfID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDeviceDefaultProfileID
+	ENDIF
+
+
+; *  CMGetDeviceDefaultProfileID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceDefaultProfileID(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceProfileID *defaultProfID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceDefaultProfileID
+	ENDIF
+
+
+; *  CMGetDeviceProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceProfile(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceProfileID profileID, CMProfileLocation *deviceProfLoc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceProfile
+	ENDIF
+
+
+; *  CMSetDeviceProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDeviceProfile(CMDeviceClass deviceClass, CMDeviceID deviceID, const CMDeviceScope *profileScope, CMDeviceProfileID profileID, const CMProfileLocation *deviceProfLoc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDeviceProfile
+	ENDIF
+
+; 
+;    Other Device State/Info accessors
+;
+
+
+; *  CMSetDeviceState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetDeviceState(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceState deviceState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDeviceState
+	ENDIF
+
+
+; *  CMGetDeviceState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceState(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceState *deviceState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceState
+	ENDIF
+
+
+; *  CMGetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetDeviceInfo(CMDeviceClass deviceClass, CMDeviceID deviceID, CMDeviceInfo *deviceInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDeviceInfo
+	ENDIF
+
+; 
+;    Device Data & Profile Iterators
+;
+
+
+; *  CMIterateColorDevices()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMIterateColorDevices(CMIterateDeviceInfoProcPtr proc, UInt32 *seed, UInt32 *count, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIterateColorDevices
+	ENDIF
+
+
+; *  CMIterateDeviceProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMIterateDeviceProfiles(CMIterateDeviceProfileProcPtr proc, UInt32 *seed, UInt32 *count, UInt32 flags, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIterateDeviceProfiles
+	ENDIF
+
+	ENDIF	; TARGET_API_MAC_OSX
+	ENDIF ; __CMDEVICEINTEGRATION__ 
+

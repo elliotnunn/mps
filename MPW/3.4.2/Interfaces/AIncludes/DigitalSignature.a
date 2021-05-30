@@ -1,0 +1,540 @@
+;
+;	File:		DigitalSignature.a
+;
+;	Contains:	Digital Signature Interfaces.
+;
+;	Version:	Technology:	AOCE toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__DIGITALSIGNATURE__') = 'UNDEFINED' THEN
+__DIGITALSIGNATURE__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;		include 'Finder.a'											;
+
+kSIGNewContext					EQU		1900
+kSIGDisposeContext				EQU		1901
+kSIGSignPrepare					EQU		1902
+kSIGSign						EQU		1903
+kSIGVerifyPrepare				EQU		1904
+kSIGVerify						EQU		1905
+kSIGDigestPrepare				EQU		1906
+kSIGDigest						EQU		1907
+kSIGProcessData					EQU		1908
+kSIGShowSigner					EQU		1909
+kSIGGetSignerInfo				EQU		1910
+kSIGGetCertInfo					EQU		1911
+kSIGGetCertNameAttributes		EQU		1912
+kSIGGetCertIssuerNameAttributes	EQU		1913
+kSIGFileIsSigned				EQU		2500
+kSIGSignFile					EQU		2501
+kSIGVerifyFile					EQU		2502
+
+kSIGCountryCode					EQU		0
+kSIGOrganization				EQU		1
+kSIGStreetAddress				EQU		2
+kSIGState						EQU		3
+kSIGLocality					EQU		4
+kSIGCommonName					EQU		5
+kSIGTitle						EQU		6
+kSIGOrganizationUnit			EQU		7
+kSIGPostalCode					EQU		8
+
+; typedef unsigned short 	SIGNameAttributeType
+; 
+;Certificate status codes returned in SIGCertInfo or SIGSignerInfo from
+;either SIGGetCertInfo or SIGGetSignerInfo respectively. kSIGValid means that
+;the certificate is currently valid. kSIGPending means the certificate is
+;currently not valid - but will be.  kSIGExpired means the certificate has
+;expired. A time is always associated with a SIGCertStatus.  In each case the
+;time has a specific interpretation.  When the status is kSIGValid the time is
+;when the certificate will expire. When the status is kSIGPending the time is
+;when the certificate will become valid. When the status is kSIGExpired the time
+;is when the certificate expired. In the SIGCertInfo structure, the startDate
+;and endDate fields hold the appropriate date information.  In the SIGSignerInfo
+;structure, this information is provided in the certSetStatusTime field. In the
+;SIGSignerInfo struct, the status time is actually represented by the SIGSignatureStatus
+;field which can contain any of the types below. NOTE: The only time you will get 
+;a kSIGInvalid status is when it pertains to a SIGSignatureStatus field and only when
+;you get a signature that was created after the certificates expiration date, something
+;we are not allowing on the Mac but that may not be restricted on other platforms. Also, 
+;it will not be possible to get a kSIGPending value for SIGSignatureStatus on the Mac but
+;possibly allowed by other platforms.
+;
+; Values for SIGCertStatus or SIGSignatureStatus 
+
+kSIGValid						EQU		0					; possible for either a SIGCertStatus or SIGSignatureStatus 
+kSIGPending						EQU		1					; possible for either a SIGCertStatus or SIGSignatureStatus 
+kSIGExpired						EQU		2					; possible for either a SIGCertStatus or SIGSignatureStatus
+;	* possible only for a SIGSignatureStatus 
+kSIGInvalid						EQU		3
+
+; typedef unsigned short 	SIGCertStatus
+; typedef unsigned short 	SIGSignatureStatus
+; Gestalt selector code - returns toolbox version in low-order word 
+
+gestaltDigitalSignatureVersion	EQU		'dsig'
+
+; Number of bytes needed for a digest record when using SIGDigest 
+kSIGDigestSize					EQU		16
+
+; typedef Byte 				SIGDigestData[kSIGDigestSize], *SIGDigestDataPtr
+SIGCertInfo 			RECORD	0
+startDate				 ds.l   1		; offset: $0 (0)		; cert start validity date 
+endDate					 ds.l   1		; offset: $4 (4)		; cert end validity date 
+certStatus				 ds.w   1		; offset: $8 (8)		; see comment on SIGCertStatus for definition 
+certAttributeCount		 ds.l   1		; offset: $A (10)		; number of name attributes in this cert 
+issuerAttributeCount	 ds.l   1		; offset: $E (14)		; number of name attributes in this certs issuer 
+serialNumber			 ds.l   64		; offset: $12 (18)		; cert serial number 
+sizeof					 EQU *			; size:   $112 (274)
+						ENDR
+
+; typedef struct SIGCertInfo  SIGCertInfo
+; typedef SIGCertInfo 		*SIGCertInfoPtr
+SIGSignerInfo 			RECORD	0
+signingTime				 ds.l   1		; offset: $0 (0)		; time of signing 
+certCount				 ds.l   1		; offset: $4 (4)		; number of certificates in the cert set 
+certSetStatusTime		 ds.l   1		; offset: $8 (8)		; Worst cert status time. See comment on SIGCertStatus for definition 
+signatureStatus			 ds.w   1		; offset: $C (12)		; The status of the signature. See comment on SIGCertStatus for definition
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct SIGSignerInfo  SIGSignerInfo
+; typedef SIGSignerInfo 	*SIGSignerInfoPtr
+SIGNameAttributesInfo 	RECORD	0
+onNewLevel				 ds.b   1		; offset: $0 (0)
+filler1					 ds.b   1		; offset: $1 (1)
+attributeType			 ds.w   1		; offset: $2 (2)
+attributeScript			 ds.w   1		; offset: $4 (4)
+attribute				 ds.l   64		; offset: $6 (6)
+sizeof					 EQU *			; size:   $106 (262)
+						ENDR
+
+; typedef struct SIGNameAttributesInfo  SIGNameAttributesInfo
+; typedef SIGNameAttributesInfo  *SIGNameAttributesInfoPtr
+; typedef Ptr 				SIGContextPtr
+; typedef Ptr 				SIGSignaturePtr
+;
+;Certificates are always in order. That is, the signers cert is always 0, the
+;issuer of the signers cert is always 1 etc… to the number of certificates-1.
+;You can use this constant for readability in your code.
+;
+
+kSIGSignerCertIndex				EQU		0
+
+;
+;Call back procedure supplied by developer, return false to cancel the current
+;process.
+;
+;
+;Resource id's of standard signature icon suite, all sizes and colors are available.
+;
+kSIGSignatureIconResID			EQU		-16800
+kSIGValidSignatureIconResID		EQU		-16799
+kSIGInvalidSignatureIconResID	EQU		-16798
+
+; ——————————————————————————————— CONTEXT CALLS ——————————————————————————————— 
+;To use the Digital Signature toolbox you will need a SIGContextPtr.  To create
+;a SIGContextPtr you simply call SIGNewContext and it will create and initialize
+;a context for you.  To free the memory occupied by the context and invalidate
+;its internal data, call SIGDisposeContext. An initialized context has no notion
+;of the type of operation it will be performing however, once you call
+;SIGSignPrepare SIGVerifyPrepare, or SIGDigestPrepare, the contexts operation
+;type is set and to switch  to another type of operation will require creating a
+;new context. Be sure to pass the same context to corresponding toolbox calls
+;(ie SIGSignPrepare, SIGProcessData, SIGSign)  in other words mixing lets say
+;signing and verify calls with the same context is not allowed.
+;
+;
+; pascal OSErr SIGNewContext(SIGContextPtr *context)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGNewContext
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$076C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGNewContext
+	ENDIF
+
+;
+; pascal OSErr SIGDisposeContext(SIGContextPtr context)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGDisposeContext
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$076D
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGDisposeContext
+	ENDIF
+
+; ——————————————————————————————— SIGNING CALLS ——————————————————————————————— 
+;Once you have created a SIGContextPtr, you create a signature by calling
+;SIGSignPrepare once, followed by n calls to SIGProcessData, followed by one call
+;toRcpt SIGSign. To create another signature on different data but for the same
+;signer, don't dispose of the context and call SIGProcessData for the new data
+;followed by a call SIGSign again. In this case the signer will not be prompted
+;for their signer and password again as it was already provided.  Once you call
+;SIGDisposeContext, all signer information will be cleared out of the context and
+;the signer will be re-prompted.  The signer file FSSpecPtr should be set to nil
+;if you want the toolbox to use the last signer by default or prompt for a signer
+;if none exists.  The prompt parameter can be used to pass a string to be displayed
+;in the dialog that prompts the user for their password.  If the substring "^1"
+;(without the quotes) is in the prompt string, then the toolbox will replace it
+;with the name of the signer from the signer selected by the user.  If an empty
+;string is passed, the following default string will be sent to the toolbox
+;"\pSigning as ^1.".  You can call any of the utility routines after SIGSignPrepare
+;or SIGSign to get information about the signer or certs.
+;
+;
+; pascal OSErr SIGSignPrepare(SIGContextPtr context, const FSSpec *signerFile, ConstStr255Param prompt, Size *signatureSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGSignPrepare
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$076E
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGSignPrepare
+	ENDIF
+
+;
+; pascal OSErr SIGSign(SIGContextPtr context, SIGSignaturePtr signature, SIGStatusUPP statusProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGSign
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$076F
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGSign
+	ENDIF
+
+; ——————————————————————————————— VERIFYING CALLS ——————————————————————————————— 
+;Once you have created a SIGContextPtr, you verify a signature by calling
+;SIGVerifyPrepare  once, followed by n calls to SIGProcessData, followed by one
+;call to SIGVerify. Check the return code from SIGVerify to see if the signature
+;verified or not (noErr is returned on  success otherwise the appropriate error
+;code).  Upon successfull verification, you can call any of the utility routines
+;toRcpt find out who signed the data.
+;
+;
+; pascal OSErr SIGVerifyPrepare(SIGContextPtr context, SIGSignaturePtr signature, Size signatureSize, SIGStatusUPP statusProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGVerifyPrepare
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0770
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGVerifyPrepare
+	ENDIF
+
+;
+; pascal OSErr SIGVerify(SIGContextPtr context)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGVerify
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0771
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGVerify
+	ENDIF
+
+; —————————————————————————————— DIGESTING CALLS —————————————————————————————— 
+;Once you have created a SIGContextPtr, you create a digest by calling
+;SIGDigestPrepare once, followed by n calls to SIGProcessData, followed by one
+;call to SIGDigest.  You can dispose of the context after SIGDigest as the
+;SIGDigestData does not reference back into it.  SIGDigest returns the digest in
+;digest.
+;
+;
+; pascal OSErr SIGDigestPrepare(SIGContextPtr context)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGDigestPrepare
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0772
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGDigestPrepare
+	ENDIF
+
+;
+; pascal OSErr SIGDigest(SIGContextPtr context, SIGDigestData digest)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGDigest
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0773
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGDigest
+	ENDIF
+
+; —————————————————————————————— PROCESSING DATA —————————————————————————————— 
+;To process data during a digest, sign, or verify operation call SIGProcessData
+;as many times as necessary and with any sized blocks of data.  The data needs to
+;be processed in the same order during corresponding sign and verify operations
+;but does not need to be processed in the same sized chunks (i.e., the toolbox
+;just sees it as a continuous bit stream).
+;
+;
+; pascal OSErr SIGProcessData(SIGContextPtr context, const void *data, Size dataSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGProcessData
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$0774
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGProcessData
+	ENDIF
+
+; ——————————————————————————————— UTILITY CALLS ——————————————————————————————— 
+;Given a context that has successfully performed a verification SIGShowSigner
+;will  display a modal dialog with the entire distinguished name of the person
+;who signed the data. the prompt (if supplied) will appear at the top of the
+;dialog.  If no prompt is specified, the default prompt "\pVerification
+;Successfull." will appear.
+;
+;Given a context that has been populated by calling SIGSignPrepare, SIGSign or a
+;successful SIGVerify, you can make the remaining utility calls:
+;
+;SIGGetSignerInfo will return the SignerInfo record.  The certCount can be used
+;toRcpt index into the certificate set when calling SIGGetCertInfo,
+;SIGGetCertNameAttributes or SIGGetCertIssuerNameAttributes. The signingTime is
+;only defined if the call is made after SIGSign  or SIGVerify. The certSetStatus
+;will tell you the best status of the entire certificate set while
+;certSetStatusTime will correspond to the time associated with that status (see
+;definitions above).
+;
+;SIGGetCertInfo will return the SIGCertInfo record when given a valid index into
+;the cert set in  certIndex.  Note: The cert at index kSIGSignerCertIndex is
+;always the signers certificate.  The  serial number, start date and end date
+;are there should you wish to display that info.  The  certAttributeCount and
+;issuerAttributeCount provide the number of parts in the name of that certificate
+;or that certificates issuer respectively.  You use these numbers to index into
+;either SIGGetCertNameAttributes or SIGGetCertIssuerNameAttributes to retrieve
+;the name. The certStatus will tell you the status of the certificate while
+;certStatusTime will correspond to the time associated with that status (see
+;definitions above).
+;
+;SIGGetCertNameAttributes and SIGGetCertIssuerNameAttributes return name parts
+;of the certificate at  certIndex and attributeIndex.  The newLevel return value
+;tells you wether the name attribute returned is at the same level in the name
+;hierarchy as the previous attribute.  The type return value tells you  the type
+;of attribute returned. nameAttribute is the actual string containing the name
+;attribute.   So, if you wanted to display the entire distinguished name of the
+;person who's signature was just validated you could do something like this;
+;
+;	(…… variable declarations and verification code would preceed this sample ……)
+;
+;	error = SIGGetCertInfo(verifyContext, kSIGSignerCertIndex, &certInfo);
+;	HandleErr(error);
+;
+;	for (i = 0; i <= certInfo.certAttributeCount-1; i++)
+;		{
+;		error = SIGGetCertNameAttributes(
+;			verifyContext, kSIGSignerCertIndex, i, &newLevel, &type, theAttribute);
+;		HandleErr(error);
+;		DisplayNamePart(theAttribute, type, newLevel);
+;		}
+;
+;
+; pascal OSErr SIGShowSigner(SIGContextPtr context, ConstStr255Param prompt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGShowSigner
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0775
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGShowSigner
+	ENDIF
+
+;
+; pascal OSErr SIGGetSignerInfo(SIGContextPtr context, SIGSignerInfo *signerInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGGetSignerInfo
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0776
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGGetSignerInfo
+	ENDIF
+
+;
+; pascal OSErr SIGGetCertInfo(SIGContextPtr context, unsigned long certIndex, SIGCertInfo *certInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGGetCertInfo
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$0777
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGGetCertInfo
+	ENDIF
+
+;
+; pascal OSErr SIGGetCertNameAttributes(SIGContextPtr context, unsigned long certIndex, unsigned long attributeIndex, SIGNameAttributesInfo *attributeInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGGetCertNameAttributes
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0778
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGGetCertNameAttributes
+	ENDIF
+
+;
+; pascal OSErr SIGGetCertIssuerNameAttributes(SIGContextPtr context, unsigned long certIndex, unsigned long attributeIndex, SIGNameAttributesInfo *attributeInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGGetCertIssuerNameAttributes
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0779
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGGetCertIssuerNameAttributes
+	ENDIF
+
+; ——————————————————————————— FILE SIGN & VERIFY CALLS —————————————————————————— 
+;These calls allow you to detect the presence of a standard signtaure in a file as 
+;well as sign and verify files in a standard way.  An example of this is the Finder, 
+;which uses these calls to allow the user to "drop sign" a file.
+;
+;To detect if a file is signed in the standard way, pass the FSSpec of the file to SIGFileIsSigned.
+;A result of noErr means the file is in fact signed, otherwise, a kSIGNoSignature error will
+;be returned.
+;
+;Once you have created a SIGContextPtr, you can make calls to either sign or verify a file in
+;a standard way: 
+;
+;To sign a file, call SIGSignPrepare followed by 'n' number of calls to SIGSignFile,
+;passing it the file spec for each file you wish to sign in turn.  You supply the context, the signature 
+;size that was returned from SIGSignPrepare and an optional call back proc.  The call will take care of all
+;the processing of data and affixing the signature to the file. If a signature already exists in the file, 
+;it is replaced with the newly created signature.
+;
+;To verify a file that was signed using SIGSignFile, call SIGVerifyFile passing it a new context and 
+;the file spec.  Once this call has completed, if the verification is successfull, you can pass the context 
+;to SIGShowSigner to display the name of the person who signed the file.
+;
+;
+; pascal OSErr SIGFileIsSigned(const FSSpec *fileSpec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGFileIsSigned
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$09C4
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGFileIsSigned
+	ENDIF
+
+;
+; pascal OSErr SIGSignFile(SIGContextPtr context, Size signatureSize, const FSSpec *fileSpec, SIGStatusUPP statusProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGSignFile
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$09C5
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGSignFile
+	ENDIF
+
+;
+; pascal OSErr SIGVerifyFile(SIGContextPtr context, const FSSpec *fileSpec, SIGStatusUPP statusProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SIGVerifyFile
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$09C6
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SIGVerifyFile
+	ENDIF
+
+	ENDIF ; __DIGITALSIGNATURE__

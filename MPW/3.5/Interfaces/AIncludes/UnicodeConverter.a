@@ -1,0 +1,662 @@
+;
+;    File:       UnicodeConverter.a
+;
+;    Contains:   Types, constants, and prototypes for Unicode Converter
+;
+;    Version:    Technology: Mac OS 9.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__UNICODECONVERTER__') = 'UNDEFINED' THEN
+__UNICODECONVERTER__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+;  Unicode conversion contexts: 
+
+
+
+
+
+
+; typedef const TextToUnicodeInfo 		ConstTextToUnicodeInfo
+
+; typedef const UnicodeToTextInfo 		ConstUnicodeToTextInfo
+
+;  UnicodeMapVersion type & values 
+; typedef SInt32 						UnicodeMapVersion
+
+
+kUnicodeUseLatestMapping		EQU		-1
+kUnicodeUseHFSPlusMapping		EQU		4
+;  Types used in conversion 
+UnicodeMapping			RECORD 0
+unicodeEncoding			 ds.l	1				; offset: $0 (0)
+otherEncoding			 ds.l	1				; offset: $4 (4)
+mappingVersion			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct UnicodeMapping *		UnicodeMappingPtr
+
+; typedef const struct UnicodeMapping *	ConstUnicodeMappingPtr
+
+;  Control flags for ConvertFromUnicodeToText and ConvertFromTextToUnicode 
+
+kUnicodeUseFallbacksBit			EQU		0
+kUnicodeKeepInfoBit				EQU		1
+kUnicodeDirectionalityBits		EQU		2
+kUnicodeVerticalFormBit			EQU		4
+kUnicodeLooseMappingsBit		EQU		5
+kUnicodeStringUnterminatedBit	EQU		6
+kUnicodeTextRunBit				EQU		7
+kUnicodeKeepSameEncodingBit		EQU		8
+kUnicodeForceASCIIRangeBit		EQU		9
+kUnicodeNoHalfwidthCharsBit		EQU		10
+kUnicodeTextRunHeuristicsBit	EQU		11
+
+kUnicodeUseFallbacksMask		EQU		$00000001
+kUnicodeKeepInfoMask			EQU		$00000002
+kUnicodeDirectionalityMask		EQU		$0000000C
+kUnicodeVerticalFormMask		EQU		$00000010
+kUnicodeLooseMappingsMask		EQU		$00000020
+kUnicodeStringUnterminatedMask	EQU		$00000040
+kUnicodeTextRunMask				EQU		$00000080
+kUnicodeKeepSameEncodingMask	EQU		$00000100
+kUnicodeForceASCIIRangeMask		EQU		$00000200
+kUnicodeNoHalfwidthCharsMask	EQU		$00000400
+kUnicodeTextRunHeuristicsMask	EQU		$00000800
+;  Values for kUnicodeDirectionality field 
+
+kUnicodeDefaultDirection		EQU		0
+kUnicodeLeftToRight				EQU		1
+kUnicodeRightToLeft				EQU		2
+;  Directionality masks for control flags 
+
+kUnicodeDefaultDirectionMask	EQU		$00
+kUnicodeLeftToRightMask			EQU		$04
+kUnicodeRightToLeftMask			EQU		$08
+
+;  Control flags for TruncateForUnicodeToText: 
+
+;   Now TruncateForUnicodeToText uses control flags from the same set as used by
+;   ConvertFromTextToUnicode, ConvertFromUnicodeToText, etc., but only
+;   kUnicodeStringUnterminatedMask is meaningful for TruncateForUnicodeToText.
+;   
+;   Previously two special control flags were defined for TruncateForUnicodeToText:
+;        kUnicodeTextElementSafeBit = 0
+;        kUnicodeRestartSafeBit = 1
+;   However, neither of these was implemented.
+;   Instead of implementing kUnicodeTextElementSafeBit, we now use
+;   kUnicodeStringUnterminatedMask since it accomplishes the same thing and avoids
+;   having special flags just for TruncateForUnicodeToText
+;   Also, kUnicodeRestartSafeBit is unnecessary, since restart-safeness is handled by
+;   setting kUnicodeKeepInfoBit with ConvertFromUnicodeToText.
+;   If TruncateForUnicodeToText is called with one or both of the old special control
+;   flags set (bits 0 or 1), it will not generate a paramErr, but the old bits have no
+;   effect on its operation.
+
+
+
+;  Filter bits for filter field in QueryUnicodeMappings and CountUnicodeMappings: 
+
+kUnicodeMatchUnicodeBaseBit		EQU		0
+kUnicodeMatchUnicodeVariantBit	EQU		1
+kUnicodeMatchUnicodeFormatBit	EQU		2
+kUnicodeMatchOtherBaseBit		EQU		3
+kUnicodeMatchOtherVariantBit	EQU		4
+kUnicodeMatchOtherFormatBit		EQU		5
+
+kUnicodeMatchUnicodeBaseMask	EQU		$00000001
+kUnicodeMatchUnicodeVariantMask	EQU		$00000002
+kUnicodeMatchUnicodeFormatMask	EQU		$00000004
+kUnicodeMatchOtherBaseMask		EQU		$00000008
+kUnicodeMatchOtherVariantMask	EQU		$00000010
+kUnicodeMatchOtherFormatMask	EQU		$00000020
+;  Control flags for SetFallbackUnicodeToText 
+
+kUnicodeFallbackSequencingBits	EQU		0
+
+kUnicodeFallbackSequencingMask	EQU		$00000003
+kUnicodeFallbackInterruptSafeMask EQU	$00000004			; To indicate that caller fallback routine doesn’t move memory
+;  values for kUnicodeFallbackSequencing field 
+
+kUnicodeFallbackDefaultOnly		EQU		0
+kUnicodeFallbackCustomOnly		EQU		1
+kUnicodeFallbackDefaultFirst	EQU		2
+kUnicodeFallbackCustomFirst		EQU		3
+
+;  Caller-supplied entry point to a fallback handler 
+
+; *  NewUnicodeToTextFallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeUnicodeToTextFallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeUnicodeToTextFallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  Function prototypes 
+	IF TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+
+;    Routine to Initialize the Unicode Converter and cleanup once done with it. 
+;    These routines must be called from Static Library clients.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitializeUnicodeConverter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus InitializeUnicodeConverter(StringPtr TECFileName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitializeUnicodeConverter
+	ENDIF
+
+
+; *  TerminateUnicodeConverter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TerminateUnicodeConverter(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TerminateUnicodeConverter
+	ENDIF
+
+;  Note: the old names (InitializeUnicode, TerminateUnicode) for the above are still exported.
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+; *  CreateTextToUnicodeInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateTextToUnicodeInfo(ConstUnicodeMappingPtr iUnicodeMapping, TextToUnicodeInfo *oTextToUnicodeInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateTextToUnicodeInfo
+	ENDIF
+
+
+; *  CreateTextToUnicodeInfoByEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateTextToUnicodeInfoByEncoding(TextEncoding iEncoding, TextToUnicodeInfo *oTextToUnicodeInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateTextToUnicodeInfoByEncoding
+	ENDIF
+
+
+; *  CreateUnicodeToTextInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateUnicodeToTextInfo(ConstUnicodeMappingPtr iUnicodeMapping, UnicodeToTextInfo *oUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateUnicodeToTextInfo
+	ENDIF
+
+
+; *  CreateUnicodeToTextInfoByEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateUnicodeToTextInfoByEncoding(TextEncoding iEncoding, UnicodeToTextInfo *oUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateUnicodeToTextInfoByEncoding
+	ENDIF
+
+
+; *  CreateUnicodeToTextRunInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateUnicodeToTextRunInfo(ItemCount iNumberOfMappings, const UnicodeMapping iUnicodeMappings[], UnicodeToTextRunInfo *oUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateUnicodeToTextRunInfo
+	ENDIF
+
+
+; *  CreateUnicodeToTextRunInfoByEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateUnicodeToTextRunInfoByEncoding(ItemCount iNumberOfEncodings, const TextEncoding iEncodings[], UnicodeToTextRunInfo *oUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateUnicodeToTextRunInfoByEncoding
+	ENDIF
+
+
+; *  CreateUnicodeToTextRunInfoByScriptCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateUnicodeToTextRunInfoByScriptCode(ItemCount iNumberOfScriptCodes, const ScriptCode iScripts[], UnicodeToTextRunInfo *oUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateUnicodeToTextRunInfoByScriptCode
+	ENDIF
+
+;  Change the TextToUnicodeInfo to another mapping. 
+
+; *  ChangeTextToUnicodeInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeTextToUnicodeInfo(TextToUnicodeInfo ioTextToUnicodeInfo, ConstUnicodeMappingPtr iUnicodeMapping)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeTextToUnicodeInfo
+	ENDIF
+
+;  Change the UnicodeToTextInfo to another mapping. 
+
+; *  ChangeUnicodeToTextInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeUnicodeToTextInfo(UnicodeToTextInfo ioUnicodeToTextInfo, ConstUnicodeMappingPtr iUnicodeMapping)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeUnicodeToTextInfo
+	ENDIF
+
+
+
+; *  DisposeTextToUnicodeInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DisposeTextToUnicodeInfo(TextToUnicodeInfo *ioTextToUnicodeInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeTextToUnicodeInfo
+	ENDIF
+
+
+; *  DisposeUnicodeToTextInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DisposeUnicodeToTextInfo(UnicodeToTextInfo *ioUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeUnicodeToTextInfo
+	ENDIF
+
+
+; *  DisposeUnicodeToTextRunInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DisposeUnicodeToTextRunInfo(UnicodeToTextRunInfo *ioUnicodeToTextRunInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeUnicodeToTextRunInfo
+	ENDIF
+
+
+; *  ConvertFromTextToUnicode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromTextToUnicode(TextToUnicodeInfo iTextToUnicodeInfo, ByteCount iSourceLen, ConstLogicalAddress iSourceStr, OptionBits iControlFlags, ItemCount iOffsetCount, ByteOffset iOffsetArray[], ItemCount *oOffsetCount, ByteOffset oOffsetArray[], ByteCount iOutputBufLen, ByteCount *oSourceRead, ByteCount *oUnicodeLen, UniChar oUnicodeStr[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromTextToUnicode
+	ENDIF
+
+
+; *  ConvertFromUnicodeToText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromUnicodeToText(UnicodeToTextInfo iUnicodeToTextInfo, ByteCount iUnicodeLen, const UniChar iUnicodeStr[], OptionBits iControlFlags, ItemCount iOffsetCount, ByteOffset iOffsetArray[], ItemCount *oOffsetCount, ByteOffset oOffsetArray[], ByteCount iOutputBufLen, ByteCount *oInputRead, ByteCount *oOutputLen, LogicalAddress oOutputStr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromUnicodeToText
+	ENDIF
+
+
+; *  ConvertFromUnicodeToTextRun()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromUnicodeToTextRun(UnicodeToTextRunInfo iUnicodeToTextInfo, ByteCount iUnicodeLen, const UniChar iUnicodeStr[], OptionBits iControlFlags, ItemCount iOffsetCount, ByteOffset iOffsetArray[], ItemCount *oOffsetCount, ByteOffset oOffsetArray[], ByteCount iOutputBufLen, ByteCount *oInputRead, ByteCount *oOutputLen, LogicalAddress oOutputStr, ItemCount iEncodingRunBufLen, ItemCount *oEncodingRunOutLen, TextEncodingRun oEncodingRuns[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromUnicodeToTextRun
+	ENDIF
+
+
+; *  ConvertFromUnicodeToScriptCodeRun()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromUnicodeToScriptCodeRun(UnicodeToTextRunInfo iUnicodeToTextInfo, ByteCount iUnicodeLen, const UniChar iUnicodeStr[], OptionBits iControlFlags, ItemCount iOffsetCount, ByteOffset iOffsetArray[], ItemCount *oOffsetCount, ByteOffset oOffsetArray[], ByteCount iOutputBufLen, ByteCount *oInputRead, ByteCount *oOutputLen, LogicalAddress oOutputStr, ItemCount iScriptRunBufLen, ItemCount *oScriptRunOutLen, ScriptCodeRun oScriptCodeRuns[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromUnicodeToScriptCodeRun
+	ENDIF
+
+;  Truncate a multibyte string at a safe place. 
+
+; *  TruncateForTextToUnicode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TruncateForTextToUnicode(ConstTextToUnicodeInfo iTextToUnicodeInfo, ByteCount iSourceLen, ConstLogicalAddress iSourceStr, ByteCount iMaxLen, ByteCount *oTruncatedLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TruncateForTextToUnicode
+	ENDIF
+
+;  Truncate a Unicode string at a safe place. 
+
+; *  TruncateForUnicodeToText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TruncateForUnicodeToText(ConstUnicodeToTextInfo iUnicodeToTextInfo, ByteCount iSourceLen, const UniChar iSourceStr[], OptionBits iControlFlags, ByteCount iMaxLen, ByteCount *oTruncatedLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TruncateForUnicodeToText
+	ENDIF
+
+;  Convert a Pascal string to Unicode string. 
+
+; *  ConvertFromPStringToUnicode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromPStringToUnicode(TextToUnicodeInfo iTextToUnicodeInfo, ConstStr255Param iPascalStr, ByteCount iOutputBufLen, ByteCount *oUnicodeLen, UniChar oUnicodeStr[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromPStringToUnicode
+	ENDIF
+
+;  Convert a Unicode string to Pascal string. 
+
+; *  ConvertFromUnicodeToPString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConvertFromUnicodeToPString(UnicodeToTextInfo iUnicodeToTextInfo, ByteCount iUnicodeLen, const UniChar iUnicodeStr[], Str255 oPascalStr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConvertFromUnicodeToPString
+	ENDIF
+
+;  Count the available conversion mappings. 
+
+; *  CountUnicodeMappings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CountUnicodeMappings(OptionBits iFilter, ConstUnicodeMappingPtr iFindMapping, ItemCount *oActualCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountUnicodeMappings
+	ENDIF
+
+;  Get a list of the available conversion mappings. 
+
+; *  QueryUnicodeMappings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus QueryUnicodeMappings(OptionBits iFilter, ConstUnicodeMappingPtr iFindMapping, ItemCount iMaxCount, ItemCount *oActualCount, UnicodeMapping oReturnedMappings[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QueryUnicodeMappings
+	ENDIF
+
+;  Setup the fallback handler for converting Unicode To Text. 
+
+; *  SetFallbackUnicodeToText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetFallbackUnicodeToText(UnicodeToTextInfo iUnicodeToTextInfo, UnicodeToTextFallbackUPP iFallback, OptionBits iControlFlags, LogicalAddress iInfoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetFallbackUnicodeToText
+	ENDIF
+
+;  Setup the fallback handler for converting Unicode To TextRuns. 
+
+; *  SetFallbackUnicodeToTextRun()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetFallbackUnicodeToTextRun(UnicodeToTextRunInfo iUnicodeToTextRunInfo, UnicodeToTextFallbackUPP iFallback, OptionBits iControlFlags, LogicalAddress iInfoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetFallbackUnicodeToTextRun
+	ENDIF
+
+;  Re-initialize all state information kept by the context objects. 
+
+; *  ResetTextToUnicodeInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.3 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ResetTextToUnicodeInfo(TextToUnicodeInfo ioTextToUnicodeInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResetTextToUnicodeInfo
+	ENDIF
+
+;  Re-initialize all state information kept by the context objects. 
+
+; *  ResetUnicodeToTextInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ResetUnicodeToTextInfo(UnicodeToTextInfo ioUnicodeToTextInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResetUnicodeToTextInfo
+	ENDIF
+
+;  Re-initialize all state information kept by the context objects in TextRun conversions. 
+
+; *  ResetUnicodeToTextRunInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in UnicodeConverter 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ResetUnicodeToTextRunInfo(UnicodeToTextRunInfo ioUnicodeToTextRunInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResetUnicodeToTextRunInfo
+	ENDIF
+
+
+	ENDIF ; __UNICODECONVERTER__ 
+

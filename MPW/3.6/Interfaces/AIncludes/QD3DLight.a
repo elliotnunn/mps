@@ -1,0 +1,845 @@
+;
+;    File:       QD3DLight.a
+;
+;    Contains:   Generic light routines
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QD3DLIGHT__') = 'UNDEFINED' THEN
+__QD3DLIGHT__ SET 1
+
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+	include 'QD3D.a'
+	ENDIF
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Enum Definitions                                 **
+; **                                                                          **
+; ****************************************************************************
+
+
+; typedef long							TQ3AttenuationType
+kQ3AttenuationTypeNone			EQU		0
+kQ3AttenuationTypeInverseDistance EQU	1
+kQ3AttenuationTypeInverseDistanceSquared EQU 2
+
+
+; typedef long							TQ3FallOffType
+kQ3FallOffTypeNone				EQU		0
+kQ3FallOffTypeLinear			EQU		1
+kQ3FallOffTypeExponential		EQU		2
+kQ3FallOffTypeCosine			EQU		3
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Data Structure Definitions                       **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3LightData			RECORD 0
+isOn					 ds.l	1				; offset: $0 (0)
+brightness				 ds		Float32			; offset: $4 (4)
+color					 ds		TQ3ColorRGB		; offset: $8 (8)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+TQ3DirectionalLightData	RECORD 0
+lightData				 ds		TQ3LightData	; offset: $0 (0)
+castsShadows			 ds.l	1				; offset: $14 (20)
+direction				 ds		TQ3Vector3D		; offset: $18 (24)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+TQ3PointLightData		RECORD 0
+lightData				 ds		TQ3LightData	; offset: $0 (0)
+castsShadows			 ds.l	1				; offset: $14 (20)
+attenuation				 ds.l	1				; offset: $18 (24)
+location				 ds		TQ3Point3D		; offset: $1C (28)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+TQ3SpotLightData		RECORD 0
+lightData				 ds		TQ3LightData	; offset: $0 (0)
+castsShadows			 ds.l	1				; offset: $14 (20)
+attenuation				 ds.l	1				; offset: $18 (24)
+location				 ds		TQ3Point3D		; offset: $1C (28)
+direction				 ds		TQ3Vector3D		; offset: $28 (40)
+hotAngle				 ds		Float32			; offset: $34 (52)
+outerAngle				 ds		Float32			; offset: $38 (56)
+fallOff					 ds.l	1				; offset: $3C (60)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                 Light routines (apply to all TQ3LightObjects)            **
+; **                                                                          **
+; ****************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3Light_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Light_GetType(TQ3LightObject light)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_GetType
+	ENDIF
+
+
+; *  Q3Light_GetState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_GetState(TQ3LightObject light, TQ3Boolean *isOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_GetState
+	ENDIF
+
+
+; *  Q3Light_GetBrightness()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_GetBrightness(TQ3LightObject light, float *brightness)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_GetBrightness
+	ENDIF
+
+
+; *  Q3Light_GetColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_GetColor(TQ3LightObject light, TQ3ColorRGB *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_GetColor
+	ENDIF
+
+
+; *  Q3Light_SetState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_SetState(TQ3LightObject light, TQ3Boolean isOn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_SetState
+	ENDIF
+
+
+; *  Q3Light_SetBrightness()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_SetBrightness(TQ3LightObject light, float brightness)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_SetBrightness
+	ENDIF
+
+
+; *  Q3Light_SetColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_SetColor(TQ3LightObject light, const TQ3ColorRGB *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_SetColor
+	ENDIF
+
+
+; *  Q3Light_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_GetData(TQ3LightObject light, TQ3LightData *lightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_GetData
+	ENDIF
+
+
+; *  Q3Light_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Light_SetData(TQ3LightObject light, const TQ3LightData *lightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Light_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Specific Light Routines                          **
+; **                                                                          **
+; ****************************************************************************
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Ambient Light                                    **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3AmbientLight_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3LightObject Q3AmbientLight_New(const TQ3LightData *lightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3AmbientLight_New
+	ENDIF
+
+
+; *  Q3AmbientLight_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3AmbientLight_GetData(TQ3LightObject light, TQ3LightData *lightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3AmbientLight_GetData
+	ENDIF
+
+
+; *  Q3AmbientLight_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3AmbientLight_SetData(TQ3LightObject light, const TQ3LightData *lightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3AmbientLight_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                     Directional Light                                    **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3DirectionalLight_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3LightObject Q3DirectionalLight_New(const TQ3DirectionalLightData *directionalLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_New
+	ENDIF
+
+
+; *  Q3DirectionalLight_GetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_GetCastShadowsState(TQ3LightObject light, TQ3Boolean *castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_GetCastShadowsState
+	ENDIF
+
+
+; *  Q3DirectionalLight_GetDirection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_GetDirection(TQ3LightObject light, TQ3Vector3D *direction)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_GetDirection
+	ENDIF
+
+
+; *  Q3DirectionalLight_SetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_SetCastShadowsState(TQ3LightObject light, TQ3Boolean castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_SetCastShadowsState
+	ENDIF
+
+
+; *  Q3DirectionalLight_SetDirection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_SetDirection(TQ3LightObject light, const TQ3Vector3D *direction)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_SetDirection
+	ENDIF
+
+
+; *  Q3DirectionalLight_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_GetData(TQ3LightObject light, TQ3DirectionalLightData *directionalLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_GetData
+	ENDIF
+
+
+; *  Q3DirectionalLight_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3DirectionalLight_SetData(TQ3LightObject light, const TQ3DirectionalLightData *directionalLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3DirectionalLight_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                     Point Light                                          **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3PointLight_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3LightObject Q3PointLight_New(const TQ3PointLightData *pointLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_New
+	ENDIF
+
+
+; *  Q3PointLight_GetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_GetCastShadowsState(TQ3LightObject light, TQ3Boolean *castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_GetCastShadowsState
+	ENDIF
+
+
+; *  Q3PointLight_GetAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_GetAttenuation(TQ3LightObject light, TQ3AttenuationType *attenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_GetAttenuation
+	ENDIF
+
+
+; *  Q3PointLight_GetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_GetLocation(TQ3LightObject light, TQ3Point3D *location)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_GetLocation
+	ENDIF
+
+
+; *  Q3PointLight_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_GetData(TQ3LightObject light, TQ3PointLightData *pointLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_GetData
+	ENDIF
+
+
+; *  Q3PointLight_SetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_SetCastShadowsState(TQ3LightObject light, TQ3Boolean castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_SetCastShadowsState
+	ENDIF
+
+
+; *  Q3PointLight_SetAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_SetAttenuation(TQ3LightObject light, TQ3AttenuationType attenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_SetAttenuation
+	ENDIF
+
+
+; *  Q3PointLight_SetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_SetLocation(TQ3LightObject light, const TQ3Point3D *location)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_SetLocation
+	ENDIF
+
+
+; *  Q3PointLight_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3PointLight_SetData(TQ3LightObject light, const TQ3PointLightData *pointLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3PointLight_SetData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                     Spot Light                                           **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3SpotLight_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3LightObject Q3SpotLight_New(const TQ3SpotLightData *spotLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_New
+	ENDIF
+
+
+; *  Q3SpotLight_GetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetCastShadowsState(TQ3LightObject light, TQ3Boolean *castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetCastShadowsState
+	ENDIF
+
+
+; *  Q3SpotLight_GetAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetAttenuation(TQ3LightObject light, TQ3AttenuationType *attenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetAttenuation
+	ENDIF
+
+
+; *  Q3SpotLight_GetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetLocation(TQ3LightObject light, TQ3Point3D *location)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetLocation
+	ENDIF
+
+
+; *  Q3SpotLight_GetDirection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetDirection(TQ3LightObject light, TQ3Vector3D *direction)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetDirection
+	ENDIF
+
+
+; *  Q3SpotLight_GetHotAngle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetHotAngle(TQ3LightObject light, float *hotAngle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetHotAngle
+	ENDIF
+
+
+; *  Q3SpotLight_GetOuterAngle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetOuterAngle(TQ3LightObject light, float *outerAngle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetOuterAngle
+	ENDIF
+
+
+; *  Q3SpotLight_GetFallOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetFallOff(TQ3LightObject light, TQ3FallOffType *fallOff)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetFallOff
+	ENDIF
+
+
+; *  Q3SpotLight_GetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_GetData(TQ3LightObject light, TQ3SpotLightData *spotLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_GetData
+	ENDIF
+
+
+; *  Q3SpotLight_SetCastShadowsState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetCastShadowsState(TQ3LightObject light, TQ3Boolean castsShadows)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetCastShadowsState
+	ENDIF
+
+
+; *  Q3SpotLight_SetAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetAttenuation(TQ3LightObject light, TQ3AttenuationType attenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetAttenuation
+	ENDIF
+
+
+; *  Q3SpotLight_SetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetLocation(TQ3LightObject light, const TQ3Point3D *location)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetLocation
+	ENDIF
+
+
+; *  Q3SpotLight_SetDirection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetDirection(TQ3LightObject light, const TQ3Vector3D *direction)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetDirection
+	ENDIF
+
+
+; *  Q3SpotLight_SetHotAngle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetHotAngle(TQ3LightObject light, float hotAngle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetHotAngle
+	ENDIF
+
+
+; *  Q3SpotLight_SetOuterAngle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetOuterAngle(TQ3LightObject light, float outerAngle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetOuterAngle
+	ENDIF
+
+
+; *  Q3SpotLight_SetFallOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetFallOff(TQ3LightObject light, TQ3FallOffType fallOff)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetFallOff
+	ENDIF
+
+
+; *  Q3SpotLight_SetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3SpotLight_SetData(TQ3LightObject light, const TQ3SpotLightData *spotLightData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3SpotLight_SetData
+	ENDIF
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __QD3DLIGHT__ 
+

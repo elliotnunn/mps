@@ -1,0 +1,599 @@
+;
+;	File:		Drag.a
+;
+;	Contains:	Drag and Drop Interfaces.
+;
+;	Version:	Technology:	Macintosh Drag and Drop 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__DRAG__') = 'UNDEFINED' THEN
+__DRAG__ SET 1
+
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Types.a'											;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'OSUtils.a'										;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+
+; Flavor Flags 
+flavorSenderOnly				EQU		$00000001			; flavor is available to sender only 
+flavorSenderTranslated			EQU		$00000002			; flavor is translated by sender 
+flavorNotSaved					EQU		$00000004			; flavor should not be saved 
+flavorSystemTranslated			EQU		$00000100			; flavor is translated by system 
+
+; typedef unsigned long 	FlavorFlags
+
+; Drag Attributes 
+dragHasLeftSenderWindow			EQU		$00000001			; drag has left the source window since TrackDrag 
+dragInsideSenderApplication		EQU		$00000002			; drag is occurring within the sender application 
+dragInsideSenderWindow			EQU		$00000004			; drag is occurring within the sender window 
+
+; typedef unsigned long 	DragAttributes
+
+; Special Flavor Types 
+flavorTypeHFS					EQU		'hfs '				; flavor type for HFS data 
+flavorTypePromiseHFS			EQU		'phfs'				; flavor type for promised HFS data 
+flavorTypeDirectory				EQU		'diry'
+
+; Drag Tracking Handler Messages 
+dragTrackingEnterHandler		EQU		1					; drag has entered handler 
+dragTrackingEnterWindow			EQU		2					; drag has entered window 
+dragTrackingInWindow			EQU		3					; drag is moving within window 
+dragTrackingLeaveWindow			EQU		4					; drag has exited window 
+dragTrackingLeaveHandler		EQU		5					; drag has exited handler 
+
+; typedef short 			DragTrackingMessage
+
+; Drag Drawing Procedure Messages 
+dragRegionBegin					EQU		1					; initialize drawing 
+dragRegionDraw					EQU		2					; draw drag feedback 
+dragRegionHide					EQU		3					; hide drag feedback 
+dragRegionIdle					EQU		4					; drag feedback idle time 
+dragRegionEnd					EQU		5					; end of drawing 
+
+; typedef short 			DragRegionMessage
+
+; Zoom Acceleration 
+zoomNoAcceleration				EQU		0					; use linear interpolation 
+zoomAccelerate					EQU		1					; ramp up step size 
+zoomDecelerate					EQU		2					; ramp down step size 
+
+; typedef short 			ZoomAcceleration
+; Drag Manager Data Types 
+; typedef unsigned long 	DragReference
+; typedef unsigned long 	ItemReference
+; typedef ResType 			FlavorType
+; HFS Flavors 
+HFSFlavor 				RECORD	0
+fileType				 ds.l   1		; offset: $0 (0)		; file type 
+fileCreator				 ds.l   1		; offset: $4 (4)		; file creator 
+fdFlags					 ds.w   1		; offset: $8 (8)		; Finder flags 
+fileSpec				 ds     FSSpec	; offset: $A (10)		; file system specification 
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct HFSFlavor 	HFSFlavor
+PromiseHFSFlavor 		RECORD	0
+fileType				 ds.l   1		; offset: $0 (0)		; file type 
+fileCreator				 ds.l   1		; offset: $4 (4)		; file creator 
+fdFlags					 ds.w   1		; offset: $8 (8)		; Finder flags 
+promisedFlavor			 ds.l   1		; offset: $A (10)		; promised flavor containing an FSSpec 
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct PromiseHFSFlavor  PromiseHFSFlavor
+; Application-Defined Drag Handler Routines 
+; typedef DragTrackingHandlerUPP  DragTrackingHandler
+; typedef DragReceiveHandlerUPP  DragReceiveHandler
+; Application-Defined Routines 
+; typedef DragSendDataUPP 	DragSendDataProc
+; typedef DragInputUPP 		DragInputProc
+; typedef DragDrawingUPP 	DragDrawingProc
+; Drag Manager Routines 
+; Installing and Removing Drag Handlers 
+;
+; pascal OSErr InstallTrackingHandler(DragTrackingHandler trackingHandler, WindowPtr theWindow, void *handlerRefCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InstallTrackingHandler
+			moveq	#1,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InstallTrackingHandler
+	ENDIF
+
+;
+; pascal OSErr InstallReceiveHandler(DragReceiveHandler receiveHandler, WindowPtr theWindow, void *handlerRefCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InstallReceiveHandler
+			moveq	#2,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InstallReceiveHandler
+	ENDIF
+
+;
+; pascal OSErr RemoveTrackingHandler(DragTrackingHandler trackingHandler, WindowPtr theWindow)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveTrackingHandler
+			moveq	#3,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveTrackingHandler
+	ENDIF
+
+;
+; pascal OSErr RemoveReceiveHandler(DragReceiveHandler receiveHandler, WindowPtr theWindow)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveReceiveHandler
+			moveq	#4,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveReceiveHandler
+	ENDIF
+
+; Creating and Disposing Drag References 
+;
+; pascal OSErr NewDrag(DragReference *theDragRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewDrag
+			moveq	#5,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewDrag
+	ENDIF
+
+;
+; pascal OSErr DisposeDrag(DragReference theDragRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeDrag
+			moveq	#6,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeDrag
+	ENDIF
+
+; Adding Drag Item Flavors 
+;
+; pascal OSErr AddDragItemFlavor(DragReference theDragRef, ItemReference theItemRef, FlavorType theType, void *dataPtr, Size dataSize, FlavorFlags theFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddDragItemFlavor
+			moveq	#7,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddDragItemFlavor
+	ENDIF
+
+;
+; pascal OSErr SetDragItemFlavorData(DragReference theDragRef, ItemReference theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, unsigned long dataOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragItemFlavorData
+			moveq	#9,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragItemFlavorData
+	ENDIF
+
+; Providing Drag Callback Procedures 
+;
+; pascal OSErr SetDragSendProc(DragReference theDragRef, DragSendDataProc sendProc, void *dragSendRefCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragSendProc
+			moveq	#10,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragSendProc
+	ENDIF
+
+;
+; pascal OSErr SetDragInputProc(DragReference theDragRef, DragInputProc inputProc, void *dragInputRefCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragInputProc
+			moveq	#11,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragInputProc
+	ENDIF
+
+;
+; pascal OSErr SetDragDrawingProc(DragReference theDragRef, DragDrawingProc drawingProc, void *dragDrawingRefCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragDrawingProc
+			moveq	#12,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragDrawingProc
+	ENDIF
+
+;
+; pascal OSErr TrackDrag(DragReference theDragRef, const EventRecord *theEvent, RgnHandle theRegion)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TrackDrag
+			moveq	#13,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TrackDrag
+	ENDIF
+
+; Getting Drag Item Information 
+;
+; pascal OSErr CountDragItems(DragReference theDragRef, unsigned short *numItems)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountDragItems
+			moveq	#14,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountDragItems
+	ENDIF
+
+;
+; pascal OSErr GetDragItemReferenceNumber(DragReference theDragRef, unsigned short index, ItemReference *theItemRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragItemReferenceNumber
+			moveq	#15,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragItemReferenceNumber
+	ENDIF
+
+;
+; pascal OSErr CountDragItemFlavors(DragReference theDragRef, ItemReference theItemRef, unsigned short *numFlavors)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountDragItemFlavors
+			moveq	#16,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountDragItemFlavors
+	ENDIF
+
+;
+; pascal OSErr GetFlavorType(DragReference theDragRef, ItemReference theItemRef, unsigned short index, FlavorType *theType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFlavorType
+			moveq	#17,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFlavorType
+	ENDIF
+
+;
+; pascal OSErr GetFlavorFlags(DragReference theDragRef, ItemReference theItemRef, FlavorType theType, FlavorFlags *theFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFlavorFlags
+			moveq	#18,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFlavorFlags
+	ENDIF
+
+;
+; pascal OSErr GetFlavorDataSize(DragReference theDragRef, ItemReference theItemRef, FlavorType theType, Size *dataSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFlavorDataSize
+			moveq	#19,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFlavorDataSize
+	ENDIF
+
+;
+; pascal OSErr GetFlavorData(DragReference theDragRef, ItemReference theItemRef, FlavorType theType, void *dataPtr, Size *dataSize, unsigned long dataOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFlavorData
+			moveq	#20,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFlavorData
+	ENDIF
+
+;
+; pascal OSErr GetDragItemBounds(DragReference theDragRef, ItemReference theItemRef, Rect *itemBounds)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragItemBounds
+			moveq	#21,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragItemBounds
+	ENDIF
+
+;
+; pascal OSErr SetDragItemBounds(DragReference theDragRef, ItemReference theItemRef, const Rect *itemBounds)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragItemBounds
+			moveq	#22,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragItemBounds
+	ENDIF
+
+;
+; pascal OSErr GetDropLocation(DragReference theDragRef, AEDesc *dropLocation)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDropLocation
+			moveq	#23,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDropLocation
+	ENDIF
+
+;
+; pascal OSErr SetDropLocation(DragReference theDragRef, const AEDesc *dropLocation)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDropLocation
+			moveq	#24,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDropLocation
+	ENDIF
+
+; Getting Information About a Drag 
+;
+; pascal OSErr GetDragAttributes(DragReference theDragRef, DragAttributes *flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragAttributes
+			moveq	#25,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragAttributes
+	ENDIF
+
+;
+; pascal OSErr GetDragMouse(DragReference theDragRef, Point *mouse, Point *pinnedMouse)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragMouse
+			moveq	#26,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragMouse
+	ENDIF
+
+;
+; pascal OSErr SetDragMouse(DragReference theDragRef, Point pinnedMouse)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDragMouse
+			moveq	#27,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDragMouse
+	ENDIF
+
+;
+; pascal OSErr GetDragOrigin(DragReference theDragRef, Point *initialMouse)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragOrigin
+			moveq	#28,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragOrigin
+	ENDIF
+
+;
+; pascal OSErr GetDragModifiers(DragReference theDragRef, short *modifiers, short *mouseDownModifiers, short *mouseUpModifiers)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDragModifiers
+			moveq	#29,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDragModifiers
+	ENDIF
+
+; Drag Highlighting 
+;
+; pascal OSErr ShowDragHilite(DragReference theDragRef, RgnHandle hiliteFrame, Boolean inside)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ShowDragHilite
+			moveq	#30,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ShowDragHilite
+	ENDIF
+
+;
+; pascal OSErr HideDragHilite(DragReference theDragRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HideDragHilite
+			moveq	#31,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HideDragHilite
+	ENDIF
+
+;
+; pascal OSErr DragPreScroll(DragReference theDragRef, short dH, short dV)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DragPreScroll
+			moveq	#32,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DragPreScroll
+	ENDIF
+
+;
+; pascal OSErr DragPostScroll(DragReference theDragRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DragPostScroll
+			moveq	#33,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DragPostScroll
+	ENDIF
+
+;
+; pascal OSErr UpdateDragHilite(DragReference theDragRef, RgnHandle updateRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UpdateDragHilite
+			moveq	#34,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UpdateDragHilite
+	ENDIF
+
+; Drag Manager Utilities 
+;
+; pascal Boolean WaitMouseMoved(Point initialMouse)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_WaitMouseMoved
+			moveq	#35,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	WaitMouseMoved
+	ENDIF
+
+;
+; pascal OSErr ZoomRects(const Rect *fromRect, const Rect *toRect, short zoomSteps, ZoomAcceleration acceleration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ZoomRects
+			moveq	#36,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ZoomRects
+	ENDIF
+
+;
+; pascal OSErr ZoomRegion(RgnHandle region, Point zoomDistance, short zoomSteps, ZoomAcceleration acceleration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ZoomRegion
+			moveq	#37,d0
+			dc.w 	$ABED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ZoomRegion
+	ENDIF
+
+	ENDIF ; __DRAG__

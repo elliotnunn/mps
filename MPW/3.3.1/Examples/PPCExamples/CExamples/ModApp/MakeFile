@@ -1,0 +1,272 @@
+# Makefile for "ModApp"
+# Written 11/28/93 by Richard Clark of Apple Developer University
+#
+#
+# Usage:
+#  Use "make all" or "BuildProgram all" to build a "fat" version of the app and all tools
+#  Use "make ModApp" or "BuildProgram ModApp" to build a "fat" version of the app.
+#  Use "make ModApp -d SYM=on" to build with symbols, or edit the "SYM" variable
+#	below. (The -d flag also works with BuildProgram.)
+#  Use "make ModApp -d OPT=speed" to build a speed-optimized version, or edit the "OPT"
+#	variable below. (NOTE: SYM=on disables all optimizations.)
+#  Use "make :Modules":Clock" to build the "clock" module by itself (or substitute
+#	another module name.)
+#
+# Note:
+#	The "Mark" menu has been set up to show each major secion of the makefile
+#
+# Change history
+#		11/28/93	RC		Original release
+#		12/20/93	RC		Added comments, simplified "SYM" and "OPT" options,
+#							reset marks to the correct places
+#		 1/13/94	RC		Added "cfrg.c" and "cfrg.h" -- the cfrg resource parser
+
+
+# -------------- Object files
+OBJECTS_68K = ∂
+		:68K:AppleEventHandlers.o ∂
+#		:68K:GWorldTools.o ∂
+		:68K:ToolLoader.o ∂
+		:68K:Init.o ∂
+		:68K:main.o ∂
+		:68K:Menus.o ∂
+		:68K:cfrg.o ∂
+		:68K:Windows.o
+
+OBJECTS_PowerPC = ∂
+		:PowerPC:AppleEventHandlers.c.o ∂
+		:PowerPC:ToolLoader.c.o ∂
+		:PowerPC:Init.c.o ∂
+		:PowerPC:main.c.o ∂
+		:PowerPC:Menus.c.o ∂
+		:PowerPC:cfrg.c.o ∂
+		:PowerPC:Windows.c.o
+
+XCOFFLibs	= 	"{PPCLibraries}"InterfaceLib.xcoff 			∂
+				"{PPCLibraries}"PPCCRuntime.o 				∂
+				"{PPCLibraries}"StdCLib.xcoff 				∂
+				"{PPCLibraries}"MathLib.xcoff 				∂
+				"{PPCLibraries}"StdCRuntime.o
+
+# Directories used by the build process
+SRC = :
+MSRC  = :ModuleSources:
+PPC = :PowerPC:
+68K = :68K:
+
+# -------------- Debugging & optimization control
+SYM = off  # Symbolic debugging: "on" or "off" (you can override with the "d- SYM=off" option to make)
+OPT = off  # Optimization: off, speed, size, or local (you can override with the "d- SYM=size" option to make)
+
+
+# -------------- Default build rules
+:68K: ƒ :		# Objects in the 68K folder depend on sources in the current folder
+
+:PowerPC: ƒ :	# Objects in the PowerPC folder depend on sources in the current folder
+
+.o ƒ .c			# 68K .o files depend on the sources
+	C {deps} -r -sym {SYM} -mbg full -o {targ}
+
+.c.o ƒ .c		# PowerPC .c.o files depend on the sources
+	PPCC {deps}  -w conformance -opt {OPT} -sym {SYM} -appleext on -i : -o {targ}
+
+
+# -------------- Dummy rule to build everything
+all ƒ ModApp tools
+
+# -------------- Build rules for a fat binary
+ModApp ƒ ModApp.PowerPC ModApp.68K Merge.r
+	duplicate -y ModApp.PowerPC {targ}
+	Rez Merge.r -append -o {targ}
+	SetFile -c 'moda' -a Bi {targ}
+
+# -------------- Build rules for a PowerPC version
+ModApp.PowerPC ƒƒ ModApp.r cfrg.r
+	Rez ModApp.r -o {targ}
+	Rez cfrg.r -append -o {targ}
+	SetFile {targ} -t 'APPL' -c 'moda' -a Bi
+
+ModApp.PowerPC ƒƒ ModApp.xcoff
+	MakePEF ModApp.xcoff -o {targ} ∂
+			-l InterfaceLib.xcoff=InterfaceLib ∂
+			-l MathLib.xcoff=MathLib ∂
+			-l StdCLib.xcoff=StdCLib
+
+ModApp.xcoff ƒ {OBJECTS_PowerPC}
+	PPCLink -sym {SYM} {Objects_PowerPC} {XCOFFLibs} -o {targ}
+	if ("{SYM}" == "on")
+		MakeSYM -w ModApp.xcoff
+	end
+
+# Which files depend on which others?
+ModApp.h ƒ ToolAPI.h
+AppleEventHandlers.c.o ƒ ModApp.h Prototypes.h AppleEventHandlers.c
+ToolLoader.c.o ƒ ModApp.h Prototypes.h ToolAPI.h cfrg.h ToolLoader.c
+Init.c.o ƒ ModApp.h Prototypes.h Init.c
+main.c.o ƒ ModApp.h Prototypes.h main.c
+Menus.c.o ƒ ModApp.h Prototypes.h Menus.c
+Windows.c.o ƒ ModApp.h Prototypes.h Windows.c
+cfrg.c.o ƒ cfrg.h cfrg.c
+
+# -------------- Build rules for a 68K version
+ModApp.68K ƒƒ ModApp.r
+	Rez ModApp.r -append -o {targ}
+
+ModApp.68K ƒƒ {OBJECTS_68K}
+	Link -t APPL -c 'moda' ∂
+		-mf -sym {SYM} ∂
+		{OBJECTS_68K} ∂
+		"{Libraries}"Runtime.o ∂
+		"{Libraries}"Interface.o ∂
+		-o {targ}
+	if ({SYM} == "on")
+		rename -y ModApp.68K.SYM ModApp.SYM
+	end
+	
+
+# Which files depend on which others?
+# ModApp.h ƒ ToolAPI.h -- already shown above
+AppleEventHandlers.o ƒ ModApp.h Prototypes.h AppleEventHandlers.c
+ToolLoader.o ƒ ModApp.h Prototypes.h ToolAPI.h cfrg.h ToolLoader.c
+Init.o ƒ ModApp.h Prototypes.h Init.c
+main.o ƒ ModApp.h Prototypes.h main.c
+Menus.o ƒ ModApp.h Prototypes.h Menus.c
+Windows.o ƒ ModApp.h Prototypes.h Windows.c
+cfrg.o ƒ cfrg.h cfrg.c
+
+
+# -------------- Build all tools
+tools ƒ :Modules:Clock :Modules:Simple :Modules:Button :Modules:GWorldTools :Modules:Koch :Modules:PowerResource
+
+:PowerPC: ƒ :ModuleSources:
+GWorldTools.c.o ƒ ModApp.h Prototypes.h :ModuleSources:GWorldTools.c
+
+:68K: ƒ :ModuleSources:
+GWorldTools.o ƒ ModApp.h Prototypes.h :ModuleSources:GWorldTools.c
+
+
+# -------------- Build the GWorldTools shared library
+:Modules:GWorldTools ƒƒ :ModuleSources:GWorldTools.r
+	Rez {deps} -a -o {targ}
+
+:Modules:GWorldTools ƒƒ :PowerPC:GWorldTools.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-ft shlb -fc cfmg ∂
+	-l InterfaceLib.xcoff=InterfaceLib
+
+:PowerPC:GWorldTools.xcoff ƒ :PowerPC:GWorldTools.c.o
+	PPCLink {deps} "{PPCLibraries}"InterfaceLib.xcoff ∂
+		-sym {SYM}  -export GetGlobalBounds,AllocateBuffer,LockBuffer,UnlockBuffer,UpdateBuffer,DisposeBuffer,CopyBufferToWindow ∂
+		-xm SharedLibrary ∂
+		-o {targ}
+
+# -------------- Build the Clock tool
+:Modules:Clock ƒƒ :ModuleSources:Clock.r
+	Rez {deps} -a -o {targ} -d AddCFRG=1 -d SystemSevenOrLater=1
+
+:Modules:Clock ƒƒ :68K:Clock.o :68K:GWorldTools.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg Clock -sym {SYM} -mf ∂
+	"{Libraries}"Runtime.o
+
+:PowerPC:Clock.xcoff ƒ :PowerPC:Clock.c.o :PowerPC:GWorldTools.xcoff
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+	"{PPCLibraries}"MathLib.xcoff ∂
+	"{PPCLibraries}"StdCLib.xcoff ∂
+	"{PPCLibraries}"InterfaceLib.xcoff
+	if ("{SYM}" == "on")
+		MakeSYM -w  {targ} -o :Modules:Clock.xSYM
+	end
+
+:Modules:Clock ƒƒ :PowerPC:Clock.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-l InterfaceLib.xcoff=InterfaceLib ∂
+	-l StdCLib.xcoff=StdCLib ∂
+	-l GWorldTools.xcoff=GWorldTools ∂
+	-l MathLib.xcoff=MathLib
+
+
+# -------------- Build the Simple tool
+:Modules:Simple ƒƒ :ModuleSources:Simple.r
+	Rez {deps} -a -o {targ} -d AddCFRG=1 -d SystemSevenOrLater=1
+
+:Modules:Simple ƒƒ :68K:Simple.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg Simple -sym {SYM} -mf
+
+:PowerPC:Simple.xcoff ƒ :PowerPC:Simple.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+	"{PPCLibraries}"StdCLib.xcoff ∂
+	"{PPCLibraries}"InterfaceLib.xcoff
+	if ("{SYM}" == "on")
+		MakeSYM -w  {targ} -o :Modules:Simple.xSYM
+	end
+
+:Modules:Simple ƒƒ :PowerPC:Simple.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-l InterfaceLib.xcoff=InterfaceLib ∂
+	-l StdCLib.xcoff=StdCLib
+
+# -------------- Build the Button tool
+:Modules:Button ƒƒ :ModuleSources:Button.r
+	Rez {deps} -a -o {targ} -d AddCFRG=1 -d SystemSevenOrLater=1
+
+:Modules:Button ƒƒ :68K:Button.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg Button -sym {SYM} -mf
+
+:PowerPC:Button.xcoff ƒ :PowerPC:Button.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+	"{PPCLibraries}"StdCLib.xcoff ∂
+	"{PPCLibraries}"InterfaceLib.xcoff
+	if ("{SYM}" == "on")
+		MakeSYM -w  {targ} -o :Modules:Button.xSYM
+	end
+
+:Modules:Button ƒƒ :PowerPC:Button.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-l InterfaceLib.xcoff=InterfaceLib ∂
+	-l StdCLib.xcoff=StdCLib
+
+# -------------- Build the Koch tool
+:Modules:Koch ƒƒ :ModuleSources:Koch.r
+	Rez {deps} -a -o {targ} -d AddCFRG=1 -d SystemSevenOrLater=1
+
+:Modules:Koch ƒƒ :68K:Koch.o :68K:GWorldTools.o "{CLibraries}"CSANELib.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg Koch -sym {SYM} -mf ∂
+	"{Libraries}"Runtime.o
+
+:PowerPC:Koch.xcoff ƒ :PowerPC:Koch.c.o :PowerPC:GWorldTools.xcoff
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+	"{PPCLibraries}"MathLib.xcoff ∂
+	"{PPCLibraries}"StdCLib.xcoff ∂
+	"{PPCLibraries}"InterfaceLib.xcoff
+	if ("{SYM}" == "on")
+		MakeSYM -w  {targ} -o :Modules:Koch.xSYM
+	end
+
+:Modules:Koch ƒƒ :PowerPC:Koch.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-l InterfaceLib.xcoff=InterfaceLib ∂
+	-l StdCLib.xcoff=StdCLib ∂
+	-l GWorldTools.xcoff=GWorldTools ∂
+	-l MathLib.xcoff=MathLib
+
+# -------------- Build the PowerResource tool
+# This build is a little different, as we create a PEF file and then
+# read it into a TOOL resource in the module using a Rez script.
+
+:PowerPC:PowerResource.xcoff ƒ :PowerPC:PowerResource.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+	"{PPCLibraries}"InterfaceLib.xcoff
+	if ("{SYM}" == "on")
+		MakeSYM -w  {targ} -o :Modules:PowerResource.xSYM
+	end
+
+:PowerPC:PowerResource.PEF ƒ :PowerPC:PowerResource.xcoff
+	MakePEF {deps} -o {targ} ∂
+	-l InterfaceLib.xcoff=InterfaceLib
+
+:Modules:PowerResource ƒƒ :ModuleSources:PowerResource.r :PowerPC:PowerResource.PEF
+	Rez :ModuleSources:PowerResource.r -a -o {targ} -t modt -c moda -d SystemSevenOrLater=1
+
+:Modules:PowerResource ƒƒ :68K:PowerResource.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg PowerResource -sym {SYM} -mf ∂
+	"{Libraries}"Interface.o

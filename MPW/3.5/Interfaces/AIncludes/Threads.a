@@ -1,0 +1,804 @@
+;
+;    File:       Threads.a
+;
+;    Contains:   Thread Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1991-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__THREADS__') = 'UNDEFINED' THEN
+__THREADS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+;  Thread states
+
+; typedef UInt16						ThreadState
+kReadyThreadState				EQU		0
+kStoppedThreadState				EQU		1
+kRunningThreadState				EQU		2
+;  Error codes have been moved to Errors.(pah)
+
+;  Thread environment characteristics
+; typedef void *						ThreadTaskRef
+
+;  Thread characteristics
+
+; typedef UInt32						ThreadStyle
+kCooperativeThread				EQU		$00000001
+kPreemptiveThread				EQU		$00000002
+;  Thread identifiers
+
+; typedef UInt32						ThreadID
+kNoThreadID						EQU		0
+kCurrentThreadID				EQU		1
+kApplicationThreadID			EQU		2
+;  Options when creating a thread
+
+; typedef UInt32						ThreadOptions
+kNewSuspend						EQU		$01
+kUsePremadeThread				EQU		$02
+kCreateIfNeeded					EQU		$04
+kFPUNotNeeded					EQU		$08
+kExactMatchThread				EQU		$10
+;  Information supplied to the custom scheduler
+SchedulerInfoRec		RECORD 0
+InfoRecSize				 ds.l	1				; offset: $0 (0)
+CurrentThreadID			 ds.l	1				; offset: $4 (4)
+SuggestedThreadID		 ds.l	1				; offset: $8 (8)
+InterruptedCoopThreadID	 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct SchedulerInfoRec *		SchedulerInfoRecPtr
+
+
+; 
+;    The following ProcPtrs cannot be interchanged with UniversalProcPtrs because
+;    of differences between 680x0 and PowerPC runtime architectures with regard to
+;    the implementation of the Thread Manager.
+; 
+
+; typedef void *						voidPtr
+
+;  Prototype for thread's entry (main) routine
+;  Prototype for custom thread scheduler routine
+;  Prototype for custom thread switcher routine
+;  Prototype for thread termination notification routine
+;  Prototype for debugger NewThread notification
+;  Prototype for debugger DisposeThread notification
+;  Prototype for debugger schedule notification
+
+; *  NewThreadEntryUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewThreadSwitchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewThreadTerminationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDebuggerNewThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDebuggerDisposeThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDebuggerThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeThreadEntryUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeThreadSwitchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeThreadTerminationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDebuggerNewThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDebuggerDisposeThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDebuggerThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeThreadEntryUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeThreadSwitchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeThreadTerminationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDebuggerNewThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDebuggerDisposeThreadUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDebuggerThreadSchedulerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;   Thread Manager function pointers (TPP):
+;   on classic 68k use raw function pointers (same as UPP's)
+;   on classic PowerPC, use raw function pointers
+;   on classic PowerPC with OPAQUE_UPP_TYPES=1, use UPP's
+;   on CFM-68K, use UPP's
+;   on Carbon, use UPP's
+
+
+
+	IF TARGET_OS_MAC ** TARGET_CPU_PPC ** ¬ OPAQUE_UPP_TYPES THEN
+;  use raw function pointers
+; typedef ThreadEntryProcPtr 			ThreadEntryTPP
+
+; typedef ThreadSchedulerProcPtr 		ThreadSchedulerTPP
+
+; typedef ThreadSwitchProcPtr 			ThreadSwitchTPP
+
+; typedef ThreadTerminationProcPtr 		ThreadTerminationTPP
+
+; typedef DebuggerNewThreadProcPtr 		DebuggerNewThreadTPP
+
+; typedef DebuggerDisposeThreadProcPtr 	DebuggerDisposeThreadTPP
+
+; typedef DebuggerThreadSchedulerProcPtr  DebuggerThreadSchedulerTPP
+
+	ELSE
+;  use UPP's
+; typedef ThreadEntryUPP 				ThreadEntryTPP
+
+; typedef ThreadSchedulerUPP 			ThreadSchedulerTPP
+
+; typedef ThreadSwitchUPP 				ThreadSwitchTPP
+
+; typedef ThreadTerminationUPP 			ThreadTerminationTPP
+
+; typedef DebuggerNewThreadUPP 			DebuggerNewThreadTPP
+
+; typedef DebuggerDisposeThreadUPP 		DebuggerDisposeThreadTPP
+
+; typedef DebuggerThreadSchedulerUPP 	DebuggerThreadSchedulerTPP
+
+	ENDIF
+
+; *  NewThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NewThread(ThreadStyle threadStyle, ThreadEntryTPP threadEntry, void *threadParam, Size stackSize, ThreadOptions options, void **threadResult, ThreadID *threadMade)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewThread
+			move.w              #$0E03,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewThread
+	ENDIF
+
+
+; *  SetThreadScheduler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadScheduler(ThreadSchedulerTPP threadScheduler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadScheduler
+			move.w              #$0209,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadScheduler
+	ENDIF
+
+
+; *  SetThreadSwitcher()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadSwitcher(ThreadID thread, ThreadSwitchTPP threadSwitcher, void *switchProcParam, Boolean inOrOut)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadSwitcher
+			move.w              #$070A,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadSwitcher
+	ENDIF
+
+
+; *  SetThreadTerminator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadTerminator(ThreadID thread, ThreadTerminationTPP threadTerminator, void *terminationProcParam)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadTerminator
+			move.w              #$0611,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadTerminator
+	ENDIF
+
+
+; *  SetDebuggerNotificationProcs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDebuggerNotificationProcs(DebuggerNewThreadTPP notifyNewThread, DebuggerDisposeThreadTPP notifyDisposeThread, DebuggerThreadSchedulerTPP notifyThreadScheduler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDebuggerNotificationProcs
+			move.w              #$060D,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDebuggerNotificationProcs
+	ENDIF
+
+
+; *  CreateThreadPool()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CreateThreadPool(ThreadStyle threadStyle, SInt16 numToCreate, Size stackSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CreateThreadPool
+			move.w              #$0501,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateThreadPool
+	ENDIF
+
+
+; *  GetFreeThreadCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetFreeThreadCount(ThreadStyle threadStyle, SInt16 *freeCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFreeThreadCount
+			move.w              #$0402,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFreeThreadCount
+	ENDIF
+
+
+; *  GetSpecificFreeThreadCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSpecificFreeThreadCount(ThreadStyle threadStyle, Size stackSize, SInt16 *freeCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSpecificFreeThreadCount
+			move.w              #$0615,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSpecificFreeThreadCount
+	ENDIF
+
+
+; *  GetDefaultThreadStackSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDefaultThreadStackSize(ThreadStyle threadStyle, Size *stackSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDefaultThreadStackSize
+			move.w              #$0413,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDefaultThreadStackSize
+	ENDIF
+
+
+; *  ThreadCurrentStackSpace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ThreadCurrentStackSpace(ThreadID thread, UInt32 *freeStack)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ThreadCurrentStackSpace
+			move.w              #$0414,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ThreadCurrentStackSpace
+	ENDIF
+
+
+; *  DisposeThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DisposeThread(ThreadID threadToDump, void *threadResult, Boolean recycleThread)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisposeThread
+			move.w              #$0504,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeThread
+	ENDIF
+
+
+; *  YieldToThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr YieldToThread(ThreadID suggestedThread)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_YieldToThread
+			move.w              #$0205,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION YieldToThread
+	ENDIF
+
+
+; *  YieldToAnyThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr YieldToAnyThread(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_YieldToAnyThread
+			clr.l               -(sp)
+			move.w              #$0205,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION YieldToAnyThread
+	ENDIF
+
+
+; *  [Mac]GetCurrentThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetCurrentThread(ThreadID *currentThreadID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetCurrentThread
+			move.w              #$0206,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCurrentThread
+	ENDIF
+
+
+; *  GetThreadState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetThreadState(ThreadID threadToGet, ThreadState *threadState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetThreadState
+			move.w              #$0407,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetThreadState
+	ENDIF
+
+
+; *  SetThreadState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadState(ThreadID threadToSet, ThreadState newState, ThreadID suggestedThread)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadState
+			move.w              #$0508,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadState
+	ENDIF
+
+
+; *  SetThreadStateEndCritical()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadStateEndCritical(ThreadID threadToSet, ThreadState newState, ThreadID suggestedThread)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadStateEndCritical
+			move.w              #$0512,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadStateEndCritical
+	ENDIF
+
+
+; *  ThreadBeginCritical()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ThreadBeginCritical(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ThreadBeginCritical
+			move.w              #$000B,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ThreadBeginCritical
+	ENDIF
+
+
+; *  ThreadEndCritical()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ThreadEndCritical(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ThreadEndCritical
+			move.w              #$000C,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ThreadEndCritical
+	ENDIF
+
+
+; *  GetThreadCurrentTaskRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetThreadCurrentTaskRef(ThreadTaskRef *threadTRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetThreadCurrentTaskRef
+			move.w              #$020E,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetThreadCurrentTaskRef
+	ENDIF
+
+
+; *  GetThreadStateGivenTaskRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetThreadStateGivenTaskRef(ThreadTaskRef threadTRef, ThreadID threadToGet, ThreadState *threadState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetThreadStateGivenTaskRef
+			move.w              #$060F,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetThreadStateGivenTaskRef
+	ENDIF
+
+
+; *  SetThreadReadyGivenTaskRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ThreadsLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetThreadReadyGivenTaskRef(ThreadTaskRef threadTRef, ThreadID threadToSet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetThreadReadyGivenTaskRef
+			move.w              #$0410,D0
+			dc.w            	$ABF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetThreadReadyGivenTaskRef
+	ENDIF
+
+	ENDIF ; __THREADS__ 
+

@@ -1,0 +1,978 @@
+;
+;	File:		CardServices.a
+;
+;	Contains:	This file contains constants and data structures that describe
+;				the client interface to Card and Socket Services.
+;
+; 	Version:	Technology: PCMCIA Software 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+; 	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+; 				stack.  Include the file and version information (from above)
+; 				in the problem description and send to:
+; 					Internet:	apple.bugs@applelink.apple.com
+; 					AppleLink:	APPLE.BUGS
+;
+
+	IF &TYPE('__CARDSERVICES__') = 'UNDEFINED' THEN
+__CARDSERVICES__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__PCCARDTUPLES__') = 'UNDEFINED' THEN
+	include 'PCCardTuples.a'
+	ENDIF
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+CS_MAX_SOCKETS					EQU		32					; a long is used as a socket bitmap
+
+; ••• Should eventually move to <Gestalt.h>
+gestaltCardServicesAttr			EQU		'pccd'				; Card Services attributes
+gestaltCardServicesPresent		EQU		0					; if set, Card Services is present
+
+; ••• Should eventually move to <Traps.h>
+_PCCardDispatch					EQU		$AAF0				; Card Services entry trap
+
+; 
+;	The PC Card Manager will migrate towards a complete Mac name space very soon.
+;	Part of that process will be to reassign result codes to a range reserved for
+;	the PC Card Manager...the range will be...-9050 to -9305 (decimal inclusive).
+;
+;	result codes
+kCSBadAdapterErr				EQU		-9050				; invalid adapter number
+kCSBadAttributeErr				EQU		-9051				; specified attributes field value is invalid
+kCSBadBaseErr					EQU		-9052				; specified base system memory address is invalid
+kCSBadEDCErr					EQU		-9053				; specified EDC generator specified is invalid
+kCSBadIRQErr					EQU		-9054				; specified IRQ level is invalid
+kCSBadOffsetErr					EQU		-9055				; specified PC card memory array offset is invalid
+kCSBadPageErr					EQU		-9056				; specified page is invalid
+kCSBadSizeErr					EQU		-9057				; specified size is invalid
+kCSBadSocketErr					EQU		-9058				; specified logical or physical socket number is invalid
+kCSBadTypeErr					EQU		-9059				; specified window or interface type is invalid
+kCSBadVccErr					EQU		-9060				; specified Vcc power level index is invalid
+kCSBadVppErr					EQU		-9061				; specified Vpp1 or Vpp2 power level index is invalid
+kCSBadWindowErr					EQU		-9062				; specified window is invalid
+kCSBadArgLengthErr				EQU		-9063				; ArgLength argument is invalid
+kCSBadArgsErr					EQU		-9064				; values in argument packet are invalid
+kCSBadHandleErr					EQU		-9065				; clientHandle is invalid
+kCSBadCISErr					EQU		-9066				; CIS on card is invalid
+kCSBadSpeedErr					EQU		-9067				; specified speed is unavailable
+kCSReadFailureErr				EQU		-9068				; unable to complete read request
+kCSWriteFailureErr				EQU		-9069				; unable to complete write request
+kCSGeneralFailureErr			EQU		-9070				; an undefined error has occurred
+kCSNoCardErr					EQU		-9071				; no PC card in the socket
+kCSUnsupportedFunctionErr		EQU		-9072				; function is not supported by this implementation
+kCSUnsupportedModeErr			EQU		-9073				; mode is not supported
+kCSBusyErr						EQU		-9074				; unable to process request at this time - try later
+kCSWriteProtectedErr			EQU		-9075				; media is write-protected
+kCSConfigurationLockedErr		EQU		-9076				; a configuration has already been locked
+kCSInUseErr						EQU		-9077				; requested resource is being used by a client
+kCSNoMoreItemsErr				EQU		-9078				; there are no more of the requested item
+kCSOutOfResourceErr				EQU		-9079				; Card Services has exhausted the resource
+
+;	messages sent to client's event handler
+kCSNullMessage					EQU		$00					; no messages pending (not sent to clients)
+kCSCardInsertionMessage			EQU		$01					; card has been inserted into the socket
+kCSCardRemovalMessage			EQU		$02					; card has been removed from the socket
+kCSCardLockMessage				EQU		$03					; card is locked into the socket with a mechanical latch
+kCSCardUnlockMessage			EQU		$04					; card is no longer locked into the socket
+kCSCardReadyMessage				EQU		$05					; card is ready to be accessed
+kCSCardResetMessage				EQU		$06					; physical reset has completed
+kCSInsertionRequestMessage		EQU		$07					; request to insert a card using insertion motor
+kCSInsertionCompleteMessage		EQU		$08					; insertion motor has finished inserting a card
+kCSEjectionRequestMessage		EQU		$09					; user or other client is requesting a card ejection
+kCSEjectionFailedMessage		EQU		$0A					; eject failure due to electrical/mechanical problems
+kCSPMResumeMessage				EQU		$0B					; power management resume (TBD)
+kCSPMSuspendMessage				EQU		$0C					; power management suspend (TBD)
+kCSResetPhysicalMessage			EQU		$0D					; physical reset is about to occur on this card
+kCSResetRequestMessage			EQU		$0E					; physical reset has been requested by a client
+kCSResetCompleteMessage			EQU		$0F					; ResetCard() background reset has completed
+kCSBatteryDeadMessage			EQU		$10					; battery is no longer useable, data will be lost
+kCSBatteryLowMessage			EQU		$11					; battery is weak and should be replaced
+kCSWriteProtectMessage			EQU		$12					; card is now write protected
+kCSWriteEnabledMessage			EQU		$13					; card is now write enabled
+kCSClientInfoMessage			EQU		$14					; client is to return client information
+kCSSSUpdatedMessage				EQU		$15					; AddSocketServices/ReplaceSocket services has changed SS support
+kCSFunctionInterruptMessage		EQU		$16					; card function interrupt
+kCSAccessErrorMessage			EQU		$17					; client bus errored on access to socket
+kCSCardUnconfiguredMessage		EQU		$18					; a CARD_READY was delivered to all clients and no client 
+;	requested a configuration for the socket
+kCSStatusChangedMessage			EQU		$19					; status change for cards in I/O mode
+
+;
+;	The following is a mapping of the PCMCIA name space to the Macintosh name space.
+;	These two enum lists will be removed and given to developers as a separate file.
+;
+SUCCESS							EQU		noErr
+BAD_ADAPTER						EQU		kCSBadAdapterErr
+BAD_ATTRIBUTE					EQU		kCSBadAttributeErr
+BAD_BASE						EQU		kCSBadBaseErr
+BAD_EDC							EQU		kCSBadEDCErr
+BAD_IRQ							EQU		kCSBadIRQErr
+BAD_OFFSET						EQU		kCSBadOffsetErr
+BAD_PAGE						EQU		kCSBadPageErr
+BAD_SIZE						EQU		kCSBadSizeErr
+BAD_SOCKET						EQU		kCSBadSocketErr
+BAD_TYPE						EQU		kCSBadTypeErr
+BAD_VCC							EQU		kCSBadVccErr
+BAD_VPP							EQU		kCSBadVppErr
+BAD_WINDOW						EQU		kCSBadWindowErr
+BAD_ARG_LENGTH					EQU		kCSBadArgLengthErr
+BAD_ARGS						EQU		kCSBadArgsErr
+BAD_HANDLE						EQU		kCSBadHandleErr
+BAD_CIS							EQU		kCSBadCISErr
+BAD_SPEED						EQU		kCSBadSpeedErr
+READ_FAILURE					EQU		kCSReadFailureErr
+WRITE_FAILURE					EQU		kCSWriteFailureErr
+GENERAL_FAILURE					EQU		kCSGeneralFailureErr
+NO_CARD							EQU		kCSNoCardErr
+UNSUPPORTED_FUNCTION			EQU		kCSUnsupportedFunctionErr
+UNSUPPORTED_MODE				EQU		kCSUnsupportedModeErr
+BUSY							EQU		kCSBusyErr
+WRITE_PROTECTED					EQU		kCSWriteProtectedErr
+CONFIGURATION_LOCKED			EQU		kCSConfigurationLockedErr
+IN_USE							EQU		kCSInUseErr
+NO_MORE_ITEMS					EQU		kCSNoMoreItemsErr
+OUT_OF_RESOURCE					EQU		kCSOutOfResourceErr
+
+;	messages sent to client's event handler
+NULL_MESSAGE					EQU		kCSNullMessage
+CARD_INSERTION					EQU		kCSCardInsertionMessage
+CARD_REMOVAL					EQU		kCSCardRemovalMessage
+CARD_LOCK						EQU		kCSCardLockMessage
+CARD_UNLOCK						EQU		kCSCardUnlockMessage
+CARD_READY						EQU		kCSCardReadyMessage
+CARD_RESET						EQU		kCSCardResetMessage
+INSERTION_REQUEST				EQU		kCSInsertionRequestMessage
+INSERTION_COMPLETE				EQU		kCSInsertionCompleteMessage
+EJECTION_REQUEST				EQU		kCSEjectionRequestMessage
+EJECTION_FAILED					EQU		kCSEjectionFailedMessage
+PM_RESUME						EQU		kCSPMResumeMessage
+PM_SUSPEND						EQU		kCSPMSuspendMessage
+RESET_PHYSICAL					EQU		kCSResetPhysicalMessage
+RESET_REQUEST					EQU		kCSResetRequestMessage
+RESET_COMPLETE					EQU		kCSResetCompleteMessage
+BATTERY_DEAD					EQU		kCSBatteryDeadMessage
+BATTERY_LOW						EQU		kCSBatteryLowMessage
+WRITE_PROTECT					EQU		kCSWriteProtectMessage
+WRITE_ENABLED					EQU		kCSWriteEnabledMessage
+CLIENT_INFO						EQU		kCSClientInfoMessage
+SS_UPDATED						EQU		kCSSSUpdatedMessage
+FUNCTION_INTERRUPT				EQU		kCSFunctionInterruptMessage
+ACCESS_ERROR					EQU		kCSAccessErrorMessage
+CARD_UNCONFIGURED				EQU		kCSCardUnconfiguredMessage
+STATUS_CHANGED					EQU		kCSStatusChangedMessage
+
+;----------------		CSAccessConfigurationRegister	----------------
+; typedef struct AccessConfigurationRegisterPB  AccessConfigurationRegisterPB
+AccessConfigurationRegisterPB RECORD	0
+socket					 ds.w   1		; offset: $0 (0)		;  -> global socket number
+action					 ds.b   1		; offset: $2 (2)		;  -> read/write
+offset					 ds.b   1		; offset: $3 (3)		;  -> offset from config register base
+value					 ds.b   1		; offset: $4 (4)		; <-> value to read/write
+padding					 ds.b   1		; offset: $5 (5)		; 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+;	‘action’ field values
+
+kCSReadConfigRegister			EQU		$00
+kCSWriteConfigRegister			EQU		$01
+
+;----------------		CSGetCardServicesInfo			----------------
+; typedef struct GetCardServicesInfoPB  GetCardServicesInfoPB
+GetCardServicesInfoPB 	RECORD	0
+signature				 ds.b   2		; offset: $0 (0)		; <-  two ascii chars 'CS'
+count					 ds.w   1		; offset: $2 (2)		; <-  total number of sockets installed
+revision				 ds.w   1		; offset: $4 (4)		; <-  BCD
+csLevel					 ds.w   1		; offset: $6 (6)		; <-  BCD
+reserved				 ds.w   1		; offset: $8 (8)		;  -> zero
+vStrLen					 ds.w   1		; offset: $A (10)		; <-> in: client's buffer size, out: vendor string length
+vendorString			 ds.l   1		; offset: $C (12)		; <-> in: pointer to buffer to hold CS vendor string (zero-terminated)
+;  	out: CS vendor string copied to buffer
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+;----------------		CSGetClientInfo					----------------
+; typedef struct ClientInfoParam  ClientInfoParam
+ClientInfoParam 		RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+attributes				 ds.w   1		; offset: $4 (4)		; <-> subfunction + bitmapped client attributes
+revision				 ds.w   1		; offset: $6 (6)		; <-  BCD value of client's revision
+csLevel					 ds.w   1		; offset: $8 (8)		; <-  BCD value of CS release
+revDate					 ds.w   1		; offset: $A (10)		; <-  revision date: y[15-9], m[8-5], d[4-0]
+nameLen					 ds.w   1		; offset: $C (12)		; <-> in: max length of client name string, out: actual length
+vStringLen				 ds.w   1		; offset: $E (14)		; <-> in: max length of vendor string, out: actual length
+nameString				 ds.l   1		; offset: $10 (16)		; <-  pointer to client name string (zero-terminated)
+vendorString			 ds.l   1		; offset: $14 (20)		; <-  pointer to vendor string (zero-terminated)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; upper byte of attributes is kCSCardNameSubfunction,
+;							   kCSCardTypeSubfunction,
+;							   kCSHelpStringSubfunction
+; typedef struct AlternateTextStringParam  AlternateTextStringParam
+AlternateTextStringParam RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+attributes				 ds.w   1		; offset: $4 (4)		; <-> subfunction + bitmapped client attributes
+socket					 ds.w   1		; offset: $6 (6)		;  -> logical socket number
+reserved				 ds.w   1		; offset: $8 (8)		;  -> zero
+length					 ds.w   1		; offset: $A (10)		; <-> in: max length of string, out: actual length
+text					 ds.l   1		; offset: $C (12)		; <-  pointer to string (zero-terminated)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; upper byte of attributes is kCSCardIconSubfunction
+; typedef struct AlternateCardIconParam  AlternateCardIconParam
+AlternateCardIconParam 	RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+attributes				 ds.w   1		; offset: $4 (4)		; <-> subfunction + bitmapped client attributes
+socket					 ds.w   1		; offset: $6 (6)		;  -> logical socket number
+iconSuite				 ds.l   1		; offset: $8 (8)		; <-  handle to icon suite containing all icons
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; upper byte of attributes is kCSActionProcSubfunction
+; typedef struct CustomActionProcParam  CustomActionProcParam
+CustomActionProcParam 	RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+attributes				 ds.w   1		; offset: $4 (4)		; <-> subfunction + bitmapped client attributes
+socket					 ds.w   1		; offset: $6 (6)		;  -> logical socket number
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct GetClientInfoPB  GetClientInfoPB
+GetClientInfoPB 		RECORD	0
+clientInfo				 ds     ClientInfoParam ; offset: $0 (0)
+						 ORG 0
+alternateTextString		 ds     AlternateTextStringParam ; offset: $0 (0)
+						 ORG 0
+alternateIcon			 ds     AlternateCardIconParam ; offset: $0 (0)
+						 ORG 0
+customActionProc		 ds     CustomActionProcParam ; offset: $0 (0)
+						 ORG 24
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSMemoryClient					EQU		$0001
+kCSIOClient						EQU		$0004
+kCSClientTypeMask				EQU		$0007
+kCSShareableCardInsertEvents	EQU		$0008
+kCSExclusiveCardInsertEvents	EQU		$0010
+kCSInfoSubfunctionMask			EQU		$FF00
+kCSClientInfoSubfunction		EQU		$0000
+kCSCardNameSubfunction			EQU		$8000
+kCSCardTypeSubfunction			EQU		$8100
+kCSHelpStringSubfunction		EQU		$8200
+kCSCardIconSubfunction			EQU		$8300
+kCSActionProcSubfunction		EQU		$8400
+
+;----------------		CSGetConfigurationInfo			----------------
+;----------------		CSModifyConfiguration			----------------
+;----------------		CSRequestConfiguration			----------------
+; typedef struct GetModRequestConfigInfoPB  GetModRequestConfigInfoPB
+GetModRequestConfigInfoPB RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+socket					 ds.w   1		; offset: $4 (4)		;  -> logical socket number
+attributes				 ds.w   1		; offset: $6 (6)		; <-> bitmap of configuration attributes
+vcc						 ds.b   1		; offset: $8 (8)		; <-> Vcc setting
+vpp1					 ds.b   1		; offset: $9 (9)		; <-> Vpp1 setting
+vpp2					 ds.b   1		; offset: $A (10)		; <-> Vpp2 setting
+intType					 ds.b   1		; offset: $B (11)		; <-> interface type (memory or memory+I/O)
+configBase				 ds.l   1		; offset: $C (12)		; <-> card base address of configuration registers
+status					 ds.b   1		; offset: $10 (16)		; <-> card status register setting, if present
+pin						 ds.b   1		; offset: $11 (17)		; <-> card pin register setting, if present
+copy					 ds.b   1		; offset: $12 (18)		; <-> card socket/copy register setting, if present
+configIndex				 ds.b   1		; offset: $13 (19)		; <-> card option register setting, if present
+present					 ds.b   1		; offset: $14 (20)		; <-> bitmap of which configuration registers are present
+firstDevType			 ds.b   1		; offset: $15 (21)		; <-  from DeviceID tuple
+funcCode				 ds.b   1		; offset: $16 (22)		; <-  from FuncID tuple
+sysInitMask				 ds.b   1		; offset: $17 (23)		; <-  from FuncID tuple
+manufCode				 ds.w   1		; offset: $18 (24)		; <-  from ManufacturerID tuple
+manufInfo				 ds.w   1		; offset: $1A (26)		; <-  from ManufacturerID tuple
+cardValues				 ds.b   1		; offset: $1C (28)		; <-  valid card register values
+padding					 ds.b   1		; offset: $1D (29)		; 
+sizeof					 EQU *			; size:   $1E (30)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSExclusivelyUsed				EQU		$0001
+kCSEnableIREQs					EQU		$0002
+kCSVccChangeValid				EQU		$0004
+kCSVpp1ChangeValid				EQU		$0008
+kCSVpp2ChangeValid				EQU		$0010
+kCSValidClient					EQU		$0020
+kCSSleepPower					EQU		$0040				; request that power be applied to socket during Sleep
+kCSLockSocket					EQU		$0080
+kCSTurnOnInUse					EQU		$0100
+
+;	‘intType’ field values
+kCSMemoryInterface				EQU		$01
+kCSMemory_And_IO_Interface		EQU		$02
+
+;	‘present’ field values
+kCSOptionRegisterPresent		EQU		$01
+kCSStatusRegisterPresent		EQU		$02
+kCSPinReplacementRegisterPresent EQU		$04
+kCSCopyRegisterPresent			EQU		$08
+
+;	‘cardValues’ field values
+kCSOptionValueValid				EQU		$01
+kCSStatusValueValid				EQU		$02
+kCSPinReplacementValueValid		EQU		$04
+kCSCopyValueValid				EQU		$08
+
+;----------------		CSGetClientEventMask			----------------
+;----------------		CSSetClientEventMask			----------------
+; typedef struct GetSetClientEventMaskPB  GetSetClientEventMaskPB
+GetSetClientEventMaskPB RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+attributes				 ds.w   1		; offset: $4 (4)		; <-> bitmap of attributes
+eventMask				 ds.w   1		; offset: $6 (6)		; <-> bitmap of events to be passed to client for this socket
+socket					 ds.w   1		; offset: $8 (8)		;  -> logical socket number
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSEventMaskThisSocketOnly		EQU		$0001
+
+;	‘eventMask’ field values
+kCSWriteProtectEvent			EQU		$0001
+kCSCardLockChangeEvent			EQU		$0002
+kCSEjectRequestEvent			EQU		$0004
+kCSInsertRequestEvent			EQU		$0008
+kCSBatteryDeadEvent				EQU		$0010
+kCSBatteryLowEvent				EQU		$0020
+kCSReadyChangeEvent				EQU		$0040
+kCSCardDetectChangeEvent		EQU		$0080
+kCSPMChangeEvent				EQU		$0100
+kCSResetEvent					EQU		$0200
+kCSSSUpdateEvent				EQU		$0400
+kCSFunctionInterrupt			EQU		$0800
+kCSAllEvents					EQU		$FFFF
+
+;----------------		CSGetFirstClient				----------------
+;----------------		CSGetNextClient					----------------
+; typedef struct GetClientPB  GetClientPB
+GetClientPB 			RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		; <-  clientHandle for this client
+socket					 ds.w   1		; offset: $4 (4)		;  -> logical socket number
+attributes				 ds.w   1		; offset: $6 (6)		;  -> bitmap of attributes
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSClientsForAllSockets			EQU		$0000
+kCSClientsThisSocketOnly		EQU		$0001
+
+;----------------		CSGetFirstTuple					----------------
+;----------------		CSGetNextTuple					----------------
+;----------------		CSGetTupleData					----------------
+; typedef struct GetTuplePB  GetTuplePB
+GetTuplePB 				RECORD	0
+socket					 ds.w   1		; offset: $0 (0)		;  -> logical socket number
+attributes				 ds.w   1		; offset: $2 (2)		;  -> bitmap of attributes
+desiredTuple			 ds.b   1		; offset: $4 (4)		;  -> desired tuple code value, or $FF for all
+tupleOffset				 ds.b   1		; offset: $5 (5)		;  -> offset into tuple from link byte
+flags					 ds.w   1		; offset: $6 (6)		; <-> internal use
+linkOffset				 ds.l   1		; offset: $8 (8)		; <-> internal use
+cisOffset				 ds.l   1		; offset: $C (12)		; <-> internal use
+tupleCode				 ds.b   1		; offset: $10 (16)		; <-  tuple code found
+tupleLink				 ds.b   1		; offset: $11 (17)		; <-  link value for tuple found
+						 ORG 16
+tupleDataMax			 ds.w   1		; offset: $10 (16)		;  -> maximum size of tuple data area
+tupleDataLen			 ds.w   1		; offset: $12 (18)		; <-  number of bytes in tuple body
+tupleData				 ds.w   127		; offset: $14 (20)		; <-  tuple data
+						 ORG 274
+sizeof					 EQU *			; size:   $112 (274)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSReturnLinkTuples				EQU		$0001
+
+;----------------		CSRequestSocketMask				----------------
+;----------------		CSReleaseSocketMask				----------------
+; typedef struct ReqRelSocketMaskPB  ReqRelSocketMaskPB
+ReqRelSocketMaskPB 		RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+socket					 ds.w   1		; offset: $4 (4)		;  -> logical socket
+eventMask				 ds.w   1		; offset: $6 (6)		;  -> bitmap of events to be passed to client for this socket
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+;	‘eventMask’ field values (see above for Get/SetClientEventMask
+;----------------		CSGetStatus						----------------
+; typedef struct GetStatusPB  GetStatusPB
+GetStatusPB 			RECORD	0
+socket					 ds.w   1		; offset: $0 (0)		;  -> logical socket number
+cardState				 ds.w   1		; offset: $2 (2)		; <-  current state of installed card
+socketState				 ds.w   1		; offset: $4 (4)		; <-  current state of the socket
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+;	‘cardState’ field values
+
+kCSWriteProtected				EQU		$0001
+kCSCardLocked					EQU		$0002
+kCSEjectRequest					EQU		$0004
+kCSInsertRequest				EQU		$0008
+kCSBatteryDead					EQU		$0010
+kCSBatteryLow					EQU		$0020
+kCSReady						EQU		$0040
+kCSCardDetected					EQU		$0080
+
+;	‘socketState’ field values
+kCSWriteProtectChanged			EQU		$0001
+kCSCardLockChanged				EQU		$0002
+kCSEjectRequestPending			EQU		$0004
+kCSInsertRequestPending			EQU		$0008
+kCSBatteryDeadChanged			EQU		$0010
+kCSBatteryLowChanged			EQU		$0020
+kCSReadyChanged					EQU		$0040
+kCSCardDetectChanged			EQU		$0080
+
+;----------------		CSModifyWindow					----------------
+;----------------		CSReleaseWindow					----------------
+;----------------		CSRequestWindow					----------------
+; typedef struct ReqModRelWindowPB  ReqModRelWindowPB
+ReqModRelWindowPB 		RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+windowHandle			 ds.l   1		; offset: $4 (4)		; <-> window descriptor
+socket					 ds.w   1		; offset: $8 (8)		;  -> logical socket number
+attributes				 ds.w   1		; offset: $A (10)		;  -> window attributes (bitmap)
+base					 ds.l   1		; offset: $C (12)		; <-> system base address
+size					 ds.l   1		; offset: $10 (16)		; <-> memory window size
+accessSpeed				 ds.b   1		; offset: $14 (20)		;  -> window access speed (bitmap)
+;		(not applicable for I/O mode)
+padding					 ds.b   1		; offset: $15 (21)		; 
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSMemoryWindow					EQU		$0001
+kCSIOWindow						EQU		$0002
+kCSAttributeWindow				EQU		$0004				; not normally used by Card Services clients
+kCSWindowTypeMask				EQU		$0007
+kCSEnableWindow					EQU		$0008
+kCSAccessSpeedValid				EQU		$0010
+kCSLittleEndian					EQU		$0020				; configure socket for little endianess
+kCS16BitDataPath				EQU		$0040				;
+kCSWindowPaged					EQU		$0080				; 
+kCSWindowShared					EQU		$0100				;
+kCSWindowFirstShared			EQU		$0200				; 
+kCSWindowProgrammable			EQU		$0400				; 
+
+;	‘accessSpeed’ field values
+kCSDeviceSpeedCodeMask			EQU		$07
+kCSSpeedExponentMask			EQU		$07
+kCSSpeedMantissaMask			EQU		$78
+kCSUseWait						EQU		$80
+kCSAccessSpeed250nsec			EQU		$01
+kCSAccessSpeed200nsec			EQU		$02
+kCSAccessSpeed150nsec			EQU		$03
+kCSAccessSpeed100nsec			EQU		$04
+kCSExtAccSpeedMant1pt0			EQU		$01
+kCSExtAccSpeedMant1pt2			EQU		$02
+kCSExtAccSpeedMant1pt3			EQU		$03
+kCSExtAccSpeedMant1pt5			EQU		$04
+kCSExtAccSpeedMant2pt0			EQU		$05
+kCSExtAccSpeedMant2pt5			EQU		$06
+kCSExtAccSpeedMant3pt0			EQU		$07
+kCSExtAccSpeedMant3pt5			EQU		$08
+kCSExtAccSpeedMant4pt0			EQU		$09
+kCSExtAccSpeedMant4pt5			EQU		$0A
+kCSExtAccSpeedMant5pt0			EQU		$0B
+kCSExtAccSpeedMant5pt5			EQU		$0C
+kCSExtAccSpeedMant6pt0			EQU		$0D
+kCSExtAccSpeedMant7pt0			EQU		$0E
+kCSExtAccSpeedMant8pt0			EQU		$0F
+kCSExtAccSpeedExp1ns			EQU		$00
+kCSExtAccSpeedExp10ns			EQU		$01
+kCSExtAccSpeedExp100ns			EQU		$02
+kCSExtAccSpeedExp1us			EQU		$03
+kCSExtAccSpeedExp10us			EQU		$04
+kCSExtAccSpeedExp100us			EQU		$05
+kCSExtAccSpeedExp1ms			EQU		$06
+kCSExtAccSpeedExp10ms			EQU		$07
+
+;----------------		CSRegisterClient				----------------
+;----------------		CSDeregisterClient				----------------
+; typedef struct ClientCallbackPB  ClientCallbackPB
+ClientCallbackPB 		RECORD	0
+message					 ds.w   1		; offset: $0 (0)		;  -> which event this is
+socket					 ds.w   1		; offset: $2 (2)		;  -> logical socket number
+info					 ds.w   1		; offset: $4 (4)		;  -> function-specific
+misc					 ds.w   1		; offset: $6 (6)		;  -> function-specific
+reserved				 ds.l   1		; offset: $8 (8)		;  -> pointer to MTD request block
+buffer					 ds.l   1		; offset: $C (12)		;  -> function-specific
+clientData				 ds.l   1		; offset: $10 (16)		;  -> pointer to client's data (from RegisterClient)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef ClientCallbackPB 	*ClientCallbackPBPtr
+; typedef struct RegisterClientPB  RegisterClientPB
+RegisterClientPB 		RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		; <-  client descriptor
+clientEntry				 ds.l   1		; offset: $4 (4)		;  -> universal procPtr to client's event handler
+attributes				 ds.w   1		; offset: $8 (8)		;  -> bitmap of client attributes
+eventMask				 ds.w   1		; offset: $A (10)		;  -> bitmap of events to notify client
+clientData				 ds.l   1		; offset: $C (12)		;  -> pointer to client's data
+version					 ds.w   1		; offset: $10 (16)		;  -> Card Services version this client expects
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+;	‘attributes’ field values (see GetClientInfo)
+;	kCSMemoryClient					= 0x0001,
+;	kCSIOClient						= 0x0004,
+;	kCSShareableCardInsertEvents	= 0x0008,
+;	kCSExclusiveCardInsertEvents	= 0x0010
+;----------------		CSReleaseConfiguration			----------------
+; typedef struct ReleaseConfigurationPB  ReleaseConfigurationPB
+ReleaseConfigurationPB 	RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+socket					 ds.w   1		; offset: $4 (4)		;  -> 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+;----------------		CSResetCard						----------------
+; typedef struct ResetCardPB  ResetCardPB
+ResetCardPB 			RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+socket					 ds.w   1		; offset: $4 (4)		;  -> 
+attributes				 ds.w   1		; offset: $6 (6)		;  -> xxx
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+;----------------		CSValidateCIS					----------------
+; typedef struct ValidateCISPB  ValidateCISPB
+ValidateCISPB 			RECORD	0
+socket					 ds.w   1		; offset: $0 (0)		;  -> 
+chains					 ds.w   1		; offset: $2 (2)		;  -> whether link/null tuples should be included
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+;----------------		CSVendorSpecific				----------------
+; typedef struct VendorSpecificPB  VendorSpecificPB
+VendorSpecificPB 		RECORD	0
+clientHandle			 ds.l   1		; offset: $0 (0)		;  -> clientHandle returned by RegisterClient
+vsCode					 ds.w   1		; offset: $4 (4)
+socket					 ds.w   1		; offset: $6 (6)
+dataLen					 ds.l   1		; offset: $8 (8)		;  -> length of buffer pointed to by vsDataPtr
+vsDataPtr				 ds.l   1		; offset: $C (12)		;  -> Card Services version this client expects
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+;	‘vsCode’ field values
+
+vsAppleReserved					EQU		$0000
+vsEjectCard						EQU		$0001
+vsGetCardInfo					EQU		$0002
+vsEnableSocketEvents			EQU		$0003
+vsGetCardLocationIcon			EQU		$0004
+vsGetCardLocationText			EQU		$0005
+vsGetAdapterInfo				EQU		$0006
+
+;///////////////////////////////////////////////////////////////////////////////////////
+;
+;	GetAdapterInfo parameter block (vendor-specific call #6)
+; typedef struct GetAdapterInfoPB  GetAdapterInfoPB
+GetAdapterInfoPB 		RECORD	0
+attributes				 ds.l   1		; offset: $0 (0)		; <-  capabilties of socket's adapter
+revision				 ds.w   1		; offset: $4 (4)		; <-  id of adapter
+reserved				 ds.w   1		; offset: $6 (6)		; 
+numVoltEntries			 ds.w   1		; offset: $8 (8)		; <-  number of valid voltage values
+voltages				 ds.l   1		; offset: $A (10)		; <-> array of BCD voltage values
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+;	‘attributes’ field values
+
+kCSLevelModeInterrupts			EQU		$00000001
+kCSPulseModeInterrupts			EQU		$00000002
+kCSProgrammableWindowAddr		EQU		$00000004
+kCSProgrammableWindowSize		EQU		$00000008
+kCSSocketSleepPower				EQU		$00000010
+kCSSoftwareEject				EQU		$00000020
+kCSLockableSocket				EQU		$00000040
+kCSInUseIndicator				EQU		$00000080
+
+;///////////////////////////////////////////////////////////////////////////////////////
+;
+;	GetCardInfo parameter block (vendor-specific call #2)
+; typedef struct GetCardInfoPB  GetCardInfoPB
+GetCardInfoPB 			RECORD	0
+cardType				 ds.b   1		; offset: $0 (0)		; <-  type of card in this socket (defined at top of file)
+subType					 ds.b   1		; offset: $1 (1)		; <-  more detailed card type (defined at top of file)
+reserved				 ds.w   1		; offset: $2 (2)		; <-> reserved (should be set to zero)
+cardNameLen				 ds.w   1		; offset: $4 (4)		;  -> maximum length of card name to be returned
+vendorNameLen			 ds.w   1		; offset: $6 (6)		;  -> maximum length of vendor name to be returned
+cardName				 ds.l   1		; offset: $8 (8)		;  -> pointer to card name string (read from CIS), or nil
+vendorName				 ds.l   1		; offset: $C (12)		;  -> pointer to vendor name string (read from CIS), or nil
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+;	GetCardInfo card types
+
+kCSUnknownCardType				EQU		0
+kCSMultiFunctionCardType		EQU		1
+kCSMemoryCardType				EQU		2
+kCSSerialPortCardType			EQU		3
+kCSSerialOnlyType				EQU		0
+kCSDataModemType				EQU		1
+kCSFaxModemType					EQU		2
+kCSFaxAndDataModemMask			EQU		(kCSDataModemType | kCSFaxModemType)
+kCSVoiceEncodingType			EQU		4
+kCSParallelPortCardType			EQU		4
+kCSFixedDiskCardType			EQU		5
+kCSUnknownFixedDiskType			EQU		0
+kCSATAInterface					EQU		1
+kCSRotatingDevice				EQU		(0 << 7)
+kCSSiliconDevice				EQU		(1 << 7)
+kCSVideoAdaptorCardType			EQU		6
+kCSNetworkAdaptorCardType		EQU		7
+kCSAIMSCardType					EQU		8
+kCSNumCardTypes					EQU		9
+
+;
+; pascal OSErr CSVendorSpecific(VendorSpecificPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSVendorSpecific
+			moveq	#0,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSVendorSpecific
+	ENDIF
+
+;
+; pascal OSErr CSRegisterClient(RegisterClientPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSRegisterClient
+			moveq	#1,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSRegisterClient
+	ENDIF
+
+;
+; pascal OSErr CSDeregisterClient(RegisterClientPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSDeregisterClient
+			moveq	#2,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSDeregisterClient
+	ENDIF
+
+;
+; pascal OSErr CSGetFirstTuple(GetTuplePB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetFirstTuple
+			moveq	#3,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetFirstTuple
+	ENDIF
+
+;
+; pascal OSErr CSGetNextTuple(GetTuplePB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetNextTuple
+			moveq	#4,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetNextTuple
+	ENDIF
+
+;
+; pascal OSErr CSGetTupleData(GetTuplePB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetTupleData
+			moveq	#5,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetTupleData
+	ENDIF
+
+;
+; pascal OSErr CSGetConfigurationInfo(GetModRequestConfigInfoPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetConfigurationInfo
+			moveq	#6,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetConfigurationInfo
+	ENDIF
+
+;
+; pascal OSErr CSGetCardServicesInfo(GetCardServicesInfoPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetCardServicesInfo
+			moveq	#7,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetCardServicesInfo
+	ENDIF
+
+;
+; pascal OSErr CSGetStatus(GetStatusPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetStatus
+			moveq	#8,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetStatus
+	ENDIF
+
+;
+; pascal OSErr CSValidateCIS(ValidateCISPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSValidateCIS
+			moveq	#9,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSValidateCIS
+	ENDIF
+
+;
+; pascal OSErr CSGetFirstClient(GetClientPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetFirstClient
+			moveq	#15,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetFirstClient
+	ENDIF
+
+;
+; pascal OSErr CSGetNextClient(GetClientPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetNextClient
+			moveq	#16,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetNextClient
+	ENDIF
+
+;
+; pascal OSErr CSGetClientInfo(GetClientInfoPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetClientInfo
+			moveq	#17,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetClientInfo
+	ENDIF
+
+;
+; pascal OSErr CSResetCard(ResetCardPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSResetCard
+			moveq	#18,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSResetCard
+	ENDIF
+
+;
+; pascal OSErr CSRequestWindow(ReqModRelWindowPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSRequestWindow
+			moveq	#19,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSRequestWindow
+	ENDIF
+
+;
+; pascal OSErr CSModifyWindow(ReqModRelWindowPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSModifyWindow
+			moveq	#20,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSModifyWindow
+	ENDIF
+
+;
+; pascal OSErr CSReleaseWindow(ReqModRelWindowPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSReleaseWindow
+			moveq	#21,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSReleaseWindow
+	ENDIF
+
+;
+; pascal OSErr CSRequestConfiguration(GetModRequestConfigInfoPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSRequestConfiguration
+			moveq	#27,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSRequestConfiguration
+	ENDIF
+
+;
+; pascal OSErr CSModifyConfiguration(GetModRequestConfigInfoPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSModifyConfiguration
+			moveq	#28,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSModifyConfiguration
+	ENDIF
+
+;
+; pascal OSErr CSAccessConfigurationRegister(AccessConfigurationRegisterPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSAccessConfigurationRegister
+			moveq	#29,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSAccessConfigurationRegister
+	ENDIF
+
+;
+; pascal OSErr CSReleaseConfiguration(ReleaseConfigurationPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSReleaseConfiguration
+			moveq	#30,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSReleaseConfiguration
+	ENDIF
+
+;
+; pascal OSErr CSGetClientEventMask(GetSetClientEventMaskPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSGetClientEventMask
+			moveq	#31,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSGetClientEventMask
+	ENDIF
+
+;
+; pascal OSErr CSSetClientEventMask(GetSetClientEventMaskPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSSetClientEventMask
+			moveq	#32,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSSetClientEventMask
+	ENDIF
+
+;
+; pascal OSErr CSRequestSocketMask(ReqRelSocketMaskPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSRequestSocketMask
+			moveq	#33,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSRequestSocketMask
+	ENDIF
+
+;
+; pascal OSErr CSReleaseSocketMask(ReqRelSocketMaskPB *pb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CSReleaseSocketMask
+			moveq	#34,d0
+			dc.w 	$AAF0
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CSReleaseSocketMask
+	ENDIF
+
+	ENDIF ; __CARDSERVICES__

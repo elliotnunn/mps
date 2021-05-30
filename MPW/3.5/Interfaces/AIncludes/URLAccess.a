@@ -1,0 +1,525 @@
+;
+;    File:       URLAccess.a
+;
+;    Contains:   URL Access Interfaces.
+;
+;    Version:    Technology: URLAccess 2.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__URLACCESS__') = 'UNDEFINED' THEN
+__URLACCESS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+;  Data structures and types 
+
+
+
+; typedef UInt32						URLOpenFlags
+kURLReplaceExistingFlag			EQU		$01
+kURLBinHexFileFlag				EQU		$02					; Binhex before uploading if necessary
+kURLExpandFileFlag				EQU		$04					; Use StuffIt engine to expand file if necessary
+kURLDisplayProgressFlag			EQU		$08
+kURLDisplayAuthFlag				EQU		$10					; Display auth dialog if guest connection fails
+kURLUploadFlag					EQU		$20					; Do an upload instead of a download
+kURLIsDirectoryHintFlag			EQU		$40					; Hint: the URL is a directory
+kURLDoNotTryAnonymousFlag		EQU		$80					; Don't try to connect anonymously before getting logon info
+kURLDirectoryListingFlag		EQU		$0100				; Download the directory listing, not the whole directory
+kURLExpandAndVerifyFlag			EQU		$0200				; Expand file and then verify using signature resource
+kURLNoAutoRedirectFlag			EQU		$0400				; Do not automatically redirect to new URL
+kURLDebinhexOnlyFlag			EQU		$0800				; Do not use Stuffit Expander - just internal debinhex engine
+kURLDoNotDeleteOnErrorFlag		EQU		$1000				; Do not delete the downloaded file if an error or abort occurs.
+															; This flag applies to downloading only and should be used if
+															; interested in later resuming the download.
+kURLResumeDownloadFlag			EQU		$2000				; The passed in file is partially downloaded, attempt to resume
+															; it.  Currently works for HTTP only.  If no FSSpec passed in,
+															; this flag will be ignored. Overriden by kURLReplaceExistingFlag. 
+kURLReservedFlag				EQU		$80000000			; reserved for Apple internal use
+
+; typedef UInt32						URLState
+kURLNullState					EQU		0
+kURLInitiatingState				EQU		1
+kURLLookingUpHostState			EQU		2
+kURLConnectingState				EQU		3
+kURLResourceFoundState			EQU		4
+kURLDownloadingState			EQU		5
+kURLDataAvailableState			EQU		$15
+kURLTransactionCompleteState	EQU		6
+kURLErrorOccurredState			EQU		7
+kURLAbortingState				EQU		8
+kURLCompletedState				EQU		9
+kURLUploadingState				EQU		10
+
+; typedef UInt32						URLEvent
+kURLInitiatedEvent				EQU		1
+kURLResourceFoundEvent			EQU		4
+kURLDownloadingEvent			EQU		5
+kURLAbortInitiatedEvent			EQU		8
+kURLCompletedEvent				EQU		9
+kURLErrorOccurredEvent			EQU		7
+kURLDataAvailableEvent			EQU		$15
+kURLTransactionCompleteEvent	EQU		6
+kURLUploadingEvent				EQU		10
+kURLSystemEvent					EQU		29
+kURLPercentEvent				EQU		30
+kURLPeriodicEvent				EQU		31
+kURLPropertyChangedEvent		EQU		32
+; typedef unsigned long 				URLEventMask
+
+
+kURLInitiatedEventMask			EQU		$01
+kURLResourceFoundEventMask		EQU		$08
+kURLDownloadingMask				EQU		$10
+kURLUploadingMask				EQU		$0200
+kURLAbortInitiatedMask			EQU		$80
+kURLCompletedEventMask			EQU		$0100
+kURLErrorOccurredEventMask		EQU		$40
+kURLDataAvailableEventMask		EQU		$00100000
+kURLTransactionCompleteEventMask EQU	$20
+kURLSystemEventMask				EQU		$10000000
+kURLPercentEventMask			EQU		$20000000
+kURLPeriodicEventMask			EQU		$40000000
+kURLPropertyChangedEventMask	EQU		$80000000
+kURLAllBufferEventsMask			EQU		$00100020
+kURLAllNonBufferEventsMask		EQU		$E00003D1
+kURLAllEventsMask				EQU		$FFFFFFFF
+
+URLCallbackInfo			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+urlRef					 ds.l	1				; offset: $4 (4)
+property				 ds.l	1				; offset: $8 (8)
+currentSize				 ds.l	1				; offset: $C (12)
+systemEvent				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+;  authentication type flags
+
+kUserNameAndPasswordFlag		EQU		$00000001
+; #define kURLURL "URLString"
+; #define kURLResourceSize "URLResourceSize"
+; #define kURLLastModifiedTime "URLLastModifiedTime"
+; #define kURLMIMEType "URLMIMEType"
+; #define kURLFileType "URLFileType"
+; #define kURLFileCreator "URLFileCreator"
+; #define kURLCharacterSet "URLCharacterSet"
+; #define kURLResourceName "URLResourceName"
+; #define kURLHost "URLHost"
+; #define kURLAuthType "URLAuthType"
+; #define kURLUserName "URLUserName"
+; #define kURLPassword "URLPassword"
+; #define kURLStatusString "URLStatusString"
+; #define kURLIsSecure "URLIsSecure"
+; #define kURLCertificate "URLCertificate"
+; #define kURLTotalItems "URLTotalItems"
+; #define kURLConnectTimeout "URLConnectTimeout"
+;  http and https properties
+; #define kURLHTTPRequestMethod "URLHTTPRequestMethod"
+; #define kURLHTTPRequestHeader "URLHTTPRequestHeader"
+; #define kURLHTTPRequestBody "URLHTTPRequestBody"
+; #define kURLHTTPRespHeader "URLHTTPRespHeader"
+; #define kURLHTTPUserAgent "URLHTTPUserAgent"
+; #define kURLHTTPRedirectedURL "URLHTTPRedirectedURL"
+; #define kURLSSLCipherSuite "URLSSLCipherSuite"
+
+
+
+
+
+; *  URLGetURLAccessVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetURLAccessVersion(UInt32 *returnVers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetURLAccessVersion
+	ENDIF
+
+
+	IF TARGET_RT_MAC_CFM THEN
+; 
+;        URLAccessAvailable() is a macro/inline available only in C/C++.  
+;        To get the same functionality from pascal or assembly, you need
+;        to test if URLGetURLAccessVersion function is not NULL.  For instance:
+;        
+;            gURLAccessAvailable = FALSE;
+;            IF @URLAccessAvailable <> kUnresolvedCFragSymbolAddress THEN
+;                gURLAccessAvailable = TRUE;
+;            END
+;    
+;    
+
+	ELSEIF TARGET_RT_MAC_MACHO THEN
+;  URL Access is always available on OS X 
+	ENDIF	; 
+
+; *  NewURLNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewURLSystemEventUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeURLNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeURLSystemEventUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeURLNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeURLSystemEventUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  URLSimpleDownload()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLSimpleDownload(const char *url, FSSpec *destination, Handle destinationHandle, URLOpenFlags openFlags, URLSystemEventUPP eventProc, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLSimpleDownload
+	ENDIF
+
+
+; *  URLDownload()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLDownload(URLReference urlRef, FSSpec *destination, Handle destinationHandle, URLOpenFlags openFlags, URLSystemEventUPP eventProc, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLDownload
+	ENDIF
+
+
+; *  URLSimpleUpload()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLSimpleUpload(const char *url, const FSSpec *source, URLOpenFlags openFlags, URLSystemEventUPP eventProc, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLSimpleUpload
+	ENDIF
+
+
+; *  URLUpload()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLUpload(URLReference urlRef, const FSSpec *source, URLOpenFlags openFlags, URLSystemEventUPP eventProc, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLUpload
+	ENDIF
+
+
+; *  URLNewReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLNewReference(const char *url, URLReference *urlRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLNewReference
+	ENDIF
+
+
+; *  URLDisposeReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLDisposeReference(URLReference urlRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLDisposeReference
+	ENDIF
+
+
+; *  URLOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLOpen(URLReference urlRef, FSSpec *fileSpec, URLOpenFlags openFlags, URLNotifyUPP notifyProc, URLEventMask eventRegister, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLOpen
+	ENDIF
+
+
+; *  URLAbort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLAbort(URLReference urlRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLAbort
+	ENDIF
+
+
+; *  URLGetDataAvailable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetDataAvailable(URLReference urlRef, Size *dataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetDataAvailable
+	ENDIF
+
+
+; *  URLGetBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetBuffer(URLReference urlRef, void **buffer, Size *bufferSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetBuffer
+	ENDIF
+
+
+; *  URLReleaseBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLReleaseBuffer(URLReference urlRef, void *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLReleaseBuffer
+	ENDIF
+
+
+; *  URLGetProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetProperty(URLReference urlRef, const char *property, void *propertyBuffer, Size bufferSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetProperty
+	ENDIF
+
+
+; *  URLGetPropertySize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetPropertySize(URLReference urlRef, const char *property, Size *propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetPropertySize
+	ENDIF
+
+
+; *  URLSetProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLSetProperty(URLReference urlRef, const char *property, void *propertyBuffer, Size bufferSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLSetProperty
+	ENDIF
+
+
+; *  URLGetCurrentState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetCurrentState(URLReference urlRef, URLState *state)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetCurrentState
+	ENDIF
+
+
+; *  URLGetError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetError(URLReference urlRef, OSStatus *urlError)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetError
+	ENDIF
+
+
+; *  URLIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLIdle(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLIdle
+	ENDIF
+
+
+; *  URLGetFileInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in URLAccessLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus URLGetFileInfo(StringPtr fName, OSType *fType, OSType *fCreator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION URLGetFileInfo
+	ENDIF
+
+	ENDIF ; __URLACCESS__ 
+

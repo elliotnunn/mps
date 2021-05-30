@@ -1,0 +1,3530 @@
+;
+;    File:       Sound.a
+;
+;    Contains:   Sound Manager Interfaces.
+;
+;    Version:    Technology: Sound Manager 3.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1986-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SOUND__') = 'UNDEFINED' THEN
+__SOUND__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+
+; 
+;                        * * *  N O T E  * * *
+;
+;    This file has been updated to include Sound Manager 3.3 interfaces.
+;
+;    Some of the Sound Manager 3.0 interfaces were not put into the InterfaceLib
+;    that originally shipped with the PowerMacs. These missing functions and the
+;    new 3.3 interfaces have been released in the SoundLib library for PowerPC
+;    developers to link with. The runtime library for these functions are
+;    installed by the Sound Manager. The following functions are found in SoundLib.
+;
+;        GetCompressionInfo(), GetSoundPreference(), SetSoundPreference(),
+;        UnsignedFixedMulDiv(), SndGetInfo(), SndSetInfo(), GetSoundOutputInfo(),
+;        SetSoundOutputInfo(), GetCompressionName(), SoundConverterOpen(),
+;        SoundConverterClose(), SoundConverterGetBufferSizes(), SoundConverterBeginConversion(),
+;        SoundConverterConvertBuffer(), SoundConverterEndConversion(),
+;        AudioGetBass(), AudioGetInfo(), AudioGetMute(), AudioGetOutputDevice(),
+;        AudioGetTreble(), AudioGetVolume(), AudioMuteOnEvent(), AudioSetBass(),
+;        AudioSetMute(), AudioSetToDefaults(), AudioSetTreble(), AudioSetVolume(),
+;        OpenMixerSoundComponent(), CloseMixerSoundComponent(), SoundComponentAddSource(),
+;        SoundComponentGetInfo(), SoundComponentGetSource(), SoundComponentGetSourceData(),
+;        SoundComponentInitOutputDevice(), SoundComponentPauseSource(),
+;        SoundComponentPlaySourceBuffer(), SoundComponentRemoveSource(),
+;        SoundComponentSetInfo(), SoundComponentSetOutput(), SoundComponentSetSource(),
+;        SoundComponentStartSource(), SoundComponentStopSource(),
+;        ParseAIFFHeader(), ParseSndHeader(), SoundConverterGetInfo(), SoundConverterSetInfo()
+;
+
+; 
+;    Interfaces for Sound Driver, !!! OBSOLETE and NOT SUPPORTED !!!
+;
+;    These items are no longer defined, but appear here so that someone
+;    searching the interfaces might find them. If you are using one of these
+;    items, you must change your code to support the Sound Manager.
+;
+;        swMode, ftMode, ffMode
+;        FreeWave, FFSynthRec, Tone, SWSynthRec, Wave, FTSoundRec
+;        SndCompletionProcPtr
+;        StartSound, StopSound, SoundDone
+;        SetSoundVol, GetSoundVol
+;
+
+
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;   constants
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+soundListRsrc					EQU		'snd '				;Resource type used by Sound Manager
+
+kSimpleBeepID					EQU		1					;reserved resource ID for Simple Beep
+
+rate48khz						EQU		$BB800000			;48000.00000 in fixed-point
+rate44khz						EQU		$AC440000			;44100.00000 in fixed-point
+rate32khz						EQU		$7D000000			;32000.00000 in fixed-point
+rate22050hz						EQU		$56220000			;22050.00000 in fixed-point
+rate22khz						EQU		$56EE8BA3			;22254.54545 in fixed-point
+rate16khz						EQU		$3E800000			;16000.00000 in fixed-point
+rate11khz						EQU		$2B7745D1			;11127.27273 in fixed-point
+rate11025hz						EQU		$2B110000			;11025.00000 in fixed-point
+rate8khz						EQU		$1F400000			; 8000.00000 in fixed-point
+; synthesizer numbers for SndNewChannel
+
+sampledSynth					EQU		5					;sampled sound synthesizer
+	IF CALL_NOT_IN_CARBON THEN
+
+squareWaveSynth					EQU		1					;square wave synthesizer
+waveTableSynth					EQU		3					;wave table synthesizer
+															;old Sound Manager MACE synthesizer numbers
+MACE3snthID						EQU		11
+MACE6snthID						EQU		13
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kMiddleC						EQU		60					;MIDI note value for middle C
+
+kNoVolume						EQU		0					;setting for no sound volume
+kFullVolume						EQU		$0100				;1.0, setting for full hardware output volume
+
+stdQLength						EQU		128
+
+dataOffsetFlag					EQU		$8000
+
+kUseOptionalOutputDevice		EQU		-1					;only for Sound Manager 3.0 or later
+
+notCompressed					EQU		0					;compression ID's
+fixedCompression				EQU		-1					;compression ID for fixed-sized compression
+variableCompression				EQU		-2					;compression ID for variable-sized compression
+
+twoToOne						EQU		1
+eightToThree					EQU		2
+threeToOne						EQU		3
+sixToOne						EQU		4
+sixToOnePacketSize				EQU		8
+threeToOnePacketSize			EQU		16
+
+stateBlockSize					EQU		64
+leftOverBlockSize				EQU		32
+
+firstSoundFormat				EQU		$0001				;general sound format
+secondSoundFormat				EQU		$0002				;special sampled sound format (HyperCard)
+	IF CALL_NOT_IN_CARBON THEN
+
+dbBufferReady					EQU		$00000001			;double buffer is filled
+dbLastBuffer					EQU		$00000004			;last double buffer to play
+	ENDIF	; CALL_NOT_IN_CARBON
+
+sysBeepDisable					EQU		$0000				;SysBeep() enable flags
+sysBeepEnable					EQU		$01
+sysBeepSynchronous				EQU		$02					;if bit set, make alert sounds synchronous
+
+unitTypeNoSelection				EQU		$FFFF				;unitTypes for AudioSelection.unitType
+unitTypeSeconds					EQU		$0000
+; PPCAsm thinks “extSH” is a directive and therefore can't be a constant (?)
+; But the 68k Asm needs to have these constants, so wrap them inside TARGET_CPU_68K
+    IF TARGET_CPU_68K THEN
+
+stdSH							EQU		$00					;Standard sound header encode value
+extSH							EQU		$FF					;Extended sound header encode value
+cmpSH							EQU		$FE					;Compressed sound header encode value
+    ENDIF   ; TARGET_CPU_68K
+; command numbers for SndDoCommand and SndDoImmediate
+
+nullCmd							EQU		0
+quietCmd						EQU		3
+flushCmd						EQU		4
+reInitCmd						EQU		5
+waitCmd							EQU		10
+pauseCmd						EQU		11
+resumeCmd						EQU		12
+callBackCmd						EQU		13
+syncCmd							EQU		14
+availableCmd					EQU		24
+versionCmd						EQU		25
+volumeCmd						EQU		46					;sound manager 3.0 or later only
+getVolumeCmd					EQU		47					;sound manager 3.0 or later only
+clockComponentCmd				EQU		50					;sound manager 3.2.1 or later only
+getClockComponentCmd			EQU		51					;sound manager 3.2.1 or later only
+scheduledSoundCmd				EQU		52					;sound manager 3.3 or later only
+linkSoundComponentsCmd			EQU		53					;sound manager 3.3 or later only
+soundCmd						EQU		80
+bufferCmd						EQU		81
+rateMultiplierCmd				EQU		86
+getRateMultiplierCmd			EQU		87
+	IF CALL_NOT_IN_CARBON THEN
+; command numbers for SndDoCommand and SndDoImmediate that are not available for use in Carbon 
+
+initCmd							EQU		1
+freeCmd							EQU		2
+totalLoadCmd					EQU		26
+loadCmd							EQU		27
+freqDurationCmd					EQU		40
+restCmd							EQU		41
+freqCmd							EQU		42
+ampCmd							EQU		43
+timbreCmd						EQU		44
+getAmpCmd						EQU		45
+waveTableCmd					EQU		60
+phaseCmd						EQU		61
+rateCmd							EQU		82
+continueCmd						EQU		83
+doubleBufferCmd					EQU		84
+getRateCmd						EQU		85
+sizeCmd							EQU		90					;obsolete command
+convertCmd						EQU		91					;obsolete MACE command
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OLDROUTINENAMES THEN
+; channel initialization parameters
+
+waveInitChannelMask				EQU		$07
+waveInitChannel0				EQU		$04					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel1				EQU		$05					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel2				EQU		$06					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel3				EQU		$07					;wave table only, Sound Manager 2.0 and earlier
+initChan0						EQU		$04					;obsolete spelling
+initChan1						EQU		$05					;obsolete spelling
+initChan2						EQU		$06					;obsolete spelling
+initChan3						EQU		$07					;obsolete spelling
+
+outsideCmpSH					EQU		0					;obsolete MACE constant
+insideCmpSH						EQU		1					;obsolete MACE constant
+aceSuccess						EQU		0					;obsolete MACE constant
+aceMemFull						EQU		1					;obsolete MACE constant
+aceNilBlock						EQU		2					;obsolete MACE constant
+aceBadComp						EQU		3					;obsolete MACE constant
+aceBadEncode					EQU		4					;obsolete MACE constant
+aceBadDest						EQU		5					;obsolete MACE constant
+aceBadCmd						EQU		6					;obsolete MACE constant
+	ENDIF	; OLDROUTINENAMES
+
+initChanLeft					EQU		$0002				;left stereo channel
+initChanRight					EQU		$0003				;right stereo channel
+initNoInterp					EQU		$0004				;no linear interpolation
+initNoDrop						EQU		$0008				;no drop-sample conversion
+initMono						EQU		$0080				;monophonic channel
+initStereo						EQU		$00C0				;stereo channel
+initMACE3						EQU		$0300				;MACE 3:1
+initMACE6						EQU		$0400				;MACE 6:1
+initPanMask						EQU		$0003				;mask for right/left pan values
+initSRateMask					EQU		$0030				;mask for sample rate values
+initStereoMask					EQU		$00C0				;mask for mono/stereo values
+initCompMask					EQU		$FF00				;mask for compression IDs
+; Get&Set Sound Information Selectors
+
+siActiveChannels				EQU		'chac'				;active channels
+siActiveLevels					EQU		'lmac'				;active meter levels
+siAGCOnOff						EQU		'agc '				;automatic gain control state
+siAsync							EQU		'asyn'				;asynchronous capability
+siAVDisplayBehavior				EQU		'avdb'
+siChannelAvailable				EQU		'chav'				;number of channels available
+siCompressionAvailable			EQU		'cmav'				;compression types available
+siCompressionChannels			EQU		'cpct'				;compressor's number of channels
+siCompressionFactor				EQU		'cmfa'				;current compression factor
+siCompressionHeader				EQU		'cmhd'				;return compression header
+siCompressionNames				EQU		'cnam'				;compression type names available
+siCompressionParams				EQU		'evaw'				;compression parameters
+siCompressionSampleRate			EQU		'cprt'				;compressor's sample rate
+siCompressionType				EQU		'comp'				;current compression type
+siContinuous					EQU		'cont'				;continous recording
+siDecompressionParams			EQU		'wave'				;decompression parameters
+siDeviceBufferInfo				EQU		'dbin'				;size of interrupt buffer
+siDeviceConnected				EQU		'dcon'				;input device connection status
+siDeviceIcon					EQU		'icon'				;input device icon
+siDeviceName					EQU		'name'				;input device name
+siEQSpectrumBands				EQU		'eqsb'				; number of spectrum bands
+siEQSpectrumLevels				EQU		'eqlv'				; gets spectum meter levels
+siEQSpectrumOnOff				EQU		'eqlo'				; turn on/off spectum meter levels
+siEQSpectrumResolution			EQU		'eqrs'				; set the resolution of the FFT, 0 = low res (<=16 bands), 1 = high res (16-64 bands)
+siEQToneControlGain				EQU		'eqtg'				; set the bass and treble gain
+siEQToneControlOnOff			EQU		'eqtc'				; turn on equalizer attenuation
+siHardwareBalance				EQU		'hbal'
+siHardwareBalanceSteps			EQU		'hbls'
+siHardwareBass					EQU		'hbas'
+siHardwareBassSteps				EQU		'hbst'
+siHardwareBusy					EQU		'hwbs'				;sound hardware is in use
+siHardwareFormat				EQU		'hwfm'				;get hardware format
+siHardwareMute					EQU		'hmut'				;mute state of all hardware
+siHardwareMuteNoPrefs			EQU		'hmnp'				;mute state of all hardware, but don't store in prefs 
+siHardwareTreble				EQU		'htrb'
+siHardwareTrebleSteps			EQU		'hwts'
+siHardwareVolume				EQU		'hvol'				;volume level of all hardware
+siHardwareVolumeSteps			EQU		'hstp'				;number of volume steps for hardware
+siHeadphoneMute					EQU		'pmut'				;mute state of headphones
+siHeadphoneVolume				EQU		'pvol'				;volume level of headphones
+siHeadphoneVolumeSteps			EQU		'hdst'				;number of volume steps for headphones
+siInputAvailable				EQU		'inav'				;input sources available
+siInputGain						EQU		'gain'				;input gain
+siInputSource					EQU		'sour'				;input source selector
+siInputSourceNames				EQU		'snam'				;input source names
+siLevelMeterOnOff				EQU		'lmet'				;level meter state
+siModemGain						EQU		'mgai'				;modem input gain
+siMonitorAvailable				EQU		'mnav'
+siMonitorSource					EQU		'mons'
+siNumberChannels				EQU		'chan'				;current number of channels
+siOptionsDialog					EQU		'optd'				;display options dialog
+siOSTypeInputSource				EQU		'inpt'				;input source by OSType
+siOSTypeInputAvailable			EQU		'inav'				;list of available input source OSTypes
+siOutputDeviceName				EQU		'onam'				;output device name
+siPlayThruOnOff					EQU		'plth'				;playthrough state
+siPostMixerSoundComponent		EQU		'psmx'				;install post-mixer effect
+siPreMixerSoundComponent		EQU		'prmx'				;install pre-mixer effect
+siQuality						EQU		'qual'				;quality setting
+siRateMultiplier				EQU		'rmul'				;throttle rate setting
+siRecordingQuality				EQU		'qual'				;recording quality
+siSampleRate					EQU		'srat'				;current sample rate
+siSampleRateAvailable			EQU		'srav'				;sample rates available
+siSampleSize					EQU		'ssiz'				;current sample size
+siSampleSizeAvailable			EQU		'ssav'				;sample sizes available
+siSetupCDAudio					EQU		'sucd'				;setup sound hardware for CD audio
+siSetupModemAudio				EQU		'sumd'				;setup sound hardware for modem audio
+siSlopeAndIntercept				EQU		'flap'				;floating point variables for conversion
+siSoundClock					EQU		'sclk'
+siUseThisSoundClock				EQU		'sclc'				;sdev uses this to tell the mixer to use his sound clock
+siSpeakerMute					EQU		'smut'				;mute state of all built-in speaker
+siSpeakerVolume					EQU		'svol'				;volume level of built-in speaker
+siSSpCPULoadLimit				EQU		'3dll'
+siSSpLocalization				EQU		'3dif'
+siSSpSpeakerSetup				EQU		'3dst'
+siStereoInputGain				EQU		'sgai'				;stereo input gain
+siSubwooferMute					EQU		'bmut'				;mute state of sub-woofer
+siTerminalType					EQU		'ttyp'				; usb terminal type 
+siTwosComplementOnOff			EQU		'twos'				;two's complement state
+siVendorProduct					EQU		'vpro'				; vendor and product ID 
+siVolume						EQU		'volu'				;volume level of source
+siVoxRecordInfo					EQU		'voxr'				;VOX record parameters
+siVoxStopInfo					EQU		'voxs'				;VOX stop parameters
+siWideStereo					EQU		'wide'				;wide stereo setting
+siSupportedExtendedFlags		EQU		'exfl'				;which flags are supported in Extended sound data structures
+siRateConverterRollOffSlope		EQU		'rcdb'				;the roll-off slope for the rate converter's filter, in whole dB as a long this value is a long whose range is from 20 (worst quality/fastest performance) to 90 (best quality/slowest performance)
+siOutputLatency					EQU		'olte'				;latency of sound output component
+
+siCloseDriver					EQU		'clos'				;reserved for internal use only
+siInitializeDriver				EQU		'init'				;reserved for internal use only
+siPauseRecording				EQU		'paus'				;reserved for internal use only
+siUserInterruptProc				EQU		'user'				;reserved for internal use only
+;  input source Types
+
+kInvalidSource					EQU		$FFFFFFFF			;this source may be returned from GetInfo if no other source is the monitored source
+kNoSource						EQU		'none'				;no source selection
+kCDSource						EQU		'cd  '				;internal CD player input
+kExtMicSource					EQU		'emic'				;external mic input
+kSoundInSource					EQU		'sinj'				;sound input jack
+kRCAInSource					EQU		'irca'				;RCA jack input
+kTVFMTunerSource				EQU		'tvfm'
+kDAVInSource					EQU		'idav'				;DAV analog input
+kIntMicSource					EQU		'imic'				;internal mic input
+kMediaBaySource					EQU		'mbay'				;media bay input
+kModemSource					EQU		'modm'				;modem input (internal modem on desktops, PCI input on PowerBooks)
+kPCCardSource					EQU		'pcm '				;PC Card pwm input
+kZoomVideoSource				EQU		'zvpc'				;zoom video input
+kDVDSource						EQU		'dvda'				; DVD audio input
+kMicrophoneArray				EQU		'mica'				; microphone array
+; Sound Component Types and Subtypes
+
+kNoSoundComponentType			EQU		'****'
+kSoundComponentType				EQU		'sift'				;component type
+kSoundComponentPPCType			EQU		'nift'				;component type for PowerPC code
+kRate8SubType					EQU		'ratb'				;8-bit rate converter
+kRate16SubType					EQU		'ratw'				;16-bit rate converter
+kConverterSubType				EQU		'conv'				;sample format converter
+kSndSourceSubType				EQU		'sour'				;generic source component
+kMixerType						EQU		'mixr'
+kMixer8SubType					EQU		'mixb'				;8-bit mixer
+kMixer16SubType					EQU		'mixw'				;16-bit mixer
+kSoundInputDeviceType			EQU		'sinp'				;sound input component
+kWaveInSubType					EQU		'wavi'				;Windows waveIn
+kWaveInSnifferSubType			EQU		'wisn'				;Windows waveIn sniffer
+kSoundOutputDeviceType			EQU		'sdev'				;sound output component
+kClassicSubType					EQU		'clas'				;classic hardware, i.e. Mac Plus
+kASCSubType						EQU		'asc '				;Apple Sound Chip device
+kDSPSubType						EQU		'dsp '				;DSP device
+kAwacsSubType					EQU		'awac'				;Another of Will's Audio Chips device
+kGCAwacsSubType					EQU		'awgc'				;Awacs audio with Grand Central DMA
+kSingerSubType					EQU		'sing'				;Singer (via Whitney) based sound
+kSinger2SubType					EQU		'sng2'				;Singer 2 (via Whitney) for Acme
+kWhitSubType					EQU		'whit'				;Whit sound component for PrimeTime 3
+kSoundBlasterSubType			EQU		'sbls'				;Sound Blaster for CHRP
+kWaveOutSubType					EQU		'wavo'				;Windows waveOut
+kWaveOutSnifferSubType			EQU		'wosn'				;Windows waveOut sniffer
+kDirectSoundSubType				EQU		'dsnd'				;Windows DirectSound
+kDirectSoundSnifferSubType		EQU		'dssn'				;Windows DirectSound sniffer
+kUNIXsdevSubType				EQU		'un1x'				;UNIX base sdev
+kUSBSubType						EQU		'usb '				;USB device
+kBlueBoxSubType					EQU		'bsnd'				;Blue Box sound component
+kSoundCompressor				EQU		'scom'
+kSoundDecompressor				EQU		'sdec'
+kAudioComponentType				EQU		'adio'				;Audio components and sub-types
+kAwacsPhoneSubType				EQU		'hphn'
+kAudioVisionSpeakerSubType		EQU		'telc'
+kAudioVisionHeadphoneSubType	EQU		'telh'
+kPhilipsFaderSubType			EQU		'tvav'
+kSGSToneSubType					EQU		'sgs0'
+kSoundEffectsType				EQU		'snfx'				;sound effects type
+kEqualizerSubType				EQU		'eqal'				;frequency equalizer
+kSSpLocalizationSubType			EQU		'snd3'
+; Format Types
+
+kSoundNotCompressed				EQU		'NONE'				;sound is not compressed
+k8BitOffsetBinaryFormat			EQU		'raw '				;8-bit offset binary
+k16BitBigEndianFormat			EQU		'twos'				;16-bit big endian
+k16BitLittleEndianFormat		EQU		'sowt'				;16-bit little endian
+kFloat32Format					EQU		'fl32'				;32-bit floating point
+kFloat64Format					EQU		'fl64'				;64-bit floating point
+k24BitFormat					EQU		'in24'				;24-bit integer
+k32BitFormat					EQU		'in32'				;32-bit integer
+k32BitLittleEndianFormat		EQU		'23ni'				;32-bit little endian integer 
+kMACE3Compression				EQU		'MAC3'				;MACE 3:1
+kMACE6Compression				EQU		'MAC6'				;MACE 6:1
+kCDXA4Compression				EQU		'cdx4'				;CD/XA 4:1
+kCDXA2Compression				EQU		'cdx2'				;CD/XA 2:1
+kIMACompression					EQU		'ima4'				;IMA 4:1
+kULawCompression				EQU		'ulaw'				;µLaw 2:1
+kALawCompression				EQU		'alaw'				;aLaw 2:1
+kMicrosoftADPCMFormat			EQU		$6D730002			;Microsoft ADPCM - ACM code 2
+kDVIIntelIMAFormat				EQU		$6D730011			;DVI/Intel IMA ADPCM - ACM code 17
+kDVAudioFormat					EQU		'dvca'				;DV Audio
+kQDesignCompression				EQU		'QDMC'				;QDesign music
+kQDesign2Compression			EQU		'QDM2'				;QDesign2 music
+kQUALCOMMCompression			EQU		'Qclp'				;QUALCOMM PureVoice
+kOffsetBinary					EQU		'raw '				;for compatibility
+kTwosComplement					EQU		'twos'				;for compatibility
+kLittleEndianFormat				EQU		'sowt'				;for compatibility
+kMPEGLayer3Format				EQU		$6D730055			;MPEG Layer 3, CBR only (pre QT4.1)
+kFullMPEGLay3Format				EQU		'.mp3'				;MPEG Layer 3, CBR & VBR (QT4.1 and later)
+	IF TARGET_RT_LITTLE_ENDIAN THEN
+
+k16BitNativeEndianFormat		EQU		'sowt'
+k16BitNonNativeEndianFormat		EQU		'twos'
+	ELSE
+
+k16BitNativeEndianFormat		EQU		'twos'
+k16BitNonNativeEndianFormat		EQU		'sowt'
+	ENDIF	; TARGET_RT_LITTLE_ENDIAN
+; Features Flags
+
+k8BitRawIn						EQU		$01					;data description
+k8BitTwosIn						EQU		$02
+k16BitIn						EQU		$04
+kStereoIn						EQU		$08
+k8BitRawOut						EQU		$0100
+k8BitTwosOut					EQU		$0200
+k16BitOut						EQU		$0400
+kStereoOut						EQU		$0800
+kReverse						EQU		$00010000			;  function description
+kRateConvert					EQU		$00020000
+kCreateSoundSource				EQU		$00040000
+kVMAwareness					EQU		$00200000			; component will hold its memory
+kHighQuality					EQU		$00400000			;  performance description
+kNonRealTime					EQU		$00800000
+; SoundComponentPlaySourceBuffer action flags
+
+kSourcePaused					EQU		$01
+kPassThrough					EQU		$00010000
+kNoSoundComponentChain			EQU		$00020000
+; SoundParamBlock flags, usefull for OpenMixerSoundComponent
+
+kNoMixing						EQU		$01					;don't mix source
+kNoSampleRateConversion			EQU		$02					;don't convert sample rate (i.e. 11 kHz -> 22 kHz)
+kNoSampleSizeConversion			EQU		$04					;don't convert sample size (i.e. 16 -> 8)
+kNoSampleFormatConversion		EQU		$08					;don't convert sample format (i.e. 'twos' -> 'raw ')
+kNoChannelConversion			EQU		$10					;don't convert stereo/mono
+kNoDecompression				EQU		$20					;don't decompress (i.e. 'MAC3' -> 'raw ')
+kNoVolumeConversion				EQU		$40					;don't apply volume
+kNoRealtimeProcessing			EQU		$80					;won't run at interrupt time
+kScheduledSource				EQU		$0100				;source is scheduled
+kNonInterleavedBuffer			EQU		$0200				;buffer is not interleaved samples
+kNonPagingMixer					EQU		$0400				;if VM is on, use the non-paging mixer
+kSoundConverterMixer			EQU		$0800				;the mixer is to be used by the SoundConverter
+kPagingMixer					EQU		$1000				;the mixer is to be used as a paging mixer when VM is on
+kVMAwareMixer					EQU		$2000				;passed to the output device when the SM is going to deal with VM safety
+kExtendedSoundData				EQU		$4000				;SoundComponentData record is actually an ExtendedSoundComponentData
+; SoundParamBlock quality settings
+
+kBestQuality					EQU		$01					;use interpolation in rate conversion
+; useful bit masks
+
+kInputMask						EQU		$000000FF			;masks off input bits
+kOutputMask						EQU		$0000FF00			;masks off output bits
+kOutputShift					EQU		8					;amount output bits are shifted
+kActionMask						EQU		$00FF0000			;masks off action bits
+kSoundComponentBits				EQU		$00FFFFFF
+; audio atom types
+
+kAudioFormatAtomType			EQU		'frma'
+kAudioEndianAtomType			EQU		'enda'
+kAudioVBRAtomType				EQU		'vbra'
+kAudioTerminatorAtomType		EQU		0
+; siAVDisplayBehavior types
+
+kAVDisplayHeadphoneRemove		EQU		0					; monitor does not have a headphone attached
+kAVDisplayHeadphoneInsert		EQU		1					; monitor has a headphone attached
+kAVDisplayPlainTalkRemove		EQU		2					; monitor either sending no input through CPU input port or unable to tell if input is coming in
+kAVDisplayPlainTalkInsert		EQU		3					; monitor sending PlainTalk level microphone source input through sound input port
+; Audio Component constants
+
+															;Values for whichChannel parameter
+audioAllChannels				EQU		0					;All channels (usually interpreted as both left and right)
+audioLeftChannel				EQU		1					;Left channel
+audioRightChannel				EQU		2					;Right channel
+															;Values for mute parameter
+audioUnmuted					EQU		0					;Device is unmuted
+audioMuted						EQU		1					;Device is muted
+															;Capabilities flags definitions
+audioDoesMono					EQU		$00000001			;Device supports mono output
+audioDoesStereo					EQU		$00000002			;Device supports stereo output
+audioDoesIndependentChannels	EQU		$00000004			;Device supports independent software control of each channel
+; Sound Input Qualities
+
+siCDQuality						EQU		'cd  '				;44.1kHz, stereo, 16 bit
+siBestQuality					EQU		'best'				;22kHz, mono, 8 bit
+siBetterQuality					EQU		'betr'				;22kHz, mono, MACE 3:1
+siGoodQuality					EQU		'good'				;22kHz, mono, MACE 6:1
+siNoneQuality					EQU		'none'				;settings don't match any quality for a get call
+
+siDeviceIsConnected				EQU		1					;input device is connected and ready for input
+siDeviceNotConnected			EQU		0					;input device is not connected
+siDontKnowIfConnected			EQU		-1					;can't tell if input device is connected
+siReadPermission				EQU		0					;permission passed to SPBOpenDevice
+siWritePermission				EQU		1					;permission passed to SPBOpenDevice
+; flags that SoundConverterFillBuffer will return
+
+kSoundConverterDidntFillBuffer	EQU		$01					;set if the converter couldn't completely satisfy a SoundConverterFillBuffer request
+kSoundConverterHasLeftOverData	EQU		$02					;set if the converter had left over data after completely satisfying a SoundConverterFillBuffer call
+;  flags for extendedFlags fields of ExtendedSoundComponentData, ExtendedSoundParamBlock, and ExtendedScheduledSoundHeader
+
+kExtendedSoundSampleCountNotValid EQU	$00000001			; set if sampleCount of SoundComponentData isn't meaningful; use buffer size instead
+kExtendedSoundBufferSizeValid	EQU		$00000002			; set if bufferSize field is valid
+
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;   typedefs
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+SndCommand				RECORD 0
+cmd						 ds.w	1				; offset: $0 (0)
+param1					 ds.w	1				; offset: $2 (2)
+param2					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+; typedef SndChannel *					SndChannelPtr
+
+SndChannel				RECORD 0
+nextChan				 ds.l	1				; offset: $0 (0)
+firstMod				 ds.l	1				; offset: $4 (4)		;  reserved for the Sound Manager 
+callBack				 ds.l	1				; offset: $8 (8)
+userInfo				 ds.l	1				; offset: $C (12)
+wait					 ds.l	1				; offset: $10 (16)		;  The following is for internal Sound Manager use only.
+cmdInProgress			 ds		SndCommand		; offset: $14 (20)
+flags					 ds.w	1				; offset: $1C (28)
+qLength					 ds.w	1				; offset: $1E (30)
+qHead					 ds.w	1				; offset: $20 (32)
+qTail					 ds.w	1				; offset: $22 (34)
+queue					 ds.b	128 * SndCommand.sizeof ; offset: $24 (36)
+sizeof					 EQU *					; size:   $424 (1060)
+						ENDR
+
+; *  NewSndCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSndCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSndCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+; MACE structures
+StateBlock				RECORD 0
+stateVar				 ds.w	64				; offset: $0 (0)
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+; typedef struct StateBlock *			StateBlockPtr
+
+LeftOverBlock			RECORD 0
+count					 ds.l	1				; offset: $0 (0)
+sampleArea				 ds.b	32				; offset: $4 (4)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct LeftOverBlock *		LeftOverBlockPtr
+
+ModRef					RECORD 0
+modNumber				 ds.w	1				; offset: $0 (0)
+modInit					 ds.l	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+SndListResource			RECORD 0
+format					 ds.w	1				; offset: $0 (0)
+numModifiers			 ds.w	1				; offset: $2 (2)
+modifierPart			 ds		ModRef			; offset: $4 (4) <-- really an array of length one
+numCommands				 ds.w	1				; offset: $A (10)
+commandPart				 ds		SndCommand		; offset: $C (12) <-- really an array of length one
+dataPart				 ds.b	1				; offset: $14 (20) <-- really an array of length one
+						 ORG 22
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+; typedef struct SndListResource *		SndListPtr
+
+; typedef SndListPtr *					SndListHandle
+
+; typedef SndListHandle 				SndListHndl
+
+; HyperCard sound resource format
+Snd2ListResource		RECORD 0
+format					 ds.w	1				; offset: $0 (0)
+refCount				 ds.w	1				; offset: $2 (2)
+numCommands				 ds.w	1				; offset: $4 (4)
+commandPart				 ds		SndCommand		; offset: $6 (6) <-- really an array of length one
+dataPart				 ds.b	1				; offset: $E (14) <-- really an array of length one
+						 ORG 16
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct Snd2ListResource *		Snd2ListPtr
+
+; typedef Snd2ListPtr *					Snd2ListHandle
+
+; typedef Snd2ListHandle 				Snd2ListHndl
+
+SoundHeader				RECORD 0
+samplePtr				 ds.l	1				; offset: $0 (0)		; if NIL then samples are in sampleArea
+length					 ds.l	1				; offset: $4 (4)		; length of sound in bytes
+sampleRate				 ds.l	1				; offset: $8 (8)		; sample rate for this sound
+loopStart				 ds.l	1				; offset: $C (12)		; start of looping portion
+loopEnd					 ds.l	1				; offset: $10 (16)		; end of looping portion
+encode					 ds.b	1				; offset: $14 (20)		; header encoding
+baseFrequency			 ds.b	1				; offset: $15 (21)		; baseFrequency value
+sampleArea				 ds.b	1				; offset: $16 (22) <-- really an array of length one ; space for when samples follow directly
+						 ORG 24
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct SoundHeader *			SoundHeaderPtr
+
+CmpSoundHeader			RECORD 0
+samplePtr				 ds.l	1				; offset: $0 (0)		; if nil then samples are in sample area
+numChannels				 ds.l	1				; offset: $4 (4)		; number of channels i.e. mono = 1
+sampleRate				 ds.l	1				; offset: $8 (8)		; sample rate in Apples Fixed point representation
+loopStart				 ds.l	1				; offset: $C (12)		; loopStart of sound before compression
+loopEnd					 ds.l	1				; offset: $10 (16)		; loopEnd of sound before compression
+encode					 ds.b	1				; offset: $14 (20)		; data structure used , stdSH, extSH, or cmpSH
+baseFrequency			 ds.b	1				; offset: $15 (21)		; same meaning as regular SoundHeader
+numFrames				 ds.l	1				; offset: $16 (22)		; length in frames ( packetFrames or sampleFrames )
+AIFFSampleRate			 ds		extended80		; offset: $1A (26)		; IEEE sample rate
+markerChunk				 ds.l	1				; offset: $24 (36)		; sync track
+format					 ds.l	1				; offset: $28 (40)		; data format type, was futureUse1
+futureUse2				 ds.l	1				; offset: $2C (44)		; reserved by Apple
+stateVars				 ds.l	1				; offset: $30 (48)		; pointer to State Block
+leftOverSamples			 ds.l	1				; offset: $34 (52)		; used to save truncated samples between compression calls
+compressionID			 ds.w	1				; offset: $38 (56)		; 0 means no compression, non zero means compressionID
+packetSize				 ds.w	1				; offset: $3A (58)		; number of bits in compressed sample packet
+snthID					 ds.w	1				; offset: $3C (60)		; resource ID of Sound Manager snth that contains NRT C/E
+sampleSize				 ds.w	1				; offset: $3E (62)		; number of bits in non-compressed sample
+sampleArea				 ds.b	1				; offset: $40 (64) <-- really an array of length one ; space for when samples follow directly
+						 ORG 66
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+; typedef struct CmpSoundHeader *		CmpSoundHeaderPtr
+
+ExtSoundHeader			RECORD 0
+samplePtr				 ds.l	1				; offset: $0 (0)		; if nil then samples are in sample area
+numChannels				 ds.l	1				; offset: $4 (4)		; number of channels,  ie mono = 1
+sampleRate				 ds.l	1				; offset: $8 (8)		; sample rate in Apples Fixed point representation
+loopStart				 ds.l	1				; offset: $C (12)		; same meaning as regular SoundHeader
+loopEnd					 ds.l	1				; offset: $10 (16)		; same meaning as regular SoundHeader
+encode					 ds.b	1				; offset: $14 (20)		; data structure used , stdSH, extSH, or cmpSH
+baseFrequency			 ds.b	1				; offset: $15 (21)		; same meaning as regular SoundHeader
+numFrames				 ds.l	1				; offset: $16 (22)		; length in total number of frames
+AIFFSampleRate			 ds		extended80		; offset: $1A (26)		; IEEE sample rate
+markerChunk				 ds.l	1				; offset: $24 (36)		; sync track
+instrumentChunks		 ds.l	1				; offset: $28 (40)		; AIFF instrument chunks
+AESRecording			 ds.l	1				; offset: $2C (44)
+sampleSize				 ds.w	1				; offset: $30 (48)		; number of bits in sample
+futureUse1				 ds.w	1				; offset: $32 (50)		; reserved by Apple
+futureUse2				 ds.l	1				; offset: $34 (52)		; reserved by Apple
+futureUse3				 ds.l	1				; offset: $38 (56)		; reserved by Apple
+futureUse4				 ds.l	1				; offset: $3C (60)		; reserved by Apple
+sampleArea				 ds.b	1				; offset: $40 (64) <-- really an array of length one ; space for when samples follow directly
+						 ORG 66
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+; typedef struct ExtSoundHeader *		ExtSoundHeaderPtr
+
+SoundHeaderUnion		RECORD 0
+stdHeader				 ds		SoundHeader		; offset: $0 (0)
+						 ORG 0
+cmpHeader				 ds		CmpSoundHeader ; offset: $0 (0)
+						 ORG 0
+extHeader				 ds		ExtSoundHeader ; offset: $0 (0)
+sizeof					 EQU *					; size:   $42 (66)
+						ENDR
+ConversionBlock			RECORD 0
+destination				 ds.w	1				; offset: $0 (0)
+unused					 ds.w	1				; offset: $2 (2)
+inputPtr				 ds.l	1				; offset: $4 (4)
+outputPtr				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct ConversionBlock *		ConversionBlockPtr
+
+;  ScheduledSoundHeader flags
+
+kScheduledSoundDoScheduled		EQU		$01
+kScheduledSoundDoCallBack		EQU		$02
+kScheduledSoundExtendedHdr		EQU		$04
+ScheduledSoundHeader	RECORD 0
+u						 ds		SoundHeaderUnion ; offset: $0 (0)
+flags					 ds.l	1				; offset: $42 (66)
+reserved				 ds.w	1				; offset: $46 (70)
+callBackParam1			 ds.w	1				; offset: $48 (72)
+callBackParam2			 ds.l	1				; offset: $4A (74)
+startTime				 ds		TimeRecord		; offset: $4E (78)
+sizeof					 EQU *					; size:   $5E (94)
+						ENDR
+; typedef struct ScheduledSoundHeader *	ScheduledSoundHeaderPtr
+
+ExtendedScheduledSoundHeader RECORD 0
+u						 ds		SoundHeaderUnion ; offset: $0 (0)
+flags					 ds.l	1				; offset: $42 (66)
+reserved				 ds.w	1				; offset: $46 (70)
+callBackParam1			 ds.w	1				; offset: $48 (72)
+callBackParam2			 ds.l	1				; offset: $4A (74)
+startTime				 ds		TimeRecord		; offset: $4E (78)
+recordSize				 ds.l	1				; offset: $5E (94)
+extendedFlags			 ds.l	1				; offset: $62 (98)
+bufferSize				 ds.l	1				; offset: $66 (102)
+sizeof					 EQU *					; size:   $6A (106)
+						ENDR
+; typedef struct ExtendedScheduledSoundHeader * ExtendedScheduledSoundHeaderPtr
+
+SMStatus				RECORD 0
+smMaxCPULoad			 ds.w	1				; offset: $0 (0)
+smNumChannels			 ds.w	1				; offset: $2 (2)
+smCurCPULoad			 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct SMStatus *				SMStatusPtr
+
+SCStatus				RECORD 0
+scStartTime				 ds.l	1				; offset: $0 (0)
+scEndTime				 ds.l	1				; offset: $4 (4)
+scCurrentTime			 ds.l	1				; offset: $8 (8)
+scChannelBusy			 ds.b	1				; offset: $C (12)
+scChannelDisposed		 ds.b	1				; offset: $D (13)
+scChannelPaused			 ds.b	1				; offset: $E (14)
+scUnused				 ds.b	1				; offset: $F (15)
+scChannelAttributes		 ds.l	1				; offset: $10 (16)
+scCPULoad				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct SCStatus *				SCStatusPtr
+
+AudioSelection			RECORD 0
+unitType				 ds.l	1				; offset: $0 (0)
+selStart				 ds.l	1				; offset: $4 (4)
+selEnd					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct AudioSelection *		AudioSelectionPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+SndDoubleBuffer			RECORD 0
+dbNumFrames				 ds.l	1				; offset: $0 (0)
+dbFlags					 ds.l	1				; offset: $4 (4)
+dbUserInfo				 ds.l	2				; offset: $8 (8)
+dbSoundData				 ds.b	1				; offset: $10 (16) <-- really an array of length one
+						 ORG 18
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+; typedef struct SndDoubleBuffer *		SndDoubleBufferPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewSndDoubleBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeSndDoubleBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeSndDoubleBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+SndDoubleBufferHeader	RECORD 0
+dbhNumChannels			 ds.w	1				; offset: $0 (0)
+dbhSampleSize			 ds.w	1				; offset: $2 (2)
+dbhCompressionID		 ds.w	1				; offset: $4 (4)
+dbhPacketSize			 ds.w	1				; offset: $6 (6)
+dbhSampleRate			 ds.l	1				; offset: $8 (8)
+dbhBufferPtr			 ds.l	2				; offset: $C (12)
+dbhDoubleBack			 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct SndDoubleBufferHeader * SndDoubleBufferHeaderPtr
+
+SndDoubleBufferHeader2	RECORD 0
+dbhNumChannels			 ds.w	1				; offset: $0 (0)
+dbhSampleSize			 ds.w	1				; offset: $2 (2)
+dbhCompressionID		 ds.w	1				; offset: $4 (4)
+dbhPacketSize			 ds.w	1				; offset: $6 (6)
+dbhSampleRate			 ds.l	1				; offset: $8 (8)
+dbhBufferPtr			 ds.l	2				; offset: $C (12)
+dbhDoubleBack			 ds.l	1				; offset: $14 (20)
+dbhFormat				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct SndDoubleBufferHeader2 * SndDoubleBufferHeader2Ptr
+
+	ENDIF	; CALL_NOT_IN_CARBON
+SoundInfoList			RECORD 0
+count					 ds.w	1				; offset: $0 (0)
+infoHandle				 ds.l	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct SoundInfoList *		SoundInfoListPtr
+
+SoundComponentData		RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+format					 ds.l	1				; offset: $4 (4)
+numChannels				 ds.w	1				; offset: $8 (8)
+sampleSize				 ds.w	1				; offset: $A (10)
+sampleRate				 ds.l	1				; offset: $C (12)
+sampleCount				 ds.l	1				; offset: $10 (16)
+buffer					 ds.l	1				; offset: $14 (20)
+reserved				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct SoundComponentData *	SoundComponentDataPtr
+
+ExtendedSoundComponentData RECORD 0
+desc					 ds		SoundComponentData ; offset: $0 (0)		; description of sound buffer
+recordSize				 ds.l	1				; offset: $1C (28)		; size of this record in bytes
+extendedFlags			 ds.l	1				; offset: $20 (32)		; flags for extended record
+bufferSize				 ds.l	1				; offset: $24 (36)		; size of buffer in bytes
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+; typedef struct ExtendedSoundComponentData * ExtendedSoundComponentDataPtr
+
+
+
+; typedef SoundParamBlock *				SoundParamBlockPtr
+
+SoundParamBlock			RECORD 0
+recordSize				 ds.l	1				; offset: $0 (0)		; size of this record in bytes
+desc					 ds		SoundComponentData ; offset: $4 (4)		; description of sound buffer
+rateMultiplier			 ds.l	1				; offset: $20 (32)		; rate multiplier to apply to sound
+leftVolume				 ds.w	1				; offset: $24 (36)		; volumes to apply to sound
+rightVolume				 ds.w	1				; offset: $26 (38)
+quality					 ds.l	1				; offset: $28 (40)		; quality to apply to sound
+filter					 ds.l	1				; offset: $2C (44)		; filter to apply to sound
+moreRtn					 ds.l	1				; offset: $30 (48)		; routine to call to get more data
+completionRtn			 ds.l	1				; offset: $34 (52)		; routine to call when buffer is complete
+refCon					 ds.l	1				; offset: $38 (56)		; user refcon
+result					 ds.w	1				; offset: $3C (60)		; result
+sizeof					 EQU *					; size:   $3E (62)
+						ENDR
+ExtendedSoundParamBlock	RECORD 0
+pb						 ds		SoundParamBlock ; offset: $0 (0)		; classic SoundParamBlock except recordSize == sizeof(ExtendedSoundParamBlock)
+reserved				 ds.w	1				; offset: $3E (62)
+extendedFlags			 ds.l	1				; offset: $40 (64)		; flags
+bufferSize				 ds.l	1				; offset: $44 (68)		; size of buffer in bytes
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+; typedef struct ExtendedSoundParamBlock * ExtendedSoundParamBlockPtr
+
+CompressionInfo			RECORD 0
+recordSize				 ds.l	1				; offset: $0 (0)
+format					 ds.l	1				; offset: $4 (4)
+compressionID			 ds.w	1				; offset: $8 (8)
+samplesPerPacket		 ds.w	1				; offset: $A (10)
+bytesPerPacket			 ds.w	1				; offset: $C (12)
+bytesPerFrame			 ds.w	1				; offset: $E (14)
+bytesPerSample			 ds.w	1				; offset: $10 (16)
+futureUse1				 ds.w	1				; offset: $12 (18)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct CompressionInfo *		CompressionInfoPtr
+
+; typedef CompressionInfoPtr *			CompressionInfoHandle
+
+; variables for floating point conversion
+SoundSlopeAndInterceptRecord RECORD 0
+slope					 ds		Float64			; offset: $0 (0)
+intercept				 ds		Float64			; offset: $8 (8)
+minClip					 ds		Float64			; offset: $10 (16)
+maxClip					 ds		Float64			; offset: $18 (24)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct SoundSlopeAndInterceptRecord * SoundSlopeAndInterceptPtr
+
+; private thing to use as a reference to a Sound Converter
+
+
+; callback routine to provide data to the Sound Converter
+; private thing to use as a reference to a Sound Source
+
+
+; typedef SoundSource *					SoundSourcePtr
+
+SoundComponentLink		RECORD 0
+description				 ds		ComponentDescription ; offset: $0 (0)	; Describes the sound component
+mixerID					 ds.l	1				; offset: $14 (20)		; Reserved by Apple
+linkID					 ds.l	1				; offset: $18 (24)		; Reserved by Apple
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct SoundComponentLink *	SoundComponentLinkPtr
+
+AudioInfo				RECORD 0
+capabilitiesFlags		 ds.l	1				; offset: $0 (0)		; Describes device capabilities
+reserved				 ds.l	1				; offset: $4 (4)		; Reserved by Apple
+numVolumeSteps			 ds.w	1				; offset: $8 (8)		; Number of significant increments between min and max volume
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct AudioInfo *			AudioInfoPtr
+
+AudioFormatAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  = sizeof(AudioFormatAtom)
+atomType				 ds.l	1				; offset: $4 (4)		;  = kAudioFormatAtomType
+format					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct AudioFormatAtom *		AudioFormatAtomPtr
+
+AudioEndianAtom			RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  = sizeof(AudioEndianAtom)
+atomType				 ds.l	1				; offset: $4 (4)		;  = kAudioEndianAtomType
+littleEndian			 ds.w	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef struct AudioEndianAtom *		AudioEndianAtomPtr
+
+AudioTerminatorAtom		RECORD 0
+size					 ds.l	1				; offset: $0 (0)		;  = sizeof(AudioTerminatorAtom)
+atomType				 ds.l	1				; offset: $4 (4)		;  = kAudioTerminatorAtomType
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct AudioTerminatorAtom *	AudioTerminatorAtomPtr
+
+LevelMeterInfo			RECORD 0
+numChannels				 ds.w	1				; offset: $0 (0)		;  mono or stereo source
+leftMeter				 ds.b	1				; offset: $2 (2)		;  0-255 range
+rightMeter				 ds.b	1				; offset: $3 (3)		;  0-255 range
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct LevelMeterInfo *		LevelMeterInfoPtr
+
+EQSpectrumBandsRecord	RECORD 0
+count					 ds.w	1				; offset: $0 (0)
+frequency				 ds.l	1				; offset: $2 (2)		;  pointer to array of frequencies
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct EQSpectrumBandsRecord * EQSpectrumBandsRecordPtr
+
+;  Sound Input Structures
+
+
+; typedef SPB *							SPBPtr
+
+; user procedures called by sound input routines
+; Sound Input Parameter Block
+SPB						RECORD 0
+inRefNum				 ds.l	1				; offset: $0 (0)		; reference number of sound input device
+count					 ds.l	1				; offset: $4 (4)		; number of bytes to record
+milliseconds			 ds.l	1				; offset: $8 (8)		; number of milliseconds to record
+bufferLength			 ds.l	1				; offset: $C (12)		; length of buffer in bytes
+bufferPtr				 ds.l	1				; offset: $10 (16)		; buffer to store sound data in
+completionRoutine		 ds.l	1				; offset: $14 (20)		; completion routine
+interruptRoutine		 ds.l	1				; offset: $18 (24)		; interrupt routine
+userLong				 ds.l	1				; offset: $1C (28)		; user-defined field
+error					 ds.w	1				; offset: $20 (32)		; error
+unused1					 ds.l	1				; offset: $22 (34)		; reserved - must be zero
+sizeof					 EQU *					; size:   $26 (38)
+						ENDR
+
+; *  NewSoundParamUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSoundConverterFillBufferDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSIInterruptUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSICompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSoundParamUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSoundConverterFillBufferDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSIInterruptUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSICompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSoundParamUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSoundConverterFillBufferDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSIInterruptUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSICompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewFilePlayCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeFilePlayCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeFilePlayCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;   prototypes
+;  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+;  Sound Manager routines 
+
+; *  SysBeep()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SysBeep(short duration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SysBeep:	OPWORD	$A9C8
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SysBeep
+	ENDIF
+
+
+; *  SndDoCommand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndDoCommand(SndChannelPtr chan, const SndCommand *cmd, Boolean noWait)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndDoCommand:	OPWORD	$A803
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndDoCommand
+	ENDIF
+
+
+; *  SndDoImmediate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndDoImmediate(SndChannelPtr chan, const SndCommand *cmd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndDoImmediate:	OPWORD	$A804
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndDoImmediate
+	ENDIF
+
+
+; *  SndNewChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndNewChannel(SndChannelPtr *chan, short synth, long init, SndCallBackUPP userRoutine)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndNewChannel:	OPWORD	$A807
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndNewChannel
+	ENDIF
+
+
+; *  SndDisposeChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndDisposeChannel(SndChannelPtr chan, Boolean quietNow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndDisposeChannel:	OPWORD	$A801
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndDisposeChannel
+	ENDIF
+
+
+; *  SndPlay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndPlay(SndChannelPtr chan, SndListHandle sndHandle, Boolean async)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndPlay:	OPWORD	$A805
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndPlay
+	ENDIF
+
+	IF OLDROUTINENAMES THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SndAddModifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndAddModifier(SndChannelPtr chan, Ptr modifier, short id, long init)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndAddModifier:	OPWORD	$A802
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndAddModifier
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; OLDROUTINENAMES
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SndControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndControl(short id, SndCommand *cmd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SndControl:	OPWORD	$A806
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndControl
+	ENDIF
+
+;  Sound Manager 2.0 and later, uses _SoundDispatch 
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SndSoundManagerVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NumVersion SndSoundManagerVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndSoundManagerVersion
+			move.l              #$000C0008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndSoundManagerVersion
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SndStartFilePlay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndStartFilePlay(SndChannelPtr chan, short fRefNum, short resNum, long bufferSize, void *theBuffer, AudioSelectionPtr theSelection, FilePlayCompletionUPP theCompletion, Boolean async)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndStartFilePlay
+			move.l              #$0D000008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndStartFilePlay
+	ENDIF
+
+
+; *  SndPauseFilePlay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndPauseFilePlay(SndChannelPtr chan)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndPauseFilePlay
+			move.l              #$02040008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndPauseFilePlay
+	ENDIF
+
+
+; *  SndStopFilePlay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndStopFilePlay(SndChannelPtr chan, Boolean quietNow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndStopFilePlay
+			move.l              #$03080008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndStopFilePlay
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SndChannelStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndChannelStatus(SndChannelPtr chan, short theLength, SCStatusPtr theStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndChannelStatus
+			move.l              #$05100008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndChannelStatus
+	ENDIF
+
+
+; *  SndManagerStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndManagerStatus(short theLength, SMStatusPtr theStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndManagerStatus
+			move.l              #$03140008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndManagerStatus
+	ENDIF
+
+
+; *  SndGetSysBeepState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SndGetSysBeepState(short *sysBeepState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndGetSysBeepState
+			move.l              #$02180008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndGetSysBeepState
+	ENDIF
+
+
+; *  SndSetSysBeepState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndSetSysBeepState(short sysBeepState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndSetSysBeepState
+			move.l              #$011C0008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndSetSysBeepState
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SndPlayDoubleBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndPlayDoubleBuffer(SndChannelPtr chan, SndDoubleBufferHeaderPtr theParams)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndPlayDoubleBuffer
+			move.l              #$04200008,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndPlayDoubleBuffer
+	ENDIF
+
+;  MACE compression routines, uses _SoundDispatch 
+
+; *  MACEVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal NumVersion MACEVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MACEVersion
+			move.l              #$00000010,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MACEVersion
+	ENDIF
+
+
+; *  Comp3to1()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void Comp3to1(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Comp3to1
+			move.l              #$00040010,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Comp3to1
+	ENDIF
+
+
+; *  Exp1to3()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void Exp1to3(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Exp1to3
+			move.l              #$00080010,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Exp1to3
+	ENDIF
+
+
+; *  Comp6to1()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void Comp6to1(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Comp6to1
+			move.l              #$000C0010,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Comp6to1
+	ENDIF
+
+
+; *  Exp1to6()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void Exp1to6(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_Exp1to6
+			move.l              #$00100010,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Exp1to6
+	ENDIF
+
+;  Sound Manager 3.0 and later calls, uses _SoundDispatch 
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  GetSysBeepVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSysBeepVolume(long *level)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSysBeepVolume
+			move.l              #$02240018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSysBeepVolume
+	ENDIF
+
+
+; *  SetSysBeepVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSysBeepVolume(long level)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSysBeepVolume
+			move.l              #$02280018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSysBeepVolume
+	ENDIF
+
+
+; *  GetDefaultOutputVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDefaultOutputVolume(long *level)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDefaultOutputVolume
+			move.l              #$022C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDefaultOutputVolume
+	ENDIF
+
+
+; *  SetDefaultOutputVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDefaultOutputVolume(long level)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDefaultOutputVolume
+			move.l              #$02300018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDefaultOutputVolume
+	ENDIF
+
+
+; *  GetSoundHeaderOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSoundHeaderOffset(SndListHandle sndHandle, long *offset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSoundHeaderOffset
+			move.l              #$04040018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSoundHeaderOffset
+	ENDIF
+
+
+; *  UnsignedFixedMulDiv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal UnsignedFixed UnsignedFixedMulDiv(UnsignedFixed value, UnsignedFixed multiplier, UnsignedFixed divisor)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UnsignedFixedMulDiv
+			move.l              #$060C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UnsignedFixedMulDiv
+	ENDIF
+
+
+; *  GetCompressionInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetCompressionInfo(short compressionID, OSType format, short numChannels, short sampleSize, CompressionInfoPtr cp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetCompressionInfo
+			move.l              #$07100018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCompressionInfo
+	ENDIF
+
+
+; *  SetSoundPreference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSoundPreference(OSType theType, Str255 name, Handle settings)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSoundPreference
+			move.l              #$06340018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSoundPreference
+	ENDIF
+
+
+; *  GetSoundPreference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSoundPreference(OSType theType, Str255 name, Handle settings)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSoundPreference
+			move.l              #$06380018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSoundPreference
+	ENDIF
+
+
+; *  OpenMixerSoundComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr OpenMixerSoundComponent(SoundComponentDataPtr outputDescription, long outputFlags, ComponentInstance *mixerComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenMixerSoundComponent
+			move.l              #$06140018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenMixerSoundComponent
+	ENDIF
+
+
+; *  CloseMixerSoundComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CloseMixerSoundComponent(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseMixerSoundComponent
+			move.l              #$02180018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseMixerSoundComponent
+	ENDIF
+
+;  Sound Manager 3.1 and later calls, uses _SoundDispatch 
+
+; *  SndGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndGetInfo(SndChannelPtr chan, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndGetInfo
+			move.l              #$063C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndGetInfo
+	ENDIF
+
+
+; *  SndSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndSetInfo(SndChannelPtr chan, OSType selector, const void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndSetInfo
+			move.l              #$06400018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndSetInfo
+	ENDIF
+
+
+; *  GetSoundOutputInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSoundOutputInfo(Component outputDevice, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSoundOutputInfo
+			move.l              #$06440018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSoundOutputInfo
+	ENDIF
+
+
+; *  SetSoundOutputInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSoundOutputInfo(Component outputDevice, OSType selector, const void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSoundOutputInfo
+			move.l              #$06480018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSoundOutputInfo
+	ENDIF
+
+;  Sound Manager 3.2 and later calls, uses _SoundDispatch 
+
+; *  GetCompressionName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetCompressionName(OSType compressionType, Str255 compressionName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetCompressionName
+			move.l              #$044C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCompressionName
+	ENDIF
+
+
+; *  SoundConverterOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterOpen(const SoundComponentData *inputFormat, const SoundComponentData *outputFormat, SoundConverter *sc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterOpen
+			move.l              #$06500018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterOpen
+	ENDIF
+
+
+; *  SoundConverterClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterClose(SoundConverter sc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterClose
+			move.l              #$02540018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterClose
+	ENDIF
+
+
+; *  SoundConverterGetBufferSizes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterGetBufferSizes(SoundConverter sc, unsigned long inputBytesTarget, unsigned long *inputFrames, unsigned long *inputBytes, unsigned long *outputBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterGetBufferSizes
+			move.l              #$0A580018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterGetBufferSizes
+	ENDIF
+
+
+; *  SoundConverterBeginConversion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterBeginConversion(SoundConverter sc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterBeginConversion
+			move.l              #$025C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterBeginConversion
+	ENDIF
+
+
+; *  SoundConverterConvertBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterConvertBuffer(SoundConverter sc, const void *inputPtr, unsigned long inputFrames, void *outputPtr, unsigned long *outputFrames, unsigned long *outputBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterConvertBuffer
+			move.l              #$0C600018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterConvertBuffer
+	ENDIF
+
+
+; *  SoundConverterEndConversion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterEndConversion(SoundConverter sc, void *outputPtr, unsigned long *outputFrames, unsigned long *outputBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterEndConversion
+			move.l              #$08640018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterEndConversion
+	ENDIF
+
+;  Sound Manager 3.3 and later calls, uses _SoundDispatch 
+
+; *  SoundConverterGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.3 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterGetInfo(SoundConverter sc, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterGetInfo
+			move.l              #$06680018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterGetInfo
+	ENDIF
+
+
+; *  SoundConverterSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.3 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterSetInfo(SoundConverter sc, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterSetInfo
+			move.l              #$066C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterSetInfo
+	ENDIF
+
+;  Sound Manager 3.6 and later calls, uses _SoundDispatch 
+
+; *  SoundConverterFillBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.6 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundConverterFillBuffer(SoundConverter sc, SoundConverterFillBufferDataUPP fillBufferDataUPP, void *fillBufferDataRefCon, void *outputBuffer, unsigned long outputBufferByteSize, unsigned long *bytesWritten, unsigned long *framesWritten, unsigned long *outputFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundConverterFillBuffer
+			move.l              #$10780018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundConverterFillBuffer
+	ENDIF
+
+
+; *  SoundManagerGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.6 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundManagerGetInfo(OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundManagerGetInfo
+			move.l              #$047C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundManagerGetInfo
+	ENDIF
+
+
+; *  SoundManagerSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.6 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SoundManagerSetInfo(OSType selector, const void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundManagerSetInfo
+			move.l              #$04800018,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundManagerSetInfo
+	ENDIF
+
+
+;  Sound Component Functions
+;   basic sound component functions
+
+
+
+
+; *  SoundComponentInitOutputDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentInitOutputDevice(ComponentInstance ti, long actions)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentInitOutputDevice
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentInitOutputDevice
+	ENDIF
+
+
+; *  SoundComponentSetSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentSetSource(ComponentInstance ti, SoundSource sourceID, ComponentInstance source)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentSetSource
+			move.l              #$00080002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentSetSource
+	ENDIF
+
+
+; *  SoundComponentGetSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentGetSource(ComponentInstance ti, SoundSource sourceID, ComponentInstance *source)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentGetSource
+			move.l              #$00080003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentGetSource
+	ENDIF
+
+
+; *  SoundComponentGetSourceData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentGetSourceData(ComponentInstance ti, SoundComponentDataPtr *sourceData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentGetSourceData
+			move.l              #$00040004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentGetSourceData
+	ENDIF
+
+
+; *  SoundComponentSetOutput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentSetOutput(ComponentInstance ti, SoundComponentDataPtr requested, SoundComponentDataPtr *actual)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentSetOutput
+			move.l              #$00080005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentSetOutput
+	ENDIF
+
+;  junction methods for the mixer, must be called at non-interrupt level
+
+; *  SoundComponentAddSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentAddSource(ComponentInstance ti, SoundSource *sourceID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentAddSource
+			move.l              #$00040101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentAddSource
+	ENDIF
+
+
+; *  SoundComponentRemoveSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentRemoveSource(ComponentInstance ti, SoundSource sourceID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentRemoveSource
+			move.l              #$00040102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentRemoveSource
+	ENDIF
+
+;  info methods
+
+; *  SoundComponentGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentGetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentGetInfo
+			move.l              #$000C0103,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentGetInfo
+	ENDIF
+
+
+; *  SoundComponentSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentSetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentSetInfo
+			move.l              #$000C0104,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentSetInfo
+	ENDIF
+
+;  control methods
+
+; *  SoundComponentStartSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentStartSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentStartSource
+			move.l              #$00060105,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentStartSource
+	ENDIF
+
+
+; *  SoundComponentStopSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentStopSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentStopSource
+			move.l              #$00060106,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentStopSource
+	ENDIF
+
+
+; *  SoundComponentPauseSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentPauseSource(ComponentInstance ti, short count, SoundSource *sources)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentPauseSource
+			move.l              #$00060107,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentPauseSource
+	ENDIF
+
+
+; *  SoundComponentPlaySourceBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SoundComponentPlaySourceBuffer(ComponentInstance ti, SoundSource sourceID, SoundParamBlockPtr pb, long actions)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SoundComponentPlaySourceBuffer
+			move.l              #$000C0108,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SoundComponentPlaySourceBuffer
+	ENDIF
+
+; Audio Components
+; Volume is described as a value between 0 and 1, with 0 indicating minimum
+;  volume and 1 indicating maximum volume; if the device doesn't support
+;  software control of volume, then a value of unimpErr is returned, indicating
+;  that these functions are not supported by the device
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  AudioGetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetVolume(ComponentInstance ac, short whichChannel, ShortFixed *volume)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetVolume
+			move.l              #$00060000,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetVolume
+	ENDIF
+
+
+; *  AudioSetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioSetVolume(ComponentInstance ac, short whichChannel, ShortFixed volume)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioSetVolume
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioSetVolume
+	ENDIF
+
+; If the device doesn't support software control of mute, then a value of unimpErr is
+;returned, indicating that these functions are not supported by the device.
+
+; *  AudioGetMute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetMute(ComponentInstance ac, short whichChannel, short *mute)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetMute
+			move.l              #$00060002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetMute
+	ENDIF
+
+
+; *  AudioSetMute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioSetMute(ComponentInstance ac, short whichChannel, short mute)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioSetMute
+			move.l              #$00040003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioSetMute
+	ENDIF
+
+; AudioSetToDefaults causes the associated device to reset its volume and mute values
+;(and perhaps other characteristics, e.g. attenuation) to "factory default" settings
+
+; *  AudioSetToDefaults()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioSetToDefaults(ComponentInstance ac)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioSetToDefaults
+			move.l              #$00000004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioSetToDefaults
+	ENDIF
+
+; This routine is required; it must be implemented by all audio components
+
+
+; *  AudioGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetInfo(ComponentInstance ac, AudioInfoPtr info)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetInfo
+			move.l              #$00040005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetInfo
+	ENDIF
+
+
+; *  AudioGetBass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetBass(ComponentInstance ac, short whichChannel, short *bass)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetBass
+			move.l              #$00060006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetBass
+	ENDIF
+
+
+; *  AudioSetBass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioSetBass(ComponentInstance ac, short whichChannel, short bass)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioSetBass
+			move.l              #$00040007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioSetBass
+	ENDIF
+
+
+; *  AudioGetTreble()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetTreble(ComponentInstance ac, short whichChannel, short *Treble)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetTreble
+			move.l              #$00060008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetTreble
+	ENDIF
+
+
+; *  AudioSetTreble()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioSetTreble(ComponentInstance ac, short whichChannel, short Treble)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioSetTreble
+			move.l              #$00040009,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioSetTreble
+	ENDIF
+
+
+; *  AudioGetOutputDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioGetOutputDevice(ComponentInstance ac, Component *outputDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioGetOutputDevice
+			move.l              #$0004000A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioGetOutputDevice
+	ENDIF
+
+; This is routine is private to the AudioVision component.  It enables the watching of the mute key.
+
+; *  AudioMuteOnEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ComponentResult AudioMuteOnEvent(ComponentInstance ac, short muteOnEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AudioMuteOnEvent
+			move.l              #$00020081,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AudioMuteOnEvent
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+
+kDelegatedSoundComponentSelectors EQU	$0100
+;  Sound Input Manager routines, uses _SoundDispatch 
+
+; *  SPBVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NumVersion SPBVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBVersion
+			move.l              #$00000014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBVersion
+	ENDIF
+
+
+; *  SndRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SndRecord(ModalFilterUPP filterProc, Point corner, OSType quality, SndListHandle *sndHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndRecord
+			move.l              #$08040014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndRecord
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SndRecordToFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SndRecordToFile(ModalFilterUPP filterProc, Point corner, OSType quality, short fRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndRecordToFile
+			move.l              #$07080014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndRecordToFile
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SPBSignInDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBSignInDevice(short deviceRefNum, ConstStr255Param deviceName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBSignInDevice
+			move.l              #$030C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBSignInDevice
+	ENDIF
+
+
+; *  SPBSignOutDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBSignOutDevice(short deviceRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBSignOutDevice
+			move.l              #$01100014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBSignOutDevice
+	ENDIF
+
+
+; *  SPBGetIndexedDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBGetIndexedDevice(short count, Str255 deviceName, Handle *deviceIconHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBGetIndexedDevice
+			move.l              #$05140014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBGetIndexedDevice
+	ENDIF
+
+
+; *  SPBOpenDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBOpenDevice(ConstStr255Param deviceName, short permission, long *inRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBOpenDevice
+			move.l              #$05180014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBOpenDevice
+	ENDIF
+
+
+; *  SPBCloseDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBCloseDevice(long inRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBCloseDevice
+			move.l              #$021C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBCloseDevice
+	ENDIF
+
+
+; *  SPBRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBRecord(SPBPtr inParamPtr, Boolean asynchFlag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBRecord
+			move.l              #$03200014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBRecord
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SPBRecordToFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SPBRecordToFile(short fRefNum, SPBPtr inParamPtr, Boolean asynchFlag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBRecordToFile
+			move.l              #$04240014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBRecordToFile
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SPBPauseRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBPauseRecording(long inRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBPauseRecording
+			move.l              #$02280014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBPauseRecording
+	ENDIF
+
+
+; *  SPBResumeRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBResumeRecording(long inRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBResumeRecording
+			move.l              #$022C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBResumeRecording
+	ENDIF
+
+
+; *  SPBStopRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBStopRecording(long inRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBStopRecording
+			move.l              #$02300014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBStopRecording
+	ENDIF
+
+
+; *  SPBGetRecordingStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBGetRecordingStatus(long inRefNum, short *recordingStatus, short *meterLevel, unsigned long *totalSamplesToRecord, unsigned long *numberOfSamplesRecorded, unsigned long *totalMsecsToRecord, unsigned long *numberOfMsecsRecorded)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBGetRecordingStatus
+			move.l              #$0E340014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBGetRecordingStatus
+	ENDIF
+
+
+; *  SPBGetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBGetDeviceInfo(long inRefNum, OSType infoType, void *infoData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBGetDeviceInfo
+			move.l              #$06380014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBGetDeviceInfo
+	ENDIF
+
+
+; *  SPBSetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBSetDeviceInfo(long inRefNum, OSType infoType, void *infoData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBSetDeviceInfo
+			move.l              #$063C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBSetDeviceInfo
+	ENDIF
+
+
+; *  SPBMillisecondsToBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBMillisecondsToBytes(long inRefNum, long *milliseconds)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBMillisecondsToBytes
+			move.l              #$04400014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBMillisecondsToBytes
+	ENDIF
+
+
+; *  SPBBytesToMilliseconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SPBBytesToMilliseconds(long inRefNum, long *byteCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SPBBytesToMilliseconds
+			move.l              #$04440014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPBBytesToMilliseconds
+	ENDIF
+
+
+; *  SetupSndHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetupSndHeader(SndListHandle sndHandle, short numChannels, UnsignedFixed sampleRate, short sampleSize, OSType compressionType, short baseNote, unsigned long numBytes, short *headerLen)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetupSndHeader
+			move.l              #$0D480014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetupSndHeader
+	ENDIF
+
+
+; *  SetupAIFFHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetupAIFFHeader(short fRefNum, short numChannels, UnsignedFixed sampleRate, short sampleSize, OSType compressionType, unsigned long numBytes, unsigned long numFrames)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetupAIFFHeader
+			move.l              #$0B4C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetupAIFFHeader
+	ENDIF
+
+;  Sound Input Manager 1.1 and later calls, uses _SoundDispatch 
+
+; *  ParseAIFFHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ParseAIFFHeader(short fRefNum, SoundComponentData *sndInfo, unsigned long *numFrames, unsigned long *dataOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ParseAIFFHeader
+			move.l              #$07580014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ParseAIFFHeader
+	ENDIF
+
+
+; *  ParseSndHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ParseSndHeader(SndListHandle sndHandle, SoundComponentData *sndInfo, unsigned long *numFrames, unsigned long *dataOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ParseSndHeader
+			move.l              #$085C0014,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ParseSndHeader
+	ENDIF
+
+	IF ¬ TARGET_OS_MAC ++ TARGET_API_MAC_CARBON THEN
+;   Only to be used if you are writing a sound input component; this 
+;   is the param block for a read request from the SoundMgr to the   
+;   sound input component.  Not to be confused with the SPB struct   
+;   above, which is the param block for a read request from an app   
+;   to the SoundMgr.                                                 
+
+
+; typedef SndInputCmpParam *			SndInputCmpParamPtr
+
+SndInputCmpParam		RECORD 0
+ioCompletion			 ds.l	1				; offset: $0 (0)		;  completion routine [pointer]
+ioInterrupt				 ds.l	1				; offset: $4 (4)		;  interrupt routine [pointer]
+ioResult				 ds.w	1				; offset: $8 (8)		;  I/O result code [word]
+pad						 ds.w	1				; offset: $A (10)
+ioReqCount				 ds.l	1				; offset: $C (12)
+ioActCount				 ds.l	1				; offset: $10 (16)
+ioBuffer				 ds.l	1				; offset: $14 (20)
+ioMisc					 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+; *  SndInputReadAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputReadAsync(ComponentInstance self, SndInputCmpParamPtr SICParmPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputReadAsync
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputReadAsync
+	ENDIF
+
+
+; *  SndInputReadSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputReadSync(ComponentInstance self, SndInputCmpParamPtr SICParmPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputReadSync
+			move.l              #$00040002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputReadSync
+	ENDIF
+
+
+; *  SndInputPauseRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputPauseRecording(ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputPauseRecording
+			move.l              #$00000003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputPauseRecording
+	ENDIF
+
+
+; *  SndInputResumeRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputResumeRecording(ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputResumeRecording
+			move.l              #$00000004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputResumeRecording
+	ENDIF
+
+
+; *  SndInputStopRecording()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputStopRecording(ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputStopRecording
+			move.l              #$00000005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputStopRecording
+	ENDIF
+
+
+; *  SndInputGetStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputGetStatus(ComponentInstance self, short *recordingStatus, unsigned long *totalSamplesToRecord, unsigned long *numberOfSamplesRecorded)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputGetStatus
+			move.l              #$000C0006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputGetStatus
+	ENDIF
+
+
+; *  SndInputGetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputGetDeviceInfo(ComponentInstance self, OSType infoType, void *infoData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputGetDeviceInfo
+			move.l              #$00080007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputGetDeviceInfo
+	ENDIF
+
+
+; *  SndInputSetDeviceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputSetDeviceInfo(ComponentInstance self, OSType infoType, void *infoData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputSetDeviceInfo
+			move.l              #$00080008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputSetDeviceInfo
+	ENDIF
+
+
+; *  SndInputInitHardware()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult SndInputInitHardware(ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SndInputInitHardware
+			move.l              #$00000009,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SndInputInitHardware
+	ENDIF
+
+	ENDIF
+
+	ENDIF ; __SOUND__ 
+

@@ -1,0 +1,1560 @@
+;
+;	File:		CMApplication.a
+;
+;	Contains:	Color Matching Interfaces
+;
+;	Version:	Technology:	ColorSync 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+__CMAPPLICATION__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+;		include 'Finder.a'											;
+
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+	include 'Printing.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Dialogs.a'										;
+;			include 'Menus.a'										;
+;			include 'Controls.a'									;
+;			include 'Windows.a'									;
+;				include 'Events.a'									;
+;			include 'TextEdit.a'									;
+
+	IF &TYPE('__CMICCPROFILE__') = 'UNDEFINED' THEN
+	include 'CMICCProfile.a'
+	ENDIF
+
+gestaltColorSync20				EQU		$0200
+
+kDefaultCMMSignature			EQU		'appl'
+
+; Macintosh 68K trap word 
+cmTrap							EQU		$ABEE
+
+; PicComment IDs 
+cmBeginProfile					EQU		220
+cmEndProfile					EQU		221
+cmEnableMatching				EQU		222
+cmDisableMatching				EQU		223
+cmComment						EQU		224
+
+; PicComment selectors for cmComment 
+cmBeginProfileSel				EQU		0
+cmContinueProfileSel			EQU		1
+cmEndProfileSel					EQU		2
+
+; Defines for version 1.0 CMProfileSearchRecord.fieldMask 
+cmMatchCMMType					EQU		$00000001
+cmMatchApplProfileVersion		EQU		$00000002
+cmMatchDataType					EQU		$00000004
+cmMatchDeviceType				EQU		$00000008
+cmMatchDeviceManufacturer		EQU		$00000010
+cmMatchDeviceModel				EQU		$00000020
+cmMatchDeviceAttributes			EQU		$00000040
+cmMatchFlags					EQU		$00000080
+cmMatchOptions					EQU		$00000100
+cmMatchWhite					EQU		$00000200
+cmMatchBlack					EQU		$00000400
+
+; Defines for version 2.0 CMSearchRecord.searchMask 
+cmMatchAnyProfile				EQU		$00000000
+cmMatchProfileCMMType			EQU		$00000001
+cmMatchProfileClass				EQU		$00000002
+cmMatchDataColorSpace			EQU		$00000004
+cmMatchProfileConnectionSpace	EQU		$00000008
+cmMatchManufacturer				EQU		$00000010
+cmMatchModel					EQU		$00000020
+cmMatchAttributes				EQU		$00000040
+cmMatchProfileFlags				EQU		$00000080
+
+; Result codes 
+; General Errors 
+cmProfileError					EQU		-170
+cmMethodError					EQU		-171
+cmMethodNotFound				EQU		-175				; CMM not present 
+cmProfileNotFound				EQU		-176				; Responder error 
+cmProfilesIdentical				EQU		-177				; Profiles the same 
+cmCantConcatenateError			EQU		-178				; Profile can't be concatenated 
+cmCantXYZ						EQU		-179				; CMM cant handle XYZ space 
+cmCantDeleteProfile				EQU		-180				; Responder error 
+cmUnsupportedDataType			EQU		-181				; Responder error 
+cmNoCurrentProfile				EQU		-182				; Responder error 
+; Profile Access Errors 
+cmElementTagNotFound			EQU		-4200
+cmIndexRangeErr					EQU		-4201				; Index out of range 
+cmCantDeleteElement				EQU		-4202
+cmFatalProfileErr				EQU		-4203
+cmInvalidProfile				EQU		-4204				; A Profile must contain a 'cs1 ' tag to be valid 
+cmInvalidProfileLocation		EQU		-4205				; Operation not supported for this profile location 
+; Profile Search Errors 
+cmInvalidSearch					EQU		-4206				; Bad Search Handle 
+cmSearchError					EQU		-4207
+cmErrIncompatibleProfile		EQU		-4208
+; Other ColorSync Errors 
+cmInvalidColorSpace				EQU		-4209				; Profile colorspace does not match bitmap type 
+cmInvalidSrcMap					EQU		-4210				; Source pix/bit map was invalid 
+cmInvalidDstMap					EQU		-4211				; Destination pix/bit map was invalid 
+cmNoGDevicesError				EQU		-4212				; Begin/End Matching -- no gdevices available 
+cmInvalidProfileComment			EQU		-4213				; Bad Profile comment during drawpicture 
+; Color Conversion Errors 
+cmRangeOverFlow					EQU		-4214				; One or more output color value overflows in color conversion 
+;														all input color values will still be converted, and the overflown 
+;														will be clipped 
+; Other Profile Access Errors 
+cmCantCopyModifiedV1Profile		EQU		-4215				; It is illegal to copy version 1 profiles that  
+;														have been modified 
+
+; deviceType values for ColorSync 1.0 Device Profile access 
+cmSystemDevice					EQU		'sys '
+cmGDevice						EQU		'gdev'
+
+; Commands for CMFlattenUPP(…) 
+cmOpenReadSpool					EQU		1
+cmOpenWriteSpool				EQU		2
+cmReadSpool						EQU		3
+cmWriteSpool					EQU		4
+cmCloseSpool					EQU		5
+
+; Flags for PostScript-related functions 
+cmPS7bit						EQU		1
+cmPS8bit						EQU		2
+
+; Caller-supplied progress function for Bitmap & PixMap matching routines 
+; Caller-supplied filter function for Profile search 
+; typedef long 				CMError
+; For 1.0 and 2.0 profile header variants 
+; CMAppleProfileHeader 
+CMAppleProfileHeader 	RECORD	0
+cm1						 ds     CMHeader ; offset: $0 (0)
+						 ORG 0
+cm2						 ds     CM2Header ; offset: $0 (0)
+						 ORG 128
+sizeof					 EQU *			; size:   $80 (128)
+						ENDR
+
+; typedef union CMAppleProfileHeader  CMAppleProfileHeader
+; Param for CWConcatColorWorld(…) 
+CMConcatProfileSet 		RECORD	0
+keyIndex				 ds.w   1		; offset: $0 (0)		; Zero-based 
+count					 ds.w   1		; offset: $2 (2)		; Min 1 
+profileSet				 ds.l   1		; offset: $4 (4)		; Variable. Ordered from Source -> Dest 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CMConcatProfileSet  CMConcatProfileSet
+; ColorSync color data types 
+CMRGBColor 				RECORD	0
+red						 ds.w   1		; offset: $0 (0)		; 0..65535 
+green					 ds.w   1		; offset: $2 (2)
+blue					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMRGBColor  CMRGBColor
+CMCMYKColor 			RECORD	0
+cyan					 ds.w   1		; offset: $0 (0)		; 0..65535 
+magenta					 ds.w   1		; offset: $2 (2)
+yellow					 ds.w   1		; offset: $4 (4)
+black					 ds.w   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CMCMYKColor  CMCMYKColor
+CMCMYColor 				RECORD	0
+cyan					 ds.w   1		; offset: $0 (0)		; 0..65535 
+magenta					 ds.w   1		; offset: $2 (2)
+yellow					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMCMYColor  CMCMYColor
+CMHLSColor 				RECORD	0
+hue						 ds.w   1		; offset: $0 (0)		; 0..65535. Fraction of circle. Red at 0 
+lightness				 ds.w   1		; offset: $2 (2)		; 0..65535 
+saturation				 ds.w   1		; offset: $4 (4)		; 0..65535 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMHLSColor  CMHLSColor
+CMHSVColor 				RECORD	0
+hue						 ds.w   1		; offset: $0 (0)		; 0..65535. Fraction of circle. Red at 0 
+saturation				 ds.w   1		; offset: $2 (2)		; 0..65535 
+value					 ds.w   1		; offset: $4 (4)		; 0..65535 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMHSVColor  CMHSVColor
+CMLabColor 				RECORD	0
+L						 ds.w   1		; offset: $0 (0)		; 0..65535 maps to 0..100 
+a						 ds.w   1		; offset: $2 (2)		; 0..65535 maps to -128..127.996 
+b						 ds.w   1		; offset: $4 (4)		; 0..65535 maps to -128..127.996 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMLabColor  CMLabColor
+CMLuvColor 				RECORD	0
+L						 ds.w   1		; offset: $0 (0)		; 0..65535 maps to 0..100 
+u						 ds.w   1		; offset: $2 (2)		; 0..65535 maps to -128..127.996 
+v						 ds.w   1		; offset: $4 (4)		; 0..65535 maps to -128..127.996 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMLuvColor  CMLuvColor
+CMYxyColor 				RECORD	0
+capY					 ds.w   1		; offset: $0 (0)		; 0..65535 maps to 0..1 
+x						 ds.w   1		; offset: $2 (2)		; 0..65535 maps to 0..1 
+y						 ds.w   1		; offset: $4 (4)		; 0..65535 maps to 0..1 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMYxyColor  CMYxyColor
+CMGrayColor 			RECORD	0
+gray					 ds.w   1		; offset: $0 (0)		; 0..65535 
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct CMGrayColor  CMGrayColor
+CMMultichannel5Color 	RECORD	0
+components				 ds.b   5		; offset: $0 (0)		; 0..255 
+						 ORG 6
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMMultichannel5Color  CMMultichannel5Color
+CMMultichannel6Color 	RECORD	0
+components				 ds.b   6		; offset: $0 (0)		; 0..255 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct CMMultichannel6Color  CMMultichannel6Color
+CMMultichannel7Color 	RECORD	0
+components				 ds.b   7		; offset: $0 (0)		; 0..255 
+						 ORG 8
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CMMultichannel7Color  CMMultichannel7Color
+CMMultichannel8Color 	RECORD	0
+components				 ds.b   8		; offset: $0 (0)		; 0..255 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CMMultichannel8Color  CMMultichannel8Color
+CMColor 				RECORD	0
+rgb						 ds     CMRGBColor ; offset: $0 (0)
+						 ORG 0
+hsv						 ds     CMHSVColor ; offset: $0 (0)
+						 ORG 0
+hls						 ds     CMHLSColor ; offset: $0 (0)
+						 ORG 0
+XYZ						 ds     CMXYZColor ; offset: $0 (0)
+						 ORG 0
+Lab						 ds     CMLabColor ; offset: $0 (0)
+						 ORG 0
+Luv						 ds     CMLuvColor ; offset: $0 (0)
+						 ORG 0
+Yxy						 ds     CMYxyColor ; offset: $0 (0)
+						 ORG 0
+cmyk					 ds     CMCMYKColor ; offset: $0 (0)
+						 ORG 0
+cmy						 ds     CMCMYColor ; offset: $0 (0)
+						 ORG 0
+gray					 ds     CMGrayColor ; offset: $0 (0)
+						 ORG 0
+mc5						 ds     CMMultichannel5Color ; offset: $0 (0)
+						 ORG 0
+mc6						 ds     CMMultichannel6Color ; offset: $0 (0)
+						 ORG 0
+mc7						 ds     CMMultichannel7Color ; offset: $0 (0)
+						 ORG 0
+mc8						 ds     CMMultichannel8Color ; offset: $0 (0)
+						 ORG 8
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef union CMColor 	CMColor
+CMProfileSearchRecord 	RECORD	0
+header					 ds     CMHeader ; offset: $0 (0)
+fieldMask				 ds.l   1		; offset: $40 (64)
+reserved				 ds.l   2		; offset: $44 (68)
+sizeof					 EQU *			; size:   $4C (76)
+						ENDR
+
+; typedef struct CMProfileSearchRecord  CMProfileSearchRecord, **CMProfileSearchRecordHandle
+; Search definition for 2.0 
+CMSearchRecord 			RECORD	0
+CMMType					 ds.l   1		; offset: $0 (0)
+profileClass			 ds.l   1		; offset: $4 (4)
+dataColorSpace			 ds.l   1		; offset: $8 (8)
+profileConnectionSpace	 ds.l   1		; offset: $C (12)
+deviceManufacturer		 ds.l   1		; offset: $10 (16)
+deviceModel				 ds.l   1		; offset: $14 (20)
+deviceAttributes		 ds.l   2		; offset: $18 (24)
+profileFlags			 ds.l   1		; offset: $20 (32)
+searchMask				 ds.l   1		; offset: $24 (36)
+filter					 ds.l   1		; offset: $28 (40)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct CMSearchRecord  CMSearchRecord
+; GetCWInfo structures 
+CMMInfoRecord 			RECORD	0
+CMMType					 ds.l   1		; offset: $0 (0)
+CMMVersion				 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CMMInfoRecord  CMMInfoRecord
+CMCWInfoRecord 			RECORD	0
+cmmCount				 ds.l   1		; offset: $0 (0)
+cmmInfo					 ds.b   2 * CMMInfoRecord.sizeof ; offset: $4 (4)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct CMCWInfoRecord  CMCWInfoRecord
+
+cmNoColorPacking				EQU		$0000
+cmAlphaSpace					EQU		$0080
+cmWord5ColorPacking				EQU		$0500
+cmLong8ColorPacking				EQU		$0800
+cmLong10ColorPacking			EQU		$0a00
+cmAlphaFirstPacking				EQU		$1000
+cmOneBitDirectPacking			EQU		$0b00
+
+cmNoSpace						EQU		0
+cmRGBSpace						EQU		1
+cmCMYKSpace						EQU		2
+cmHSVSpace						EQU		3
+cmHLSSpace						EQU		4
+cmYXYSpace						EQU		5
+cmXYZSpace						EQU		6
+cmLUVSpace						EQU		7
+cmLABSpace						EQU		8
+cmReservedSpace1				EQU		9
+cmGraySpace						EQU		10
+cmReservedSpace2				EQU		11
+cmGamutResultSpace				EQU		12
+cmRGBASpace						EQU		cmRGBSpace + cmAlphaSpace
+cmGrayASpace					EQU		cmGraySpace + cmAlphaSpace
+cmRGB16Space					EQU		cmWord5ColorPacking + cmRGBSpace
+cmRGB32Space					EQU		cmLong8ColorPacking + cmRGBSpace
+cmARGB32Space					EQU		cmLong8ColorPacking + cmAlphaFirstPacking + cmRGBASpace
+cmCMYK32Space					EQU		cmLong8ColorPacking + cmCMYKSpace
+cmHSV32Space					EQU		cmLong10ColorPacking + cmHSVSpace
+cmHLS32Space					EQU		cmLong10ColorPacking + cmHLSSpace
+cmYXY32Space					EQU		cmLong10ColorPacking + cmYXYSpace
+cmXYZ32Space					EQU		cmLong10ColorPacking + cmXYZSpace
+cmLUV32Space					EQU		cmLong10ColorPacking + cmLUVSpace
+cmLAB32Space					EQU		cmLong10ColorPacking + cmLABSpace
+cmGamutResult1Space				EQU		cmOneBitDirectPacking + cmGamutResultSpace
+
+; typedef unsigned long 	CMBitmapColorSpace
+CMBitmap 				RECORD	0
+image					 ds.l   1		; offset: $0 (0)
+width					 ds.l   1		; offset: $4 (4)
+height					 ds.l   1		; offset: $8 (8)
+rowBytes				 ds.l   1		; offset: $C (12)
+pixelSize				 ds.l   1		; offset: $10 (16)
+space					 ds.l   1		; offset: $14 (20)
+user1					 ds.l   1		; offset: $18 (24)
+user2					 ds.l   1		; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct CMBitmap 	CMBitmap
+; Classic Print Manager Stuff 
+
+enableColorMatchingOp			EQU		12
+registerProfileOp				EQU		13
+
+; PrGeneral parameter blocks 
+TEnableColorMatchingBlk RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+hPrint					 ds.l   1		; offset: $8 (8)
+fEnableIt				 ds.b   1		; offset: $C (12)
+filler					 ds.b   1		; offset: $D (13)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct TEnableColorMatchingBlk  TEnableColorMatchingBlk
+TRegisterProfileBlk 	RECORD	0
+iOpCode					 ds.w   1		; offset: $0 (0)
+iError					 ds.w   1		; offset: $2 (2)
+lReserved				 ds.l   1		; offset: $4 (4)
+hPrint					 ds.l   1		; offset: $8 (8)
+fRegisterIt				 ds.b   1		; offset: $C (12)
+filler					 ds.b   1		; offset: $D (13)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct TRegisterProfileBlk  TRegisterProfileBlk
+
+cmNoProfileBase					EQU		0
+cmFileBasedProfile				EQU		1
+cmHandleBasedProfile			EQU		2
+cmPtrBasedProfile				EQU		3
+
+CMFileLocation 			RECORD	0
+spec					 ds     FSSpec	; offset: $0 (0)
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct CMFileLocation  CMFileLocation
+CMHandleLocation 		RECORD	0
+h						 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct CMHandleLocation  CMHandleLocation
+CMPtrLocation 			RECORD	0
+p						 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct CMPtrLocation  CMPtrLocation
+CMProfLoc 				RECORD	0
+fileLoc					 ds     CMFileLocation ; offset: $0 (0)
+						 ORG 0
+handleLoc				 ds     CMHandleLocation ; offset: $0 (0)
+						 ORG 0
+ptrLoc					 ds     CMPtrLocation ; offset: $0 (0)
+						 ORG 70
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef union CMProfLoc 	CMProfLoc
+CMProfileLocation 		RECORD	0
+locType					 ds.w   1		; offset: $0 (0)
+u						 ds.w   35		; offset: $2 (2)
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct CMProfileLocation  CMProfileLocation
+; Profile file and element access 
+;
+; pascal CMError CMOpenProfile(CMProfileRef *prof, const CMProfileLocation *theProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMOpenProfile
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$001C
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMOpenProfile
+	ENDIF
+
+;
+; pascal CMError CMCloseProfile(CMProfileRef prof)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMCloseProfile
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$001D
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMCloseProfile
+	ENDIF
+
+;
+; pascal CMError CMUpdateProfile(CMProfileRef prof)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMUpdateProfile
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0034
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMUpdateProfile
+	ENDIF
+
+;
+; pascal CMError CMNewProfile(CMProfileRef *prof, const CMProfileLocation *theProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMNewProfile
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$001B
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMNewProfile
+	ENDIF
+
+;
+; pascal CMError CMCopyProfile(CMProfileRef *targetProf, const CMProfileLocation *targetLocation, CMProfileRef srcProf)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMCopyProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0025
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMCopyProfile
+	ENDIF
+
+;
+; pascal CMError CMGetProfileLocation(CMProfileRef prof, CMProfileLocation *theProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetProfileLocation
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$003C
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetProfileLocation
+	ENDIF
+
+;
+; pascal CMError CMValidateProfile(CMProfileRef prof, Boolean *valid, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMValidateProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0026
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMValidateProfile
+	ENDIF
+
+;
+; pascal CMError CMFlattenProfile(CMProfileRef prof, unsigned long flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMFlattenProfile
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0031
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMFlattenProfile
+	ENDIF
+
+;
+; pascal CMError CMUnflattenProfile(FSSpec *resultFileSpec, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMUnflattenProfile
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0032
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMUnflattenProfile
+	ENDIF
+
+;
+; pascal CMError CMProfileElementExists(CMProfileRef prof, OSType tag, Boolean *found)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMProfileElementExists
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$001E
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMProfileElementExists
+	ENDIF
+
+;
+; pascal CMError CMCountProfileElements(CMProfileRef prof, unsigned long *elementCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMCountProfileElements
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$001F
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMCountProfileElements
+	ENDIF
+
+;
+; pascal CMError CMGetProfileElement(CMProfileRef prof, OSType tag, unsigned long *elementSize, void *elementData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetProfileElement
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0020
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetProfileElement
+	ENDIF
+
+;
+; pascal CMError CMGetProfileHeader(CMProfileRef prof, CMAppleProfileHeader *header)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetProfileHeader
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0039
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetProfileHeader
+	ENDIF
+
+;
+; pascal CMError CMGetPartialProfileElement(CMProfileRef prof, OSType tag, unsigned long offset, unsigned long *byteCount, void *elementData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetPartialProfileElement
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0036
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetPartialProfileElement
+	ENDIF
+
+;
+; pascal CMError CMSetProfileElementSize(CMProfileRef prof, OSType tag, unsigned long elementSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetProfileElementSize
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0038
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetProfileElementSize
+	ENDIF
+
+;
+; pascal CMError CMSetPartialProfileElement(CMProfileRef prof, OSType tag, unsigned long offset, unsigned long byteCount, void *elementData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetPartialProfileElement
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0037
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetPartialProfileElement
+	ENDIF
+
+;
+; pascal CMError CMGetIndProfileElementInfo(CMProfileRef prof, unsigned long index, OSType *tag, unsigned long *elementSize, Boolean *refs)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetIndProfileElementInfo
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0021
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetIndProfileElementInfo
+	ENDIF
+
+;
+; pascal CMError CMGetIndProfileElement(CMProfileRef prof, unsigned long index, unsigned long *elementSize, void *elementData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetIndProfileElement
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0022
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetIndProfileElement
+	ENDIF
+
+;
+; pascal CMError CMSetProfileElement(CMProfileRef prof, OSType tag, unsigned long elementSize, void *elementData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetProfileElement
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0023
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetProfileElement
+	ENDIF
+
+;
+; pascal CMError CMSetProfileHeader(CMProfileRef prof, const CMAppleProfileHeader *header)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetProfileHeader
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$003A
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetProfileHeader
+	ENDIF
+
+;
+; pascal CMError CMSetProfileElementReference(CMProfileRef prof, OSType elementTag, OSType referenceTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetProfileElementReference
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0035
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetProfileElementReference
+	ENDIF
+
+;
+; pascal CMError CMRemoveProfileElement(CMProfileRef prof, OSType tag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMRemoveProfileElement
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0024
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMRemoveProfileElement
+	ENDIF
+
+;
+; pascal CMError CMGetScriptProfileDescription(CMProfileRef prof, Str255 name, ScriptCode *code)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetScriptProfileDescription
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$003E
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetScriptProfileDescription
+	ENDIF
+
+; Low-level matching functions 
+;
+; pascal CMError NCWNewColorWorld(CMWorldRef *cw, CMProfileRef src, CMProfileRef dst)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NCWNewColorWorld
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0014
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NCWNewColorWorld
+	ENDIF
+
+;
+; pascal CMError CWConcatColorWorld(CMWorldRef *cw, CMConcatProfileSet *profileSet)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWConcatColorWorld
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0015
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWConcatColorWorld
+	ENDIF
+
+;
+; pascal CMError CWNewLinkProfile(CMProfileRef *prof, const CMProfileLocation *targetLocation, CMConcatProfileSet *profileSet)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWNewLinkProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0033
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWNewLinkProfile
+	ENDIF
+
+;
+; pascal void CWDisposeColorWorld(CMWorldRef cw)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWDisposeColorWorld
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0001
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWDisposeColorWorld
+	ENDIF
+
+;
+; pascal CMError CWMatchColors(CMWorldRef cw, CMColor *myColors, unsigned long count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWMatchColors
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0002
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWMatchColors
+	ENDIF
+
+;
+; pascal CMError CWCheckColors(CMWorldRef cw, CMColor *myColors, unsigned long count, long *result)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWCheckColors
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0003
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWCheckColors
+	ENDIF
+
+; Bitmap matching 
+;
+; pascal CMError CWMatchBitmap(CMWorldRef cw, CMBitmap *bitmap, CMBitmapCallBackUPP progressProc, void *refCon, CMBitmap *matchedBitmap)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWMatchBitmap
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$002C
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWMatchBitmap
+	ENDIF
+
+;
+; pascal CMError CWCheckBitmap(CMWorldRef cw, const CMBitmap *bitmap, CMBitmapCallBackUPP progressProc, void *refCon, CMBitmap *resultBitmap)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWCheckBitmap
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$002D
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWCheckBitmap
+	ENDIF
+
+; Quickdraw-specific matching 
+;
+; pascal CMError CWMatchPixMap(CMWorldRef cw, PixMap *myPixMap, CMBitmapCallBackUPP progressProc, void *refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWMatchPixMap
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0004
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWMatchPixMap
+	ENDIF
+
+;
+; pascal CMError CWCheckPixMap(CMWorldRef cw, PixMap *myPixMap, CMBitmapCallBackUPP progressProc, void *refCon, BitMap *resultBitMap)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWCheckPixMap
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0007
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWCheckPixMap
+	ENDIF
+
+;
+; pascal CMError NCMBeginMatching(CMProfileRef src, CMProfileRef dst, CMMatchRef *myRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NCMBeginMatching
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0016
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NCMBeginMatching
+	ENDIF
+
+;
+; pascal void CMEndMatching(CMMatchRef myRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMEndMatching
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$000B
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMEndMatching
+	ENDIF
+
+;
+; pascal void NCMDrawMatchedPicture(PicHandle myPicture, CMProfileRef dst, Rect *myRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NCMDrawMatchedPicture
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0017
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NCMDrawMatchedPicture
+	ENDIF
+
+;
+; pascal void CMEnableMatchingComment(Boolean enableIt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMEnableMatchingComment
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$000D
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMEnableMatchingComment
+	ENDIF
+
+;
+; pascal CMError NCMUseProfileComment(CMProfileRef prof, unsigned long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NCMUseProfileComment
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$003B
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NCMUseProfileComment
+	ENDIF
+
+; System Profile access 
+;
+; pascal CMError CMGetSystemProfile(CMProfileRef *prof)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetSystemProfile
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0018
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetSystemProfile
+	ENDIF
+
+;
+; pascal CMError CMSetSystemProfile(const FSSpec *profileFileSpec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSetSystemProfile
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0019
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSetSystemProfile
+	ENDIF
+
+; External Profile Management 
+;
+; pascal CMError CMNewProfileSearch(CMSearchRecord *searchSpec, void *refCon, unsigned long *count, CMProfileSearchRef *searchResult)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMNewProfileSearch
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0027
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMNewProfileSearch
+	ENDIF
+
+;
+; pascal CMError CMUpdateProfileSearch(CMProfileSearchRef search, void *refCon, unsigned long *count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMUpdateProfileSearch
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0028
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMUpdateProfileSearch
+	ENDIF
+
+;
+; pascal void CMDisposeProfileSearch(CMProfileSearchRef search)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMDisposeProfileSearch
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0029
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMDisposeProfileSearch
+	ENDIF
+
+;
+; pascal CMError CMSearchGetIndProfile(CMProfileSearchRef search, unsigned long index, CMProfileRef *prof)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSearchGetIndProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$002A
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSearchGetIndProfile
+	ENDIF
+
+;
+; pascal CMError CMSearchGetIndProfileFileSpec(CMProfileSearchRef search, unsigned long index, FSSpec *profileFile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMSearchGetIndProfileFileSpec
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$002B
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMSearchGetIndProfileFileSpec
+	ENDIF
+
+; Utilities 
+;
+; pascal CMError CMGetColorSyncFolderSpec(short vRefNum, Boolean createFolder, short *foundVRefNum, long *foundDirID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetColorSyncFolderSpec
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0011
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetColorSyncFolderSpec
+	ENDIF
+
+;
+; pascal CMError CMGetCWInfo(CMWorldRef cw, CMCWInfoRecord *info)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetCWInfo
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$001A
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetCWInfo
+	ENDIF
+
+; PS-related 
+;
+; pascal CMError CMGetPS2ColorSpace(CMProfileRef srcProf, unsigned long flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetPS2ColorSpace
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$002E
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetPS2ColorSpace
+	ENDIF
+
+;
+; pascal CMError CMGetPS2ColorRenderingIntent(CMProfileRef srcProf, unsigned long flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetPS2ColorRenderingIntent
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$002F
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetPS2ColorRenderingIntent
+	ENDIF
+
+;
+; pascal CMError CMGetPS2ColorRendering(CMProfileRef srcProf, CMProfileRef dstProf, unsigned long flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetPS2ColorRendering
+			dc.w 	$203C
+			dc.w 	$0018
+			dc.w 	$0030
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetPS2ColorRendering
+	ENDIF
+
+;
+; pascal CMError CMGetPS2ColorRenderingVMSize(CMProfileRef srcProf, CMProfileRef dstProf, unsigned long *vmSize, Boolean *preferredCMMnotfound)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetPS2ColorRenderingVMSize
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$003D
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetPS2ColorRenderingVMSize
+	ENDIF
+
+; ColorSync 1.0 functions which have parallel 2.0 counterparts 
+;
+; pascal CMError CWNewColorWorld(CMWorldRef *cw, CMProfileHandle src, CMProfileHandle dst)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CWNewColorWorld
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0000
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CWNewColorWorld
+	ENDIF
+
+;
+; pascal CMError ConcatenateProfiles(CMProfileHandle thru, CMProfileHandle dst, CMProfileHandle *newDst)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConcatenateProfiles
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$000C
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConcatenateProfiles
+	ENDIF
+
+;
+; pascal CMError CMBeginMatching(CMProfileHandle src, CMProfileHandle dst, CMMatchRef *myRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMBeginMatching
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$000A
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMBeginMatching
+	ENDIF
+
+;
+; pascal void CMDrawMatchedPicture(PicHandle myPicture, CMProfileHandle dst, Rect *myRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMDrawMatchedPicture
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0009
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMDrawMatchedPicture
+	ENDIF
+
+;
+; pascal CMError CMUseProfileComment(CMProfileHandle profile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMUseProfileComment
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0008
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMUseProfileComment
+	ENDIF
+
+;
+; pascal void CMGetProfileName(CMProfileHandle myProfile, CMIString *IStringResult)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetProfileName
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$000E
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetProfileName
+	ENDIF
+
+;
+; pascal long CMGetProfileAdditionalDataOffset(CMProfileHandle myProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CMGetProfileAdditionalDataOffset
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$000F
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CMGetProfileAdditionalDataOffset
+	ENDIF
+
+; ProfileResponder functions 
+;
+; pascal CMError GetProfile(OSType deviceType, long refNum, CMProfileHandle aProfile, CMProfileHandle *returnedProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetProfile
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0005
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetProfile
+	ENDIF
+
+;
+; pascal CMError SetProfile(OSType deviceType, long refNum, CMProfileHandle newProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0006
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetProfile
+	ENDIF
+
+;
+; pascal CMError SetProfileDescription(OSType deviceType, long refNum, long deviceData, CMProfileHandle hProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetProfileDescription
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0010
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetProfileDescription
+	ENDIF
+
+;
+; pascal CMError GetIndexedProfile(OSType deviceType, long refNum, CMProfileSearchRecordHandle search, CMProfileHandle *returnProfile, long *index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetIndexedProfile
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$0012
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetIndexedProfile
+	ENDIF
+
+;
+; pascal CMError DeleteDeviceProfile(OSType deviceType, long refNum, CMProfileHandle deleteMe)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteDeviceProfile
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0013
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteDeviceProfile
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+
+kMatchCMMType					EQU		cmMatchCMMType
+kMatchApplProfileVersion		EQU		cmMatchApplProfileVersion
+kMatchDataType					EQU		cmMatchDataType
+kMatchDeviceType				EQU		cmMatchDeviceType
+kMatchDeviceManufacturer		EQU		cmMatchDeviceManufacturer
+kMatchDeviceModel				EQU		cmMatchDeviceModel
+kMatchDeviceAttributes			EQU		cmMatchDeviceAttributes
+kMatchFlags						EQU		cmMatchFlags
+kMatchOptions					EQU		cmMatchOptions
+kMatchWhite						EQU		cmMatchWhite
+kMatchBlack						EQU		cmMatchBlack
+
+; types 
+; typedef struct CMCMYKColor  CMYKColor
+; typedef CMWorldRef 		CWorld
+; typedef long 				*CMGamutResult
+; functions 
+;
+; pascal void EndMatching(CMMatchRef myRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EndMatching
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$000B
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EndMatching
+	ENDIF
+
+;
+; pascal void EnableMatching(Boolean enableIt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EnableMatching
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$000D
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EnableMatching
+	ENDIF
+
+;
+; pascal CMError GetColorSyncFolderSpec(short vRefNum, Boolean createFolder, short *foundVRefNum, long *foundDirID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetColorSyncFolderSpec
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0011
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetColorSyncFolderSpec
+	ENDIF
+
+;
+; pascal CMError BeginMatching(CMProfileHandle src, CMProfileHandle dst, CMMatchRef *myRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_BeginMatching
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$000A
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	BeginMatching
+	ENDIF
+
+;
+; pascal void DrawMatchedPicture(PicHandle myPicture, CMProfileHandle dst, Rect *myRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawMatchedPicture
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0009
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawMatchedPicture
+	ENDIF
+
+;
+; pascal CMError UseProfile(CMProfileHandle profile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UseProfile
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0008
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UseProfile
+	ENDIF
+
+;
+; pascal void GetProfileName(CMProfileHandle myProfile, CMIString *IStringResult)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetProfileName
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$000E
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetProfileName
+	ENDIF
+
+;
+; pascal long GetProfileAdditionalDataOffset(CMProfileHandle myProfile)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetProfileAdditionalDataOffset
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$000F
+			dc.w 	$ABEE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetProfileAdditionalDataOffset
+	ENDIF
+
+	ENDIF
+	ENDIF ; __CMAPPLICATION__

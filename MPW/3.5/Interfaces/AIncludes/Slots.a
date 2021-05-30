@@ -1,0 +1,1498 @@
+;
+;    File:       Slots.a
+;
+;    Contains:   Slot Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1986-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SLOTS__') = 'UNDEFINED' THEN
+__SLOTS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+
+fDontUse						EQU		0					;old slotmgr put fcardIsChanged here
+fCardIsChanged					EQU		1					;card is Changed field in StatusFlags field of sInfoArray
+fTempEnabled					EQU		2					;slot is temporarily enabled
+fCkForNext						EQU		0					;check for NEXT sRsrc in SRT        (SearchSRT)
+fCkReserved						EQU		1					;check reserved field for zero    (ReadPBSize)
+fWarmStart						EQU		2					;warm start, else cold start        (PrimaryInit)
+fClear							EQU		3					;clear the memory                 (sNewPtr)
+fSys							EQU		4					;alloc  on system heap           (sNewPtr)
+fConsecBytes					EQU		5					;calc step value for consecutive bytes (CalcStep)
+
+stateNil						EQU		0					;State
+stateSDMInit					EQU		1					;:Slot declaration manager Init
+statePRAMInit					EQU		2					;:sPRAM record init
+statePInit						EQU		3					;:Primary init
+stateSInit						EQU		4					;:Secondary init
+
+															; flags for spParamData 
+fall							EQU		0					; bit 0: set=search enabled/disabled sRsrc's 
+foneslot						EQU		1					;    1: set=search sRsrc's in given slot only 
+fnext							EQU		2					;    2: set=search for next sRsrc 
+
+															; Misc masks 
+catMask							EQU		$08					; sets spCategory field of spTBMask (bit 3) 
+cTypeMask						EQU		$04					; sets spCType    field of spTBMask (bit 2) 
+drvrSWMask						EQU		$02					; sets spDrvrSW   field of spTBMask (bit 1) 
+drvrHWMask						EQU		$01					; sets spDrvrHW    field of spTBMask (bit 0) 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewSlotIntServiceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeSlotIntServiceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeSlotIntServiceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+SlotIntQElement			RECORD 0
+sqLink					 ds.l	1				; offset: $0 (0)		; ptr to next element
+sqType					 ds.w	1				; offset: $4 (4)		; queue type ID for validity
+sqPrio					 ds.w	1				; offset: $6 (6)		; priority
+sqAddr					 ds.l	1				; offset: $8 (8)		; interrupt service routine
+sqParm					 ds.l	1				; offset: $C (12)		; optional A1 parameter
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct SlotIntQElement *		SQElemPtr
+
+SpBlock					RECORD 0
+spResult				 ds.l	1				; offset: $0 (0)		; FUNCTION Result
+spsPointer				 ds.l	1				; offset: $4 (4)		; structure pointer
+spSize					 ds.l	1				; offset: $8 (8)		; size of structure
+spOffsetData			 ds.l	1				; offset: $C (12)		; offset/data field used by sOffsetData
+spIOFileName			 ds.l	1				; offset: $10 (16)		; ptr to IOFile name for sDisDrvrName
+spsExecPBlk				 ds.l	1				; offset: $14 (20)		; pointer to sExec parameter block.
+spParamData				 ds.l	1				; offset: $18 (24)		; misc parameter data (formerly spStackPtr).
+spMisc					 ds.l	1				; offset: $1C (28)		; misc field for SDM.
+spReserved				 ds.l	1				; offset: $20 (32)		; reserved for future expansion
+spIOReserved			 ds.w	1				; offset: $24 (36)		; Reserved field of Slot Resource Table
+spRefNum				 ds.w	1				; offset: $26 (38)		; RefNum
+spCategory				 ds.w	1				; offset: $28 (40)		; sType: Category
+spCType					 ds.w	1				; offset: $2A (42)		; Type
+spDrvrSW				 ds.w	1				; offset: $2C (44)		; DrvrSW
+spDrvrHW				 ds.w	1				; offset: $2E (46)		; DrvrHW
+spTBMask				 ds.b	1				; offset: $30 (48)		; type bit mask bits 0..3 mask words 0..3
+spSlot					 ds.b	1				; offset: $31 (49)		; slot number
+spID					 ds.b	1				; offset: $32 (50)		; structure ID
+spExtDev				 ds.b	1				; offset: $33 (51)		; ID of the external device
+spHwDev					 ds.b	1				; offset: $34 (52)		; Id of the hardware device.
+spByteLanes				 ds.b	1				; offset: $35 (53)		; bytelanes from card ROM format block
+spFlags					 ds.b	1				; offset: $36 (54)		; standard flags
+spKey					 ds.b	1				; offset: $37 (55)		; Internal use only
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+; typedef struct SpBlock *				SpBlockPtr
+
+SInfoRecord				RECORD 0
+siDirPtr				 ds.l	1				; offset: $0 (0)		; Pointer to directory
+siInitStatusA			 ds.w	1				; offset: $4 (4)		; initialization E
+siInitStatusV			 ds.w	1				; offset: $6 (6)		; status returned by vendor init code
+siState					 ds.b	1				; offset: $8 (8)		; initialization state
+siCPUByteLanes			 ds.b	1				; offset: $9 (9)		; 0=[d0..d7] 1=[d8..d15]
+siTopOfROM				 ds.b	1				; offset: $A (10)		; Top of ROM= $FssFFFFx: x is TopOfROM
+siStatusFlags			 ds.b	1				; offset: $B (11)		; bit 0 - card is changed
+siTOConst				 ds.w	1				; offset: $C (12)		; Time Out C for BusErr
+siReserved				 ds.b	2				; offset: $E (14)		; reserved
+siROMAddr				 ds.l	1				; offset: $10 (16)		;  addr of top of ROM 
+siSlot					 ds.b	1				; offset: $14 (20)		;  slot number 
+siPadding				 ds.b	3				; offset: $15 (21)		;  reserved 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct SInfoRecord *			SInfoRecPtr
+
+SDMRecord				RECORD 0
+sdBEVSave				 ds.l	1				; offset: $0 (0)		; Save old BusErr vector
+sdBusErrProc			 ds.l	1				; offset: $4 (4)		; Go here to determine if it is a BusErr
+sdErrorEntry			 ds.l	1				; offset: $8 (8)		; Go here if BusErrProc finds real BusErr
+sdReserved				 ds.l	1				; offset: $C (12)		; Reserved
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+FHeaderRec				RECORD 0
+fhDirOffset				 ds.l	1				; offset: $0 (0)		; offset to directory
+fhLength				 ds.l	1				; offset: $4 (4)		; length of ROM
+fhCRC					 ds.l	1				; offset: $8 (8)		; CRC
+fhROMRev				 ds.b	1				; offset: $C (12)		; revision of ROM
+fhFormat				 ds.b	1				; offset: $D (13)		; format - 2
+fhTstPat				 ds.l	1				; offset: $E (14)		; test pattern
+fhReserved				 ds.b	1				; offset: $12 (18)		; reserved
+fhByteLanes				 ds.b	1				; offset: $13 (19)		; ByteLanes
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct FHeaderRec *			FHeaderRecPtr
+
+OffsetToDir     EQU         FHeaderRec.fhDirOffset-FHeaderRec.sizeof+1  ; offset to dir ptr <1.8>
+
+;   
+;    Extended Format header block  -  extended declaration ROM format header for super sRsrc directories.    <H2><SM0>
+;   
+
+
+
+XFHeaderRec				RECORD 0
+fhXSuperInit			 ds.l	1				; offset: $0 (0)		; Offset to SuperInit SExecBlock  <fhFormat,offset>
+fhXSDirOffset			 ds.l	1				; offset: $4 (4)		; Offset to SuperDirectory         <$FE,offset>
+fhXEOL					 ds.l	1				; offset: $8 (8)		; Psuedo end-of-list          <$FF,nil>
+fhXSTstPat				 ds.l	1				; offset: $C (12)		; TestPattern
+fhXDirOffset			 ds.l	1				; offset: $10 (16)		; Offset to (minimal) directory
+fhXLength				 ds.l	1				; offset: $14 (20)		; Length of ROM
+fhXCRC					 ds.l	1				; offset: $18 (24)		; CRC
+fhXROMRev				 ds.b	1				; offset: $1C (28)		; Revision of ROM
+fhXFormat				 ds.b	1				; offset: $1D (29)		; Format-2
+fhXTstPat				 ds.l	1				; offset: $1E (30)		; TestPattern
+fhXReserved				 ds.b	1				; offset: $22 (34)		; Reserved
+fhXByteLanes			 ds.b	1				; offset: $23 (35)		; ByteLanes
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct XFHeaderRec *			XFHeaderRecPtr
+
+XFHdrExtraSize  Equ         XFHeaderRec.sizeof-FHeaderRec.sizeof        ; (extended - standard) delta
+XOffsetToDir    Equ         XFHeaderRec.fhXSDirOffset-XFHeaderRec.sizeof+1  ; offset to super dir ptr
+XOffsetToSInit  Equ         XFHeaderRec.fhXSuperInit-XFHeaderRec.sizeof+1   ; offset to super dir ptr
+SEBlock					RECORD 0
+seSlot					 ds.b	1				; offset: $0 (0)		; Slot number.
+sesRsrcId				 ds.b	1				; offset: $1 (1)		; sResource Id.
+seStatus				 ds.w	1				; offset: $2 (2)		; Status of code executed by sExec.
+seFlags					 ds.b	1				; offset: $4 (4)		; Flags
+seFiller0				 ds.b	1				; offset: $5 (5)		; Filler, must be SignedByte to align on odd boundry
+seFiller1				 ds.b	1				; offset: $6 (6)		; Filler
+seFiller2				 ds.b	1				; offset: $7 (7)		; Filler
+seResult				 ds.l	1				; offset: $8 (8)		; Result of sLoad.
+seIOFileName			 ds.l	1				; offset: $C (12)		; Pointer to IOFile name.
+seDevice				 ds.b	1				; offset: $10 (16)		; Which device to read from.
+sePartition				 ds.b	1				; offset: $11 (17)		; The partition.
+seOSType				 ds.b	1				; offset: $12 (18)		; Type of OS.
+seReserved				 ds.b	1				; offset: $13 (19)		; Reserved field.
+seRefNum				 ds.b	1				; offset: $14 (20)		; RefNum of the driver.
+seNumDevices			 ds.b	1				; offset: $15 (21)		;  Number of devices to load.
+seBootState				 ds.b	1				; offset: $16 (22)		; State of StartBoot code.
+filler					 ds.b	1				; offset: $17 (23)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;   Principle  
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SReadByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadByte(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadByte
+			moveq           	#0,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadByte
+	ENDIF
+
+
+; *  SReadWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadWord(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadWord
+			moveq           	#1,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadWord
+	ENDIF
+
+
+; *  SReadLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadLong(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadLong
+			moveq           	#2,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadLong
+	ENDIF
+
+
+; *  SGetCString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetCString(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetCString
+			moveq           	#3,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetCString
+	ENDIF
+
+
+; *  SGetBlock()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetBlock(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetBlock
+			moveq           	#5,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetBlock
+	ENDIF
+
+
+; *  SFindStruct()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindStruct(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindStruct
+			moveq           	#6,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindStruct
+	ENDIF
+
+
+; *  SReadStruct()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadStruct(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadStruct
+			moveq           	#7,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadStruct
+	ENDIF
+
+;   Special  
+
+; *  SReadInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadInfo(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadInfo
+			moveq           	#16,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadInfo
+	ENDIF
+
+
+; *  SReadPRAMRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadPRAMRec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadPRAMRec
+			moveq           	#17,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadPRAMRec
+	ENDIF
+
+
+; *  SPutPRAMRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SPutPRAMRec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SPutPRAMRec
+			moveq           	#18,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPutPRAMRec
+	ENDIF
+
+
+; *  SReadFHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadFHeader(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadFHeader
+			moveq           	#19,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadFHeader
+	ENDIF
+
+
+; *  SNextSRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SNextSRsrc(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SNextSRsrc
+			moveq           	#20,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SNextSRsrc
+	ENDIF
+
+
+; *  SNextTypeSRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SNextTypeSRsrc(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SNextTypeSRsrc
+			moveq           	#21,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SNextTypeSRsrc
+	ENDIF
+
+
+; *  SRsrcInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SRsrcInfo(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SRsrcInfo
+			moveq           	#22,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SRsrcInfo
+	ENDIF
+
+
+; *  SDisposePtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SDisposePtr(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SDisposePtr
+			moveq           	#23,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SDisposePtr
+	ENDIF
+
+
+; *  SCkCardStat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SCkCardStat(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SCkCardStat
+			moveq           	#24,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SCkCardStat
+	ENDIF
+
+
+; *  SReadDrvrName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadDrvrName(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadDrvrName
+			moveq           	#25,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadDrvrName
+	ENDIF
+
+
+; *  SFindSRTRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindSRTRec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindSRTRec
+			moveq           	#26,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindSRTRec
+	ENDIF
+
+
+; *  SFindDevBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindDevBase(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindDevBase
+			moveq           	#27,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindDevBase
+	ENDIF
+
+
+; *  SFindBigDevBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindBigDevBase(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindBigDevBase
+			moveq           	#28,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindBigDevBase
+	ENDIF
+
+;   Advanced  
+
+; *  InitSDeclMgr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InitSDeclMgr(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_InitSDeclMgr
+			moveq           	#32,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitSDeclMgr
+	ENDIF
+
+
+; *  SPrimaryInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SPrimaryInit(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SPrimaryInit
+			moveq           	#33,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPrimaryInit
+	ENDIF
+
+
+; *  SCardChanged()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SCardChanged(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SCardChanged
+			moveq           	#34,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SCardChanged
+	ENDIF
+
+
+; *  SExec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SExec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SExec
+			moveq           	#35,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SExec
+	ENDIF
+
+
+; *  SOffsetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SOffsetData(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SOffsetData
+			moveq           	#36,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SOffsetData
+	ENDIF
+
+
+; *  SInitPRAMRecs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SInitPRAMRecs(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SInitPRAMRecs
+			moveq           	#37,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SInitPRAMRecs
+	ENDIF
+
+
+; *  SReadPBSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SReadPBSize(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SReadPBSize
+			moveq           	#38,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SReadPBSize
+	ENDIF
+
+
+; *  SCalcStep()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SCalcStep(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SCalcStep
+			moveq           	#40,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SCalcStep
+	ENDIF
+
+
+; *  SInitSRsrcTable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SInitSRsrcTable(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SInitSRsrcTable
+			moveq           	#41,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SInitSRsrcTable
+	ENDIF
+
+
+; *  SSearchSRT()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SSearchSRT(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SSearchSRT
+			moveq           	#42,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSearchSRT
+	ENDIF
+
+
+; *  SUpdateSRT()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SUpdateSRT(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SUpdateSRT
+			moveq           	#43,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SUpdateSRT
+	ENDIF
+
+
+; *  SCalcSPointer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SCalcSPointer(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SCalcSPointer
+			moveq           	#44,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SCalcSPointer
+	ENDIF
+
+
+; *  SGetDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetDriver(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetDriver
+			moveq           	#45,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetDriver
+	ENDIF
+
+
+; *  SPtrToSlot()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SPtrToSlot(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SPtrToSlot
+			moveq           	#46,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SPtrToSlot
+	ENDIF
+
+
+; *  SFindSInfoRecPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindSInfoRecPtr(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindSInfoRecPtr
+			moveq           	#47,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindSInfoRecPtr
+	ENDIF
+
+
+; *  SFindSRsrcPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SFindSRsrcPtr(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SFindSRsrcPtr
+			moveq           	#48,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SFindSRsrcPtr
+	ENDIF
+
+
+; *  SDeleteSRTRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SDeleteSRTRec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SDeleteSRTRec
+			moveq           	#49,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SDeleteSRTRec
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SSecondaryInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SSecondaryInit(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SSecondaryInit
+			moveq           	#50,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSecondaryInit
+	ENDIF
+
+
+; *  SInitSlotPRAM()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SInitSlotPRAM(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SInitSlotPRAM
+			moveq           	#51,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SInitSlotPRAM
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OpenSlot()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr OpenSlot(ParmBlkPtr paramBlock, Boolean async)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenSlot
+	ENDIF
+
+
+; *  OpenSlotSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr OpenSlotSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_OpenSlotSync:	OPWORD	$A200
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenSlotSync
+	ENDIF
+
+
+; *  OpenSlotAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr OpenSlotAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_OpenSlotAsync:	OPWORD	$A600
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenSlotAsync
+	ENDIF
+
+;   Device Manager Slot Support  
+
+; *  SIntInstall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SIntInstall(SQElemPtr sIntQElemPtr, short theSlot)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	sIntQElemPtrtheSlot=> A0
+		;	theSlot         => D0
+		; returns:
+		;	OSErr           <= D0
+		_SIntInstall:	OPWORD	$A075
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SIntInstall
+	ENDIF
+
+
+; *  SIntRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SIntRemove(SQElemPtr sIntQElemPtr, short theSlot)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	sIntQElemPtrtheSlot=> A0
+		;	theSlot         => D0
+		; returns:
+		;	OSErr           <= D0
+		_SIntRemove:	OPWORD	$A076
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SIntRemove
+	ENDIF
+
+
+; *  SVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SVersion(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SVersion
+			moveq           	#8,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SVersion
+	ENDIF
+
+
+; *  SetSRsrcState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SetSRsrcState(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SetSRsrcState
+			moveq           	#9,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSRsrcState
+	ENDIF
+
+
+; *  InsertSRTRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InsertSRTRec(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_InsertSRTRec
+			moveq           	#10,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertSRTRec
+	ENDIF
+
+
+; *  SGetSRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetSRsrc(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetSRsrc
+			moveq           	#11,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetSRsrc
+	ENDIF
+
+
+; *  SGetTypeSRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetTypeSRsrc(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetTypeSRsrc
+			moveq           	#12,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetTypeSRsrc
+	ENDIF
+
+
+; *  SGetSRsrcPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SGetSRsrcPtr(SpBlockPtr spBlkPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	spBlkPtr        => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SGetSRsrcPtr
+			moveq           	#29,D0
+			dc.w            	$A06E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SGetSRsrcPtr
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __SLOTS__ 
+

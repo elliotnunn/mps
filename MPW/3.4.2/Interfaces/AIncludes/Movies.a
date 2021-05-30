@@ -1,0 +1,5296 @@
+;
+;	File:		Movies.a
+;
+;	Contains:	QuickTime Interfaces.
+;
+;	Version:	Technology:	QuickTime 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+__MOVIES__ SET 1
+
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+	include 'Aliases.a'
+	ENDIF
+;		include 'AppleTalk.a'										;
+;			include 'OSUtils.a'									;
+;				include 'Memory.a'									;
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+	include 'ImageCompression.a'
+	ENDIF
+;		include 'QDOffscreen.a'									;
+;			include 'Errors.a'										;
+;		include 'Windows.a'										;
+;			include 'Controls.a'									;
+;		include 'StandardFile.a'									;
+;			include 'Dialogs.a'									;
+;				include 'TextEdit.a'								;
+;  "kFix1" is defined in FixMath as "fixed1"  
+; error codes are in Errors.[haa] 
+; gestalt codes are in Gestalt.[hpa] 
+
+MovieFileType					EQU		'MooV'
+
+MediaHandlerType				EQU		'mhlr'
+DataHandlerType					EQU		'dhlr'
+
+VideoMediaType					EQU		'vide'
+SoundMediaType					EQU		'soun'
+TextMediaType					EQU		'text'
+BaseMediaType					EQU		'gnrc'
+MPEGMediaType					EQU		'MPEG'
+MusicMediaType					EQU		'musi'
+TimeCodeMediaType				EQU		'tmcd'
+HandleDataHandlerSubType		EQU		'hndl'
+
+VisualMediaCharacteristic		EQU		'eyes'
+AudioMediaCharacteristic		EQU		'ears'
+
+DoTheRightThing					EQU		0
+
+MovieRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct MovieRecord  MovieRecord, *Movie
+TrackRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TrackRecord  TrackRecord, *Track
+MediaRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct MediaRecord  MediaRecord, *Media
+UserDataRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct UserDataRecord  UserDataRecord, *UserData
+TrackEditStateRecord 	RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TrackEditStateRecord  TrackEditStateRecord, *TrackEditState
+MovieEditStateRecord 	RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct MovieEditStateRecord  MovieEditStateRecord, *MovieEditState
+SampleDescription 		RECORD	0
+descSize				 ds.l   1		; offset: $0 (0)
+dataFormat				 ds.l   1		; offset: $4 (4)
+resvd1					 ds.l   1		; offset: $8 (8)
+resvd2					 ds.w   1		; offset: $C (12)
+dataRefIndex			 ds.w   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct SampleDescription  SampleDescription, *SampleDescriptionPtr, **SampleDescriptionHandle
+SoundDescription 		RECORD	0
+descSize				 ds.l   1		; offset: $0 (0)		; total size of SoundDescription including extra data 
+dataFormat				 ds.l   1		; offset: $4 (4)		;  
+resvd1					 ds.l   1		; offset: $8 (8)		; reserved for apple use 
+resvd2					 ds.w   1		; offset: $C (12)
+dataRefIndex			 ds.w   1		; offset: $E (14)
+version					 ds.w   1		; offset: $10 (16)		; which version is this data 
+revlevel				 ds.w   1		; offset: $12 (18)		; what version of that codec did this 
+vendor					 ds.l   1		; offset: $14 (20)		; whose  codec compressed this data 
+numChannels				 ds.w   1		; offset: $18 (24)		; number of channels of sound 
+sampleSize				 ds.w   1		; offset: $1A (26)		; number of bits per sample 
+compressionID			 ds.w   1		; offset: $1C (28)		; sound compression used, 0 if none 
+packetSize				 ds.w   1		; offset: $1E (30)		; packet size for compression, 0 if no compression 
+sampleRate				 ds.l   1		; offset: $20 (32)		; sample rate sound is captured at 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct SoundDescription  SoundDescription, *SoundDescriptionPtr, **SoundDescriptionHandle
+TextDescription 		RECORD	0
+descSize				 ds.l   1		; offset: $0 (0)		; Total size of TextDescription
+dataFormat				 ds.l   1		; offset: $4 (4)		; 'text'
+resvd1					 ds.l   1		; offset: $8 (8)
+resvd2					 ds.w   1		; offset: $C (12)
+dataRefIndex			 ds.w   1		; offset: $E (14)
+displayFlags			 ds.l   1		; offset: $10 (16)		; see enum below for flag values
+textJustification		 ds.l   1		; offset: $14 (20)		; Can be: teCenter,teFlush -Default,-Right,-Left
+bgColor					 ds     RGBColor ; offset: $18 (24)		; Background color
+defaultTextBox			 ds     Rect	; offset: $1E (30)		; Location to place the text within the track bounds
+defaultStyle			 ds     ScrpSTElement ; offset: $26 (38) ; Default style (struct defined in TextEdit.h)
+defaultFontName			 ds.b   1		; offset: $3A (58)		; Font Name (pascal string - struct extended to fit) 
+						 ORG 60
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct TextDescription  TextDescription, *TextDescriptionPtr, **TextDescriptionHandle
+;--------------------------
+;  Music Sample Description
+;--------------------------
+MusicDescription 		RECORD	0
+descSize				 ds.l   1		; offset: $0 (0)
+dataFormat				 ds.l   1		; offset: $4 (4)		; 'musi' 
+resvd1					 ds.l   1		; offset: $8 (8)
+resvd2					 ds.w   1		; offset: $C (12)
+dataRefIndex			 ds.w   1		; offset: $E (14)
+musicFlags				 ds.l   1		; offset: $10 (16)
+headerData				 ds.l   1		; offset: $14 (20)		; variable size! 
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct MusicDescription  MusicDescription
+; typedef MusicDescription 	*MusicDescriptionPtr
+; typedef MusicDescriptionPtr  *MusicDescriptionHandle
+
+dfDontDisplay					EQU		1 << 0				; Don't display the text
+dfDontAutoScale					EQU		1 << 1				; Don't scale text as track bounds grows or shrinks
+dfClipToTextBox					EQU		1 << 2				; Clip update to the textbox
+dfUseMovieBGColor				EQU		1 << 3				; Set text background to movie's background color
+dfShrinkTextBoxToFit			EQU		1 << 4				; Compute minimum box to fit the sample
+dfScrollIn						EQU		1 << 5				; Scroll text in until last of text is in view 
+dfScrollOut						EQU		1 << 6				; Scroll text out until last of text is gone (if both set, scroll in then out)
+dfHorizScroll					EQU		1 << 7				; Scroll text horizontally (otherwise it's vertical)
+dfReverseScroll					EQU		1 << 8				; vert: scroll down rather than up; horiz: scroll backwards (justfication dependent)
+dfContinuousScroll				EQU		1 << 9				; new samples cause previous samples to scroll out 
+dfFlowHoriz						EQU		1 << 10				; horiz scroll text flows in textbox rather than extend to right 
+dfDropShadow					EQU		1 << 12				; display text with a drop shadow 
+dfAntiAlias						EQU		1 << 13				; attempt to display text anti aliased
+dfKeyedText						EQU		1 << 14				; key the text over background
+dfInverseHilite					EQU		1 << 15				; Use inverse hiliting rather than using hilite color
+
+searchTextDontGoToFoundTime		EQU		1 << 16
+searchTextDontHiliteFoundText	EQU		1 << 17
+searchTextOneTrackOnly			EQU		1 << 18
+searchTextEnabledTracksOnly		EQU		1 << 19
+
+; progress messages 
+movieProgressOpen				EQU		0
+movieProgressUpdatePercent		EQU		1
+movieProgressClose				EQU		2
+
+; progress operations 
+progressOpFlatten				EQU		1
+progressOpInsertTrackSegment	EQU		2
+progressOpInsertMovieSegment	EQU		3
+progressOpPaste					EQU		4
+progressOpAddMovieSelection		EQU		5
+progressOpCopy					EQU		6
+progressOpCut					EQU		7
+progressOpLoadMovieIntoRam		EQU		8
+progressOpLoadTrackIntoRam		EQU		9
+progressOpLoadMediaIntoRam		EQU		10
+progressOpImportMovie			EQU		11
+progressOpExportMovie			EQU		12
+
+mediaQualityDraft				EQU		$0000
+mediaQualityNormal				EQU		$0040
+mediaQualityBetter				EQU		$0080
+mediaQualityBest				EQU		$00C0
+
+; typedef ComponentInstance  MediaHandler, DataHandler
+; typedef Component 		MediaHandlerComponent, DataHandlerComponent
+; typedef ComponentResult 	HandlerError
+; typedef long 				TimeValue
+; typedef long 				TimeScale
+; typedef wide 				CompTimeValue
+
+loopTimeBase					EQU		1
+palindromeLoopTimeBase			EQU		2
+maintainTimeBaseZero			EQU		4
+
+; typedef unsigned long 	TimeBaseFlags
+TimeBaseRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TimeBaseRecord  TimeBaseRecord, *TimeBase
+CallBackRecord 			RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct CallBackRecord  CallBackRecord, *QTCallBack
+TimeRecord 				RECORD	0
+value					 ds.l   2		; offset: $0 (0)		; units 
+scale					 ds.l   1		; offset: $8 (8)		; units per second 
+base					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct TimeRecord  TimeRecord
+; CallBack equates 
+
+triggerTimeFwd					EQU		$0001				; when curTime exceeds triggerTime going forward 
+triggerTimeBwd					EQU		$0002				; when curTime exceeds triggerTime going backwards 
+triggerTimeEither				EQU		$0003				; when curTime exceeds triggerTime going either direction 
+triggerRateLT					EQU		$0004				; when rate changes to less than trigger value 
+triggerRateGT					EQU		$0008				; when rate changes to greater than trigger value 
+triggerRateEqual				EQU		$0010				; when rate changes to equal trigger value 
+triggerRateLTE					EQU		triggerRateLT | triggerRateEqual
+triggerRateGTE					EQU		triggerRateGT | triggerRateEqual
+triggerRateNotEqual				EQU		triggerRateGT | triggerRateEqual | triggerRateLT
+triggerRateChange				EQU		0
+triggerAtStart					EQU		$0001
+triggerAtStop					EQU		$0002
+
+; typedef unsigned short 	QTCallBackFlags
+
+timeBaseBeforeStartTime			EQU		1
+timeBaseAfterStopTime			EQU		2
+
+; typedef unsigned long 	TimeBaseStatus
+
+callBackAtTime					EQU		1
+callBackAtRate					EQU		2
+callBackAtTimeJump				EQU		3
+callBackAtExtremes				EQU		4
+callBackAtInterrupt				EQU		$8000
+callBackAtDeferredTask			EQU		$4000
+
+; typedef unsigned short 	QTCallBackType
+
+qtcbNeedsRateChanges			EQU		1					; wants to know about rate changes 
+qtcbNeedsTimeChanges			EQU		2					; wants to know about time changes 
+qtcbNeedsStartStopChanges		EQU		4					; wants to know when TimeBase start/stop is changed
+
+QTCallBackHeader 		RECORD	0
+callBackFlags			 ds.l   1		; offset: $0 (0)
+reserved1				 ds.l   1		; offset: $4 (4)
+qtPrivate				 ds.b   40		; offset: $8 (8)
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct QTCallBackHeader  QTCallBackHeader
+QTSyncTaskRecord 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+proc					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct QTSyncTaskRecord  QTSyncTaskRecord, *QTSyncTaskPtr
+
+keepInRam						EQU		1 << 0				; load and make non-purgable
+unkeepInRam						EQU		1 << 1				; mark as purgable
+flushFromRam					EQU		1 << 2				; empty those handles
+loadForwardTrackEdits			EQU		1 << 3				;	load track edits into ram for playing forward
+loadBackwardTrackEdits			EQU		1 << 4				;	load track edits into ram for playing in reverse
+
+newMovieActive					EQU		1 << 0
+newMovieDontResolveDataRefs		EQU		1 << 1
+newMovieDontAskUnresolvedDataRefs EQU		1 << 2
+newMovieDontAutoAlternates		EQU		1 << 3
+
+; track usage bits 
+trackUsageInMovie				EQU		1 << 1
+trackUsageInPreview				EQU		1 << 2
+trackUsageInPoster				EQU		1 << 3
+
+; Add/GetMediaSample flags 
+mediaSampleNotSync				EQU		1 << 0				; sample is not a sync sample (eg. is frame differenced 
+mediaSampleShadowSync			EQU		1 << 1				; sample is a shadow sync 
+
+pasteInParallel					EQU		1
+showUserSettingsDialog			EQU		2
+movieToFileOnlyExport			EQU		4
+
+nextTimeMediaSample				EQU		1 << 0
+nextTimeMediaEdit				EQU		1 << 1
+nextTimeTrackEdit				EQU		1 << 2
+nextTimeSyncSample				EQU		1 << 3
+nextTimeEdgeOK					EQU		1 << 14
+nextTimeIgnoreActiveSegment		EQU		1 << 15
+
+; typedef unsigned short 	nextTimeFlagsEnum
+
+createMovieFileDeleteCurFile	EQU		1 << 31
+createMovieFileDontCreateMovie	EQU		1 << 30
+createMovieFileDontOpenFile		EQU		1 << 29
+
+; typedef unsigned long 	createMovieFileFlagsEnum
+
+flattenAddMovieToDataFork		EQU		1 << 0
+flattenActiveTracksOnly			EQU		1 << 2
+flattenDontInterleaveFlatten	EQU		1 << 3
+
+; typedef unsigned long 	movieFlattenFlagsEnum
+
+movieInDataForkResID			EQU		-1					; magic res ID 
+
+mcTopLeftMovie					EQU		1 << 0				; usually centered 
+mcScaleMovieToFit				EQU		1 << 1				; usually only scales down 
+mcWithBadge						EQU		1 << 2				; give me a badge 
+mcNotVisible					EQU		1 << 3				; don't show controller 
+mcWithFrame						EQU		1 << 4				; gimme a frame 
+
+movieScrapDontZeroScrap			EQU		1 << 0
+movieScrapOnlyPutMovie			EQU		1 << 1
+
+dataRefSelfReference			EQU		1 << 0
+dataRefWasNotResolved			EQU		1 << 1
+
+; typedef unsigned long 	dataRefAttributesFlags
+
+hintsScrubMode					EQU		1 << 0				; mask == && (if flags == scrub on, flags != scrub off) 
+hintsLoop						EQU		1 << 1
+hintsDontPurge					EQU		1 << 2
+hintsUseScreenBuffer			EQU		1 << 5
+hintsAllowInterlace				EQU		1 << 6
+hintsUseSoundInterp				EQU		1 << 7
+hintsHighQuality				EQU		1 << 8				; slooooow 
+hintsPalindrome					EQU		1 << 9
+hintsInactive					EQU		1 << 11
+
+; typedef unsigned long 	playHintsEnum
+
+mediaHandlerFlagBaseClient		EQU		1
+
+; typedef unsigned long 	mediaHandlerFlagsEnum
+
+movieTrackMediaType				EQU		1 << 0
+movieTrackCharacteristic		EQU		1 << 1
+movieTrackEnabledOnly			EQU		1 << 2
+
+SampleReferenceRecord 	RECORD	0
+dataOffset				 ds.l   1		; offset: $0 (0)
+dataSize				 ds.l   1		; offset: $4 (4)
+durationPerSample		 ds.l   1		; offset: $8 (8)
+numberOfSamples			 ds.l   1		; offset: $C (12)
+sampleFlags				 ds.w   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct SampleReferenceRecord  SampleReferenceRecord, *SampleReferencePtr
+;************************
+;* Initialization Routines 
+;*************************
+;
+; pascal OSErr EnterMovies(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EnterMovies
+			moveq	#1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EnterMovies
+	ENDIF
+
+;
+; pascal void ExitMovies(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ExitMovies
+			moveq	#2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ExitMovies
+	ENDIF
+
+;************************
+;* Error Routines 
+;*************************
+;
+; pascal OSErr GetMoviesError(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviesError
+			moveq	#3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviesError
+	ENDIF
+
+;
+; pascal void ClearMoviesStickyError(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ClearMoviesStickyError
+			move.w	#$DE,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ClearMoviesStickyError
+	ENDIF
+
+;
+; pascal OSErr GetMoviesStickyError(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviesStickyError
+			moveq	#4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviesStickyError
+	ENDIF
+
+;
+; pascal void SetMoviesErrorProc(MoviesErrorUPP errProc, long refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviesErrorProc
+			move.w	#$EF,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviesErrorProc
+	ENDIF
+
+;************************
+;* Idle Routines 
+;*************************
+;
+; pascal void MoviesTask(Movie theMovie, long maxMilliSecToUse)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MoviesTask
+			moveq	#5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MoviesTask
+	ENDIF
+
+;
+; pascal OSErr PrerollMovie(Movie theMovie, TimeValue time, Fixed Rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PrerollMovie
+			moveq	#6,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PrerollMovie
+	ENDIF
+
+;
+; pascal OSErr LoadMovieIntoRam(Movie theMovie, TimeValue time, TimeValue duration, long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LoadMovieIntoRam
+			moveq	#7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LoadMovieIntoRam
+	ENDIF
+
+;
+; pascal OSErr LoadTrackIntoRam(Track theTrack, TimeValue time, TimeValue duration, long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LoadTrackIntoRam
+			move.w	#$16E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LoadTrackIntoRam
+	ENDIF
+
+;
+; pascal OSErr LoadMediaIntoRam(Media theMedia, TimeValue time, TimeValue duration, long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LoadMediaIntoRam
+			moveq	#8,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LoadMediaIntoRam
+	ENDIF
+
+;
+; pascal void SetMovieActive(Movie theMovie, Boolean active)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieActive
+			moveq	#9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieActive
+	ENDIF
+
+;
+; pascal Boolean GetMovieActive(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieActive
+			moveq	#10,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieActive
+	ENDIF
+
+;************************
+;* calls for playing movies, previews, posters
+;*************************
+;
+; pascal void StartMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StartMovie
+			moveq	#11,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StartMovie
+	ENDIF
+
+;
+; pascal void StopMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StopMovie
+			moveq	#12,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StopMovie
+	ENDIF
+
+;
+; pascal void GoToBeginningOfMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GoToBeginningOfMovie
+			moveq	#13,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GoToBeginningOfMovie
+	ENDIF
+
+;
+; pascal void GoToEndOfMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GoToEndOfMovie
+			moveq	#14,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GoToEndOfMovie
+	ENDIF
+
+;
+; pascal Boolean IsMovieDone(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IsMovieDone
+			move.w	#$DD,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsMovieDone
+	ENDIF
+
+;
+; pascal Boolean GetMoviePreviewMode(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePreviewMode
+			moveq	#15,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePreviewMode
+	ENDIF
+
+;
+; pascal void SetMoviePreviewMode(Movie theMovie, Boolean usePreview)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePreviewMode
+			moveq	#16,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePreviewMode
+	ENDIF
+
+;
+; pascal void ShowMoviePoster(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ShowMoviePoster
+			moveq	#17,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ShowMoviePoster
+	ENDIF
+
+;
+; pascal void PlayMoviePreview(Movie theMovie, MoviePreviewCallOutUPP callOutProc, long refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PlayMoviePreview
+			move.w	#$F2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PlayMoviePreview
+	ENDIF
+
+;************************
+;* calls for controlling movies & tracks which are playing
+;*************************
+;
+; pascal TimeBase GetMovieTimeBase(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieTimeBase
+			moveq	#18,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieTimeBase
+	ENDIF
+
+;
+; pascal void SetMovieMasterTimeBase(Movie theMovie, TimeBase tb, const TimeRecord *slaveZero)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieMasterTimeBase
+			move.w	#$167,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieMasterTimeBase
+	ENDIF
+
+;
+; pascal void SetMovieMasterClock(Movie theMovie, Component clockMeister, const TimeRecord *slaveZero)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieMasterClock
+			move.w	#$168,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieMasterClock
+	ENDIF
+
+;
+; pascal void GetMovieGWorld(Movie theMovie, CGrafPtr *port, GDHandle *gdh)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieGWorld
+			moveq	#21,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieGWorld
+	ENDIF
+
+;
+; pascal void SetMovieGWorld(Movie theMovie, CGrafPtr port, GDHandle gdh)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieGWorld
+			moveq	#22,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieGWorld
+	ENDIF
+
+
+movieDrawingCallWhenChanged		EQU		0
+movieDrawingCallAlways			EQU		1
+
+;
+; pascal void SetMovieDrawingCompleteProc(Movie theMovie, long flags, MovieDrawingCompleteUPP proc, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieDrawingCompleteProc
+			move.w	#$1DE,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieDrawingCompleteProc
+	ENDIF
+
+;
+; pascal Track GetNextTrackForCompositing(Movie theMovie, Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetNextTrackForCompositing
+			move.w	#$1FA,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextTrackForCompositing
+	ENDIF
+
+;
+; pascal Track GetPrevTrackForCompositing(Movie theMovie, Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPrevTrackForCompositing
+			move.w	#$1FB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPrevTrackForCompositing
+	ENDIF
+
+;
+; pascal void SetTrackGWorld(Track theTrack, CGrafPtr port, GDHandle gdh, TrackTransferUPP proc, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackGWorld
+			move.w	#$9D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackGWorld
+	ENDIF
+
+;
+; pascal PicHandle GetMoviePict(Movie theMovie, TimeValue time)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePict
+			moveq	#29,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePict
+	ENDIF
+
+;
+; pascal PicHandle GetTrackPict(Track theTrack, TimeValue time)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackPict
+			moveq	#30,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackPict
+	ENDIF
+
+;
+; pascal PicHandle GetMoviePosterPict(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePosterPict
+			move.w	#$F7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePosterPict
+	ENDIF
+
+; called between Begin & EndUpdate 
+;
+; pascal OSErr UpdateMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UpdateMovie
+			moveq	#31,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UpdateMovie
+	ENDIF
+
+;*** spatial movie routines ***
+;
+; pascal void GetMovieBox(Movie theMovie, Rect *boxRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieBox
+			move.w	#$F9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieBox
+	ENDIF
+
+;
+; pascal void SetMovieBox(Movie theMovie, const Rect *boxRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieBox
+			move.w	#$FA,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieBox
+	ENDIF
+
+;* movie display clip 
+;
+; pascal RgnHandle GetMovieDisplayClipRgn(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieDisplayClipRgn
+			move.w	#$FC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieDisplayClipRgn
+	ENDIF
+
+;
+; pascal void SetMovieDisplayClipRgn(Movie theMovie, RgnHandle theClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieDisplayClipRgn
+			move.w	#$FD,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieDisplayClipRgn
+	ENDIF
+
+;* movie src clip 
+;
+; pascal RgnHandle GetMovieClipRgn(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieClipRgn
+			move.w	#$100,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieClipRgn
+	ENDIF
+
+;
+; pascal void SetMovieClipRgn(Movie theMovie, RgnHandle theClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieClipRgn
+			move.w	#$101,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieClipRgn
+	ENDIF
+
+;* track src clip 
+;
+; pascal RgnHandle GetTrackClipRgn(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackClipRgn
+			move.w	#$102,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackClipRgn
+	ENDIF
+
+;
+; pascal void SetTrackClipRgn(Track theTrack, RgnHandle theClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackClipRgn
+			move.w	#$103,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackClipRgn
+	ENDIF
+
+;* bounds in display space (not clipped by display clip) 
+;
+; pascal RgnHandle GetMovieDisplayBoundsRgn(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieDisplayBoundsRgn
+			move.w	#$FB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieDisplayBoundsRgn
+	ENDIF
+
+;
+; pascal RgnHandle GetTrackDisplayBoundsRgn(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackDisplayBoundsRgn
+			move.w	#$112,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackDisplayBoundsRgn
+	ENDIF
+
+;* bounds in movie space 
+;
+; pascal RgnHandle GetMovieBoundsRgn(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieBoundsRgn
+			move.w	#$FE,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieBoundsRgn
+	ENDIF
+
+;
+; pascal RgnHandle GetTrackMovieBoundsRgn(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackMovieBoundsRgn
+			move.w	#$FF,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackMovieBoundsRgn
+	ENDIF
+
+;* bounds in track space 
+;
+; pascal RgnHandle GetTrackBoundsRgn(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackBoundsRgn
+			move.w	#$111,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackBoundsRgn
+	ENDIF
+
+;* mattes - always in track space 
+;
+; pascal PixMapHandle GetTrackMatte(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackMatte
+			move.w	#$115,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackMatte
+	ENDIF
+
+;
+; pascal void SetTrackMatte(Track theTrack, PixMapHandle theMatte)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackMatte
+			move.w	#$116,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackMatte
+	ENDIF
+
+;
+; pascal void DisposeMatte(PixMapHandle theMatte)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeMatte
+			move.w	#$14A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeMatte
+	ENDIF
+
+;************************
+;* calls for getting/saving movies
+;*************************
+;
+; pascal Movie NewMovie(long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovie
+			move.w	#$187,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovie
+	ENDIF
+
+;
+; pascal OSErr PutMovieIntoHandle(Movie theMovie, Handle publicMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PutMovieIntoHandle
+			moveq	#34,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PutMovieIntoHandle
+	ENDIF
+
+;
+; pascal OSErr PutMovieIntoDataFork(Movie theMovie, short fRefNum, long offset, long maxSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PutMovieIntoDataFork
+			move.w	#$1B4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PutMovieIntoDataFork
+	ENDIF
+
+;
+; pascal void DisposeMovie(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeMovie
+			moveq	#35,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeMovie
+	ENDIF
+
+;************************
+;* Movie State Routines
+;*************************
+;
+; pascal unsigned long GetMovieCreationTime(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieCreationTime
+			moveq	#38,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieCreationTime
+	ENDIF
+
+;
+; pascal unsigned long GetMovieModificationTime(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieModificationTime
+			moveq	#39,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieModificationTime
+	ENDIF
+
+;
+; pascal TimeScale GetMovieTimeScale(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieTimeScale
+			moveq	#41,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieTimeScale
+	ENDIF
+
+;
+; pascal void SetMovieTimeScale(Movie theMovie, TimeScale timeScale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieTimeScale
+			moveq	#42,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieTimeScale
+	ENDIF
+
+;
+; pascal TimeValue GetMovieDuration(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieDuration
+			moveq	#43,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieDuration
+	ENDIF
+
+;
+; pascal Fixed GetMovieRate(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieRate
+			moveq	#44,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieRate
+	ENDIF
+
+;
+; pascal void SetMovieRate(Movie theMovie, Fixed rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieRate
+			moveq	#45,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieRate
+	ENDIF
+
+;
+; pascal Fixed GetMoviePreferredRate(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePreferredRate
+			move.w	#$F3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePreferredRate
+	ENDIF
+
+;
+; pascal void SetMoviePreferredRate(Movie theMovie, Fixed rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePreferredRate
+			move.w	#$F4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePreferredRate
+	ENDIF
+
+;
+; pascal short GetMoviePreferredVolume(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePreferredVolume
+			move.w	#$F5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePreferredVolume
+	ENDIF
+
+;
+; pascal void SetMoviePreferredVolume(Movie theMovie, short volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePreferredVolume
+			move.w	#$F6,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePreferredVolume
+	ENDIF
+
+;
+; pascal short GetMovieVolume(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieVolume
+			moveq	#46,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieVolume
+	ENDIF
+
+;
+; pascal void SetMovieVolume(Movie theMovie, short volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieVolume
+			moveq	#47,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieVolume
+	ENDIF
+
+;
+; pascal void GetMovieMatrix(Movie theMovie, MatrixRecord *matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieMatrix
+			moveq	#49,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieMatrix
+	ENDIF
+
+;
+; pascal void SetMovieMatrix(Movie theMovie, const MatrixRecord *matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieMatrix
+			moveq	#50,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieMatrix
+	ENDIF
+
+;
+; pascal void GetMoviePreviewTime(Movie theMovie, TimeValue *previewTime, TimeValue *previewDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePreviewTime
+			moveq	#51,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePreviewTime
+	ENDIF
+
+;
+; pascal void SetMoviePreviewTime(Movie theMovie, TimeValue previewTime, TimeValue previewDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePreviewTime
+			moveq	#52,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePreviewTime
+	ENDIF
+
+;
+; pascal TimeValue GetMoviePosterTime(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMoviePosterTime
+			moveq	#53,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMoviePosterTime
+	ENDIF
+
+;
+; pascal void SetMoviePosterTime(Movie theMovie, TimeValue posterTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePosterTime
+			moveq	#54,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePosterTime
+	ENDIF
+
+;
+; pascal void GetMovieSelection(Movie theMovie, TimeValue *selectionTime, TimeValue *selectionDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieSelection
+			moveq	#55,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieSelection
+	ENDIF
+
+;
+; pascal void SetMovieSelection(Movie theMovie, TimeValue selectionTime, TimeValue selectionDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieSelection
+			moveq	#56,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieSelection
+	ENDIF
+
+;
+; pascal void SetMovieActiveSegment(Movie theMovie, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieActiveSegment
+			move.w	#$15C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieActiveSegment
+	ENDIF
+
+;
+; pascal void GetMovieActiveSegment(Movie theMovie, TimeValue *startTime, TimeValue *duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieActiveSegment
+			move.w	#$15D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieActiveSegment
+	ENDIF
+
+;
+; pascal TimeValue GetMovieTime(Movie theMovie, TimeRecord *currentTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieTime
+			moveq	#57,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieTime
+	ENDIF
+
+;
+; pascal void SetMovieTime(Movie theMovie, const TimeRecord *newtime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieTime
+			moveq	#60,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieTime
+	ENDIF
+
+;
+; pascal void SetMovieTimeValue(Movie theMovie, TimeValue newtime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieTimeValue
+			moveq	#61,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieTimeValue
+	ENDIF
+
+;
+; pascal UserData GetMovieUserData(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieUserData
+			moveq	#62,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieUserData
+	ENDIF
+
+;************************
+;* Track/Media finding routines
+;*************************
+;
+; pascal long GetMovieTrackCount(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieTrackCount
+			moveq	#63,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieTrackCount
+	ENDIF
+
+;
+; pascal Track GetMovieTrack(Movie theMovie, long trackID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieTrack
+			moveq	#64,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieTrack
+	ENDIF
+
+;
+; pascal Track GetMovieIndTrack(Movie theMovie, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieIndTrack
+			move.w	#$117,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieIndTrack
+	ENDIF
+
+;
+; pascal Track GetMovieIndTrackType(Movie theMovie, long index, OSType trackType, long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieIndTrackType
+			move.w	#$208,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieIndTrackType
+	ENDIF
+
+;
+; pascal long GetTrackID(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackID
+			move.w	#$127,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackID
+	ENDIF
+
+;
+; pascal Movie GetTrackMovie(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackMovie
+			move.w	#$D0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackMovie
+	ENDIF
+
+;************************
+;* Track creation routines
+;*************************
+;
+; pascal Track NewMovieTrack(Movie theMovie, Fixed width, Fixed height, short trackVolume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieTrack
+			move.w	#$188,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieTrack
+	ENDIF
+
+;
+; pascal void DisposeMovieTrack(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeMovieTrack
+			moveq	#66,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeMovieTrack
+	ENDIF
+
+;************************
+;* Track State routines
+;*************************
+;
+; pascal unsigned long GetTrackCreationTime(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackCreationTime
+			moveq	#67,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackCreationTime
+	ENDIF
+
+;
+; pascal unsigned long GetTrackModificationTime(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackModificationTime
+			moveq	#68,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackModificationTime
+	ENDIF
+
+;
+; pascal Boolean GetTrackEnabled(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackEnabled
+			moveq	#69,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackEnabled
+	ENDIF
+
+;
+; pascal void SetTrackEnabled(Track theTrack, Boolean isEnabled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackEnabled
+			moveq	#70,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackEnabled
+	ENDIF
+
+;
+; pascal long GetTrackUsage(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackUsage
+			moveq	#71,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackUsage
+	ENDIF
+
+;
+; pascal void SetTrackUsage(Track theTrack, long usage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackUsage
+			moveq	#72,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackUsage
+	ENDIF
+
+;
+; pascal TimeValue GetTrackDuration(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackDuration
+			moveq	#75,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackDuration
+	ENDIF
+
+;
+; pascal TimeValue GetTrackOffset(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackOffset
+			moveq	#76,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackOffset
+	ENDIF
+
+;
+; pascal void SetTrackOffset(Track theTrack, TimeValue movieOffsetTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackOffset
+			moveq	#77,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackOffset
+	ENDIF
+
+;
+; pascal short GetTrackLayer(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackLayer
+			moveq	#80,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackLayer
+	ENDIF
+
+;
+; pascal void SetTrackLayer(Track theTrack, short layer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackLayer
+			moveq	#81,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackLayer
+	ENDIF
+
+;
+; pascal Track GetTrackAlternate(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackAlternate
+			moveq	#82,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackAlternate
+	ENDIF
+
+;
+; pascal void SetTrackAlternate(Track theTrack, Track alternateT)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackAlternate
+			moveq	#83,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackAlternate
+	ENDIF
+
+;
+; pascal void SetAutoTrackAlternatesEnabled(Movie theMovie, Boolean enable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetAutoTrackAlternatesEnabled
+			move.w	#$15E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetAutoTrackAlternatesEnabled
+	ENDIF
+
+;
+; pascal void SelectMovieAlternates(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SelectMovieAlternates
+			move.w	#$15F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SelectMovieAlternates
+	ENDIF
+
+;
+; pascal short GetTrackVolume(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackVolume
+			moveq	#84,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackVolume
+	ENDIF
+
+;
+; pascal void SetTrackVolume(Track theTrack, short volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackVolume
+			moveq	#85,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackVolume
+	ENDIF
+
+;
+; pascal void GetTrackMatrix(Track theTrack, MatrixRecord *matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackMatrix
+			moveq	#86,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackMatrix
+	ENDIF
+
+;
+; pascal void SetTrackMatrix(Track theTrack, const MatrixRecord *matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackMatrix
+			moveq	#87,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackMatrix
+	ENDIF
+
+;
+; pascal void GetTrackDimensions(Track theTrack, Fixed *width, Fixed *height)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackDimensions
+			moveq	#93,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackDimensions
+	ENDIF
+
+;
+; pascal void SetTrackDimensions(Track theTrack, Fixed width, Fixed height)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackDimensions
+			moveq	#94,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackDimensions
+	ENDIF
+
+;
+; pascal UserData GetTrackUserData(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackUserData
+			moveq	#95,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackUserData
+	ENDIF
+
+;************************
+;* get Media routines
+;*************************
+;
+; pascal Media NewTrackMedia(Track theTrack, OSType mediaType, TimeScale timeScale, Handle dataRef, OSType dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewTrackMedia
+			move.w	#$18E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewTrackMedia
+	ENDIF
+
+;
+; pascal void DisposeTrackMedia(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeTrackMedia
+			moveq	#97,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeTrackMedia
+	ENDIF
+
+;
+; pascal Media GetTrackMedia(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackMedia
+			moveq	#98,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackMedia
+	ENDIF
+
+;
+; pascal Track GetMediaTrack(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaTrack
+			move.w	#$C5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaTrack
+	ENDIF
+
+;************************
+;* Media State routines
+;*************************
+;
+; pascal unsigned long GetMediaCreationTime(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaCreationTime
+			moveq	#102,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaCreationTime
+	ENDIF
+
+;
+; pascal unsigned long GetMediaModificationTime(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaModificationTime
+			moveq	#103,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaModificationTime
+	ENDIF
+
+;
+; pascal TimeScale GetMediaTimeScale(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaTimeScale
+			moveq	#104,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaTimeScale
+	ENDIF
+
+;
+; pascal void SetMediaTimeScale(Media theMedia, TimeScale timeScale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaTimeScale
+			moveq	#105,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaTimeScale
+	ENDIF
+
+;
+; pascal TimeValue GetMediaDuration(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDuration
+			moveq	#106,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDuration
+	ENDIF
+
+;
+; pascal short GetMediaLanguage(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaLanguage
+			moveq	#107,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaLanguage
+	ENDIF
+
+;
+; pascal void SetMediaLanguage(Media theMedia, short language)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaLanguage
+			moveq	#108,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaLanguage
+	ENDIF
+
+;
+; pascal short GetMediaQuality(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaQuality
+			moveq	#109,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaQuality
+	ENDIF
+
+;
+; pascal void SetMediaQuality(Media theMedia, short quality)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaQuality
+			moveq	#110,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaQuality
+	ENDIF
+
+;
+; pascal void GetMediaHandlerDescription(Media theMedia, OSType *mediaType, Str255 creatorName, OSType *creatorManufacturer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaHandlerDescription
+			moveq	#111,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaHandlerDescription
+	ENDIF
+
+;
+; pascal UserData GetMediaUserData(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaUserData
+			moveq	#112,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaUserData
+	ENDIF
+
+;************************
+;* Media Handler routines
+;*************************
+;
+; pascal MediaHandler GetMediaHandler(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaHandler
+			moveq	#113,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaHandler
+	ENDIF
+
+;
+; pascal OSErr SetMediaHandler(Media theMedia, MediaHandlerComponent mH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaHandler
+			move.w	#$190,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaHandler
+	ENDIF
+
+;************************
+;* Media's Data routines
+;*************************
+;
+; pascal OSErr BeginMediaEdits(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_BeginMediaEdits
+			moveq	#114,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	BeginMediaEdits
+	ENDIF
+
+;
+; pascal OSErr EndMediaEdits(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EndMediaEdits
+			moveq	#115,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EndMediaEdits
+	ENDIF
+
+;
+; pascal OSErr SetMediaDefaultDataRefIndex(Media theMedia, short index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaDefaultDataRefIndex
+			move.w	#$1E0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaDefaultDataRefIndex
+	ENDIF
+
+;
+; pascal void GetMediaDataHandlerDescription(Media theMedia, short index, OSType *dhType, Str255 creatorName, OSType *creatorManufacturer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDataHandlerDescription
+			move.w	#$19E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDataHandlerDescription
+	ENDIF
+
+;
+; pascal DataHandler GetMediaDataHandler(Media theMedia, short index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDataHandler
+			move.w	#$19F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDataHandler
+	ENDIF
+
+;
+; pascal OSErr SetMediaDataHandler(Media theMedia, short index, DataHandlerComponent dataHandler)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaDataHandler
+			move.w	#$1A0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaDataHandler
+	ENDIF
+
+;
+; pascal Component GetDataHandler(Handle dataRef, OSType dataHandlerSubType, long flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDataHandler
+			move.w	#$1ED,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDataHandler
+	ENDIF
+
+;************************
+;* Media Sample Table Routines
+;*************************
+;
+; pascal long GetMediaSampleDescriptionCount(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaSampleDescriptionCount
+			moveq	#119,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaSampleDescriptionCount
+	ENDIF
+
+;
+; pascal void GetMediaSampleDescription(Media theMedia, long index, SampleDescriptionHandle descH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaSampleDescription
+			moveq	#120,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaSampleDescription
+	ENDIF
+
+;
+; pascal OSErr SetMediaSampleDescription(Media theMedia, long index, SampleDescriptionHandle descH)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaSampleDescription
+			move.w	#$1D0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaSampleDescription
+	ENDIF
+
+;
+; pascal long GetMediaSampleCount(Media theMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaSampleCount
+			moveq	#121,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaSampleCount
+	ENDIF
+
+;
+; pascal void SampleNumToMediaTime(Media theMedia, long logicalSampleNum, TimeValue *sampleTime, TimeValue *sampleDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SampleNumToMediaTime
+			moveq	#122,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SampleNumToMediaTime
+	ENDIF
+
+;
+; pascal void MediaTimeToSampleNum(Media theMedia, TimeValue time, long *sampleNum, TimeValue *sampleTime, TimeValue *sampleDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaTimeToSampleNum
+			moveq	#123,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaTimeToSampleNum
+	ENDIF
+
+;
+; pascal OSErr AddMediaSample(Media theMedia, Handle dataIn, long inOffset, unsigned long size, TimeValue durationPerSample, SampleDescriptionHandle sampleDescriptionH, long numberOfSamples, short sampleFlags, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMediaSample
+			moveq	#124,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMediaSample
+	ENDIF
+
+;
+; pascal OSErr AddMediaSampleReference(Media theMedia, long dataOffset, unsigned long size, TimeValue durationPerSample, SampleDescriptionHandle sampleDescriptionH, long numberOfSamples, short sampleFlags, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMediaSampleReference
+			moveq	#125,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMediaSampleReference
+	ENDIF
+
+;
+; pascal OSErr AddMediaSampleReferences(Media theMedia, SampleDescriptionHandle sampleDescriptionH, long numberOfSamples, SampleReferencePtr sampleRefs, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMediaSampleReferences
+			move.w	#$1F7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMediaSampleReferences
+	ENDIF
+
+;
+; pascal OSErr GetMediaSample(Media theMedia, Handle dataOut, long maxSizeToGrow, long *size, TimeValue time, TimeValue *sampleTime, TimeValue *durationPerSample, SampleDescriptionHandle sampleDescriptionH, long *sampleDescriptionIndex, long maxNumberOfSamples, long *numberOfSamples, short *sampleFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaSample
+			moveq	#126,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaSample
+	ENDIF
+
+;
+; pascal OSErr GetMediaSampleReference(Media theMedia, long *dataOffset, long *size, TimeValue time, TimeValue *sampleTime, TimeValue *durationPerSample, SampleDescriptionHandle sampleDescriptionH, long *sampleDescriptionIndex, long maxNumberOfSamples, long *numberOfSamples, short *sampleFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaSampleReference
+			moveq	#127,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaSampleReference
+	ENDIF
+
+;
+; pascal OSErr SetMediaPreferredChunkSize(Media theMedia, long maxChunkSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaPreferredChunkSize
+			move.w	#$1F8,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaPreferredChunkSize
+	ENDIF
+
+;
+; pascal OSErr GetMediaPreferredChunkSize(Media theMedia, long *maxChunkSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaPreferredChunkSize
+			move.w	#$1F9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaPreferredChunkSize
+	ENDIF
+
+;
+; pascal OSErr SetMediaShadowSync(Media theMedia, long frameDiffSampleNum, long syncSampleNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaShadowSync
+			move.w	#$121,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaShadowSync
+	ENDIF
+
+;
+; pascal OSErr GetMediaShadowSync(Media theMedia, long frameDiffSampleNum, long *syncSampleNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaShadowSync
+			move.w	#$122,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaShadowSync
+	ENDIF
+
+;************************
+;* Editing Routines
+;*************************
+;
+; pascal OSErr InsertMediaIntoTrack(Track theTrack, TimeValue trackStart, TimeValue mediaTime, TimeValue mediaDuration, Fixed mediaRate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InsertMediaIntoTrack
+			move.w	#$183,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InsertMediaIntoTrack
+	ENDIF
+
+;
+; pascal OSErr InsertTrackSegment(Track srcTrack, Track dstTrack, TimeValue srcIn, TimeValue srcDuration, TimeValue dstIn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InsertTrackSegment
+			move.w	#$85,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InsertTrackSegment
+	ENDIF
+
+;
+; pascal OSErr InsertMovieSegment(Movie srcMovie, Movie dstMovie, TimeValue srcIn, TimeValue srcDuration, TimeValue dstIn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InsertMovieSegment
+			move.w	#$86,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InsertMovieSegment
+	ENDIF
+
+;
+; pascal OSErr InsertEmptyTrackSegment(Track dstTrack, TimeValue dstIn, TimeValue dstDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InsertEmptyTrackSegment
+			move.w	#$87,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InsertEmptyTrackSegment
+	ENDIF
+
+;
+; pascal OSErr InsertEmptyMovieSegment(Movie dstMovie, TimeValue dstIn, TimeValue dstDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InsertEmptyMovieSegment
+			move.w	#$88,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InsertEmptyMovieSegment
+	ENDIF
+
+;
+; pascal OSErr DeleteTrackSegment(Track theTrack, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteTrackSegment
+			move.w	#$89,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteTrackSegment
+	ENDIF
+
+;
+; pascal OSErr DeleteMovieSegment(Movie theMovie, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteMovieSegment
+			move.w	#$8A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteMovieSegment
+	ENDIF
+
+;
+; pascal OSErr ScaleTrackSegment(Track theTrack, TimeValue startTime, TimeValue oldDuration, TimeValue newDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ScaleTrackSegment
+			move.w	#$8B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ScaleTrackSegment
+	ENDIF
+
+;
+; pascal OSErr ScaleMovieSegment(Movie theMovie, TimeValue startTime, TimeValue oldDuration, TimeValue newDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ScaleMovieSegment
+			move.w	#$8C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ScaleMovieSegment
+	ENDIF
+
+;************************
+;* Hi-level Editing Routines
+;*************************
+;
+; pascal Movie CutMovieSelection(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CutMovieSelection
+			move.w	#$8D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CutMovieSelection
+	ENDIF
+
+;
+; pascal Movie CopyMovieSelection(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CopyMovieSelection
+			move.w	#$8E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyMovieSelection
+	ENDIF
+
+;
+; pascal void PasteMovieSelection(Movie theMovie, Movie src)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PasteMovieSelection
+			move.w	#$8F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PasteMovieSelection
+	ENDIF
+
+;
+; pascal void AddMovieSelection(Movie theMovie, Movie src)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMovieSelection
+			move.w	#$152,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMovieSelection
+	ENDIF
+
+;
+; pascal void ClearMovieSelection(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ClearMovieSelection
+			move.w	#$E1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ClearMovieSelection
+	ENDIF
+
+;
+; pascal OSErr PasteHandleIntoMovie(Handle h, OSType handleType, Movie theMovie, long flags, ComponentInstance userComp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PasteHandleIntoMovie
+			move.w	#$CB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PasteHandleIntoMovie
+	ENDIF
+
+;
+; pascal OSErr PutMovieIntoTypedHandle(Movie theMovie, Track targetTrack, OSType handleType, Handle publicMovie, TimeValue start, TimeValue dur, long flags, ComponentInstance userComp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PutMovieIntoTypedHandle
+			move.w	#$1CD,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PutMovieIntoTypedHandle
+	ENDIF
+
+;
+; pascal Component IsScrapMovie(Track targetTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IsScrapMovie
+			move.w	#$CC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsScrapMovie
+	ENDIF
+
+;************************
+;* Middle-level Editing Routines
+;*************************
+;
+; pascal OSErr CopyTrackSettings(Track srcTrack, Track dstTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CopyTrackSettings
+			move.w	#$153,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyTrackSettings
+	ENDIF
+
+;
+; pascal OSErr CopyMovieSettings(Movie srcMovie, Movie dstMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CopyMovieSettings
+			move.w	#$154,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyMovieSettings
+	ENDIF
+
+;
+; pascal OSErr AddEmptyTrackToMovie(Track srcTrack, Movie dstMovie, Handle dataRef, OSType dataRefType, Track *dstTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddEmptyTrackToMovie
+			moveq	#116,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddEmptyTrackToMovie
+	ENDIF
+
+;************************
+;* movie & track edit state routines
+;*************************
+;
+; pascal MovieEditState NewMovieEditState(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieEditState
+			move.w	#$104,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieEditState
+	ENDIF
+
+;
+; pascal OSErr UseMovieEditState(Movie theMovie, MovieEditState toState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UseMovieEditState
+			move.w	#$105,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UseMovieEditState
+	ENDIF
+
+;
+; pascal OSErr DisposeMovieEditState(MovieEditState state)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeMovieEditState
+			move.w	#$106,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeMovieEditState
+	ENDIF
+
+;
+; pascal TrackEditState NewTrackEditState(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewTrackEditState
+			move.w	#$107,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewTrackEditState
+	ENDIF
+
+;
+; pascal OSErr UseTrackEditState(Track theTrack, TrackEditState state)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UseTrackEditState
+			move.w	#$108,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UseTrackEditState
+	ENDIF
+
+;
+; pascal OSErr DisposeTrackEditState(TrackEditState state)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeTrackEditState
+			move.w	#$109,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeTrackEditState
+	ENDIF
+
+;************************
+;* track reference routines
+;*************************
+;
+; pascal OSErr AddTrackReference(Track theTrack, Track refTrack, OSType refType, long *addedIndex)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddTrackReference
+			move.w	#$1F0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddTrackReference
+	ENDIF
+
+;
+; pascal OSErr DeleteTrackReference(Track theTrack, OSType refType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteTrackReference
+			move.w	#$1F1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteTrackReference
+	ENDIF
+
+;
+; pascal OSErr SetTrackReference(Track theTrack, Track refTrack, OSType refType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackReference
+			move.w	#$1F2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackReference
+	ENDIF
+
+;
+; pascal Track GetTrackReference(Track theTrack, OSType refType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackReference
+			move.w	#$1F3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackReference
+	ENDIF
+
+;
+; pascal OSType GetNextTrackReferenceType(Track theTrack, OSType refType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetNextTrackReferenceType
+			move.w	#$1F4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextTrackReferenceType
+	ENDIF
+
+;
+; pascal long GetTrackReferenceCount(Track theTrack, OSType refType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackReferenceCount
+			move.w	#$1F5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackReferenceCount
+	ENDIF
+
+;************************
+;* high level file conversion routines
+;*************************
+;
+; pascal OSErr ConvertFileToMovieFile(const FSSpec *inputFile, const FSSpec *outputFile, OSType creator, ScriptCode scriptTag, short *resID, long flags, ComponentInstance userComp, MovieProgressUPP proc, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConvertFileToMovieFile
+			move.w	#$1CB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConvertFileToMovieFile
+	ENDIF
+
+;
+; pascal OSErr ConvertMovieToFile(Movie theMovie, Track onlyTrack, FSSpec *outputFile, OSType fileType, OSType creator, ScriptCode scriptTag, short *resID, long flags, ComponentInstance userComp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConvertMovieToFile
+			move.w	#$1CC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConvertMovieToFile
+	ENDIF
+
+;************************
+;* Movie Timebase Conversion Routines
+;*************************
+;
+; pascal TimeValue TrackTimeToMediaTime(TimeValue value, Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TrackTimeToMediaTime
+			move.w	#$96,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TrackTimeToMediaTime
+	ENDIF
+
+;
+; pascal Fixed GetTrackEditRate(Track theTrack, TimeValue atTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackEditRate
+			move.w	#$123,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackEditRate
+	ENDIF
+
+;************************
+;* Miscellaneous Routines
+;*************************
+;
+; pascal long GetMovieDataSize(Movie theMovie, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieDataSize
+			move.w	#$98,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieDataSize
+	ENDIF
+
+;
+; pascal long GetTrackDataSize(Track theTrack, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackDataSize
+			move.w	#$149,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackDataSize
+	ENDIF
+
+;
+; pascal long GetMediaDataSize(Media theMedia, TimeValue startTime, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDataSize
+			move.w	#$99,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDataSize
+	ENDIF
+
+;
+; pascal Boolean PtInMovie(Movie theMovie, Point pt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PtInMovie
+			move.w	#$9A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PtInMovie
+	ENDIF
+
+;
+; pascal Boolean PtInTrack(Track theTrack, Point pt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PtInTrack
+			move.w	#$9B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PtInTrack
+	ENDIF
+
+;************************
+;* Group Selection Routines
+;*************************
+;
+; pascal void SetMovieLanguage(Movie theMovie, long language)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieLanguage
+			move.w	#$9C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieLanguage
+	ENDIF
+
+;************************
+;* User Data
+;*************************
+;
+; pascal OSErr GetUserData(UserData theUserData, Handle data, OSType udType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetUserData
+			move.w	#$9E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetUserData
+	ENDIF
+
+;
+; pascal OSErr AddUserData(UserData theUserData, Handle data, OSType udType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddUserData
+			move.w	#$9F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddUserData
+	ENDIF
+
+;
+; pascal OSErr RemoveUserData(UserData theUserData, OSType udType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveUserData
+			move.w	#$A0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveUserData
+	ENDIF
+
+;
+; pascal short CountUserDataType(UserData theUserData, OSType udType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountUserDataType
+			move.w	#$14B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountUserDataType
+	ENDIF
+
+;
+; pascal long GetNextUserDataType(UserData theUserData, OSType udType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetNextUserDataType
+			move.w	#$1A5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextUserDataType
+	ENDIF
+
+;
+; pascal OSErr GetUserDataItem(UserData theUserData, void *data, long size, OSType udType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetUserDataItem
+			move.w	#$126,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetUserDataItem
+	ENDIF
+
+;
+; pascal OSErr SetUserDataItem(UserData theUserData, void *data, long size, OSType udType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetUserDataItem
+			move.w	#$12E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetUserDataItem
+	ENDIF
+
+;
+; pascal OSErr AddUserDataText(UserData theUserData, Handle data, OSType udType, long index, short itlRegionTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddUserDataText
+			move.w	#$14C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddUserDataText
+	ENDIF
+
+;
+; pascal OSErr GetUserDataText(UserData theUserData, Handle data, OSType udType, long index, short itlRegionTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetUserDataText
+			move.w	#$14D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetUserDataText
+	ENDIF
+
+;
+; pascal OSErr RemoveUserDataText(UserData theUserData, OSType udType, long index, short itlRegionTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveUserDataText
+			move.w	#$14E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveUserDataText
+	ENDIF
+
+;
+; pascal OSErr NewUserData(UserData *theUserData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewUserData
+			move.w	#$12F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewUserData
+	ENDIF
+
+;
+; pascal OSErr DisposeUserData(UserData theUserData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeUserData
+			move.w	#$130,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeUserData
+	ENDIF
+
+;
+; pascal OSErr NewUserDataFromHandle(Handle h, UserData *theUserData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewUserDataFromHandle
+			move.w	#$131,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewUserDataFromHandle
+	ENDIF
+
+;
+; pascal OSErr PutUserDataIntoHandle(UserData theUserData, Handle h)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PutUserDataIntoHandle
+			move.w	#$132,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PutUserDataIntoHandle
+	ENDIF
+
+;
+; pascal void GetMediaNextInterestingTime(Media theMedia, short interestingTimeFlags, TimeValue time, Fixed rate, TimeValue *interestingTime, TimeValue *interestingDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaNextInterestingTime
+			move.w	#$16D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaNextInterestingTime
+	ENDIF
+
+;
+; pascal void GetTrackNextInterestingTime(Track theTrack, short interestingTimeFlags, TimeValue time, Fixed rate, TimeValue *interestingTime, TimeValue *interestingDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackNextInterestingTime
+			move.w	#$E2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackNextInterestingTime
+	ENDIF
+
+;
+; pascal void GetMovieNextInterestingTime(Movie theMovie, short interestingTimeFlags, short numMediaTypes, const OSType *whichMediaTypes, TimeValue time, Fixed rate, TimeValue *interestingTime, TimeValue *interestingDuration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieNextInterestingTime
+			move.w	#$10E,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieNextInterestingTime
+	ENDIF
+
+;
+; pascal OSErr CreateMovieFile(const FSSpec *fileSpec, OSType creator, ScriptCode scriptTag, long createMovieFileFlags, short *resRefNum, Movie *newmovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CreateMovieFile
+			move.w	#$191,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CreateMovieFile
+	ENDIF
+
+;
+; pascal OSErr OpenMovieFile(const FSSpec *fileSpec, short *resRefNum, SInt8 permission)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenMovieFile
+			move.w	#$192,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenMovieFile
+	ENDIF
+
+;
+; pascal OSErr CloseMovieFile(short resRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseMovieFile
+			move.w	#$D5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseMovieFile
+	ENDIF
+
+;
+; pascal OSErr DeleteMovieFile(const FSSpec *fileSpec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DeleteMovieFile
+			move.w	#$175,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DeleteMovieFile
+	ENDIF
+
+;
+; pascal OSErr NewMovieFromFile(Movie *theMovie, short resRefNum, short *resId, StringPtr resName, short newMovieFlags, Boolean *dataRefWasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieFromFile
+			move.w	#$F0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieFromFile
+	ENDIF
+
+;
+; pascal OSErr NewMovieFromHandle(Movie *theMovie, Handle h, short newMovieFlags, Boolean *dataRefWasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieFromHandle
+			move.w	#$F1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieFromHandle
+	ENDIF
+
+;
+; pascal OSErr NewMovieFromDataFork(Movie *theMovie, short fRefNum, long fileOffset, short newMovieFlags, Boolean *dataRefWasChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieFromDataFork
+			move.w	#$1B3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieFromDataFork
+	ENDIF
+
+;
+; pascal OSErr NewMovieFromUserProc(Movie *m, short flags, Boolean *dataRefWasChanged, GetMovieUPP getProc, void *refCon, Handle defaultDataRef, OSType dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieFromUserProc
+			move.w	#$1EC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieFromUserProc
+	ENDIF
+
+;
+; pascal OSErr AddMovieResource(Movie theMovie, short resRefNum, short *resId, ConstStr255Param resName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMovieResource
+			move.w	#$D7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMovieResource
+	ENDIF
+
+;
+; pascal OSErr UpdateMovieResource(Movie theMovie, short resRefNum, short resId, ConstStr255Param resName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UpdateMovieResource
+			move.w	#$D8,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UpdateMovieResource
+	ENDIF
+
+;
+; pascal OSErr RemoveMovieResource(short resRefNum, short resId)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveMovieResource
+			move.w	#$176,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveMovieResource
+	ENDIF
+
+;
+; pascal Boolean HasMovieChanged(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HasMovieChanged
+			move.w	#$D9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HasMovieChanged
+	ENDIF
+
+;
+; pascal void ClearMovieChanged(Movie theMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ClearMovieChanged
+			move.w	#$113,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ClearMovieChanged
+	ENDIF
+
+;
+; pascal OSErr SetMovieDefaultDataRef(Movie theMovie, Handle dataRef, OSType dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieDefaultDataRef
+			move.w	#$1C1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieDefaultDataRef
+	ENDIF
+
+;
+; pascal OSErr GetMovieDefaultDataRef(Movie theMovie, Handle *dataRef, OSType *dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieDefaultDataRef
+			move.w	#$1D2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieDefaultDataRef
+	ENDIF
+
+;
+; pascal OSErr SetMovieColorTable(Movie theMovie, CTabHandle ctab)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieColorTable
+			move.w	#$205,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieColorTable
+	ENDIF
+
+;
+; pascal OSErr GetMovieColorTable(Movie theMovie, CTabHandle *ctab)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieColorTable
+			move.w	#$206,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieColorTable
+	ENDIF
+
+;
+; pascal void FlattenMovie(Movie theMovie, long movieFlattenFlags, const FSSpec *theFile, OSType creator, ScriptCode scriptTag, long createMovieFileFlags, short *resId, ConstStr255Param resName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FlattenMovie
+			move.w	#$19B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlattenMovie
+	ENDIF
+
+;
+; pascal Movie FlattenMovieData(Movie theMovie, long movieFlattenFlags, const FSSpec *theFile, OSType creator, ScriptCode scriptTag, long createMovieFileFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FlattenMovieData
+			move.w	#$19C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FlattenMovieData
+	ENDIF
+
+;
+; pascal void SetMovieProgressProc(Movie theMovie, MovieProgressUPP p, long refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieProgressProc
+			move.w	#$19A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieProgressProc
+	ENDIF
+
+;************************
+;* Video Media routines
+;*************************
+;
+; pascal HandlerError GetVideoMediaGraphicsMode(MediaHandler mh, long *graphicsMode, RGBColor *opColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetVideoMediaGraphicsMode
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0101
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetVideoMediaGraphicsMode
+	ENDIF
+
+;
+; pascal HandlerError SetVideoMediaGraphicsMode(MediaHandler mh, long graphicsMode, const RGBColor *opColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetVideoMediaGraphicsMode
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0102
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetVideoMediaGraphicsMode
+	ENDIF
+
+;************************
+;* Sound Media routines
+;*************************
+;
+; pascal HandlerError GetSoundMediaBalance(MediaHandler mh, short *balance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSoundMediaBalance
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0101
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSoundMediaBalance
+	ENDIF
+
+;
+; pascal HandlerError SetSoundMediaBalance(MediaHandler mh, short balance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSoundMediaBalance
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0102
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSoundMediaBalance
+	ENDIF
+
+;************************
+;* Text Media routines
+;*************************
+; Return displayFlags for TextProc 
+txtProcDefaultDisplay			EQU		0					;	Use the media's default
+txtProcDontDisplay				EQU		1					;	Don't display the text
+txtProcDoDisplay				EQU		2					;	Do display the text
+
+;
+; pascal ComponentResult SetTextProc(MediaHandler mh, TextMediaUPP TextProc, long refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTextProc
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0101
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTextProc
+	ENDIF
+
+;
+; pascal ComponentResult AddTextSample(MediaHandler mh, Ptr text, unsigned long size, short fontNumber, short fontSize, Style textFace, RGBColor *textColor, RGBColor *backColor, short textJustification, Rect *textBox, long displayFlags, TimeValue scrollDelay, short hiliteStart, short hiliteEnd, RGBColor *rgbHiliteColor, TimeValue duration, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddTextSample
+			dc.w 	$2F3C
+			dc.w 	$0034
+			dc.w 	$0102
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddTextSample
+	ENDIF
+
+;
+; pascal ComponentResult AddTESample(MediaHandler mh, TEHandle hTE, RGBColor *backColor, short textJustification, Rect *textBox, long displayFlags, TimeValue scrollDelay, short hiliteStart, short hiliteEnd, RGBColor *rgbHiliteColor, TimeValue duration, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddTESample
+			dc.w 	$2F3C
+			dc.w 	$0026
+			dc.w 	$0103
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddTESample
+	ENDIF
+
+;
+; pascal ComponentResult AddHiliteSample(MediaHandler mh, short hiliteStart, short hiliteEnd, RGBColor *rgbHiliteColor, TimeValue duration, TimeValue *sampleTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddHiliteSample
+			dc.w 	$2F3C
+			dc.w 	$0010
+			dc.w 	$0104
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddHiliteSample
+	ENDIF
+
+findTextEdgeOK					EQU		1 << 0				; Okay to find text at specified sample time
+findTextCaseSensitive			EQU		1 << 1				; Case sensitive search
+findTextReverseSearch			EQU		1 << 2				; Search from sampleTime backwards
+findTextWrapAround				EQU		1 << 3				; Wrap search when beginning or end of movie is hit
+findTextUseOffset				EQU		1 << 4				; Begin search at the given character offset into sample rather than edge
+
+;
+; pascal ComponentResult FindNextText(MediaHandler mh, Ptr text, long size, short findFlags, TimeValue startTime, TimeValue *foundTime, TimeValue *foundDuration, long *offset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindNextText
+			dc.w 	$2F3C
+			dc.w 	$001A
+			dc.w 	$0105
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindNextText
+	ENDIF
+
+;
+; pascal ComponentResult HiliteTextSample(MediaHandler mh, TimeValue sampleTime, short hiliteStart, short hiliteEnd, RGBColor *rgbHiliteColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HiliteTextSample
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0106
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HiliteTextSample
+	ENDIF
+
+dropShadowOffsetType			EQU		'drpo'
+dropShadowTranslucencyType		EQU		'drpt'
+
+;
+; pascal ComponentResult SetTextSampleData(MediaHandler mh, void *data, OSType dataType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTextSampleData
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0107
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTextSampleData
+	ENDIF
+
+;
+; pascal OSErr MovieSearchText(Movie theMovie, Ptr text, long size, long searchFlags, Track *searchTrack, TimeValue *searchTime, long *searchOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MovieSearchText
+			move.w	#$207,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MovieSearchText
+	ENDIF
+
+;
+; pascal void GetPosterBox(Movie theMovie, Rect *boxRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPosterBox
+			move.w	#$16F,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPosterBox
+	ENDIF
+
+;
+; pascal void SetPosterBox(Movie theMovie, const Rect *boxRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetPosterBox
+			move.w	#$170,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPosterBox
+	ENDIF
+
+;
+; pascal RgnHandle GetMovieSegmentDisplayBoundsRgn(Movie theMovie, TimeValue time, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieSegmentDisplayBoundsRgn
+			move.w	#$16C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieSegmentDisplayBoundsRgn
+	ENDIF
+
+;
+; pascal RgnHandle GetTrackSegmentDisplayBoundsRgn(Track theTrack, TimeValue time, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackSegmentDisplayBoundsRgn
+			move.w	#$16B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackSegmentDisplayBoundsRgn
+	ENDIF
+
+;
+; pascal void SetMovieCoverProcs(Movie theMovie, MovieRgnCoverUPP uncoverProc, MovieRgnCoverUPP coverProc, long refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMovieCoverProcs
+			move.w	#$179,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMovieCoverProcs
+	ENDIF
+
+;
+; pascal OSErr GetMovieCoverProcs(Movie theMovie, MovieRgnCoverUPP *uncoverProc, MovieRgnCoverUPP *coverProc, long *refcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieCoverProcs
+			move.w	#$1DD,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieCoverProcs
+	ENDIF
+
+;
+; pascal ComponentResult GetTrackStatus(Track theTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackStatus
+			move.w	#$172,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackStatus
+	ENDIF
+
+;
+; pascal ComponentResult GetMovieStatus(Movie theMovie, Track *firstProblemTrack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMovieStatus
+			move.w	#$173,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMovieStatus
+	ENDIF
+
+;***
+;	Movie Controller support routines
+;***
+;
+; pascal ComponentInstance NewMovieController(Movie theMovie, const Rect *movieRect, long someFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieController
+			move.w	#$18A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieController
+	ENDIF
+
+;
+; pascal void DisposeMovieController(ComponentInstance mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeMovieController
+			move.w	#$18B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeMovieController
+	ENDIF
+
+;
+; pascal void ShowMovieInformation(Movie theMovie, ModalFilterUPP filterProc, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ShowMovieInformation
+			move.w	#$209,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ShowMovieInformation
+	ENDIF
+
+;****
+;	Scrap routines
+;****
+;
+; pascal OSErr PutMovieOnScrap(Movie theMovie, long movieScrapFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PutMovieOnScrap
+			move.w	#$18C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PutMovieOnScrap
+	ENDIF
+
+;
+; pascal Movie NewMovieFromScrap(long newMovieFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewMovieFromScrap
+			move.w	#$18D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewMovieFromScrap
+	ENDIF
+
+;****
+;	DataRef routines
+;****
+;
+; pascal OSErr GetMediaDataRef(Media theMedia, short index, Handle *dataRef, OSType *dataRefType, long *dataRefAttributes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDataRef
+			move.w	#$197,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDataRef
+	ENDIF
+
+;
+; pascal OSErr SetMediaDataRef(Media theMedia, short index, Handle dataRef, OSType dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaDataRef
+			move.w	#$1C9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaDataRef
+	ENDIF
+
+;
+; pascal OSErr SetMediaDataRefAttributes(Media theMedia, short index, long dataRefAttributes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaDataRefAttributes
+			move.w	#$1CA,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaDataRefAttributes
+	ENDIF
+
+;
+; pascal OSErr AddMediaDataRef(Media theMedia, short *index, Handle dataRef, OSType dataRefType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddMediaDataRef
+			move.w	#$198,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddMediaDataRef
+	ENDIF
+
+;
+; pascal OSErr GetMediaDataRefCount(Media theMedia, short *count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMediaDataRefCount
+			move.w	#$199,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMediaDataRefCount
+	ENDIF
+
+;****
+;	Playback hint routines
+;****
+;
+; pascal void SetMoviePlayHints(Movie theMovie, long flags, long flagsMask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMoviePlayHints
+			move.w	#$1A1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMoviePlayHints
+	ENDIF
+
+;
+; pascal void SetMediaPlayHints(Media theMedia, long flags, long flagsMask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetMediaPlayHints
+			move.w	#$1A2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetMediaPlayHints
+	ENDIF
+
+;****
+;	Load time track hints
+;****
+preloadAlways					EQU		1 << 0
+preloadOnlyIfEnabled			EQU		1 << 1
+
+;
+; pascal void SetTrackLoadSettings(Track theTrack, TimeValue preloadTime, TimeValue preloadDuration, long preloadFlags, long defaultHints)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTrackLoadSettings
+			move.w	#$1E3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTrackLoadSettings
+	ENDIF
+
+;
+; pascal void GetTrackLoadSettings(Track theTrack, TimeValue *preloadTime, TimeValue *preloadDuration, long *preloadFlags, long *defaultHints)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTrackLoadSettings
+			move.w	#$1E4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTrackLoadSettings
+	ENDIF
+
+MovieControllerComponentType	EQU		'play'
+
+; typedef ComponentInstance  MovieController
+
+mcActionIdle					EQU		1					; no param
+mcActionDraw					EQU		2					; param is WindowPtr
+mcActionActivate				EQU		3					; no param
+mcActionDeactivate				EQU		4					; no param
+mcActionMouseDown				EQU		5					; param is pointer to EventRecord
+mcActionKey						EQU		6					; param is pointer to EventRecord
+mcActionPlay					EQU		8					; param is Fixed, play rate
+mcActionGoToTime				EQU		12					; param is TimeRecord
+mcActionSetVolume				EQU		14					; param is a short
+mcActionGetVolume				EQU		15					; param is pointer to a short
+mcActionStep					EQU		18					; param is number of steps (short)
+mcActionSetLooping				EQU		21					; param is Boolean
+mcActionGetLooping				EQU		22					; param is pointer to a Boolean
+mcActionSetLoopIsPalindrome		EQU		23					; param is Boolean
+mcActionGetLoopIsPalindrome		EQU		24					; param is pointer to a Boolean
+mcActionSetGrowBoxBounds		EQU		25					; param is a Rect
+mcActionControllerSizeChanged	EQU		26					; no param
+mcActionSetSelectionBegin		EQU		29					; param is TimeRecord
+mcActionSetSelectionDuration	EQU		30					; param is TimeRecord, action only taken on set-duration
+mcActionSetKeysEnabled			EQU		32					; param is Boolean
+mcActionGetKeysEnabled			EQU		33					; param is pointer to Boolean
+mcActionSetPlaySelection		EQU		34					; param is Boolean
+mcActionGetPlaySelection		EQU		35					; param is pointer to Boolean
+mcActionSetUseBadge				EQU		36					; param is Boolean
+mcActionGetUseBadge				EQU		37					; param is pointer to Boolean
+mcActionSetFlags				EQU		38					; param is long of flags
+mcActionGetFlags				EQU		39					; param is pointer to a long of flags
+mcActionSetPlayEveryFrame		EQU		40					; param is Boolean
+mcActionGetPlayEveryFrame		EQU		41					; param is pointer to Boolean
+mcActionGetPlayRate				EQU		42					; param is pointer to Fixed
+mcActionShowBalloon				EQU		43					; param is a pointer to a boolean. set to false to stop balloon
+mcActionBadgeClick				EQU		44					; param is pointer to Boolean. set to false to ignore click
+mcActionMovieClick				EQU		45					; param is pointer to event record. change “what” to nullEvt to kill click
+mcActionSuspend					EQU		46					; no param
+mcActionResume					EQU		47					; no param
+mcActionSetControllerKeysEnabled EQU		48					; param is Boolean
+mcActionGetTimeSliderRect		EQU		49					; param is pointer to rect
+mcActionMovieEdited				EQU		50					; no param
+mcActionGetDragEnabled			EQU		51					; param is pointer to Boolean
+mcActionSetDragEnabled			EQU		52					; param is Boolean
+
+; typedef short 			mcAction
+
+mcFlagSuppressMovieFrame		EQU		1 << 0
+mcFlagSuppressStepButtons		EQU		1 << 1
+mcFlagSuppressSpeakerButton		EQU		1 << 2
+mcFlagsUseWindowPalette			EQU		1 << 3
+mcFlagsDontInvalidate			EQU		1 << 4
+
+mcPositionDontInvalidate		EQU		1 << 5
+
+; typedef unsigned long 	mcFlags
+
+mcInfoUndoAvailable				EQU		1 << 0
+mcInfoCutAvailable				EQU		1 << 1
+mcInfoCopyAvailable				EQU		1 << 2
+mcInfoPasteAvailable			EQU		1 << 3
+mcInfoClearAvailable			EQU		1 << 4
+mcInfoHasSound					EQU		1 << 5
+mcInfoIsPlaying					EQU		1 << 6
+mcInfoIsLooping					EQU		1 << 7
+mcInfoIsInPalindrome			EQU		1 << 8
+mcInfoEditingEnabled			EQU		1 << 9
+
+; menu item codes
+mcMenuUndo						EQU		1
+mcMenuCut						EQU		3
+mcMenuCopy						EQU		4
+mcMenuPaste						EQU		5
+mcMenuClear						EQU		6
+
+; target management 
+;
+; pascal ComponentResult MCSetMovie(MovieController mc, Movie theMovie, WindowPtr movieWindow, Point where)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetMovie
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0002
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetMovie
+	ENDIF
+
+;
+; pascal Movie MCGetIndMovie(MovieController mc, short index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetIndMovie
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0005
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetIndMovie
+	ENDIF
+
+;
+; pascal ComponentResult MCRemoveMovie(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCRemoveMovie
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0006
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCRemoveMovie
+	ENDIF
+
+; event handling etc. 
+;
+; pascal ComponentResult MCIsPlayerEvent(MovieController mc, const EventRecord *e)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCIsPlayerEvent
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0007
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCIsPlayerEvent
+	ENDIF
+
+; obsolete. use MCSetActionFilterWithRefCon instead. 
+;
+; pascal ComponentResult MCSetActionFilter(MovieController mc, MCActionFilterUPP blob)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetActionFilter
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0008
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetActionFilter
+	ENDIF
+
+;
+;	proc is of the form:
+;		Boolean userPlayerFilter(MovieController mc, short *action, void *params) =
+;	proc returns TRUE if it handles the action, FALSE if not
+;	action is passed as a VAR so that it could be changed by filter (ick)
+;	this is consistent with the current dialog manager stuff
+;	params is any potential parameters that go with the action <triple ick> 
+;		such as set playback rate to xxx.
+;
+;
+; pascal ComponentResult MCDoAction(MovieController mc, short action, void *params)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCDoAction
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0009
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCDoAction
+	ENDIF
+
+; state type things 
+;
+; pascal ComponentResult MCSetControllerAttached(MovieController mc, Boolean attach)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetControllerAttached
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$000A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetControllerAttached
+	ENDIF
+
+;
+; pascal ComponentResult MCIsControllerAttached(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCIsControllerAttached
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$000B
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCIsControllerAttached
+	ENDIF
+
+;
+; pascal ComponentResult MCSetControllerPort(MovieController mc, CGrafPtr gp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetControllerPort
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$000C
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetControllerPort
+	ENDIF
+
+;
+; pascal CGrafPtr MCGetControllerPort(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetControllerPort
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$000D
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetControllerPort
+	ENDIF
+
+;
+; pascal ComponentResult MCSetVisible(MovieController mc, Boolean visible)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetVisible
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$000E
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetVisible
+	ENDIF
+
+;
+; pascal ComponentResult MCGetVisible(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetVisible
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$000F
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetVisible
+	ENDIF
+
+;
+; pascal ComponentResult MCGetControllerBoundsRect(MovieController mc, Rect *bounds)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetControllerBoundsRect
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0010
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetControllerBoundsRect
+	ENDIF
+
+;
+; pascal ComponentResult MCSetControllerBoundsRect(MovieController mc, const Rect *bounds)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetControllerBoundsRect
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0011
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetControllerBoundsRect
+	ENDIF
+
+;
+; pascal RgnHandle MCGetControllerBoundsRgn(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetControllerBoundsRgn
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0012
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetControllerBoundsRgn
+	ENDIF
+
+;
+; pascal RgnHandle MCGetWindowRgn(MovieController mc, WindowPtr w)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetWindowRgn
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0013
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetWindowRgn
+	ENDIF
+
+; other stuff 
+;
+; pascal ComponentResult MCMovieChanged(MovieController mc, Movie m)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCMovieChanged
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0014
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCMovieChanged
+	ENDIF
+
+;
+;	called when the app has changed thing about the movie (like bounding rect) or rate. So that we
+;		can update our graphical (and internal) state accordingly.
+;
+;
+; pascal ComponentResult MCSetDuration(MovieController mc, TimeValue duration)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetDuration
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0015
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetDuration
+	ENDIF
+
+;
+;	duration to use for time slider -- will be reset next time MCMovieChanged is called
+;		or MCSetMovie is called
+;
+;
+; pascal TimeValue MCGetCurrentTime(MovieController mc, TimeScale *scale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetCurrentTime
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0016
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetCurrentTime
+	ENDIF
+
+;
+;	returns the time value and the time scale it is on. if there are no movies, the
+;		time scale is passed back as 0. scale is an optional parameter
+;
+;
+;
+; pascal ComponentResult MCNewAttachedController(MovieController mc, Movie theMovie, WindowPtr w, Point where)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCNewAttachedController
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0017
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCNewAttachedController
+	ENDIF
+
+;
+;	makes m the only movie attached to the controller. makes the controller visible.
+;	the window and where parameters are passed a long to MCSetMovie and behave as
+;	described there
+;
+;
+; pascal ComponentResult MCDraw(MovieController mc, WindowPtr w)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCDraw
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0018
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCDraw
+	ENDIF
+
+;
+; pascal ComponentResult MCActivate(MovieController mc, WindowPtr w, Boolean activate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCActivate
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$0019
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCActivate
+	ENDIF
+
+;
+; pascal ComponentResult MCIdle(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCIdle
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$001A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCIdle
+	ENDIF
+
+;
+; pascal ComponentResult MCKey(MovieController mc, SInt8 key, long modifiers)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCKey
+			dc.w 	$2F3C
+			dc.w 	$0006
+			dc.w 	$001B
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCKey
+	ENDIF
+
+;
+; pascal ComponentResult MCClick(MovieController mc, WindowPtr w, Point where, long when, long modifiers)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCClick
+			dc.w 	$2F3C
+			dc.w 	$0010
+			dc.w 	$001C
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCClick
+	ENDIF
+
+;
+;	calls for editing
+;
+;
+; pascal ComponentResult MCEnableEditing(MovieController mc, Boolean enabled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCEnableEditing
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$001D
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCEnableEditing
+	ENDIF
+
+;
+; pascal long MCIsEditingEnabled(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCIsEditingEnabled
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$001E
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCIsEditingEnabled
+	ENDIF
+
+;
+; pascal Movie MCCopy(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCCopy
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$001F
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCCopy
+	ENDIF
+
+;
+; pascal Movie MCCut(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCCut
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0020
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCCut
+	ENDIF
+
+;
+; pascal ComponentResult MCPaste(MovieController mc, Movie srcMovie)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCPaste
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0021
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCPaste
+	ENDIF
+
+;
+; pascal ComponentResult MCClear(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCClear
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0022
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCClear
+	ENDIF
+
+;
+; pascal ComponentResult MCUndo(MovieController mc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCUndo
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0023
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCUndo
+	ENDIF
+
+;
+; *	somewhat special stuff
+; 
+;
+; pascal ComponentResult MCPositionController(MovieController mc, const Rect *movieRect, const Rect *controllerRect, long someFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCPositionController
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$0024
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCPositionController
+	ENDIF
+
+;
+; pascal ComponentResult MCGetControllerInfo(MovieController mc, long *someFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetControllerInfo
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0025
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetControllerInfo
+	ENDIF
+
+;
+; pascal ComponentResult MCSetClip(MovieController mc, RgnHandle theClip, RgnHandle movieClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetClip
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0028
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetClip
+	ENDIF
+
+;
+; pascal ComponentResult MCGetClip(MovieController mc, RgnHandle *theClip, RgnHandle *movieClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetClip
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0029
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetClip
+	ENDIF
+
+;
+; pascal ComponentResult MCDrawBadge(MovieController mc, RgnHandle movieRgn, RgnHandle *badgeRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCDrawBadge
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$002A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCDrawBadge
+	ENDIF
+
+;
+; pascal ComponentResult MCSetUpEditMenu(MovieController mc, long modifiers, MenuHandle mh)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetUpEditMenu
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$002B
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetUpEditMenu
+	ENDIF
+
+;
+; pascal ComponentResult MCGetMenuString(MovieController mc, long modifiers, short item, Str255 aString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCGetMenuString
+			dc.w 	$2F3C
+			dc.w 	$000A
+			dc.w 	$002C
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCGetMenuString
+	ENDIF
+
+;
+; pascal ComponentResult MCSetActionFilterWithRefCon(MovieController mc, MCActionFilterWithRefConUPP blob, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MCSetActionFilterWithRefCon
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$002D
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MCSetActionFilterWithRefCon
+	ENDIF
+
+kMCSetMovieSelect				EQU		$2
+kMCGetIndMovieSelect			EQU		$5
+kMCRemoveMovieSelect			EQU		$6
+kMCIsPlayerEventSelect			EQU		$7
+kMCSetActionFilterSelect		EQU		$8
+kMCDoActionSelect				EQU		$9
+kMCSetControllerAttachedSelect	EQU		$A
+kMCIsControllerAttachedSelect	EQU		$B
+kMCSetControllerPortSelect		EQU		$C
+kMCGetControllerPortSelect		EQU		$D
+kMCSetVisibleSelect				EQU		$E
+kMCGetVisibleSelect				EQU		$F
+kMCGetControllerBoundsRectSelect EQU		$10
+kMCSetControllerBoundsRectSelect EQU		$11
+kMCGetControllerBoundsRgnSelect	EQU		$12
+kMCGetWindowRgnSelect			EQU		$13
+kMCMovieChangedSelect			EQU		$14
+kMCSetDurationSelect			EQU		$15
+kMCGetCurrentTimeSelect			EQU		$16
+kMCNewAttachedControllerSelect	EQU		$17
+kMCDrawSelect					EQU		$18
+kMCActivateSelect				EQU		$19
+kMCIdleSelect					EQU		$1A
+kMCKeySelect					EQU		$1B
+kMCClickSelect					EQU		$1C
+kMCEnableEditingSelect			EQU		$1D
+kMCIsEditingEnabledSelect		EQU		$1E
+kMCCopySelect					EQU		$1F
+kMCCutSelect					EQU		$20
+kMCPasteSelect					EQU		$21
+kMCClearSelect					EQU		$22
+kMCUndoSelect					EQU		$23
+kMCPositionControllerSelect		EQU		$24
+kMCGetControllerInfoSelect		EQU		$25
+kMCSetClipSelect				EQU		$28
+kMCGetClipSelect				EQU		$29
+kMCDrawBadgeSelect				EQU		$2A
+kMCSetUpEditMenuSelect			EQU		$2B
+kMCGetMenuStringSelect			EQU		$2C
+kMCSetActionFilterWithRefConSelect EQU		$2D
+
+;***************************************
+;*										*
+;*  		T  I  M  E  B  A  S  E			*
+;*										*
+;***************************************
+;
+; pascal TimeBase NewTimeBase(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewTimeBase
+			move.w	#$A5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewTimeBase
+	ENDIF
+
+;
+; pascal void DisposeTimeBase(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeTimeBase
+			move.w	#$B6,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeTimeBase
+	ENDIF
+
+;
+; pascal TimeValue GetTimeBaseTime(TimeBase tb, TimeScale s, TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseTime
+			move.w	#$A6,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseTime
+	ENDIF
+
+;
+; pascal void SetTimeBaseTime(TimeBase tb, const TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseTime
+			move.w	#$A7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseTime
+	ENDIF
+
+;
+; pascal void SetTimeBaseValue(TimeBase tb, TimeValue t, TimeScale s)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseValue
+			move.w	#$A8,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseValue
+	ENDIF
+
+;
+; pascal Fixed GetTimeBaseRate(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseRate
+			move.w	#$A9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseRate
+	ENDIF
+
+;
+; pascal void SetTimeBaseRate(TimeBase tb, Fixed r)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseRate
+			move.w	#$AA,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseRate
+	ENDIF
+
+;
+; pascal TimeValue GetTimeBaseStartTime(TimeBase tb, TimeScale s, TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseStartTime
+			move.w	#$AB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseStartTime
+	ENDIF
+
+;
+; pascal void SetTimeBaseStartTime(TimeBase tb, const TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseStartTime
+			move.w	#$AC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseStartTime
+	ENDIF
+
+;
+; pascal TimeValue GetTimeBaseStopTime(TimeBase tb, TimeScale s, TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseStopTime
+			move.w	#$AD,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseStopTime
+	ENDIF
+
+;
+; pascal void SetTimeBaseStopTime(TimeBase tb, const TimeRecord *tr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseStopTime
+			move.w	#$AE,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseStopTime
+	ENDIF
+
+;
+; pascal long GetTimeBaseFlags(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseFlags
+			move.w	#$B1,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseFlags
+	ENDIF
+
+;
+; pascal void SetTimeBaseFlags(TimeBase tb, long timeBaseFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseFlags
+			move.w	#$B2,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseFlags
+	ENDIF
+
+;
+; pascal void SetTimeBaseMasterTimeBase(TimeBase slave, TimeBase master, const TimeRecord *slaveZero)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseMasterTimeBase
+			move.w	#$B4,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseMasterTimeBase
+	ENDIF
+
+;
+; pascal TimeBase GetTimeBaseMasterTimeBase(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseMasterTimeBase
+			move.w	#$AF,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseMasterTimeBase
+	ENDIF
+
+;
+; pascal void SetTimeBaseMasterClock(TimeBase slave, Component clockMeister, const TimeRecord *slaveZero)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseMasterClock
+			move.w	#$B3,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseMasterClock
+	ENDIF
+
+;
+; pascal ComponentInstance GetTimeBaseMasterClock(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseMasterClock
+			move.w	#$B0,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseMasterClock
+	ENDIF
+
+;
+; pascal void ConvertTime(TimeRecord *inout, TimeBase newBase)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConvertTime
+			move.w	#$B5,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConvertTime
+	ENDIF
+
+;
+; pascal void ConvertTimeScale(TimeRecord *inout, TimeScale newScale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConvertTimeScale
+			move.w	#$B7,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConvertTimeScale
+	ENDIF
+
+;
+; pascal void AddTime(TimeRecord *dst, const TimeRecord *src)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddTime
+			move.w	#$10C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddTime
+	ENDIF
+
+;
+; pascal void SubtractTime(TimeRecord *dst, const TimeRecord *src)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SubtractTime
+			move.w	#$10D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SubtractTime
+	ENDIF
+
+;
+; pascal long GetTimeBaseStatus(TimeBase tb, TimeRecord *unpinnedTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseStatus
+			move.w	#$10B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseStatus
+	ENDIF
+
+;
+; pascal void SetTimeBaseZero(TimeBase tb, TimeRecord *zero)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTimeBaseZero
+			move.w	#$128,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTimeBaseZero
+	ENDIF
+
+;
+; pascal Fixed GetTimeBaseEffectiveRate(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetTimeBaseEffectiveRate
+			move.w	#$124,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetTimeBaseEffectiveRate
+	ENDIF
+
+;***************************************
+;*										*
+;*  		C  A  L  L  B  A  C  K 			*
+;*										*
+;***************************************
+;
+; pascal QTCallBack NewCallBack(TimeBase tb, short cbType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewCallBack
+			move.w	#$EB,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewCallBack
+	ENDIF
+
+;
+; pascal void DisposeCallBack(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeCallBack
+			move.w	#$EC,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeCallBack
+	ENDIF
+
+;
+; pascal short GetCallBackType(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCallBackType
+			move.w	#$ED,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCallBackType
+	ENDIF
+
+;
+; pascal TimeBase GetCallBackTimeBase(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCallBackTimeBase
+			move.w	#$EE,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCallBackTimeBase
+	ENDIF
+
+;
+; pascal OSErr CallMeWhen(QTCallBack cb, QTCallBackUPP callBackProc, long refCon, long param1, long param2, long param3)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CallMeWhen
+			move.w	#$B8,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CallMeWhen
+	ENDIF
+
+;
+; pascal void CancelCallBack(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CancelCallBack
+			move.w	#$B9,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CancelCallBack
+	ENDIF
+
+;***************************************
+;*										*
+;*  		C L O C K   C A L L B A C K  	*
+;*  		      S U P P O R T  			*
+;*										*
+;***************************************
+;
+; pascal OSErr AddCallBackToTimeBase(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddCallBackToTimeBase
+			move.w	#$129,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddCallBackToTimeBase
+	ENDIF
+
+;
+; pascal OSErr RemoveCallBackFromTimeBase(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveCallBackFromTimeBase
+			move.w	#$12A,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveCallBackFromTimeBase
+	ENDIF
+
+;
+; pascal QTCallBack GetFirstCallBack(TimeBase tb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFirstCallBack
+			move.w	#$12B,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFirstCallBack
+	ENDIF
+
+;
+; pascal QTCallBack GetNextCallBack(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetNextCallBack
+			move.w	#$12C,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextCallBack
+	ENDIF
+
+;
+; pascal void ExecuteCallBack(QTCallBack cb)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ExecuteCallBack
+			move.w	#$12D,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ExecuteCallBack
+	ENDIF
+
+;***************************************
+;*										*
+;*  		S Y N C    T A S K S		  	*
+;*  		      S U P P O R T  			*
+;*										*
+;***************************************
+;
+; pascal OSErr QueueSyncTask(QTSyncTaskPtr task)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_QueueSyncTask
+			move.w	#$203,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	QueueSyncTask
+	ENDIF
+
+;
+; pascal OSErr DequeueSyncTask(QTSyncTaskPtr qElem)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DequeueSyncTask
+			move.w	#$204,d0
+			dc.w 	$AAAA
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DequeueSyncTask
+	ENDIF
+
+; UPP call backs 
+	ENDIF ; __MOVIES__

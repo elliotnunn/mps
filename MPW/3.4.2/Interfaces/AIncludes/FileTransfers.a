@@ -1,0 +1,391 @@
+;
+;	File:		FileTransfers.a
+;
+;	Contains:	CommToolbox File Transfer Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__FILETRANSFERS__') = 'UNDEFINED' THEN
+__FILETRANSFERS__ SET 1
+
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__CTBUTILITIES__') = 'UNDEFINED' THEN
+	include 'CTBUtilities.a'
+	ENDIF
+;		include 'Dialogs.a'										;
+;			include 'Errors.a'										;
+;			include 'TextEdit.a'									;
+;		include 'StandardFile.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;		include 'AppleTalk.a'										;
+
+	IF &TYPE('__CONNECTIONS__') = 'UNDEFINED' THEN
+	include 'Connections.a'
+	ENDIF
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__TERMINALS__') = 'UNDEFINED' THEN
+	include 'Terminals.a'
+	ENDIF
+
+; current file transfer manager version	
+curFTVersion					EQU		2
+; FTErr    
+ftGenericError					EQU		-1
+ftNoErr							EQU		0
+ftRejected						EQU		1
+ftFailed						EQU		2
+ftTimeOut						EQU		3
+ftTooManyRetry					EQU		4
+ftNotEnoughDSpace				EQU		5
+ftRemoteCancel					EQU		6
+ftWrongFormat					EQU		7
+ftNoTools						EQU		8
+ftUserCancel					EQU		9
+ftNotSupported					EQU		10
+
+; typedef OSErr 			FTErr
+
+ftIsFTMode						EQU		1 << 0
+ftNoMenus						EQU		1 << 1
+ftQuiet							EQU		1 << 2
+ftConfigChanged					EQU		1 << 4
+ftSucc							EQU		1 << 7
+
+; typedef unsigned long 	FTFlags
+
+ftSameCircuit					EQU		1 << 0
+ftSendDisable					EQU		1 << 1
+ftReceiveDisable				EQU		1 << 2
+ftTextOnly						EQU		1 << 3
+ftNoStdFile						EQU		1 << 4
+ftMultipleFileSend				EQU		1 << 5
+
+; typedef unsigned short 	FTAttributes
+
+ftReceiving						EQU		0
+ftTransmitting					EQU		1
+
+; typedef unsigned short 	FTDirection
+;	application routines type definitions 
+; typedef struct FTRecord 	FTRecord, *FTPtr, **FTHandle
+FTRecord 				RECORD	0
+procID					 ds.w   1		; offset: $0 (0)
+flags					 ds.l   1		; offset: $2 (2)
+errCode					 ds.w   1		; offset: $6 (6)
+refCon					 ds.l   1		; offset: $8 (8)
+userData				 ds.l   1		; offset: $C (12)
+defProc					 ds.l   1		; offset: $10 (16)
+config					 ds.l   1		; offset: $14 (20)
+oldConfig				 ds.l   1		; offset: $18 (24)
+environsProc			 ds.l   1		; offset: $1C (28)
+reserved1				 ds.l   1		; offset: $20 (32)
+reserved2				 ds.l   1		; offset: $24 (36)
+ftPrivate				 ds.l   1		; offset: $28 (40)
+sendProc				 ds.l   1		; offset: $2C (44)
+recvProc				 ds.l   1		; offset: $30 (48)
+writeProc				 ds.l   1		; offset: $34 (52)
+readProc				 ds.l   1		; offset: $38 (56)
+owner					 ds.l   1		; offset: $3C (60)
+direction				 ds.w   1		; offset: $40 (64)
+theReply				 ds     SFReply	; offset: $42 (66)
+writePtr				 ds.l   1		; offset: $8C (140)
+readPtr					 ds.l   1		; offset: $90 (144)
+theBuf					 ds.l   1		; offset: $94 (148)
+bufSize					 ds.l   1		; offset: $98 (152)
+autoRec					 ds.l   64		; offset: $9C (156)
+attributes				 ds.w   1		; offset: $19C (412)
+sizeof					 EQU *			; size:   $19E (414)
+						ENDR
+
+
+; FTReadProc messages 
+ftReadOpenFile					EQU		0					; count = forkFlags, buffer = pblock from PBGetFInfo 
+ftReadDataFork					EQU		1
+ftReadRsrcFork					EQU		2
+ftReadAbort						EQU		3
+ftReadComplete					EQU		4
+ftReadSetFPos					EQU		6					; count = forkFlags, buffer = pBlock same as PBSetFPos 
+ftReadGetFPos					EQU		7					; count = forkFlags, buffer = pBlock same as PBGetFPos 
+; FTWriteProc messages 
+ftWriteOpenFile					EQU		0					; count = forkFlags, buffer = pblock from PBGetFInfo 
+ftWriteDataFork					EQU		1
+ftWriteRsrcFork					EQU		2
+ftWriteAbort					EQU		3
+ftWriteComplete					EQU		4
+ftWriteFileInfo					EQU		5
+ftWriteSetFPos					EQU		6					; count = forkFlags, buffer = pBlock same as PBSetFPos 
+ftWriteGetFPos					EQU		7					; count = forkFlags, buffer = pBlock same as PBGetFPos 
+;	fork flags 
+ftOpenDataFork					EQU		1
+ftOpenRsrcFork					EQU		2
+
+;
+; pascal FTErr InitFT(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	InitFT
+	ENDIF
+
+;
+; pascal Handle FTGetVersion(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetVersion
+	ENDIF
+
+;
+; pascal short FTGetFTVersion(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetFTVersion
+	ENDIF
+
+;
+; pascal FTHandle FTNew(short procID, FTFlags flags, FileTransferSendUPP sendProc, FileTransferReceiveUPP recvProc, FileTransferReadUPP readProc, FileTransferWriteUPP writeProc, FileTransferEnvironsUPP environsProc, WindowPtr owner, long refCon, long userData)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTNew
+	ENDIF
+
+;
+; pascal void FTDispose(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTDispose
+	ENDIF
+
+;
+; pascal FTErr FTStart(FTHandle hFT, FTDirection direction, const SFReply *fileInfo)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTStart
+	ENDIF
+
+;
+; pascal FTErr FTAbort(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTAbort
+	ENDIF
+
+;
+; pascal FTErr FTSend(FTHandle hFT, short numFiles, FSSpecArrayPtr pFSSpec, FileTransferNotificationUPP notifyProc)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSend
+	ENDIF
+
+;
+; pascal FTErr FTReceive(FTHandle hFT, FSSpecPtr pFSSpec, FileTransferNotificationUPP notifyProc)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTReceive
+	ENDIF
+
+;
+; pascal void FTExec(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTExec
+	ENDIF
+
+;
+; pascal void FTActivate(FTHandle hFT, Boolean activate)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTActivate
+	ENDIF
+
+;
+; pascal void FTResume(FTHandle hFT, Boolean resume)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTResume
+	ENDIF
+
+;
+; pascal Boolean FTMenu(FTHandle hFT, short menuID, short item)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTMenu
+	ENDIF
+
+;
+; pascal short FTChoose(FTHandle *hFT, Point where, FileTransferChooseIdleUPP idleProc)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTChoose
+	ENDIF
+
+;
+; pascal void FTEvent(FTHandle hFT, const EventRecord *theEvent)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTEvent
+	ENDIF
+
+;
+; pascal Boolean FTValidate(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTValidate
+	ENDIF
+
+;
+; pascal void FTDefault(Ptr *theConfig, short procID, Boolean allocate)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTDefault
+	ENDIF
+
+;
+; pascal Handle FTSetupPreflight(short procID, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupPreflight
+	ENDIF
+
+;
+; pascal void FTSetupSetup(short procID, const void *theConfig, short count, DialogPtr theDialog, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupSetup
+	ENDIF
+
+;
+; pascal Boolean FTSetupFilter(short procID, const void *theConfig, short count, DialogPtr theDialog, EventRecord *theEvent, short *theItem, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupFilter
+	ENDIF
+
+;
+; pascal void FTSetupItem(short procID, const void *theConfig, short count, DialogPtr theDialog, short *theItem, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupItem
+	ENDIF
+
+;
+; pascal void FTSetupXCleanup(short procID, const void *theConfig, short count, DialogPtr theDialog, Boolean OKed, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupXCleanup
+	ENDIF
+
+;
+; pascal void FTSetupPostflight(short procID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetupPostflight
+	ENDIF
+
+;
+; pascal Ptr FTGetConfig(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetConfig
+	ENDIF
+
+;
+; pascal short FTSetConfig(FTHandle hFT, const void *thePtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetConfig
+	ENDIF
+
+;
+; pascal OSErr FTIntlToEnglish(FTHandle hFT, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTIntlToEnglish
+	ENDIF
+
+;
+; pascal OSErr FTEnglishToIntl(FTHandle hFT, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTEnglishToIntl
+	ENDIF
+
+;
+; pascal void FTGetToolName(short procID, Str255 name)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetToolName
+	ENDIF
+
+;
+; pascal short FTGetProcID(ConstStr255Param name)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetProcID
+	ENDIF
+
+;
+; pascal void FTSetRefCon(FTHandle hFT, long refCon)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetRefCon
+	ENDIF
+
+;
+; pascal long FTGetRefCon(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetRefCon
+	ENDIF
+
+;
+; pascal void FTSetUserData(FTHandle hFT, long userData)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTSetUserData
+	ENDIF
+
+;
+; pascal long FTGetUserData(FTHandle hFT)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetUserData
+	ENDIF
+
+;
+; pascal void FTGetErrorString(FTHandle hFT, short id, Str255 errMsg)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	FTGetErrorString
+	ENDIF
+
+	ENDIF ; __FILETRANSFERS__

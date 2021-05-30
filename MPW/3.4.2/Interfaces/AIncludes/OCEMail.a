@@ -1,0 +1,1973 @@
+;
+;	File:		OCEMail.a
+;
+;	Contains:	Apple Open Collaboration Environment OCEMail Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OCEMAIL__') = 'UNDEFINED' THEN
+__OCEMAIL__ SET 1
+
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Types.a'											;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'OSUtils.a'										;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__DIGITALSIGNATURE__') = 'UNDEFINED' THEN
+	include 'DigitalSignature.a'
+	ENDIF
+
+	IF &TYPE('__OCE__') = 'UNDEFINED' THEN
+	include 'OCE.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;		include 'Script.a'											;
+;			include 'IntlResources.a'								;
+
+	IF &TYPE('__OCEAUTHDIR__') = 'UNDEFINED' THEN
+	include 'OCEAuthDir.a'
+	ENDIF
+
+	IF &TYPE('__OCEMESSAGING__') = 'UNDEFINED' THEN
+	include 'OCEMessaging.a'
+	ENDIF
+; typedef union MSAMParam 	MSAMParam
+; typedef long 				MailMsgRef
+; reference to an open msam queue 
+; typedef long 				MSAMQueueRef
+; identifies slots managed by a PMSAM 
+; typedef unsigned short 	MSAMSlotID
+; reference to an active mailbox 
+; typedef long 				MailboxRef
+; identifies slots within a mailbox 
+; typedef unsigned short 	MailSlotID
+; identifies a letter in a mailbox 
+MailSeqNum 				RECORD	0
+slotID					 ds.w   1		; offset: $0 (0)
+seqNum					 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct MailSeqNum  MailSeqNum
+; A MailBuffer is used to describe a buffer used for an IO operation.
+;The location of the buffer is pointed to by 'buffer'. 
+;When reading, the size of the buffer is 'bufferSize' 
+;and the size of data actually read is 'dataSize'.
+;When writing, the size of data to be written is 'bufferSize' 
+;and the size of data actually written is 'dataSize'.
+;
+MailBuffer 				RECORD	0
+bufferSize				 ds.l   1		; offset: $0 (0)
+buffer					 ds.l   1		; offset: $4 (4)
+dataSize				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct MailBuffer  MailBuffer
+; A MailReply is used to describe a commonly used reply buffer format.
+;It contains a count of tuples followed by an array of tuples.
+;The format of the tuple itself depends on each particular call.
+;
+MailReply 				RECORD	0
+tupleCount				 ds.w   1		; offset: $0 (0)
+; tuple[tupleCount] 
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct MailReply 	MailReply
+; Shared Memory Communication Area used when Mail Manager sends 
+;High Level Events to a PMSAM. 
+;
+SMCA 					RECORD	0
+smcaLength				 ds.w   1		; offset: $0 (0)		; includes size of smcaLength field 
+result					 ds.w   1		; offset: $2 (2)
+userBytes				 ds.l   1		; offset: $4 (4)
+slotCID					 ds.l   2		; offset: $8 (8)		; for create/modify/delete slot calls 
+						 ORG 8
+msgHint					 ds.l   1		; offset: $8 (8)		; for kMailEPPCMsgOpened 
+						 ORG 16
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct SMCA 		SMCA
+;************************************************************************************
+; Value of creator and types fields for messages and blocks defined by MailManager 
+
+kMailAppleMailCreator			EQU		'apml'				; message and letter block creator 
+kMailLtrMsgType					EQU		'lttr'				; message type of letters, reports 
+kMailLtrHdrType					EQU		'lthd'				; contains letter header 
+kMailContentType				EQU		'body'				; contains content of letter 
+kMailEnclosureListType			EQU		'elst'				; contains list of enclosures 
+kMailEnclosureDesktopType		EQU		'edsk'				; contains desktop mgr info for enclosures 
+kMailEnclosureFileType			EQU		'asgl'				; contains a file enclosure 
+; format is defined by AppleSingle 
+kMailImageBodyType				EQU		'imag'				; contains image of letter 
+;		format is struct TPfPgDir - in Printing.h
+;	*	struct TPfPgDir {
+;	*		short	pageCount;		- number of pages in the image.
+;	*		long	iPgPos[129];	- iPgPos[n] is the offset from the start of the block
+;	*								- to image of page n.
+;	*								- iPgPos[n+1] - iPgPos[n] is the length of page n.
+;
+kMailMSAMType					EQU		'gwyi'				; contains msam specific information 
+kMailTunnelLtrType				EQU		'tunl'				; used to read a tunnelled message 
+kMailHopInfoType				EQU		'hopi'				; used to read hopInfo for a tunnelled message 
+kMailReportType					EQU		'rpti'				; contains report info 
+;
+;Reports have the isReport bit set in MailIndications and contain a block of type kMailReport.
+;This block has a header, IPMReportBlockHeader,
+;followed by an array of elements, each of type IPMRecipientReport
+;
+;Various families used by mail or related msgs
+;
+kMailFamily						EQU		'mail'				; Defines family of "mail" msgs: content, header, etc 
+kMailFamilyFile					EQU		'file'
+
+;************************************************************************************
+; typedef unsigned short 	MailAttributeID
+; Values of MailAttributeID 
+; Message store attributes - stored in the catalog 
+; Will always be present in a letter and have fixed sizes 
+
+kMailLetterFlagsBit				EQU		1					; MailLetterFlags 
+; Letter attributes - stored in the letter 
+;   Will always be present in a letter and have fixed sizes 
+kMailIndicationsBit				EQU		3					; MailIndications 
+kMailMsgTypeBit					EQU		4					; OCECreatorType 
+kMailLetterIDBit				EQU		5					; MailLetterID 
+kMailSendTimeStampBit			EQU		6					; MailTime 
+kMailNestingLevelBit			EQU		7					; MailNestingLevel 
+kMailMsgFamilyBit				EQU		8					; OSType 
+; Letter attributes - stored in the letter
+;   May be present in a letter and have fixed sizes 
+kMailReplyIDBit					EQU		9					; MailLetterID 
+kMailConversationIDBit			EQU		10					; MailLetterID 
+; Letter attributes - stored in the letter
+;   May be present in a letter and have variable length sizes 
+kMailSubjectBit					EQU		11					; RString 
+kMailFromBit					EQU		12					; MailRecipient 
+kMailToBit						EQU		13					; MailRecipient 
+kMailCcBit						EQU		14					; MailRecipient 
+kMailBccBit						EQU		15					; MailRecipient 
+
+; typedef unsigned long 	MailAttributeMask
+; Values of MailAttributeMask 
+
+kMailLetterFlagsMask			EQU		1
+kMailIndicationsMask			EQU		4
+kMailMsgTypeMask				EQU		8
+kMailLetterIDMask				EQU		16
+kMailSendTimeStampMask			EQU		32
+kMailNestingLevelMask			EQU		64
+kMailMsgFamilyMask				EQU		128
+kMailReplyIDMask				EQU		256
+kMailConversationIDMask			EQU		512
+kMailSubjectMask				EQU		1024
+kMailFromMask					EQU		2048
+kMailToMask						EQU		4096
+kMailCcMask						EQU		8192
+kMailBccMask					EQU		16384
+
+; typedef unsigned long 	MailAttributeBitmap
+;************************************************************************************
+; typedef unsigned short 	MailLetterSystemFlags
+; Values of MailLetterSystemFlags 
+; letter is available locally (either by nature or via cache) 
+
+kMailIsLocalBit					EQU		2
+
+kMailIsLocalMask				EQU		1 << kMailIsLocalBit
+
+; typedef unsigned short 	MailLetterUserFlags
+
+kMailReadBit					EQU		0					; this letter has been opened 
+kMailDontArchiveBit				EQU		1					; this letter is not 
+; to be archived either because 
+;										   it has already been archived or 
+;										   it should not be archived. 
+kMailInTrashBit					EQU		2					; this letter is in trash 
+
+; Values of MailLetterUserFlags 
+kMailReadMask					EQU		1
+kMailDontArchiveMask			EQU		2
+kMailInTrashMask				EQU		4
+
+MailLetterFlags 		RECORD	0
+sysFlags				 ds.w   1		; offset: $0 (0)
+userFlags				 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct MailLetterFlags  MailLetterFlags
+MailMaskedLetterFlags 	RECORD	0
+flagMask				 ds.l   1		; offset: $0 (0)		; flags that are to be set 
+flagValues				 ds.l   1		; offset: $4 (4)		; and their values 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct MailMaskedLetterFlags  MailMaskedLetterFlags
+
+kMailOriginalInReportBit		EQU		1
+kMailNonReceiptReportsBit		EQU		3
+kMailReceiptReportsBit			EQU		4
+kMailForwardedBit				EQU		5
+kMailPriorityBit				EQU		6
+kMailIsReportWithOriginalBit	EQU		8
+kMailIsReportBit				EQU		9
+kMailHasContentBit				EQU		10
+kMailHasSignatureBit			EQU		11
+kMailAuthenticatedBit			EQU		12
+kMailSentBit					EQU		13
+kMailNativeContentBit			EQU		14
+kMailImageContentBit			EQU		15
+kMailStandardContentBit			EQU		16
+
+; Values of MailIndications 
+kMailStandardContentMask		EQU		65536
+kMailImageContentMask			EQU		32768
+kMailNativeContentMask			EQU		16384
+kMailSentMask					EQU		8192
+kMailAuthenticatedMask			EQU		4096
+kMailHasSignatureMask			EQU		2048
+kMailHasContentMask				EQU		1024
+kMailIsReportMask				EQU		512
+kMailIsReportWithOriginalMask	EQU		256
+kMailPriorityMask				EQU		96
+kMailForwardedMask				EQU		32
+kMailReceiptReportsMask			EQU		16
+kMailNonReceiptReportsMask		EQU		8
+kMailOriginalInReportMask		EQU		3
+
+; typedef unsigned long 	MailIndications
+; values of the field originalInReport in MailIndications 
+
+kMailNoOriginal					EQU		0					; do not enclose original in reports 
+kMailEncloseOnNonReceipt		EQU		3					; enclose original in non-delivery reports 
+
+; typedef IPMMsgID 			MailLetterID
+MailTime 				RECORD	0
+time					 ds.l   1		; offset: $0 (0)		; current UTC(GMT) time 
+offset					 ds.l   1		; offset: $4 (4)		; offset from GMT 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct MailTime 	MailTime
+; innermost letter has nestingLevel 0 
+; typedef unsigned short 	MailNestingLevel
+; typedef OCERecipient 		MailRecipient
+;************************************************************************************
+
+kMailTextSegmentBit				EQU		0
+kMailPictSegmentBit				EQU		1
+kMailSoundSegmentBit			EQU		2
+kMailStyledTextSegmentBit		EQU		3
+kMailMovieSegmentBit			EQU		4
+
+; typedef unsigned short 	MailSegmentMask
+; Values of MailSegmentMask 
+
+kMailTextSegmentMask			EQU		1
+kMailPictSegmentMask			EQU		2
+kMailSoundSegmentMask			EQU		4
+kMailStyledTextSegmentMask		EQU		8
+kMailMovieSegmentMask			EQU		16
+
+; typedef unsigned short 	MailSegmentType
+; Values of MailSegmentType 
+
+kMailInvalidSegmentType			EQU		0
+kMailTextSegmentType			EQU		1
+kMailPictSegmentType			EQU		2
+kMailSoundSegmentType			EQU		3
+kMailStyledTextSegmentType		EQU		4
+kMailMovieSegmentType			EQU		5
+
+;************************************************************************************
+kMailErrorLogEntryVersion		EQU		$101
+kMailMSAMErrorStringListID		EQU		128					; These 'STR#' resources should be 
+kMailMSAMActionStringListID		EQU		129					; in the PMSAM resource fork 
+
+; typedef unsigned short 	MailLogErrorType
+; Values of MailLogErrorType 
+
+kMailELECorrectable				EQU		0
+kMailELEError					EQU		1
+kMailELEWarning					EQU		2
+kMailELEInformational			EQU		3
+
+; typedef short 			MailLogErrorCode
+; Values of MailLogErrorCode 
+
+kMailMSAMErrorCode				EQU		0					; positive codes are indices into
+;												   PMSAM defined strings 
+kMailMiscError					EQU		-1					; negative codes are OCE defined 
+kMailNoModem					EQU		-2					; modem required, but missing 
+
+MailErrorLogEntryInfo 	RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+timeOccurred			 ds.l   1		; offset: $2 (2)		; do not fill in 
+reportingPMSAM			 ds.l   8		; offset: $6 (6)		; do not fill in 
+reportingMSAMSlot		 ds.l   8		; offset: $26 (38)		; do not fill in 
+errorType				 ds.w   1		; offset: $46 (70)
+errorCode				 ds.w   1		; offset: $48 (72)
+errorResource			 ds.w   1		; offset: $4A (74)		; resources are valid if 
+actionResource			 ds.w   1		; offset: $4C (76)		; errorCode = kMailMSAMErrorCode
+;												   index starts from 1 
+filler					 ds.l   1		; offset: $4E (78)
+filler2					 ds.w   1		; offset: $52 (82)
+sizeof					 EQU *			; size:   $54 (84)
+						ENDR
+
+; typedef struct MailErrorLogEntryInfo  MailErrorLogEntryInfo
+;************************************************************************************
+; typedef short 			MailBlockMode
+; Values of MailBlockMode 
+
+kMailFromStart					EQU		1					; write data from offset calculated from 
+kMailFromLEOB					EQU		2					; start of block, end of block, 
+kMailFromMark					EQU		3					; or from the current mark 
+
+MailEnclosureInfo 		RECORD	0
+enclosureName			 ds.l   1		; offset: $0 (0)
+catInfo					 ds.l   1		; offset: $4 (4)
+comment					 ds.l   1		; offset: $8 (8)
+icon					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct MailEnclosureInfo  MailEnclosureInfo
+;************************************************************************************
+
+kOCESetupLocationNone			EQU		0					; disconnect state 
+kOCESetupLocationMax			EQU		8					; maximum location value 
+
+; typedef char 				OCESetupLocation
+; location state is a bitmask, 0x1=>1st location active, 
+; * 0x2 => 2nd, 0x4 => 3rd, etc.
+; 
+; typedef unsigned char 	MailLocationFlags
+MailLocationInfo 		RECORD	0
+location				 ds.b   1		; offset: $0 (0)
+active					 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct MailLocationInfo  MailLocationInfo
+;************************************************************************************
+; Definitions for Personal MSAMs 
+;************************************************************************************
+
+kMailEPPCMsgVersion				EQU		3
+
+MailEPPCMsg 			RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+theSMCA					 ds.l   1		; offset: $2 (2)		; for 'crsl', 'mdsl', 'dlsl', 'sndi', 'msgo', 'admn' 
+						 ORG 2
+sequenceNumber			 ds.l   1		; offset: $2 (2)		; for 'inqu', 'dlom' 
+						 ORG 2
+locationInfo			 ds.w   1		; offset: $2 (2)		; for 'locc' 
+						 ORG 6
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct MailEPPCMsg  MailEPPCMsg
+; Values of OCE defined High Level Event message classes 
+
+kMailEPPCCreateSlot				EQU		'crsl'
+kMailEPPCModifySlot				EQU		'mdsl'
+kMailEPPCDeleteSlot				EQU		'dlsl'
+kMailEPPCShutDown				EQU		'quit'
+kMailEPPCMailboxOpened			EQU		'mbop'
+kMailEPPCMailboxClosed			EQU		'mbcl'
+kMailEPPCMsgPending				EQU		'msgp'
+kMailEPPCSendImmediate			EQU		'sndi'
+kMailEPPCContinue				EQU		'cont'
+kMailEPPCSchedule				EQU		'sked'
+kMailEPPCAdmin					EQU		'admn'
+kMailEPPCInQUpdate				EQU		'inqu'
+kMailEPPCMsgOpened				EQU		'msgo'
+kMailEPPCDeleteOutQMsg			EQU		'dlom'
+kMailEPPCWakeup					EQU		'wkup'
+kMailEPPCLocationChanged		EQU		'locc'
+
+MailTimer 				RECORD	0
+frequency				 ds.l   1		; offset: $0 (0)		; how often to connect 
+						 ORG 0
+connectTime				 ds.l   1		; offset: $0 (0)		; time since midnight 
+						 ORG 4
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef union MailTimer 	MailTimer
+
+kMailTimerOff					EQU		0					; control is off 
+kMailTimerTime					EQU		1					; specifies connect time (relative to midnight) 
+kMailTimerFrequency				EQU		2					; specifies connect frequency 
+
+; typedef Byte 				MailTimerKind
+MailTimers 				RECORD	0
+sendTimeKind			 ds.b   1		; offset: $0 (0)		; either kMailTimerTime or kMailTimerFrequency 
+receiveTimeKind			 ds.b   1		; offset: $1 (1)		; either kMailTimerTime or kMailTimerFrequency 
+send					 ds.l   1		; offset: $2 (2)
+receive					 ds.l   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct MailTimers  MailTimers
+MailStandardSlotInfoAttribute RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+active					 ds.b   1		; offset: $2 (2)		; active if MailLocationMask(i) is set 
+padByte					 ds.b   1		; offset: $3 (3)
+sendReceiveTimer		 ds.w   5		; offset: $4 (4)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct MailStandardSlotInfoAttribute  MailStandardSlotInfoAttribute
+PMSAMGetMSAMRecordPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msamCID					 ds.l   2		; offset: $18 (24)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct PMSAMGetMSAMRecordPB  PMSAMGetMSAMRecordPB
+PMSAMOpenQueuesPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+inQueueRef				 ds.l   1		; offset: $18 (24)
+outQueueRef				 ds.l   1		; offset: $1C (28)
+msamSlotID				 ds.w   1		; offset: $20 (32)
+filler					 ds.l   2		; offset: $22 (34)
+sizeof					 EQU *			; size:   $2A (42)
+						ENDR
+
+; typedef struct PMSAMOpenQueuesPB  PMSAMOpenQueuesPB
+; typedef unsigned short 	PMSAMStatus
+; Values of PMSAMStatus 
+
+kPMSAMStatusPending				EQU		1					; for inQueue and outQueue 
+kPMSAMStatusError				EQU		2					; for inQueue and outQueue 
+kPMSAMStatusSending				EQU		3					; for outQueue only 
+kPMSAMStatusCaching				EQU		4					; for inQueue only 
+kPMSAMStatusSent				EQU		5					; for outQueue only 
+
+PMSAMSetStatusPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+msgHint					 ds.l   1		; offset: $20 (32)		; for posting cache error,set this to 0 when report outq status 
+status					 ds.w   1		; offset: $24 (36)
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct PMSAMSetStatusPB  PMSAMSetStatusPB
+PMSAMLogErrorPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msamSlotID				 ds.w   1		; offset: $18 (24)		; 0 for PMSAM errors 
+logEntry				 ds.l   1		; offset: $1A (26)
+filler					 ds.l   2		; offset: $1E (30)
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct PMSAMLogErrorPB  PMSAMLogErrorPB
+;**************************************************************************************
+
+kMailMsgSummaryVersion			EQU		1
+
+MailMasterData 			RECORD	0
+attrMask				 ds.l   1		; offset: $0 (0)		; indicates attributes present in MsgSummary 
+messageID				 ds.l   4		; offset: $4 (4)
+replyID					 ds.l   4		; offset: $14 (20)
+conversationID			 ds.l   4		; offset: $24 (36)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct MailMasterData  MailMasterData
+; Values for addressedToMe in struct MailCoreData 
+
+kAddressedAs_TO					EQU		$1
+kAddressedAs_CC					EQU		$2
+kAddressedAs_BCC				EQU		$4
+
+MailCoreData 			RECORD	0
+letterFlags				 ds.l   1		; offset: $0 (0)
+messageSize				 ds.l   1		; offset: $4 (4)
+letterIndications		 ds.l   1		; offset: $8 (8)
+messageType				 ds     OCECreatorType ; offset: $C (12)
+sendTime				 ds.l   2		; offset: $14 (20)
+messageFamily			 ds.l   1		; offset: $1C (28)
+reserved				 ds.b   1		; offset: $20 (32)
+addressedToMe			 ds.b   1		; offset: $21 (33)
+agentInfo				 ds.b   6		; offset: $22 (34)		; 6 bytes of special info [set to zero]
+;	* these are variable length and even padded 
+sender					 ds.l   9		; offset: $28 (40)		; recipient's entityName (trunc)
+subject					 ds.l   9		; offset: $4C (76)		; subject maybe truncated 
+sizeof					 EQU *			; size:   $70 (112)
+						ENDR
+
+; typedef struct MailCoreData  MailCoreData
+MSAMMsgSummary 			RECORD	0
+version					 ds.w   1		; offset: $0 (0)		; following flags are defaulted by Toolbox 
+msgDeleted				 ds.b   1		; offset: $2 (2)		; true if msg is to be deleted by PMSAM 
+msgUpdated				 ds.b   1		; offset: $3 (3)		; true if msgSummary was updated by MailManager 
+msgCached				 ds.b   1		; offset: $4 (4)		; true if msg is in the slot's InQueue 
+padByte					 ds.b   1		; offset: $5 (5)
+masterData				 ds.l   13		; offset: $6 (6)
+coreData				 ds.l   28		; offset: $3A (58)
+sizeof					 EQU *			; size:   $AA (170)
+						ENDR
+
+; typedef struct MSAMMsgSummary  MSAMMsgSummary
+; PMSAM can put up to 128 bytes of private msg summary data 
+
+kMailMaxPMSAMMsgSummaryData		EQU		128
+
+PMSAMCreateMsgSummaryPB RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+inQueueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)		; <- seq of the new message 
+msgSummary				 ds.l   1		; offset: $20 (32)		; attributes and mask filled in 
+buffer					 ds.l   1		; offset: $24 (36)		; PMSAM specific data to be appended 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct PMSAMCreateMsgSummaryPB  PMSAMCreateMsgSummaryPB
+PMSAMPutMsgSummaryPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+inQueueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+letterFlags				 ds.l   1		; offset: $20 (32)		; if not nil, then set msgStoreFlags 
+buffer					 ds.l   1		; offset: $24 (36)		; PMSAM specific data to be overwritten 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct PMSAMPutMsgSummaryPB  PMSAMPutMsgSummaryPB
+PMSAMGetMsgSummaryPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+inQueueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+msgSummary				 ds.l   1		; offset: $20 (32)		; if not nil, then read in the msgSummary 
+buffer					 ds.l   1		; offset: $24 (36)		; PMSAM specific data to be read 
+msgSummaryOffset		 ds.w   1		; offset: $28 (40)		; offset of PMSAM specific data
+;											   from start of MsgSummary 
+sizeof					 EQU *			; size:   $2A (42)
+						ENDR
+
+; typedef struct PMSAMGetMsgSummaryPB  PMSAMGetMsgSummaryPB
+;**************************************************************************************
+; Definitions for Server MSAMs 
+;************************************************************************************
+; typedef unsigned short 	SMSAMAdminCode
+; Values of SMSAMAdminCode 
+
+kSMSAMNotifyFwdrSetupChange		EQU		1
+kSMSAMNotifyFwdrNameChange		EQU		2
+kSMSAMNotifyFwdrPwdChange		EQU		3
+kSMSAMGetDynamicFwdrParams		EQU		4
+
+; typedef unsigned long 	SMSAMSlotChanges
+
+kSMSAMFwdrHomeInternetChangedBit EQU		0
+kSMSAMFwdrConnectedToChangedBit	EQU		1
+kSMSAMFwdrForeignRLIsChangedBit	EQU		2
+kSMSAMFwdrMnMServerChangedBit	EQU		3
+
+; Values of SMSAMSlotChanges 
+kSMSAMFwdrEverythingChangedMask	EQU		-1
+kSMSAMFwdrHomeInternetChangedMask EQU		1 << kSMSAMFwdrHomeInternetChangedBit
+kSMSAMFwdrConnectedToChangedMask EQU		1 << kSMSAMFwdrConnectedToChangedBit
+kSMSAMFwdrForeignRLIsChangedMask EQU		1 << kSMSAMFwdrForeignRLIsChangedBit
+kSMSAMFwdrMnMServerChangedMask	EQU		1 << kSMSAMFwdrMnMServerChangedBit
+
+; kSMSAMNotifyFwdrSetupChange 
+SMSAMSetupChange 		RECORD	0
+whatChanged				 ds.l   1		; offset: $0 (0)		;  --> bitmap of what parameters changed 
+serverHint				 ds     AddrBlock ; offset: $4 (4)		;  --> try this ADAP server first 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct SMSAMSetupChange  SMSAMSetupChange
+; kSMSAMNotifyFwdrNameChange 
+SMSAMNameChange 		RECORD	0
+newName					 ds.l   65		; offset: $0 (0)		;  --> msams new name 
+serverHint				 ds     AddrBlock ; offset: $104 (260)	;  --> try this ADAP server first 
+sizeof					 EQU *			; size:   $108 (264)
+						ENDR
+
+; typedef struct SMSAMNameChange  SMSAMNameChange
+; kSMSAMNotifyFwdrPasswordChange 
+SMSAMPasswordChange 	RECORD	0
+newPassword				 ds.l   65		; offset: $0 (0)		;  --> msams new password 
+serverHint				 ds     AddrBlock ; offset: $104 (260)	;  --> try this ADAP server first 
+sizeof					 EQU *			; size:   $108 (264)
+						ENDR
+
+; typedef struct SMSAMPasswordChange  SMSAMPasswordChange
+; kSMSAMGetDynamicFwdrParams 
+SMSAMDynamicParams 		RECORD	0
+curDiskUsed				 ds.l   1		; offset: $0 (0)		; <--  amount of disk space used by msam 
+curMemoryUsed			 ds.l   1		; offset: $4 (4)		; <--  amount of memory used by msam 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct SMSAMDynamicParams  SMSAMDynamicParams
+SMSAMAdminEPPCRequest 	RECORD	0
+adminCode				 ds.w   1		; offset: $0 (0)
+setupChange				 ds.l   2		; offset: $2 (2)
+						 ORG 2
+nameChange				 ds.l   66		; offset: $2 (2)
+						 ORG 2
+passwordChange			 ds.l   66		; offset: $2 (2)
+						 ORG 2
+dynamicParams			 ds.l   2		; offset: $2 (2)
+						 ORG 266
+sizeof					 EQU *			; size:   $10A (266)
+						ENDR
+
+; typedef struct SMSAMAdminEPPCRequest  SMSAMAdminEPPCRequest
+SMSAMSetupPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+serverMSAM				 ds.l   1		; offset: $18 (24)
+password				 ds.l   1		; offset: $1C (28)
+gatewayType				 ds.l   1		; offset: $20 (32)
+gatewayTypeDescription	 ds.l   1		; offset: $24 (36)
+catalogServerHint		 ds     AddrBlock ; offset: $28 (40)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct SMSAMSetupPB  SMSAMSetupPB
+SMSAMStartupPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msamIdentity			 ds.l   1		; offset: $18 (24)
+queueRef				 ds.l   1		; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct SMSAMStartupPB  SMSAMStartupPB
+SMSAMShutdownPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct SMSAMShutdownPB  SMSAMShutdownPB
+;**************************************************************************************
+; Definitions for reading and writing MSAM Letters 
+;**************************************************************************************
+MSAMEnumeratePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+startSeqNum				 ds.l   1		; offset: $1C (28)
+nextSeqNum				 ds.l   1		; offset: $20 (32)
+; buffer contains a Mail Reply. Each tuple is a 
+;	MSAMEnumerateInQReply when enumerating the inQueue
+;	MSAMEnumerateOutQReply when enumerating the outQueue 
+buffer					 ds.l   3		; offset: $24 (36)
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct MSAMEnumeratePB  MSAMEnumeratePB
+MSAMEnumerateInQReply 	RECORD	0
+seqNum					 ds.l   1		; offset: $0 (0)
+msgDeleted				 ds.b   1		; offset: $4 (4)		; true if msg is to be deleted by PMSAM 
+msgUpdated				 ds.b   1		; offset: $5 (5)		; true if MsgSummary has been updated by TB 
+msgCached				 ds.b   1		; offset: $6 (6)		; true if msg is in the incoming queue 
+padByte					 ds.b   1		; offset: $7 (7)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct MSAMEnumerateInQReply  MSAMEnumerateInQReply
+MSAMEnumerateOutQReply 	RECORD	0
+seqNum					 ds.l   1		; offset: $0 (0)
+done					 ds.b   1		; offset: $4 (4)		; true if all responsible recipients have been processed 
+priority				 ds.b   1		; offset: $5 (5)
+msgFamily				 ds.l   1		; offset: $6 (6)
+approxSize				 ds.l   1		; offset: $A (10)
+tunnelForm				 ds.b   1		; offset: $E (14)		; true if this letter has to be tunnelled 
+padByte					 ds.b   1		; offset: $F (15)
+nextHop					 ds.l   9		; offset: $10 (16)		; valid if tunnelForm is true 
+msgType					 ds     OCECreatorType ; offset: $34 (52)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct MSAMEnumerateOutQReply  MSAMEnumerateOutQReply
+MSAMDeletePB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+msgOnly					 ds.b   1		; offset: $20 (32)		; only valid for PMSAM & inQueue 
+; set true to delete message but not msgSummary 
+padByte					 ds.b   1		; offset: $21 (33)
+; only valid for SMSAM & tunnelled messages 
+result					 ds.w   1		; offset: $22 (34)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct MSAMDeletePB  MSAMDeletePB
+MSAMOpenPB 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+mailMsgRef				 ds.l   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct MSAMOpenPB  MSAMOpenPB
+MSAMOpenNestedPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+nestedRef				 ds.l   1		; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct MSAMOpenNestedPB  MSAMOpenNestedPB
+MSAMClosePB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct MSAMClosePB  MSAMClosePB
+MSAMGetMsgHeaderPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+selector				 ds.b   1		; offset: $1C (28)
+filler1					 ds.b   1		; offset: $1D (29)
+offset					 ds.l   1		; offset: $1E (30)
+buffer					 ds.l   3		; offset: $22 (34)
+remaining				 ds.l   1		; offset: $2E (46)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct MSAMGetMsgHeaderPB  MSAMGetMsgHeaderPB
+MSAMGetAttributesPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+requestMask				 ds.l   1		; offset: $1C (28)		; kMailIndicationsBit thru kMailSubjectBit 
+buffer					 ds.l   3		; offset: $20 (32)
+;	buffer returned will contain the attribute values of 
+;		the attributes indicated in responseMask, 
+;		from the attribute indicated by the least significant bit set
+;		to the attribute indicated by the most significant bit set.
+;		Note that recipients - from, to, cc, bcc cannot be read using
+;		this call. Use GetRecipients to read these. 
+responseMask			 ds.l   1		; offset: $2C (44)
+more					 ds.b   1		; offset: $30 (48)
+filler1					 ds.b   1		; offset: $31 (49)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct MSAMGetAttributesPB  MSAMGetAttributesPB
+; attrID value to get resolved recipient list 
+
+kMailResolvedList				EQU		0
+
+MailOriginalRecipient 	RECORD	0
+index					 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; Followed by OCEPackedRecipient 
+; typedef struct MailOriginalRecipient  MailOriginalRecipient
+MailResolvedRecipient 	RECORD	0
+index					 ds.w   1		; offset: $0 (0)
+recipientFlags			 ds.w   1		; offset: $2 (2)
+responsible				 ds.b   1		; offset: $4 (4)
+padByte					 ds.b   1		; offset: $5 (5)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; Followed by OCEPackedRecipient 
+; typedef struct MailResolvedRecipient  MailResolvedRecipient
+MSAMGetRecipientsPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+attrID					 ds.w   1		; offset: $1C (28)		; kMailFromBit thru kMailBccBit 
+startIndex				 ds.w   1		; offset: $1E (30)		; starts at 1 
+buffer					 ds.l   3		; offset: $20 (32)
+; 	buffer contains a Mail Reply. Each tuple is a
+;		MailOriginalRecipient if getting original recipients 
+;								ie the attrID is kMail[From, To, Cc, Bcc]Bit
+;		MailResolvedRecipient if getting resolved reicpients
+;								ie the attrID is kMailResolvedList
+;		Both tuples are word alligned.  
+nextIndex				 ds.w   1		; offset: $2C (44)
+more					 ds.b   1		; offset: $2E (46)
+filler1					 ds.b   1		; offset: $2F (47)
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct MSAMGetRecipientsPB  MSAMGetRecipientsPB
+MSAMGetContentPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+segmentMask				 ds.w   1		; offset: $1C (28)
+buffer					 ds.l   3		; offset: $1E (30)
+textScrap				 ds.l   1		; offset: $2A (42)
+script					 ds.w   1		; offset: $2E (46)
+segmentType				 ds.w   1		; offset: $30 (48)
+endOfScript				 ds.b   1		; offset: $32 (50)
+endOfSegment			 ds.b   1		; offset: $33 (51)
+endOfContent			 ds.b   1		; offset: $34 (52)
+filler1					 ds.b   1		; offset: $35 (53)
+segmentLength			 ds.l   1		; offset: $36 (54)		; NEW: <-  valid first call in a segment 
+segmentID				 ds.l   1		; offset: $3A (58)		; NEW: <-> identifier for this segment 
+sizeof					 EQU *			; size:   $3E (62)
+						ENDR
+
+; typedef struct MSAMGetContentPB  MSAMGetContentPB
+MSAMGetEnclosurePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+contentEnclosure		 ds.b   1		; offset: $1C (28)
+padByte					 ds.b   1		; offset: $1D (29)
+buffer					 ds.l   3		; offset: $1E (30)
+endOfFile				 ds.b   1		; offset: $2A (42)
+endOfEnclosures			 ds.b   1		; offset: $2B (43)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct MSAMGetEnclosurePB  MSAMGetEnclosurePB
+MailBlockInfo 			RECORD	0
+blockType				 ds     OCECreatorType ; offset: $0 (0)
+offset					 ds.l   1		; offset: $8 (8)
+blockLength				 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct MailBlockInfo  MailBlockInfo
+MSAMEnumerateBlocksPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+startIndex				 ds.w   1		; offset: $1C (28)		; starts at 1 
+buffer					 ds.l   3		; offset: $1E (30)
+; 	buffer contains a Mail Reply. Each tuple is a MailBlockInfo 
+nextIndex				 ds.w   1		; offset: $2A (42)
+more					 ds.b   1		; offset: $2C (44)
+filler1					 ds.b   1		; offset: $2D (45)
+sizeof					 EQU *			; size:   $2E (46)
+						ENDR
+
+; typedef struct MSAMEnumerateBlocksPB  MSAMEnumerateBlocksPB
+MSAMGetBlockPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+blockType				 ds     OCECreatorType ; offset: $1C (28)
+blockIndex				 ds.w   1		; offset: $24 (36)
+buffer					 ds.l   3		; offset: $26 (38)
+dataOffset				 ds.l   1		; offset: $32 (50)
+endOfBlock				 ds.b   1		; offset: $36 (54)
+padByte					 ds.b   1		; offset: $37 (55)
+remaining				 ds.l   1		; offset: $38 (56)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct MSAMGetBlockPB  MSAMGetBlockPB
+; YOU SHOULD BE USING THE NEW FORM OF MARK RECIPIENTS
+; * THIS VERSION IS MUCH SLOWER AND KEPT FOR COMPATIBILITY
+; * REASONS.
+;
+; not valid for tunnel form letters 
+MSAMMarkRecipientsPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+seqNum					 ds.l   1		; offset: $1C (28)
+; 	buffer contains a Mail Reply. Each tuple is an unsigned short,
+;		the index of a recipient to be marked. 
+buffer					 ds.l   3		; offset: $20 (32)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct MSAMMarkRecipientsPB  MSAMMarkRecipientsPB
+; 
+; * same as MSAMMarkRecipients except it takes a mailMsgRef instead of 
+; * queueRef, seqNum 
+;
+; not valid for tunnel form letters 
+MSAMnMarkRecipientsPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+; 	buffer contains a Mail Reply. Each tuple is an unsigned short,
+;		the index of a recipient to be marked. 
+buffer					 ds.l   3		; offset: $1C (28)
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct MSAMnMarkRecipientsPB  MSAMnMarkRecipientsPB
+;**************************************************************************************
+MSAMCreatePB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+asLetter				 ds.b   1		; offset: $1C (28)		; indicate if we should create as letter or msg 
+filler1					 ds.b   1		; offset: $1D (29)
+msgType					 ds     IPMMsgType ; offset: $1E (30)	; up to application discretion: must be of IPMSenderTag
+;										   kIPMOSFormatType for asLetter=true 
+refCon					 ds.l   1		; offset: $42 (66)		; for messages only 
+seqNum					 ds.l   1		; offset: $46 (70)		; set if creating message in the inQueue 
+tunnelForm				 ds.b   1		; offset: $4A (74)		; if true tunnelForm else newForm 
+bccRecipients			 ds.b   1		; offset: $4B (75)		; true if creating letter with bcc recipients 
+newRef					 ds.l   1		; offset: $4C (76)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct MSAMCreatePB  MSAMCreatePB
+MSAMBeginNestedPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+refCon					 ds.l   1		; offset: $1C (28)		; for messages only 
+msgType					 ds     IPMMsgType ; offset: $20 (32)
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct MSAMBeginNestedPB  MSAMBeginNestedPB
+MSAMEndNestedPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct MSAMEndNestedPB  MSAMEndNestedPB
+MSAMSubmitPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+submitFlag				 ds.b   1		; offset: $1C (28)
+padByte					 ds.b   1		; offset: $1D (29)
+msgID					 ds.l   4		; offset: $1E (30)
+sizeof					 EQU *			; size:   $2E (46)
+						ENDR
+
+; typedef struct MSAMSubmitPB  MSAMSubmitPB
+MSAMPutMsgHeaderPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+replyQueue				 ds.l   1		; offset: $1C (28)
+sender					 ds.l   1		; offset: $20 (32)
+deliveryNotification	 ds.b   1		; offset: $24 (36)
+priority				 ds.b   1		; offset: $25 (37)
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct MSAMPutMsgHeaderPB  MSAMPutMsgHeaderPB
+MSAMPutAttributePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+attrID					 ds.w   1		; offset: $1C (28)		; kMailIndicationsBit thru kMailSubjectBit 
+buffer					 ds.l   3		; offset: $1E (30)
+sizeof					 EQU *			; size:   $2A (42)
+						ENDR
+
+; typedef struct MSAMPutAttributePB  MSAMPutAttributePB
+MSAMPutRecipientPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+attrID					 ds.w   1		; offset: $1C (28)		; kMailFromBit thru kMailBccBit 
+recipient				 ds.l   1		; offset: $1E (30)
+responsible				 ds.b   1		; offset: $22 (34)		; valid for server and message msams only 
+filler1					 ds.b   1		; offset: $23 (35)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct MSAMPutRecipientPB  MSAMPutRecipientPB
+MSAMPutContentPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+segmentType				 ds.w   1		; offset: $1C (28)
+append					 ds.b   1		; offset: $1E (30)
+padByte					 ds.b   1		; offset: $1F (31)
+buffer					 ds.l   3		; offset: $20 (32)
+textScrap				 ds.l   1		; offset: $2C (44)
+startNewScript			 ds.b   1		; offset: $30 (48)
+filler1					 ds.b   1		; offset: $31 (49)
+script					 ds.w   1		; offset: $32 (50)		; valid only if startNewScript is true 
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct MSAMPutContentPB  MSAMPutContentPB
+MSAMPutEnclosurePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+contentEnclosure		 ds.b   1		; offset: $1C (28)
+padByte					 ds.b   1		; offset: $1D (29)
+hfs						 ds.b   1		; offset: $1E (30)		; true => in file system, false => in memory 
+append					 ds.b   1		; offset: $1F (31)
+buffer					 ds.l   3		; offset: $20 (32)		; Unused if hfs == true 
+enclosure				 ds     FSSpec	; offset: $2C (44)
+addlInfo				 ds.l   4		; offset: $72 (114)
+sizeof					 EQU *			; size:   $82 (130)
+						ENDR
+
+; typedef struct MSAMPutEnclosurePB  MSAMPutEnclosurePB
+MSAMPutBlockPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+refCon					 ds.l   1		; offset: $1C (28)		; for messages only 
+blockType				 ds     OCECreatorType ; offset: $20 (32)
+append					 ds.b   1		; offset: $28 (40)
+filler1					 ds.b   1		; offset: $29 (41)
+buffer					 ds.l   3		; offset: $2A (42)
+mode					 ds.w   1		; offset: $36 (54)		; if blockType is kMailTunnelLtrType or kMailHopInfoType
+;									   mode is assumed to be kMailFromMark 
+offset					 ds.l   1		; offset: $38 (56)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct MSAMPutBlockPB  MSAMPutBlockPB
+;**************************************************************************************
+MSAMCreateReportPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)		; to distinguish personal and server MSAMs 
+mailMsgRef				 ds.l   1		; offset: $1C (28)
+msgID					 ds.l   4		; offset: $20 (32)		; kMailLetterIDBit of letter being reported upon 
+sender					 ds.l   1		; offset: $30 (48)		; sender of the letter you are creating report on 
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct MSAMCreateReportPB  MSAMCreateReportPB
+MSAMPutRecipientReportPB RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailMsgRef				 ds.l   1		; offset: $18 (24)
+recipientIndex			 ds.w   1		; offset: $1C (28)		; recipient index in the original letter 
+result					 ds.w   1		; offset: $1E (30)		; result of sending the recipient 
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct MSAMPutRecipientReportPB  MSAMPutRecipientReportPB
+;**************************************************************************************
+MailWakeupPMSAMPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+pmsamCID				 ds.l   2		; offset: $18 (24)
+mailSlotID				 ds.w   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $22 (34)
+						ENDR
+
+; typedef struct MailWakeupPMSAMPB  MailWakeupPMSAMPB
+MailCreateMailSlotPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailboxRef				 ds.l   1		; offset: $18 (24)
+timeout					 ds.l   1		; offset: $1C (28)
+pmsamCID				 ds.l   2		; offset: $20 (32)
+smca					 ds.l   4		; offset: $28 (40)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct MailCreateMailSlotPB  MailCreateMailSlotPB
+MailModifyMailSlotPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+mailboxRef				 ds.l   1		; offset: $18 (24)
+timeout					 ds.l   1		; offset: $1C (28)
+pmsamCID				 ds.l   2		; offset: $20 (32)
+smca					 ds.l   4		; offset: $28 (40)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct MailModifyMailSlotPB  MailModifyMailSlotPB
+;**************************************************************************************
+MSAMParam 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+						 ORG 0
+pmsamGetMSAMRecord		 ds.l   8		; offset: $0 (0)
+						 ORG 0
+pmsamOpenQueues			 ds.w   21		; offset: $0 (0)
+						 ORG 0
+pmsamSetStatus			 ds.w   19		; offset: $0 (0)
+						 ORG 0
+pmsamLogError			 ds.w   19		; offset: $0 (0)
+						 ORG 0
+smsamSetup				 ds.l   11		; offset: $0 (0)
+						 ORG 0
+smsamStartup			 ds.l   8		; offset: $0 (0)
+						 ORG 0
+smsamShutdown			 ds.l   7		; offset: $0 (0)
+						 ORG 0
+msamEnumerate			 ds.l   12		; offset: $0 (0)
+						 ORG 0
+msamDelete				 ds.l   9		; offset: $0 (0)
+						 ORG 0
+msamOpen				 ds.l   9		; offset: $0 (0)
+						 ORG 0
+msamOpenNested			 ds.l   8		; offset: $0 (0)
+						 ORG 0
+msamClose				 ds.l   7		; offset: $0 (0)
+						 ORG 0
+msamGetMsgHeader		 ds.w   25		; offset: $0 (0)
+						 ORG 0
+msamGetAttributes		 ds.w   25		; offset: $0 (0)
+						 ORG 0
+msamGetRecipients		 ds.l   12		; offset: $0 (0)
+						 ORG 0
+msamGetContent			 ds.w   31		; offset: $0 (0)
+						 ORG 0
+msamGetEnclosure		 ds.l   11		; offset: $0 (0)
+						 ORG 0
+msamEnumerateBlocks		 ds.w   23		; offset: $0 (0)
+						 ORG 0
+msamGetBlock			 ds.l   15		; offset: $0 (0)
+						 ORG 0
+msamMarkRecipients		 ds.l   11		; offset: $0 (0)
+						 ORG 0
+msamnMarkRecipients		 ds.l   10		; offset: $0 (0)
+						 ORG 0
+msamCreate				 ds.l   20		; offset: $0 (0)
+						 ORG 0
+msamBeginNested			 ds.l   17		; offset: $0 (0)
+						 ORG 0
+msamEndNested			 ds.l   7		; offset: $0 (0)
+						 ORG 0
+msamSubmit				 ds.w   23		; offset: $0 (0)
+						 ORG 0
+msamPutMsgHeader		 ds.w   19		; offset: $0 (0)
+						 ORG 0
+msamPutAttribute		 ds.w   21		; offset: $0 (0)
+						 ORG 0
+msamPutRecipient		 ds.l   9		; offset: $0 (0)
+						 ORG 0
+msamPutContent			 ds.l   13		; offset: $0 (0)
+						 ORG 0
+msamPutEnclosure		 ds.w   65		; offset: $0 (0)
+						 ORG 0
+msamPutBlock			 ds.l   15		; offset: $0 (0)
+						 ORG 0
+msamCreateReport		 ds.l   13		; offset: $0 (0)		; Reports and Error Handling Calls 
+						 ORG 0
+msamPutRecipientReport	 ds.l   8		; offset: $0 (0)
+						 ORG 0
+pmsamCreateMsgSummary	 ds.l   10		; offset: $0 (0)
+						 ORG 0
+pmsamPutMsgSummary		 ds.l   10		; offset: $0 (0)
+						 ORG 0
+pmsamGetMsgSummary		 ds.w   21		; offset: $0 (0)
+						 ORG 0
+wakeupPMSAM				 ds.w   17		; offset: $0 (0)
+						 ORG 0
+createMailSlot			 ds.l   14		; offset: $0 (0)
+						 ORG 0
+modifyMailSlot			 ds.l   14		; offset: $0 (0)
+						 ORG 130
+sizeof					 EQU *			; size:   $82 (130)
+						ENDR
+
+;
+; pascal OSErr MailCreateMailSlot(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MailCreateMailSlot
+			moveq	#1,d0
+			dc.w 	$1F00
+			move.w	#1323,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MailCreateMailSlot
+	ENDIF
+
+; ASYNCHRONOUS ONLY, client must call WaitNextEvent 
+;
+; pascal OSErr MailModifyMailSlot(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MailModifyMailSlot
+			moveq	#1,d0
+			dc.w 	$1F00
+			move.w	#1324,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MailModifyMailSlot
+	ENDIF
+
+; ASYNCHRONOUS ONLY, client must call WaitNextEvent 
+;
+; pascal OSErr MailWakeupPMSAM(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MailWakeupPMSAM
+			moveq	#1,d0
+			dc.w 	$1F00
+			move.w	#1287,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MailWakeupPMSAM
+	ENDIF
+
+; Personal MSAM Glue Routines 
+;
+; pascal OSErr PMSAMOpenQueues(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMOpenQueues
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1280,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMOpenQueues
+	ENDIF
+
+;
+; pascal OSErr PMSAMSetStatus(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMSetStatus
+			move.w	#1319,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMSetStatus
+	ENDIF
+
+; SYNC ONLY 
+;
+; pascal OSErr PMSAMGetMSAMRecord(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMGetMSAMRecord
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1286,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMGetMSAMRecord
+	ENDIF
+
+; Server MSAM Glue Routines 
+; SYNC ONLY 
+;
+; pascal OSErr SMSAMSetup(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMSAMSetup
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1315,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMSAMSetup
+	ENDIF
+
+; SYNC ONLY 
+;
+; pascal OSErr SMSAMStartup(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMSAMStartup
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1281,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMSAMStartup
+	ENDIF
+
+;
+; pascal OSErr SMSAMShutdown(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMSAMShutdown
+			move.w	#1282,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMSAMShutdown
+	ENDIF
+
+; Get Interface Glue Routines 
+;
+; pascal OSErr MSAMEnumerate(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMEnumerate
+			move.w	#1283,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMEnumerate
+	ENDIF
+
+;
+; pascal OSErr MSAMDelete(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMDelete
+			move.w	#1284,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMDelete
+	ENDIF
+
+;
+; pascal OSErr MSAMMarkRecipients(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMMarkRecipients
+			move.w	#1285,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMMarkRecipients
+	ENDIF
+
+;
+; pascal OSErr MSAMnMarkRecipients(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMnMarkRecipients
+			move.w	#1298,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMnMarkRecipients
+	ENDIF
+
+;
+; pascal OSErr MSAMOpen(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMOpen
+			move.w	#1288,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMOpen
+	ENDIF
+
+;
+; pascal OSErr MSAMOpenNested(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMOpenNested
+			move.w	#1289,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMOpenNested
+	ENDIF
+
+;
+; pascal OSErr MSAMClose(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMClose
+			move.w	#1290,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMClose
+	ENDIF
+
+;
+; pascal OSErr MSAMGetRecipients(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetRecipients
+			move.w	#1292,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetRecipients
+	ENDIF
+
+;
+; pascal OSErr MSAMGetAttributes(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetAttributes
+			move.w	#1291,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetAttributes
+	ENDIF
+
+;
+; pascal OSErr MSAMGetContent(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetContent
+			move.w	#1293,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetContent
+	ENDIF
+
+;
+; pascal OSErr MSAMGetEnclosure(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetEnclosure
+			move.w	#1294,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetEnclosure
+	ENDIF
+
+;
+; pascal OSErr MSAMEnumerateBlocks(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMEnumerateBlocks
+			move.w	#1295,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMEnumerateBlocks
+	ENDIF
+
+;
+; pascal OSErr MSAMGetBlock(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetBlock
+			move.w	#1296,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetBlock
+	ENDIF
+
+;
+; pascal OSErr MSAMGetMsgHeader(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMGetMsgHeader
+			move.w	#1297,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMGetMsgHeader
+	ENDIF
+
+; Put Interface Glue Routines 
+;
+; pascal OSErr MSAMCreate(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMCreate
+			move.w	#1300,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMCreate
+	ENDIF
+
+;
+; pascal OSErr MSAMBeginNested(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMBeginNested
+			move.w	#1301,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMBeginNested
+	ENDIF
+
+;
+; pascal OSErr MSAMEndNested(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMEndNested
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1302,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMEndNested
+	ENDIF
+
+;  SYNCHRONOUS ONLY 
+;
+; pascal OSErr MSAMSubmit(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMSubmit
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1303,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMSubmit
+	ENDIF
+
+;
+; pascal OSErr MSAMPutAttribute(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutAttribute
+			move.w	#1304,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutAttribute
+	ENDIF
+
+;
+; pascal OSErr MSAMPutRecipient(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutRecipient
+			move.w	#1305,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutRecipient
+	ENDIF
+
+;
+; pascal OSErr MSAMPutContent(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutContent
+			move.w	#1306,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutContent
+	ENDIF
+
+;  SYNCHRONOUS ONLY 
+;
+; pascal OSErr MSAMPutEnclosure(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutEnclosure
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1307,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutEnclosure
+	ENDIF
+
+;
+; pascal OSErr MSAMPutBlock(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutBlock
+			move.w	#1308,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutBlock
+	ENDIF
+
+;
+; pascal OSErr MSAMPutMsgHeader(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutMsgHeader
+			move.w	#1309,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutMsgHeader
+	ENDIF
+
+; Reports and Error Handling Glue Routines 
+;
+; pascal OSErr MSAMCreateReport(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMCreateReport
+			move.w	#1311,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMCreateReport
+	ENDIF
+
+;
+; pascal OSErr MSAMPutRecipientReport(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MSAMPutRecipientReport
+			move.w	#1312,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MSAMPutRecipientReport
+	ENDIF
+
+;
+; pascal OSErr PMSAMLogError(MSAMParam *paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMLogError
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#1313,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMLogError
+	ENDIF
+
+; MsgSummary Glue Routines 
+;
+; pascal OSErr PMSAMCreateMsgSummary(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMCreateMsgSummary
+			move.w	#1314,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMCreateMsgSummary
+	ENDIF
+
+;
+; pascal OSErr PMSAMPutMsgSummary(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMPutMsgSummary
+			move.w	#1317,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMPutMsgSummary
+	ENDIF
+
+;
+; pascal OSErr PMSAMGetMsgSummary(MSAMParam *paramBlock, Boolean asyncFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PMSAMGetMsgSummary
+			move.w	#1318,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSAMGetMsgSummary
+	ENDIF
+
+	ENDIF ; __OCEMAIL__

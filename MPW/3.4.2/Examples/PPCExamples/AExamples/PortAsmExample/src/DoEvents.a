@@ -1,0 +1,627 @@
+;------------------------------------------------------------------------------
+;
+;	PortAsm Simple Example
+;
+;	Copyright MicroAPL Ltd 1993/4
+;
+;	File DoEvents.a	  - handles all the events and the menu routines
+;
+;------------------------------------------------------------------------------
+
+	CASE	OBJECT
+	
+	INCLUDE	'ToolEqu.a'
+	INCLUDE	'Traps.a'
+	INCLUDE	'PackMacs.a'
+	INCLUDE	'QuickEqu.a'
+	INCLUDE	'PAExample.inc'		; all our macros and data templates	
+
+	IMPORT	G:APPGLOBALS
+	IMPORT	QD:MYQDGLOBALS
+	
+;******************************************************
+; ADJUSTMENUS
+;
+; Hilight menus as appropriate
+;
+		SEG	'Main'
+AdjustMenus	PROC	ENTRY
+
+StackFrame	RECORD	{A6Link},DECR	
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+FrontMost	DS.L	1			; local copy of the front window
+Menu		DS.L	1			; local copy of the menu handle
+LocalSize	EQU 	*			; size of local variables
+		ENDR
+		
+		IMPORT	ThePolygon:DATA
+		WITH	StackFrame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+
+		CLR.L	-(SP)			; space for result
+		_FrontWindow
+		MOVE.L	(SP)+,FrontMost(A6)	; save the front window
+
+* ------------- ADJUST THE FILE MENU -------------
+AdjustFile
+		CLR.L	-(SP)			; space for result
+		MOVE.W	#FileMenu,-(SP)		; get the File menu handle
+		_GetMHandle
+		MOVE.W	#CloseItem,-(SP)	; already got menu handle
+		_DisableItem			; disable close
+
+* ------------- ADJUST THE COLOR MENU -------------
+AdjustColor
+		CLR.L	-(SP)			; space for result
+		MOVE.W	#ColorMenu,-(SP)	; get the Color menu handle
+		_GetMHandle
+		MOVE.L	(SP)+,Menu(A6)		; save the menu handle
+		
+		MOVE.L	Menu(A6),-(SP)		; Remove old color
+		MOVE.W	G.OldColor,-(SP)
+		MOVE.B	#False,-(SP)
+		_CheckItem
+
+		MOVE.L	ThePolygon,A0
+		MOVE.B	MyPoly.randColors(A0),D0
+		BNE	AdjustRandom
+		
+		MOVE.L	Menu(A6),-(SP)		; check the new color in the menu
+		MOVE.L	ThePolygon,A0
+		MOVE.W	MyPoly.color(A0),D0
+		MOVE.W	D0,-(SP)
+		MOVE.B	#True,-(SP)
+		_CheckItem
+
+* ------------- ADJUST THE RANDOM MENU -------------
+AdjustRandom
+		CLR.L	-(SP)			; space for result
+		MOVE.W	#RandomMenu,-(SP)	; get the Random menu handle
+		_GetMHandle
+		MOVE.L	(SP)+,Menu(A6)		; save the menu handle
+		
+		MOVE.L	Menu(A6),-(SP)		; Remove old color
+		MOVE.W	#ColorItem,-(SP)	;
+		MOVE.L	ThePolygon,A0		; check or uncheck color
+		MOVE.B	MyPoly.randColors(A0),-(SP)
+		_CheckItem
+		MOVE.L	Menu(A6),-(SP)
+		MOVE.W	#PolyItem,-(SP)	;
+		MOVE.L	ThePolygon,A0		; check or uncheck polygon
+		MOVE.B	MyPoly.randPoly(A0),-(SP)
+		_CheckItem
+		MOVE.L	Menu(A6),-(SP)
+		MOVE.W	#DirectionItem,-(SP)	;
+		MOVE.L	ThePolygon,A0		; check or uncheck polygon
+		MOVE.B	MyPoly.randDirection(A0),-(SP)
+		_CheckItem
+		
+* ------------- ADJUST THE SOUND MENU -------------
+AdjustSound
+		CLR.L	-(SP)			; space for result
+		MOVE.W	#SoundMenu,-(SP)	; get the Sound menu handle
+		_GetMHandle
+		MOVE.L	(SP)+,Menu(A6)		; save the menu handle
+		
+		MOVE.L	Menu(A6),-(SP)
+		MOVE.W	#SoundOffItem,-(SP)
+		MOVE.B	G.SoundMode,D0
+		EORI.B	#1,D0
+		MOVE.B	D0,-(SP)
+		_CheckItem
+		MOVE.L	Menu(A6),-(SP)
+		MOVE.W	#SoundOnItem,-(SP)
+		MOVE.B	G.SoundMode,-(SP)
+		_CheckItem
+		
+		
+		UNLK	A6			; destroy the link
+		RTS
+
+		ENDP
+	
+;******************************************************
+; DOUPDATE
+;
+;	Had an update event so perform a complete
+;	refresh of the screen
+; 
+;IN:	4(SP).L: WindowPtr - Pointer to the update window
+;
+		SEG	'Main'			; case sensitive
+DoUpdate	PROC	ENTRY
+
+StackFrame	RECORD	{A6Link},DECR		; build a stack frame record
+ParamBegin	EQU	*
+WindowPtr	DS.L	1			; the window pointer parameter
+ParamSize	EQU	ParamBegin-*
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+LocalSize	EQU 	*			; size of the local variables
+		ENDR
+		
+		IMPORT	RefreshRealWin:CODE
+		WITH	StackFrame		; cover our local stack frame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+
+		MOVE.L	WindowPtr(A6),-(SP)	; update only the visible region
+		_BeginUpDate			; region of the window
+		CLR.W	-(SP)			; space for result
+		MOVEA.L	WindowPtr(A6),A0	; the window pointer
+		MOVE.L	visRgn(A0),-(SP)	; the window's visRgn handle
+		_EmptyRgn
+		MOVE.B	(SP)+,D0		; result of EmptyRgn
+		CMPI.B	#True,D0		; was the visRgn empty?
+		BEQ.S	@1			; yes, then no update is needed
+		
+		BSR	RefreshRealWin
+		
+@1		MOVE.L	WindowPtr(A6),-(SP)	; get pointer to window
+		_EndUpdate
+
+Exit		UNLK	A6			; destroy the link
+		MOVEA.L	(SP)+,A0		; pull off the return address
+		ADDA.L	#ParamSize,SP		; strip all of the caller's parameters
+		JMP	(A0)			; return to the caller
+
+		ENDP
+
+;******************************************************
+; DOMENUCOMMAND
+;
+;IN:	4(SP).W: MenuItem
+;	2(SP).W: MenuID	- ID of selected menu item
+;
+		SEG	'Main'			; case sensitive
+DoMenuCommand	PROC
+
+StackFrame	RECORD	{A6Link},DECR		; build a stack frame record
+ParamBegin	EQU	*
+MenuItem	DS.W	1			; from _MenuKey or _MenuSelect
+MenuID		DS.W	1			; long word, ID + Item
+ParamSize	EQU	ParamBegin-*
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+Deskname	DS.B	256			; storage for Desk Accs name
+TempPort	DS.L	1			; storage for the current port
+Item		DS.W	1
+LocalSize	EQU 	*			; size of the local variables
+		ENDR
+		
+		IMPORT	Terminate:CODE
+		IMPORT	ClearVirtualWin:CODE
+		IMPORT	ThePolygon:DATA
+		IMPORT	PolyWindow:DATA
+		IMPORT	DialogPtr:DATA
+		IMPORT	RealWindow:DATA
+		IMPORT	VirtualWindow:DATA
+		
+		WITH	StackFrame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+
+		MOVE.W	MenuID(A6),D0		; select item
+		CMPI	#AppleMenu,D0
+		BEQ.W	DoAppleMenu
+		CMPI	#FileMenu,D0
+		BEQ.W	DoFileMenu
+		CMPI	#EditMenu,D0
+		BEQ.W	DoEditMenu
+		CMPI	#ColorMenu,D0
+		BEQ.W	DoColorMenu
+		CMPI	#RandomMenu,D0
+		BEQ.W	DoRandomMenu
+		CMPI	#SoundMenu,D0
+		BEQ.W	DoSoundMenu
+
+		BRA.W	Exit			; otherwise we will exit this procedure
+
+; ------------- THE APPLE MENU ROUTINES -------------
+DoAppleMenu
+		CMPI.W	#AboutItem,MenuItem(A6)	; was it the about item?
+		BNE.S	@1			; no, must be a Desk Acc
+
+		MOVE.L	DialogPtr,PolyWindow
+		MOVE.L	DialogPtr,-(SP)
+		_ShowWindow
+		MOVE.L	DialogPtr,-(SP)
+		_BringtoFront
+		
+		CLR.L	-(SP)
+		PEA	Item(A6)
+		_ModalDialog			; bring up the about dialog
+		
+		MOVE.L	DialogPtr,-(SP)		; remove the window
+		_HideWindow
+		
+		MOVE.L	VirtualWindow,PolyWindow ; Reset the drawing window for polygons
+		
+		BRA.W	Exit			; all done with with Apple menu
+
+@1		CLR.L	-(SP)			; space for result of GetMHandle
+		MOVE.W	#AppleMenu,-(SP)
+		_GetMHandle			; put Apple menu on stack
+		MOVE.W	MenuItem(A6),-(SP)	; and here's the MenuItem
+		PEA	DeskName(A6)		; now tell me the DA's name
+		_GetItem
+		CLR.W	-(SP)			; space for OpenDeskAcc result
+		PEA	DeskName(A6)
+		_OpenDeskAcc			; open that puppy
+		MOVE.W	(SP)+,D0		; result
+		
+		BRA.W	Exit
+		
+; ------------- THE FILE MENU ROUTINES -------------
+DoFileMenu	
+		MOVE.W	MenuItem(A6),D0 	; test the MenuItem
+		CMPI	#NewItem,D0
+		BEQ.W	FIleNew
+		CMPI	#QuitItem,D0
+		BEQ.W	FIleQuit
+
+		BRA.W	Exit
+FileNew
+		BSR	ClearVirtualWin		; Clear the virtual window
+		MOVEA.L	PolyWindow,A0
+		PEA	portRect(A0)		; invalidate entire window
+		_InvalRect
+		BRA.W	Exit
+
+FileQuit
+		BSR	Terminate		; let's get out of here
+		BRA	Exit
+
+; ------------- THE EDIT MENU ROUTINES -------------
+DoEditMenu	
+		CLR.W	-(SP)			; system will handle editing of desk accs.
+		MOVE.W	MenuItem(A6),-(SP)	; get the MenuItem
+		SUBQ.W	#1,(SP)			; SystemEdit is off by one
+		_SysEdit
+		MOVE.B	(SP)+,D0		; drop result from SystemEdit
+		BRA	Exit			; we don't have anything to edit
+
+; ------------- THE COLOR MENU ROUTINES -------------
+DoColorMenu	
+		MOVE.W	MenuItem(A6),D3 	; test the MenuItem
+		CMP.W	#0,D3			; check range
+		BEQ	Exit
+		CMP.W	#7,D3
+		BGT.W	Exit			; Not a valid color
+			
+		MOVE.L	ThePolygon,A0
+		CMP.W	MyPoly.color(A0),D3	; compare to the new state
+		BEQ.W	Exit			; they're the same.
+			
+		MOVE.W	MyPoly.color(A0),G.OldColor ; Save the old color value
+		MOVE.W	D3,MyPoly.color(A0)	    ; set new value
+		BRA.W	Exit
+		
+; ------------- THE RANDOM MENU ROUTINES -------------
+DoRandomMenu	
+		MOVE.W	MenuItem(A6),D0 		; test the MenuItem
+		CMPI	#ColorItem,D0
+		BEQ.W	RandColor
+		CMPI	#PolyItem,D0
+		BEQ.W	RandPoly
+		CMPI	#DirectionItem,D0
+		BEQ.W	RandDirection
+
+		BRA.S	Exit
+
+RandColor	CLR.L	-(SP)				; space for result
+		MOVE.W	#ColorMenu,-(SP)		; get Color menu handle
+		_GetMHandle
+		MOVE.W	#0,-(SP)
+		
+		MOVE.L	ThePolygon,A0
+		EORI.B	#1,MyPoly.randColors(A0)	; Toggle the color mode
+		MOVE.W	MyPoly.color(A0),G.OldColor	; remove tick from color menu
+		CMPI.B	#1,MyPoly.randColors(A0)
+		BNE.S	@1
+		_DisableItem				; disable the color menu
+		_DrawMenuBar
+		BRA.S	Exit
+
+@1		_EnableItem				; enable the color menu
+		_DrawMenuBar
+		BRA.S	Exit		
+
+RandPoly	MOVE.L	ThePolygon,A0
+		EORI.B	#1,MyPoly.randPoly(A0)		; Toggle poly mode
+		BRA.S	Exit
+
+RandDirection	MOVE.L	ThePolygon,A0
+		EORI.B	#1,MyPoly.randDirection(A0)	; Toggle direction mode
+		BRA.S	Exit
+		
+; ------------- THE SOUND MENU ROUTINES -------------
+DoSoundMenu	
+		MOVE.W	MenuItem(A6),D0 		; test the MenuItem
+		CMPI	#SoundOffItem,D0
+		BEQ.W	SoundOff
+		CMPI	#SoundOnItem,D0
+		BEQ.W	SoundOn
+
+		BRA.S	Exit				; add additional menus here
+
+SoundOff	MOVE.B	#FALSE,G.SoundMode
+		BRA.S	Exit
+
+SoundOn		MOVE.B	#TRUE,G.SoundMode
+
+Exit		CLR.W	-(SP)	
+		_HiLiteMenu				; unhilite all Menus
+		UNLK	A6				; destroy the link
+		MOVEA.L	(SP)+,A0			; pull off the return address
+		ADDA.L	#ParamSize,SP			; strip off caller's parameters
+		JMP	(A0)				; return to the caller
+			
+		ENDP
+
+	
+;******************************************************
+; DOMOUSEDOWN
+;
+; Handle all of the MouseDown events.
+;
+;IN:	4(SP).L: EventPtr - pointer to the EventRecord
+; 
+
+		SEG	'Main'			; case sensitive
+DoMouseDown	PROC	ENTRY
+
+StackFrame	RECORD	{A6Link},DECR		; build a stack frame record
+ParamBegin	EQU	*
+EventPtr 	DS.L	1	 		; pointer to current event
+ParamSize	EQU	ParamBegin-*
+RetAddr 	DS.L	1			; for return address
+A6Link		DS.L	1			; place holder for A6 link
+WindowPtr	DS.L	1			; Window pointer variable
+Where		DS.L	1			; where the click was
+NewGrowRect	DS	Rect			; rect for SizeWindow
+LocalSize	EQU 	*			; size of the local variables
+		ENDR
+
+		IMPORT	Terminate
+
+		WITH	StackFrame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+		
+		MOVEA.L	EventPtr(A6),A0		; event record for SystemClick
+		MOVE.L	evtMouse(A0),Where(A6)	; local copy of mouse location
+
+		CLR.W	-(SP)			; space for FindWindow result
+		MOVE.L	Where(A6),-(SP)		; the mouse point
+		PEA	WindowPtr(A6)		; a local variable
+		_FindWindow			; put the result in a register
+		MOVE.W	(SP)+,D0
+		CMPI	#InMenuBar,D0		; select item
+		BEQ.W	MenuEvent
+		CMPI	#InSysWindow,D0
+		BEQ.W	SystemEvent
+		CMPI	#InContent,D0
+		BEQ.W	Content
+		CMPI	#InDrag,D0
+		BEQ.W	Drag
+		CMPI	#InGoAway,D0
+		BEQ.W	GoAway
+						
+		BRA.S	Exit			; otherwise we will exit this procedure
+;
+MenuEvent	
+		BSR.W	AdjustMenus
+		CLR.L	-(SP)			; space for MenuSelect
+		MOVE.L	Where(A6),-(SP)		; Mouse coordinates
+		_MenuSelect			; pass MenuSelect's result
+		BSR	DoMenuCommand		; go do the menu and return
+		BRA.S	Exit
+;
+SystemEvent	
+		MOVE.L	EventPtr(A6),-(SP)	; get EventRecord and WindowPtr
+		MOVE.L	WindowPtr(A6),-(SP)	; pass the window pointer and...
+		_SystemClick			; let the system handle it
+		BRA.S	Exit
+
+; ------------- THE CONTENT EVENT -------------
+Content		
+		CLR.L	-(SP)			; was our window in front?
+		_FrontWindow			; get front window's pointer
+		MOVE.L	(SP)+,D0
+		CMP.L	WindowPtr(A6),D0	; was it in the front window?
+		BNE.S	@1			; no, then just select window
+		
+		BRA.S	Exit
+		
+@1		MOVE.L	WindowPtr(A6),-(SP)	; only select this window
+		_SelectWindow			; and take no further action
+		BRA.S	Exit
+
+		BRA.S	Exit
+		
+; ------------- THE GOAWAY A WINDOW EVENT -------------
+GoAway		
+		BSR	Terminate
+		BRA.S	Exit
+		
+; ------------- THE DRAG A WINDOW EVENT -------------
+Drag		
+		MOVE.L	WindowPtr(A6),-(SP)	; pass Window Pointer
+		MOVE.L	Where(A6),-(SP)		; Mouse coordinates and boundary
+		PEA	QD.Screenbits.bounds	
+		_DragWindow			; drag it the screen's boundary
+		
+Exit		
+		UNLK	A6
+		MOVEA.L	(SP)+,A0		; pull off the return address
+		ADDA.L	#ParamSize,SP
+		JMP	(A0)			; return
+
+		ENDP
+		
+		
+;******************************************************
+; DOEVENT
+; 
+; Do the right thing for an event. Determine what kind of event it is,
+; and call the appropriate routines.
+;
+;IN:	4(SP).L: EventPtr - pointer to the EventRecord
+;
+		SEG	'Main'			; case sensitive
+DoEvent		PROC
+
+StackFrame	RECORD	{A6Link},DECR
+ParamBegin	EQU	*
+EventPtr 	DS.L	1	 		; pointer to current event
+ParamSize	EQU	ParamBegin-*
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; A6 link
+TheEvent 	DS	EventRecord 		; local copy of the event record
+LocalSize	EQU 	*			; size of the local variables
+		ENDR
+
+		WITH	StackFrame,TheEvent
+		LINK	A6,#LocalSize		; allocate our local stack frame
+		MOVE.L	D4,-(SP)
+
+		MOVEA.L	EventPtr(A6),A0		; pointer passed by caller
+		LEA	TheEvent(A6),A1		; pointer to TheEvent
+		MOVE.L	#evtBlkSize,D0		; size of an event record
+		_BlockMove			; local copy of the event
+
+		MOVE.W	Modifiers(A6),D4
+
+		MOVE.W	What(A6),D0		; get the event number
+						;  0 Null (not used)
+		CMPI	#1,D0			;  1 Mouse down
+		BEQ	MouseDownEvent
+						;  2 Mouse up (not used)
+		CMPI	#3,D0			;  3 Key down
+		BEQ.W	KeyDownEvent
+						;  4 Key up (not used)
+		CMPI	#4,D0			;  5 Auto key
+		BEQ.W	KeyDownEvent
+		CMPI	#6,D0			;  6 Update
+		BEQ.W	UpdateEvent
+		CMPI	#7,D0			;  7 Disk inserted
+		BEQ.W	DiskEvent
+						;  8 Activate/Deactivate 
+						;  9 (not used)
+						; 10 Network (not used)
+						; 11 I/O Driver (not used)
+						; 12 App1 (not used)
+						; 13 App2 (not used)
+						; 14 App3 (not used)
+						; 15 OS Event (not used)
+
+; ------------- THE MOUSEDOWN EVENT -------------
+MouseDownEvent	
+		PEA	TheEvent(A6)		; pass Event pointer
+		BSR	DoMouseDown		; in case of SystemClick
+		BRA	Exit
+
+; ------------- THE KEYDOWN EVENT -------------
+KeyDownEvent	
+		BTST	#CmdKey,D4		; command key?
+		BEQ	Exit			; no, then we're done
+		BSR.W	AdjustMenus		; first, adjust the menus
+		CLR.L	-(SP)			; space for MenuKey
+		MOVE.W	2+Message(A6),-(SP)	; get the character
+		_MenuKey			; is it a command?
+		BSR	DoMenuCommand		; handle the command and return
+		BRA.W	Exit
+
+; ------------- THE UPDATE EVENT -------------
+UpdateEvent
+		MOVE.L	Message(A6),-(SP)	; pass the window pointer
+		BSR	DoUpdate		; do the update
+		BRA.S	Exit
+		
+		
+; ------------- THE DISK EVENT -------------
+DiskEvent	
+		TST.W	Message(A6)		; check for error
+		BEQ.S	Exit			; if none, skip
+		CLR.W	-(SP)
+		MOVE.L	#DITopLeft,-(SP)
+		MOVE.L	Message(A6),-(SP)
+		MOVE.W	#diBadMount,-(SP)
+		_Pack2				; go through disk init package
+		ADDQ	#2,SP			; throw away result
+		
+Exit		
+		MOVE.L	(SP)+,D4
+		UNLK	A6
+		MOVEA.L	(SP)+,A0
+		ADDA.L	#ParamSize,SP
+		JMP	(A0)
+
+		ENDP
+
+		
+;******************************************************
+; EVENTLOOP
+;
+; Get the events using _GetNextEvent and _SystemTask
+; No parameters.
+;
+;USES:	Boolean AnimateOnePolygon (MyPoly *p);
+;
+		SEG	'Main'			; case sensitive
+EventLoop	PROC	EXPORT			; any source file can use this routine
+
+StackFrame	RECORD	{A6Link},DECR
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+TheEvent 	DS	EventRecord 		; local copy of the event record
+LocalSize	EQU 	*			; size of the local variables
+		ENDR
+		
+		IMPORT	AnimateOnePolygon	; C routine (returns boolean)
+		IMPORT	SoundPlay:CODE
+		IMPORT	UpdateRealWin:CODE
+		IMPORT	ThePolygon:DATA
+		WITH	StackFrame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+		
+				
+; ------------- GET NEXT EVENT LOOP -------------
+NextEvent	
+		MOVE.L	ThePolygon,-(SP)
+		JSR	AnimateOnePolygon	; Update and draw the polygon	
+		LEA	4(SP),SP		; deallocate stack
+		
+		CMP.B	#0,D0			; test result
+		BEQ	NoBounce
+		MOVE.B	G.SoundMode,D0
+		BEQ	NoBounce		; Sound mode is off
+		
+		; Sound mode is on so do the bounce relative to y position
+		MOVE.L	ThePolygon,A0
+		MOVE.L	MyPoly.Ypos(A0),D0	; get y position of polygon
+		MOVE.W	G.Height,D1
+		MULU	#$50,D0
+		DIVU	#VIRHEIGHT,D0
+		ANDI.L	#$ff,D0
+		ADDI.L	#$20,D0
+		BSR	SoundPlay
+NoBounce				
+		_SystemTask			; call SystemTask for drivers and DAs
+		CLR.W	-(SP)			; space for result
+		MOVE.W	#EveryEvent,-(SP)	; the events we want
+		PEA	TheEvent(A6)		; pass a pointer to our event
+		_GetNextEvent
+		MOVE.W	(SP)+,D0		; result code
+		BEQ.S	NextEvent		; no event, get another one
+		
+GotEvent	PEA	TheEvent(A6)		; pass the pointer to our event
+		BSR	DoEvent			; do the event and return
+
+		BRA.S	NextEvent		; done with that event, get the next
+
+Exit		UNLK	A6			; destroy the link
+		RTS
+
+		ENDP
+
+		END

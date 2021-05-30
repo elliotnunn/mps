@@ -1,0 +1,377 @@
+;
+;	File:		Events.a
+;
+;	Contains:	Event Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.1
+;
+;	Copyright:	© 1984-1996 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+__EVENTS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+;		include 'Memory.a'											;
+; typedef UInt16 			EventKind
+
+nullEvent						EQU		0
+mouseDown						EQU		1
+mouseUp							EQU		2
+keyDown							EQU		3
+keyUp							EQU		4
+autoKey							EQU		5
+updateEvt						EQU		6
+diskEvt							EQU		7
+activateEvt						EQU		8
+kHighLevelEvent					EQU		23
+
+; typedef UInt16 			EventMask
+
+mDownMask						EQU		$0002				; mouse button pressed 
+mUpMask							EQU		$0004				; mouse button released 
+keyDownMask						EQU		$0008				; key pressed 
+keyUpMask						EQU		$0010				; key released 
+autoKeyMask						EQU		$0020				; key repeatedly held down 
+updateMask						EQU		$0040				; window needs updating 
+diskMask						EQU		$0080				; disk inserted 
+activMask						EQU		$0100				; activate/deactivate window 
+highLevelEventMask				EQU		$0400				; high-level events (includes AppleEvents) 
+osMask							EQU		$8000				; operating system events (suspend, resume) 
+everyEvent						EQU		$FFFF				; all of the above 
+
+; event message equates 
+charCodeMask					EQU		$000000FF
+keyCodeMask						EQU		$0000FF00
+adbAddrMask						EQU		$00FF0000
+osEvtMessageMask				EQU		$FF000000
+; OS event messages.  Event (sub)code is in the high byte of the message field. 
+mouseMovedMessage				EQU		$00FA
+suspendResumeMessage			EQU		$0001
+resumeFlag						EQU		1					; Bit 0 of message indicates resume vs suspend 
+convertClipboardFlag			EQU		2					; Bit 1 in resume message indicates clipboard change 
+
+; typedef UInt16 			EventModifiers
+
+; modifiers 
+activeFlag						EQU		$0001				; Bit 0 of modifiers for activateEvt and mouseDown events 
+btnState						EQU		$0080				; Bit 7 of low byte is mouse button state 
+cmdKey							EQU		$0100				; Bit 0 of high byte 
+shiftKey						EQU		$0200				; Bit 1 of high byte 
+alphaLock						EQU		$0400				; Bit 2 of high byte 
+optionKey						EQU		$0800				; Bit 3 of high byte 
+controlKey						EQU		$1000				; Bit 4 of high byte 
+rightShiftKey					EQU		$2000				; Bit 5 of high byte 
+rightOptionKey					EQU		$4000				; Bit 6 of high byte 
+rightControlKey					EQU		$8000				; Bit 7 of high byte 
+activeFlagBit					EQU		0					; activate? (activateEvt and mouseDown) 
+btnStateBit						EQU		7					; state of button? 
+cmdKeyBit						EQU		8					; command key down? 
+shiftKeyBit						EQU		9					; shift key down? 
+alphaLockBit					EQU		10					; alpha lock down? 
+optionKeyBit					EQU		11					; option key down? 
+controlKeyBit					EQU		12					; control key down? 
+rightShiftKeyBit				EQU		13					; right shift key down? 
+rightOptionKeyBit				EQU		14					; right Option key down? 
+rightControlKeyBit				EQU		15					; right Control key down? 
+
+EventRecord 			RECORD	0
+what					 ds.w   1		; offset: $0 (0)
+message					 ds.l   1		; offset: $2 (2)
+when					 ds.l   1		; offset: $6 (6)
+where					 ds     Point	; offset: $A (10)
+modifiers				 ds.w   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct EventRecord  EventRecord
+KeyMap 					RECORD	0
+map						 ds.b   16		; offset: $0 (0)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+EvQEl 					RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+evtQWhat				 ds.w   1		; offset: $6 (6)		; this part is identical to the EventRecord as... 
+evtQMessage				 ds.l   1		; offset: $8 (8)		; defined above 
+evtQWhen				 ds.l   1		; offset: $C (12)
+evtQWhere				 ds     Point	; offset: $10 (16)
+evtQModifiers			 ds.w   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+; typedef struct EvQEl 		EvQEl
+; typedef EvQEl 			*EvQElPtr
+; typedef GetNextEventFilterUPP  GNEFilterUPP
+;
+; pascal UInt32 GetCaretTime(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCaretTime		 &dest=(sp)
+		move.l               $02F4,&dest
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCaretTime
+	ENDIF
+
+;
+; pascal void SetEventMask(EventMask value)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetEventMask		 &src=(sp)+
+		move.w               &src,$0144
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetEventMask
+	ENDIF
+
+;
+; pascal EventMask GetEventMask(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetEventMask		 &dest=(sp)
+		move.w               $0144,&dest
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetEventMask
+	ENDIF
+
+;
+; pascal QHdrPtr GetEvQHdr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetEvQHdr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$014A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetEvQHdr
+	ENDIF
+
+; InterfaceLib exports GetEvQHdr, so make GetEventQueue map to that 
+;
+; pascal UInt32 GetDblTime(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDblTime		 &dest=(sp)
+		move.l               $02F0,&dest
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDblTime
+	ENDIF
+
+; InterfaceLib exports GetDblTime, so make GetDoubleClickTime map to that 
+;
+; pascal Boolean GetNextEvent(EventMask eventMask, EventRecord *theEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetNextEvent:	OPWORD	$A970
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextEvent
+	ENDIF
+
+;
+; pascal Boolean WaitNextEvent(EventMask eventMask, EventRecord *theEvent, UInt32 sleep, RgnHandle mouseRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_WaitNextEvent:	OPWORD	$A860
+	ELSE
+		IMPORT_CFM_FUNCTION	WaitNextEvent
+	ENDIF
+
+;
+; pascal Boolean EventAvail(EventMask eventMask, EventRecord *theEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EventAvail:	OPWORD	$A971
+	ELSE
+		IMPORT_CFM_FUNCTION	EventAvail
+	ENDIF
+
+;
+; pascal void GetMouse(Point *mouseLoc)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetMouse:	OPWORD	$A972
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMouse
+	ENDIF
+
+;
+; pascal Boolean Button(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Button:	OPWORD	$A974
+	ELSE
+		IMPORT_CFM_FUNCTION	Button
+	ENDIF
+
+;
+; pascal Boolean StillDown(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StillDown:	OPWORD	$A973
+	ELSE
+		IMPORT_CFM_FUNCTION	StillDown
+	ENDIF
+
+;
+; pascal Boolean WaitMouseUp(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_WaitMouseUp:	OPWORD	$A977
+	ELSE
+		IMPORT_CFM_FUNCTION	WaitMouseUp
+	ENDIF
+
+;
+; pascal void GetKeys(KeyMap theKeys)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetKeys:	OPWORD	$A976
+	ELSE
+		IMPORT_CFM_FUNCTION	GetKeys
+	ENDIF
+
+;
+; pascal UInt32 KeyTranslate(const void *transData, UInt16 keycode, UInt32 *state)
+;
+	IF ¬ GENERATINGCFM THEN
+		_KeyTranslate:	OPWORD	$A9C3
+	ELSE
+		IMPORT_CFM_FUNCTION	KeyTranslate
+	ENDIF
+
+;
+; pascal UInt32 TickCount(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_TickCount:	OPWORD	$A975
+	ELSE
+		IMPORT_CFM_FUNCTION	TickCount
+	ENDIF
+
+;
+; pascal OSErr PostEvent(EventKind eventNum, UInt32 eventMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 eventNum      	=> A0
+		;	 eventMsg      	=> D0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PostEvent:	OPWORD	$A02F
+	ELSE
+		IMPORT_CFM_FUNCTION	PostEvent
+	ENDIF
+
+;
+; pascal OSErr PPostEvent(EventKind eventCode, UInt32 eventMsg, EvQElPtr *qEl)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PPostEvent:	OPWORD	$A12F
+	ELSE
+		IMPORT_CFM_FUNCTION	PPostEvent
+	ENDIF
+
+;
+; pascal Boolean OSEventAvail(EventMask mask, EventRecord *theEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OSEventAvail:	OPWORD	$A030
+	ELSE
+		IMPORT_CFM_FUNCTION	OSEventAvail
+	ENDIF
+
+;
+; pascal Boolean GetOSEvent(EventMask mask, EventRecord *theEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetOSEvent:	OPWORD	$A031
+	ELSE
+		IMPORT_CFM_FUNCTION	GetOSEvent
+	ENDIF
+
+;
+; pascal void FlushEvents(EventMask whichMask, EventMask stopMask)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FlushEvents:	OPWORD	$A032
+	ELSE
+		IMPORT_CFM_FUNCTION	FlushEvents
+	ENDIF
+
+;
+; pascal void SystemClick(const EventRecord *theEvent, WindowPtr theWindow)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SystemClick:	OPWORD	$A9B3
+	ELSE
+		IMPORT_CFM_FUNCTION	SystemClick
+	ENDIF
+
+;
+; pascal void SystemTask(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SystemTask:	OPWORD	$A9B4
+	ELSE
+		IMPORT_CFM_FUNCTION	SystemTask
+	ENDIF
+
+;
+; pascal Boolean SystemEvent(const EventRecord *theEvent)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SystemEvent:	OPWORD	$A9B2
+	ELSE
+		IMPORT_CFM_FUNCTION	SystemEvent
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+
+networkEvt						EQU		10
+driverEvt						EQU		11
+app1Evt							EQU		12
+app2Evt							EQU		13
+app3Evt							EQU		14
+app4Evt							EQU		15
+networkMask						EQU		$0400
+driverMask						EQU		$0800
+app1Mask						EQU		$1000
+app2Mask						EQU		$2000
+app3Mask						EQU		$4000
+app4Mask						EQU		$8000
+
+	ENDIF
+	ENDIF ; __EVENTS__

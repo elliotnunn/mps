@@ -1,0 +1,618 @@
+;
+;    File:       LanguageAnalysis.a
+;
+;    Contains:   Language Analysis Manager Interfaces
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__LANGUAGEANALYSIS__') = 'UNDEFINED' THEN
+__LANGUAGEANALYSIS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__AEREGISTRY__') = 'UNDEFINED' THEN
+	include 'AERegistry.a'
+	ENDIF
+	IF &TYPE('__DICTIONARY__') = 'UNDEFINED' THEN
+	include 'Dictionary.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+
+
+
+
+; typedef AEKeyword 					LAPropertyKey
+
+; typedef DescType 						LAPropertyType
+
+; 
+;    Data structure for high level API
+;
+
+LAMorphemeRec			RECORD 0
+sourceTextLength		 ds.l	1				; offset: $0 (0)
+sourceTextPtr			 ds.l	1				; offset: $4 (4)
+morphemeTextLength		 ds.l	1				; offset: $8 (8)
+morphemeTextPtr			 ds.l	1				; offset: $C (12)
+partOfSpeech			 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+LAMorphemesArray		RECORD 0
+morphemesCount			 ds.l	1				; offset: $0 (0)
+processedTextLength		 ds.l	1				; offset: $4 (4)
+morphemesTextLength		 ds.l	1				; offset: $8 (8)
+morphemes				 ds		LAMorphemeRec	; offset: $C (12) <-- really an array of length one
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct LAMorphemesArray *		LAMorphemesArrayPtr
+
+
+kLAMorphemesArrayVersion		EQU		0
+; 
+;    Definitions for result path/bundle structure
+;
+
+LAMorphemeBundle		RECORD 0
+f						 ds		AERecord
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+LAMorphemePath			RECORD 0
+f						 ds		AERecord
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+LAMorpheme				RECORD 0
+f						 ds		AERecord
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+LAHomograph				RECORD 0
+f						 ds		AERecord
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+
+keyAELAMorphemeBundle			EQU		'lmfb'
+keyAELAMorphemePath				EQU		'lmfp'
+keyAELAMorpheme					EQU		'lmfn'
+keyAELAHomograph				EQU		'lmfh'
+
+typeLAMorphemeBundle			EQU		'reco'
+typeLAMorphemePath				EQU		'reco'
+typeLAMorpheme					EQU		'list'
+typeLAHomograph					EQU		'list'
+; 
+;    Definitions for morpheme/homograph information
+;
+
+
+keyAEMorphemePartOfSpeechCode	EQU		'lamc'
+keyAEMorphemeTextRange			EQU		'lamt'
+
+typeAEMorphemePartOfSpeechCode	EQU		'lamc'
+typeAEMorphemeTextRange			EQU		'lamt'
+; typedef UInt32 						MorphemePartOfSpeech
+
+MorphemeTextRange		RECORD 0
+sourceOffset			 ds.l	1				; offset: $0 (0)
+length					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;    Mask for High level API convert flags 
+;
+
+
+kLAEndOfSourceTextMask			EQU		$00000001
+; 
+;    Constants for leading/trailing path of analysis function
+;
+
+
+kLADefaultEdge					EQU		0
+kLAFreeEdge						EQU		1
+kLAIncompleteEdge				EQU		2
+; 
+;    Constants for confirm and shift function
+;
+
+
+kLAAllMorphemes					EQU		0
+
+; 
+;    Library version
+;
+
+
+; *  LALibraryVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 LALibraryVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LALibraryVersion
+	ENDIF
+
+; 
+;    High level API
+;
+
+
+; *  LATextToMorphemes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LATextToMorphemes(LAContextRef context, TextEncoding preferedEncoding, ByteCount textLength, ConstLogicalAddress sourceText, ByteCount bufferSize, OptionBits convertFlags, UInt32 structureVersion, ByteCount *acceptedLength, LAMorphemesArrayPtr resultBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LATextToMorphemes
+	ENDIF
+
+; 
+;    Handling Context
+;
+
+
+; *  LAOpenAnalysisContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAOpenAnalysisContext(LAEnvironmentRef environ, LAContextRef *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAOpenAnalysisContext
+	ENDIF
+
+
+; *  LACloseAnalysisContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LACloseAnalysisContext(LAContextRef context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LACloseAnalysisContext
+	ENDIF
+
+; 
+;    Handling Environment
+;
+
+
+; *  LAGetEnvironmentList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAGetEnvironmentList(UInt32 maxCount, UInt32 *actualCount, LAEnvironmentRef environmentList[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAGetEnvironmentList
+	ENDIF
+
+
+; *  LAGetEnvironmentName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAGetEnvironmentName(LAEnvironmentRef environment, Str63 environmentName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAGetEnvironmentName
+	ENDIF
+
+
+; *  LAGetEnvironmentRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAGetEnvironmentRef(ConstStr63Param targetEnvironmentName, LAEnvironmentRef *environment)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAGetEnvironmentRef
+	ENDIF
+
+
+; *  LACreateCustomEnvironment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LACreateCustomEnvironment(LAEnvironmentRef baseEnvironment, ConstStr63Param newEnvironmentName, Boolean persistent, LAEnvironmentRef *newEnvironment)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LACreateCustomEnvironment
+	ENDIF
+
+
+; *  LADeleteCustomEnvironment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LADeleteCustomEnvironment(LAEnvironmentRef environment)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LADeleteCustomEnvironment
+	ENDIF
+
+; 
+;    Handling dictionries
+;
+
+
+; *  LAOpenDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAOpenDictionary(LAEnvironmentRef environ, const FSSpec *dictionary)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAOpenDictionary
+	ENDIF
+
+
+; *  LACloseDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LACloseDictionary(LAEnvironmentRef environ, const FSSpec *dictionary)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LACloseDictionary
+	ENDIF
+
+
+; *  LAListAvailableDictionaries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAListAvailableDictionaries(LAEnvironmentRef environ, ItemCount maxCount, ItemCount *actualCount, FSSpec dictionaryList[], Boolean opened[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAListAvailableDictionaries
+	ENDIF
+
+
+; *  LAAddNewWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAAddNewWord(LAEnvironmentRef environ, const FSSpec *dictionary, const AEDesc *dataList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAAddNewWord
+	ENDIF
+
+; 
+;    Analyzing text
+;
+
+
+; *  LAMorphemeAnalysis()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAMorphemeAnalysis(LAContextRef context, ConstUniCharArrayPtr text, UniCharCount textLength, LAMorphemePath *leadingPath, LAMorphemePath *trailingPath, ItemCount pathCount, LAMorphemeBundle *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAMorphemeAnalysis
+	ENDIF
+
+
+; *  LAContinuousMorphemeAnalysis()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAContinuousMorphemeAnalysis(LAContextRef context, ConstUniCharArrayPtr text, UniCharCount textLength, Boolean incrementalText, LAMorphemePath *leadingPath, LAMorphemePath *trailingPath, Boolean *modified)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAContinuousMorphemeAnalysis
+	ENDIF
+
+
+; *  LAGetMorphemes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAGetMorphemes(LAContextRef context, LAMorphemePath *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAGetMorphemes
+	ENDIF
+
+
+; *  LAShiftMorphemes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAShiftMorphemes(LAContextRef context, ItemCount morphemeCount, LAMorphemePath *path, UniCharCount *shiftedLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAShiftMorphemes
+	ENDIF
+
+
+; *  LAResetAnalysis()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in LanguageAnalysisLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus LAResetAnalysis(LAContextRef context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LAResetAnalysis
+	ENDIF
+
+; 
+;    Check Language Analysis Manager availability
+;
+
+	IF TARGET_RT_MAC_CFM THEN
+; 
+;        LALanguageAnalysisAvailable() is a macro available only in C/C++.  
+;        To get the same functionality from pascal or assembly, you need
+;        to test if Language Analysis Manager functions are not NULL.
+;        For instance:
+;        
+;            IF @LALibraryVersion <> kUnresolvedCFragSymbolAddress THEN
+;                gLanguageAnalysisAvailable = TRUE;
+;            ELSE
+;                gLanguageAnalysisAvailable = FALSE;
+;            END
+;    
+;
+
+	ELSEIF TARGET_RT_MAC_MACHO THEN
+;  Language Analysis Manager is always available on OS X 
+	ENDIF	; 
+; 
+;=============================================================================================
+;    Definitions for Japanese Analysis Module
+;=============================================================================================
+;
+
+; 
+;    Names for default environments for Japanese analysis
+;
+
+; 
+;    File cretor for dictionary of Apple Japanese access method
+;
+
+
+kAppleJapaneseDictionarySignature EQU	'jlan'
+; 
+;    Engine limitations
+;
+
+
+kMaxInputLengthOfAppleJapaneseEngine EQU 200
+; 
+;    Definitions of information in the path/bundle
+;
+
+; typedef MorphemePartOfSpeech 			JapanesePartOfSpeech
+
+; typedef UInt16 						HomographWeight
+
+; typedef UInt8 						HomographAccent
+
+; 
+;    AE keywords and type definitions for morpheme/homograph information
+;
+
+
+keyAEHomographDicInfo			EQU		'lahd'
+keyAEHomographWeight			EQU		'lahw'
+keyAEHomographAccent			EQU		'laha'
+
+typeAEHomographDicInfo			EQU		'lahd'
+typeAEHomographWeight			EQU		'shor'
+typeAEHomographAccent			EQU		'laha'
+; 
+;    Structure for dictionary information of homograph
+;
+
+HomographDicInfoRec		RECORD 0
+dictionaryID			 ds.l	1				; offset: $0 (0)
+uniqueID				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;=============================================================================================
+;    Definitions for Japanese part of speeches
+;=============================================================================================
+;
+
+; 
+;    Masks for part of speeches
+;
+
+
+kLASpeechRoughClassMask			EQU		$0000F000
+kLASpeechMediumClassMask		EQU		$0000FF00
+kLASpeechStrictClassMask		EQU		$0000FFF0
+kLASpeechKatsuyouMask			EQU		$0000000F
+
+; 
+;    Part of speeches
+;
+
+
+kLASpeechMeishi					EQU		$00000000			; noun 
+kLASpeechFutsuuMeishi			EQU		$00000000			; general noun 
+kLASpeechJinmei					EQU		$00000100			; person name 
+kLASpeechJinmeiSei				EQU		$00000110			; family name 
+kLASpeechJinmeiMei				EQU		$00000120			; first name 
+kLASpeechChimei					EQU		$00000200			; place name 
+kLASpeechSetsubiChimei			EQU		$00000210			; place name with suffix 
+kLASpeechSoshikimei				EQU		$00000300			; organization name 
+kLASpeechKoyuuMeishi			EQU		$00000400			; proper noun 
+kLASpeechSahenMeishi			EQU		$00000500			; special noun 
+kLASpeechKeidouMeishi			EQU		$00000600			; special noun 
+kLASpeechRentaishi				EQU		$00001000
+kLASpeechFukushi				EQU		$00002000			; adverb 
+kLASpeechSetsuzokushi			EQU		$00003000			; conjunction 
+kLASpeechKandoushi				EQU		$00004000
+kLASpeechDoushi					EQU		$00005000			; verb 
+kLASpeechGodanDoushi			EQU		$00005000
+kLASpeechKagyouGodan			EQU		$00005000
+kLASpeechSagyouGodan			EQU		$00005010
+kLASpeechTagyouGodan			EQU		$00005020
+kLASpeechNagyouGodan			EQU		$00005030
+kLASpeechMagyouGodan			EQU		$00005040
+kLASpeechRagyouGodan			EQU		$00005050
+kLASpeechWagyouGodan			EQU		$00005060
+kLASpeechGagyouGodan			EQU		$00005070
+kLASpeechBagyouGodan			EQU		$00005080
+kLASpeechIchidanDoushi			EQU		$00005100
+kLASpeechKahenDoushi			EQU		$00005200
+kLASpeechSahenDoushi			EQU		$00005300
+kLASpeechZahenDoushi			EQU		$00005400
+kLASpeechKeiyoushi				EQU		$00006000			; adjective 
+kLASpeechKeiyoudoushi			EQU		$00007000
+kLASpeechSettougo				EQU		$00008000			; prefix
+kLASpeechSuujiSettougo			EQU		$00008100			; prefix for numbers 
+kLASpeechSetsubigo				EQU		$00009000			; suffix 
+kLASpeechJinmeiSetsubigo		EQU		$00009100			; suffix for person name 
+kLASpeechChimeiSetsubigo		EQU		$00009200			; suffix for place name 
+kLASpeechSoshikimeiSetsubigo	EQU		$00009300			; suffix for organization name 
+kLASpeechSuujiSetsubigo			EQU		$00009400			; suffix for numbers 
+kLASpeechMuhinshi				EQU		$0000A000			; no category 
+kLASpeechTankanji				EQU		$0000A000			; character 
+kLASpeechKigou					EQU		$0000A100			; symbol 
+kLASpeechKuten					EQU		$0000A110
+kLASpeechTouten					EQU		$0000A120
+kLASpeechSuushi					EQU		$0000A200			; numbers 
+kLASpeechDokuritsugo			EQU		$0000A300
+kLASpeechSeiku					EQU		$0000A400
+kLASpeechJodoushi				EQU		$0000B000			; auxiliary verb 
+kLASpeechJoshi					EQU		$0000C000			; postpositional particle 
+
+; 
+;    Conjugations
+; 
+
+
+kLASpeechKatsuyouGokan			EQU		$00000001			; stem 
+kLASpeechKatsuyouMizen			EQU		$00000002
+kLASpeechKatsuyouRenyou			EQU		$00000003
+kLASpeechKatsuyouSyuushi		EQU		$00000004
+kLASpeechKatsuyouRentai			EQU		$00000005
+kLASpeechKatsuyouKatei			EQU		$00000006
+kLASpeechKatsuyouMeirei			EQU		$00000007
+
+	ENDIF ; __LANGUAGEANALYSIS__ 
+

@@ -1,0 +1,501 @@
+;
+;    File:       PCI.a
+;
+;    Contains:   PCI Bus Interfaces.
+;
+;    Version:    Technology: PowerSurge 1.0.2
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__PCI__') = 'UNDEFINED' THEN
+__PCI__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+
+;  Definitions for the PCI Config Registers
+
+kPCIConfigVendorID				EQU		$00
+kPCIConfigDeviceID				EQU		$02
+kPCIConfigCommand				EQU		$04
+kPCIConfigStatus				EQU		$06
+kPCIConfigRevisionID			EQU		$08
+kPCIConfigClassCode				EQU		$09
+kPCIConfigCacheLineSize			EQU		$0C
+kPCIConfigLatencyTimer			EQU		$0D
+kPCIConfigHeaderType			EQU		$0E
+kPCIConfigBIST					EQU		$0F
+kPCIConfigBaseAddress0			EQU		$10
+kPCIConfigBaseAddress1			EQU		$14
+kPCIConfigBaseAddress2			EQU		$18
+kPCIConfigBaseAddress3			EQU		$1C
+kPCIConfigBaseAddress4			EQU		$20
+kPCIConfigBaseAddress5			EQU		$24
+kPCIConfigCardBusCISPtr			EQU		$28
+kPCIConfigSubSystemVendorID		EQU		$2C
+kPCIConfigSubSystemID			EQU		$2E
+kPCIConfigExpansionROMBase		EQU		$30
+kPCIConfigCapabilitiesPtr		EQU		$34
+kPCIConfigInterruptLine			EQU		$3C
+kPCIConfigInterruptPin			EQU		$3D
+kPCIConfigMinimumGrant			EQU		$3E
+kPCIConfigMaximumLatency		EQU		$3F
+;  Definitions for the Capabilities PCI Config Register
+
+kPCICapabilityIDOffset			EQU		$00
+kPCINextCapabilityOffset		EQU		$01
+kPCIPowerManagementCapability	EQU		$01
+kPCIAGPCapability				EQU		$02
+;  Types and structures for accessing the PCI Assigned-Address property.
+
+
+kPCIRelocatableSpace			EQU		$80
+kPCIPrefetchableSpace			EQU		$40
+kPCIAliasedSpace				EQU		$20
+kPCIAddressTypeCodeMask			EQU		$03
+kPCIConfigSpace					EQU		0
+kPCIIOSpace						EQU		1
+kPCI32BitMemorySpace			EQU		2
+kPCI64BitMemorySpace			EQU		3
+; typedef UInt8 						PCIAddressSpaceFlags
+
+
+kPCIDeviceNumberMask			EQU		$1F
+kPCIFunctionNumberMask			EQU		$07
+; typedef UInt8 						PCIDeviceFunction
+
+; typedef UInt8 						PCIBusNumber
+
+; typedef UInt8 						PCIRegisterNumber
+
+PCIAssignedAddress		RECORD 0
+addressSpaceFlags		 ds.b	1				; offset: $0 (0)
+busNumber				 ds.b	1				; offset: $1 (1)
+deviceFunctionNumber	 ds.b	1				; offset: $2 (2)
+registerNumber			 ds.b	1				; offset: $3 (3)
+address					 ds		UnsignedWide	; offset: $4 (4)
+size					 ds		UnsignedWide	; offset: $C (12)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct PCIAssignedAddress *	PCIAssignedAddressPtr
+
+
+    IF TARGET_CPU_68K THEN
+        Macro
+        _EndianSwap32Bit &Dn
+            IF &Dn = '' THEN
+                ROL.W   #8,D0
+                SWAP    D0
+                ROL.W   #8,D0
+            ELSE
+                ROL.W   #8,&Dn
+                SWAP    &Dn
+                ROL.W   #8,&Dn
+            ENDIF
+        Endm
+    ELSE
+        IMPORT_CFM_FUNCTION EndianSwap32Bit
+    ENDIF
+
+    IF TARGET_CPU_68K THEN
+        Macro
+        _EndianSwap16Bit &Dn
+            IF &Dn = '' THEN
+                ROL.W   #8,D0
+            ELSE
+                ROL.W   #8,&Dn
+            ENDIF
+        Endm
+    ELSE
+        IMPORT_CFM_FUNCTION EndianSwap16Bit
+    ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ExpMgrConfigReadByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigReadByte(RegEntryIDPtr node, LogicalAddress configAddr, UInt8 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigReadByte
+			move.w              #$0620,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigReadByte
+	ENDIF
+
+
+; *  ExpMgrConfigReadWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigReadWord(RegEntryIDPtr node, LogicalAddress configAddr, UInt16 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigReadWord
+			move.w              #$0621,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigReadWord
+	ENDIF
+
+
+; *  ExpMgrConfigReadLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigReadLong(RegEntryIDPtr node, LogicalAddress configAddr, UInt32 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigReadLong
+			move.w              #$0622,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigReadLong
+	ENDIF
+
+
+; *  ExpMgrConfigWriteByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigWriteByte(RegEntryIDPtr node, LogicalAddress configAddr, UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigWriteByte
+			move.w              #$0523,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigWriteByte
+	ENDIF
+
+
+; *  ExpMgrConfigWriteWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigWriteWord(RegEntryIDPtr node, LogicalAddress configAddr, UInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigWriteWord
+			move.w              #$0524,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigWriteWord
+	ENDIF
+
+
+; *  ExpMgrConfigWriteLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrConfigWriteLong(RegEntryIDPtr node, LogicalAddress configAddr, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrConfigWriteLong
+			move.w              #$0625,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrConfigWriteLong
+	ENDIF
+
+
+; *  ExpMgrIOReadByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOReadByte(RegEntryIDPtr node, LogicalAddress ioAddr, UInt8 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOReadByte
+			move.w              #$0626,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOReadByte
+	ENDIF
+
+
+; *  ExpMgrIOReadWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOReadWord(RegEntryIDPtr node, LogicalAddress ioAddr, UInt16 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOReadWord
+			move.w              #$0627,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOReadWord
+	ENDIF
+
+
+; *  ExpMgrIOReadLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOReadLong(RegEntryIDPtr node, LogicalAddress ioAddr, UInt32 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOReadLong
+			move.w              #$0628,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOReadLong
+	ENDIF
+
+
+; *  ExpMgrIOWriteByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOWriteByte(RegEntryIDPtr node, LogicalAddress ioAddr, UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOWriteByte
+			move.w              #$0529,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOWriteByte
+	ENDIF
+
+
+; *  ExpMgrIOWriteWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOWriteWord(RegEntryIDPtr node, LogicalAddress ioAddr, UInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOWriteWord
+			move.w              #$052A,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOWriteWord
+	ENDIF
+
+
+; *  ExpMgrIOWriteLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrIOWriteLong(RegEntryIDPtr node, LogicalAddress ioAddr, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrIOWriteLong
+			move.w              #$062B,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrIOWriteLong
+	ENDIF
+
+
+; *  ExpMgrInterruptAcknowledgeReadByte()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrInterruptAcknowledgeReadByte(RegEntryIDPtr entry, UInt8 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrInterruptAcknowledgeReadByte
+			move.w              #$0411,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrInterruptAcknowledgeReadByte
+	ENDIF
+
+
+; *  ExpMgrInterruptAcknowledgeReadWord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrInterruptAcknowledgeReadWord(RegEntryIDPtr entry, UInt16 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrInterruptAcknowledgeReadWord
+			move.w              #$0412,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrInterruptAcknowledgeReadWord
+	ENDIF
+
+
+; *  ExpMgrInterruptAcknowledgeReadLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrInterruptAcknowledgeReadLong(RegEntryIDPtr entry, UInt32 *valuePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrInterruptAcknowledgeReadLong
+			move.w              #$0413,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrInterruptAcknowledgeReadLong
+	ENDIF
+
+
+; *  ExpMgrSpecialCycleWriteLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrSpecialCycleWriteLong(RegEntryIDPtr entry, UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrSpecialCycleWriteLong
+			move.w              #$0419,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrSpecialCycleWriteLong
+	ENDIF
+
+
+; *  ExpMgrSpecialCycleBroadcastLong()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCILib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ExpMgrSpecialCycleBroadcastLong(UInt32 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExpMgrSpecialCycleBroadcastLong
+			move.w              #$021A,D0
+			dc.w            	$AAF3
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExpMgrSpecialCycleBroadcastLong
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __PCI__ 
+

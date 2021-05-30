@@ -1,0 +1,608 @@
+;
+;    File:       ControlStrip.a
+;
+;    Contains:   Control Strip (for Powerbooks and Duos) Interfaces.
+;
+;    Version:    Technology: ControlStrip 1.4
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1992-2001 by Apple Computer, Inc. All rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CONTROLSTRIP__') = 'UNDEFINED' THEN
+__CONTROLSTRIP__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+
+; *********************************************************************************************
+;
+;    messages passed to the modules
+;
+;********************************************************************************************
+
+
+sdevInitModule					EQU		0					; initialize the module
+sdevCloseModule					EQU		1					; clean up before being closed
+sdevFeatures					EQU		2					; return feature bits
+sdevGetDisplayWidth				EQU		3					; returns the width of the module's display
+sdevPeriodicTickle				EQU		4					; periodic tickle when nothing else is happening
+sdevDrawStatus					EQU		5					; update the interface in the Control Strip
+sdevMouseClick					EQU		6					; user clicked on the module's display area in the Control Strip
+sdevSaveSettings				EQU		7					; saved any changed settings in module's preferences file
+sdevShowBalloonHelp				EQU		8					; puts up a help balloon, if the module has one to display
+; *********************************************************************************************
+;
+;    Features supported by the module.  If a bit is set, it means that feature is supported.
+;    All undefined bits are reserved for future use by Apple, and should be set to zero.
+;
+;********************************************************************************************
+
+
+sdevWantMouseClicks				EQU		0					; notify the module of mouseDown events
+sdevDontAutoTrack				EQU		1					; call the module to do mouse tracking
+sdevHasCustomHelp				EQU		2					; module provides its own help messages
+sdevKeepModuleLocked			EQU		3					; module needs to be locked in the heap
+; *********************************************************************************************
+;
+;    Result values returned by the sdevPeriodicTickle and sdevIconMouseClick selectors.
+;    If a bit is set, the module can request that a specific function is performed by
+;    the Control Strip.  A result of zero will do nothing.  All undefined bits are reserved
+;    for future use by Apple, and should be set to zero.
+;
+;********************************************************************************************
+
+
+sdevResizeDisplay				EQU		0					; resize the module's display
+sdevNeedToSave					EQU		1					; need to save changed settings, when convenient
+sdevHelpStateChange				EQU		2					; need to update the help message because of a state change
+sdevCloseNow					EQU		3					; close a module because it doesn't want to stay around
+
+; *********************************************************************************************
+;
+;    miscellaneous
+;
+;********************************************************************************************
+
+
+sdevFileType					EQU		'sdev'				; module's file type
+
+sdevMenuItemMark				EQU		$A5					; ‘•’: ‘checkmark’ to use in popup menus
+
+;   direction values for SBDrawBarGraph
+
+
+BarGraphSlopeLeft				EQU		-1					; max end of sloping bar graph is on the left
+BarGraphFlatRight				EQU		0					; max end of flat bar graph is on the right
+BarGraphSlopeRight				EQU		1					; max end of sloping bar graph is on the right
+; *********************************************************************************************
+;
+;    utility routines to provide standard interface elements and support for common functions
+;
+;********************************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SBIsControlStripVisible()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean SBIsControlStripVisible(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBIsControlStripVisible
+			moveq           	#0,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBIsControlStripVisible
+	ENDIF
+
+
+; *  SBShowHideControlStrip()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SBShowHideControlStrip(Boolean showIt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBShowHideControlStrip
+			move.w              #$0101,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBShowHideControlStrip
+	ENDIF
+
+
+; *  SBSafeToAccessStartupDisk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean SBSafeToAccessStartupDisk(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBSafeToAccessStartupDisk
+			moveq           	#2,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBSafeToAccessStartupDisk
+	ENDIF
+
+
+; *  SBOpenModuleResourceFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short SBOpenModuleResourceFile(OSType fileCreator)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBOpenModuleResourceFile
+			move.w              #$0203,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBOpenModuleResourceFile
+	ENDIF
+
+
+; *  SBLoadPreferences()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBLoadPreferences(ConstStr255Param prefsResourceName, Handle *preferences)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBLoadPreferences
+			move.w              #$0404,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBLoadPreferences
+	ENDIF
+
+
+; *  SBSavePreferences()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBSavePreferences(ConstStr255Param prefsResourceName, Handle preferences)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBSavePreferences
+			move.w              #$0405,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBSavePreferences
+	ENDIF
+
+
+; *  SBGetDetachedIndString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SBGetDetachedIndString(StringPtr theString, Handle stringList, short whichString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetDetachedIndString
+			move.w              #$0506,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetDetachedIndString
+	ENDIF
+
+
+; *  SBGetDetachIconSuite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBGetDetachIconSuite(Handle *theIconSuite, short theResID, unsigned long selector)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetDetachIconSuite
+			move.w              #$0507,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetDetachIconSuite
+	ENDIF
+
+
+; *  SBTrackPopupMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short SBTrackPopupMenu(const Rect *moduleRect, MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBTrackPopupMenu
+			move.w              #$0408,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBTrackPopupMenu
+	ENDIF
+
+
+; *  SBTrackSlider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short SBTrackSlider(const Rect *moduleRect, short ticksOnSlider, short initialValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBTrackSlider
+			move.w              #$0409,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBTrackSlider
+	ENDIF
+
+
+; *  SBShowHelpString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBShowHelpString(const Rect *moduleRect, StringPtr helpString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBShowHelpString
+			move.w              #$040A,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBShowHelpString
+	ENDIF
+
+
+; *  SBGetBarGraphWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short SBGetBarGraphWidth(short barCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetBarGraphWidth
+			move.w              #$010B,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetBarGraphWidth
+	ENDIF
+
+
+; *  SBDrawBarGraph()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SBDrawBarGraph(short level, short barCount, short direction, Point barGraphTopLeft)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBDrawBarGraph
+			move.w              #$050C,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBDrawBarGraph
+	ENDIF
+
+
+; *  SBModalDialogInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SBModalDialogInContext(ModalFilterUPP filterProc, short *itemHit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBModalDialogInContext
+			move.w              #$040D,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBModalDialogInContext
+	ENDIF
+
+;  The following routines are available in Control Strip 1.2 and later. 
+
+; *  SBGetControlStripFontID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBGetControlStripFontID(short *fontID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetControlStripFontID
+			move.w              #$020E,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetControlStripFontID
+	ENDIF
+
+
+; *  SBSetControlStripFontID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBSetControlStripFontID(short fontID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBSetControlStripFontID
+			move.w              #$010F,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBSetControlStripFontID
+	ENDIF
+
+
+; *  SBGetControlStripFontSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBGetControlStripFontSize(short *fontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetControlStripFontSize
+			move.w              #$0210,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetControlStripFontSize
+	ENDIF
+
+
+; *  SBSetControlStripFontSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBSetControlStripFontSize(short fontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBSetControlStripFontSize
+			move.w              #$0111,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBSetControlStripFontSize
+	ENDIF
+
+
+; *  SBGetShowHideHotKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBGetShowHideHotKey(short *modifiers, unsigned char *keyCode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBGetShowHideHotKey
+			move.w              #$0412,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBGetShowHideHotKey
+	ENDIF
+
+
+; *  SBSetShowHideHotKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBSetShowHideHotKey(short modifiers, unsigned char keyCode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBSetShowHideHotKey
+			move.w              #$0213,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBSetShowHideHotKey
+	ENDIF
+
+
+; *  SBIsShowHideHotKeyEnabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBIsShowHideHotKeyEnabled(Boolean *enabled)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBIsShowHideHotKeyEnabled
+			move.w              #$0214,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBIsShowHideHotKeyEnabled
+	ENDIF
+
+
+; *  SBEnableShowHideHotKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SBEnableShowHideHotKey(Boolean enabled)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBEnableShowHideHotKey
+			move.w              #$0115,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBEnableShowHideHotKey
+	ENDIF
+
+;  The following routines are available in Control Strip 1.4 and later. 
+
+; *  SBHitTrackSlider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ControlStripLib 1.4 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short SBHitTrackSlider(const Rect *moduleRect, short ticksOnSlider, short initialValue, Boolean *hit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SBHitTrackSlider
+			move.w              #$0616,D0
+			dc.w            	$AAF2
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SBHitTrackSlider
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __CONTROLSTRIP__ 
+

@@ -1,0 +1,500 @@
+
+; File: SlotEqu.a
+;
+; Version 2.0a2.2
+;
+; Copyright Apple Computer, Inc.	1986-1987
+; All Rights Reserved
+;
+; modifications:
+;	21-feb-87	KLH	merged SlotIntEqu.a into SlotDclMgr.a
+;	26-feb-87	KLH added selectors and macros to this file.
+
+
+;  sInfo Array status flags (StatusFlags).
+fCardIsChanged	EQU		$01			;Card is Changed field in StatusFlags field of sInfoArray
+
+;  spBlock flags (spFlags).
+fCkForNext		EQU		$00			;For SearchSRT. Flag to check for NEXT sResource in the table.
+fCkReserved		EQU		$01			;For ReadPBSize. Flag to check reserved field for zero.
+fWarmStart		EQU		$02			;If this bit is set then warm start, else cold start.
+fClear			EQU		$03			;If this bit is set then clear the memory
+fSys			EQU		$04			;If this bit is set then allocate memory on the system heap.
+fConsecBytes	EQU		$05			;If this bit is set then Calculate step value for consecutive bytes.
+
+;  sResource flags (sRsrc_Flags).
+fOpenAtStart	EQU		$01			;If this bit is set then open the driver at start time, else do not.
+
+;State constants 
+
+stateNil		EQU		0			;State	:Nil
+stateSDMInit	EQU		1			;		:Slot declaration manager Init
+statePRAMInit	EQU		2			;		:sPRAM record init
+statePInit		EQU		3			;		:Primary init
+stateSInit		EQU		4			;		:Secondary init
+
+
+;Misc constants 
+
+sizesPRAMRec	EQU		8						;Size of sPRAM record
+smPRAMTop		EQU		$46						;Address of top of slot mgr PRAM area.
+sNumSlots		EQU		6						;number of slots
+sFirstSlot		EQU		$9						;First slot
+sLastSlot		EQU		sFirstSlot+sNumSlots-1	;The last slot.
+
+lastSDMSelt		EQU		$34						;The last SDM selector.
+
+slotQSize		EQU		6		; # of slots to support
+
+;Data Structures
+
+SlotIntQElement RECORD		0
+sqLink			DS.L	1		; Ptr - ptr to next element
+sqType			DS.W	1		; INTEGER - queue type ID for validity
+sqPrio			DS.W	1		; INTEGER - priority
+sqAddr			DS.L	1		; ProcPtr - interrupt service routine
+sqParm			DS.L	1		; LONGINT - optional A1 parameter
+sqHDSize		EQU		*		; size of slot queue header element
+				ENDR
+
+
+SpBlock  	RECORD			0
+spResult		DS.L	1		;  FUNCTION Result. [Used by: every function]
+spsPointer		DS.L	1		;  Structure pointer (A structure is a list, long, logical block, ...)
+spSize			DS.L	1		;  Size of structure
+spOffsetData	DS.L	1		;  Offset/Data field.  [Used by:sOffsetData]
+spIOFileName	DS.L	1		;  Pointer to IOFile name. [Used by sDisDrvrName]
+spsExecPBlk		DS.L	1		;  Pointer to sExec parameter block.			<C468>
+spStackPtr		DS.L	1		;  Old Stack pointer.							<C468>
+spMisc			DS.L	1		;  Misc field for SDM.							<C468>
+spReserved		DS.L	1		;  Reserved for future expansion
+spIOReserved	DS.W	1		;  Reserved field of Slot Resource Table		<C663>
+spRefNum		DS.W	1		;  RefNum
+spCategory		DS.W	1		;  sType: Category								<C663>	
+spCType			DS.W	1		;  		  Type									<C663>	
+spDrvrSW		DS.W	1		;  		  DrvrSW								<C663>	
+spDrvrHW		DS.W	1		;  		  DrvrHW								<C663>	
+spTBMask		DS.B	1		;  Type bit mask (Bits 0..3 determine which words 0..3 to mask).	<C663>	
+spSlot			DS.B	1		;  Slot number.
+spId			DS.B	1		;  Structure Id.
+spExtDev		DS.B	1		;  Id of the external device.
+spHwDev			DS.B	1		;  Id of the hardware device.
+spByteLanes		DS.B	1		;  Bytelanes value from FHeader in the declaration ROM.
+spFlags			DS.B	1		;  Flags passed to various routine which require them (sSearchSRT,_InitSDeclMgr,...
+spKey			DS.B	1		;  Internal use only.
+				ALIGN	2
+spBlockSize		EQU		*		;  Size of spBlock
+				ENDR
+
+
+SInfoRecord 	RECORD		0
+siDirPtr		DS.L	1		;  Pointer to directory
+siInitStatusA  	DS.W	1		;  Fundamental Error
+siInitStatusV	DS.W	1		;  Status returned by vendor Init code
+siState			DS.B	1		;  Initialization State (Primary, Secondary)
+siCPUByteLanes	DS.B	1		;  CPU Byte Lanes. Each bit set signifies a byte-lane used.
+siTopOfROM		DS.B	1		;  Top of ROM = $FssFFFFx, where x is TopOfROM.
+siStatusFlags	DS.B	1		;  Bit-0:Card is changed
+siTOConst		DS.W	1		;  Time Out Constant for BusErr
+siReserved		DS.B	2		;  Reserved, must be 0
+sInfoRecSize	EQU		*		;  Size of sInfoRecord
+				ENDR
+
+
+SDMRecord		RECORD		0	;SDM information record. sInfo Array[0]
+sdBEVSave		DS.L	1		;  Save old BusErr vector.
+sdBusErrProc	DS.L	1		;  Go here to determine if it is a BusErr.
+sdErrorEntry	DS.L	1		;  Go here if BusErrProc determines it is really a BusErr.
+sdReserved		DS.L	1		;  Reserved
+sdRecSize		EQU		*		;  Size of SDM information Record.
+			    ENDR
+			  
+
+FHeaderRec 		RECORD		0
+fhDirOffset		DS.L	1		;Offset to directory	
+fhLength		DS.L	1		;Length of ROM
+fhCRC			DS.L	1		;CRC
+fhROMRev		DS.B	1		;Revision of ROM
+fhFormat		DS.B	1		;Format-2
+fhTstPat		DS.L	1		;TestPattern
+fhReserved		DS.B	1		;Reserved
+fhByteLanes		DS.B	1		;ByteLanes
+fhBlockSize		EQU		*
+				ENDR
+			 
+
+SEBlock	 		RECORD		0		;Parameter block for code executed by sExec.
+								;------- elements of all seBlocks ------
+seSlot			DS.B	1		;  Slot number.
+sesRsrcId		DS.B	1		;  sResource Id.
+seStatus		DS.W	1		;  Status of code executed by sExec.
+seFlags			DS.B	1		;  Flags.
+seFiller		DS.B	3		;  Filler
+								;------- extensions for sLoad + sBoot ------
+seResult		DS.L	1		;  Result of sLoad.
+seIOFileName	DS.L	1		;  Pointer to IOFile name.
+seDevice		DS.B	1		;  Which device to read from.
+sePartition		DS.B	1		;  The partition.
+seOSType		DS.B	1		;  Type of OS.
+seReserved		DS.B	1		;  Reserved field.
+seRefNum		DS.B	1		;  RefNum of the driver.
+								;------- extensions for sBoot ------
+seNumDevices	DS.B	1		;  Number of devices to load.
+seBootState		DS.B	1		;  State of StartBoot code.
+				ALIGN	2
+seBlockSize		EQU		*		;  Size of se parameter Block
+			    ENDR
+
+SEHeader1	 	RECORD		0		;Record structure of sExec Block, Revision-1.
+seRevision		DS.B	1		;  Revision of seBlock. Revision = 1. {Must be same field as se2Block}
+seCPUId			DS.B	1		;  Id of CPU
+seTimeOut		DS.W	1		;  Time Out
+seCode			DS.B	1		;  Beginning of code.
+			    ENDR
+				
+SEHeader2	 	RECORD		0		;Record structure of sExec Block, Revision-2.
+seRevision		DS.B	1		;  Revision of seBlock. Revision = 2. {Must be same field as se1Block}
+seCPUId			DS.B	1		;  Id of CPU
+seTimeOut		DS.W	1		;  Time Out
+seCodeOffset	DS.L	1		;  Offset to code.
+			    ENDR
+				
+
+SRRBlock	 	RECORD		0		;Slot Resource Table Record.
+srrHWDev		DS.B	1		;  Hardware device id.
+srrSlot			DS.B	1		;  Slot
+srrId			DS.B	1		;  Id
+srrExtDev		DS.B	1		;  External Device
+srrRefNum		DS.W	1		;  RefNum of driver
+srrIOReserved	DS.W	1		;  Reserved
+srrCategory		DS.W	1		;  sType: Category
+srrCType		DS.W	1		;  		  Type
+srrDrvrSW		DS.W	1		; 		  DrvrSW
+srrDrvrHW		DS.W	1		;  		  DrvrHW
+srrsRsrcPtr		DS.L	1		;  Pointer to sResource
+SRTRecSize		EQU		*		;  Size of se parameter Block
+			    ENDR
+
+
+;	PRINCIPLE
+sReadByte			EQU	$00
+sReadWord			EQU	$01
+sReadLong			EQU	$02
+sGetcString			EQU	$03
+sGetColorIcon		EQU	$04
+sGetBlock			EQU	$05
+sFindStruct			EQU	$06
+sReadStruct			EQU $07
+;	SPECIAL
+sReadInfo			EQU	$10
+sReadPRAMrec		EQU	$11
+sPutPRAMRec			EQU	$12
+sReadFHeader		EQU	$13
+sNextsRsrc			EQU	$14
+sNextTypesRsrc		EQU	$15
+sRsrcInfo			EQU	$16
+sDisposePtr			EQU	$17
+sCkCardStat			EQU	$18
+sReadDrvrName		EQU	$19
+sMacBoot			EQU	$1A
+sFindDevBase		EQU	$1B
+;	Advanced
+initSDeclMgr		EQU	$20
+sPrimaryInit		EQU	$21
+sCardChanged		EQU	$22
+sExec				EQU	$23
+sOffsetData			EQU	$24
+sInitPRAMRecs		EQU	$25
+sReadPBSize			EQU	$26
+sNewPtr				EQU	$27
+sCalcStep			EQU	$28
+sInitsRsrcTable		EQU	$29
+sSearchSRT			EQU	$2A
+sUpdateSRT			EQU $2B
+sCalcsPointer		EQU	$2C
+sGetDriver			EQU	$2D
+sPtrToSlot			EQU	$2E
+sFindsInfoRecPtr	EQU	$2F
+sFindsRsrcPtr		EQU	$30
+sDeleteSRTRec		EQU	$31
+
+
+_SlotManager	OPWORD	$A06E		
+
+
+;#####################################################################
+;	PRINCIPLE
+;#####################################################################
+
+				MACRO
+				_SReadByte
+				MOVEQ	#sReadByte,D0
+				_SlotManager
+				ENDM				
+				
+				
+				MACRO
+				_SReadWord
+				MOVEQ	#sReadWord,D0
+				_SlotManager
+				ENDM				
+				
+
+				MACRO
+				_SReadLong
+				MOVEQ	#sReadLong,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SGetcString
+				MOVEQ	#sGetcString,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SGetColorIcon
+				MOVEQ	#sGetColorIcon,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SGetBlock
+				MOVEQ	#sGetBlock,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SFindStruct
+				MOVEQ	#sFindStruct,D0
+				_SlotManager
+				ENDM
+
+
+				MACRO
+				_SReadStruct
+				MOVEQ	#sReadStruct,D0
+				_SlotManager
+				ENDM				
+
+
+;#####################################################################
+;	SPECIAL
+;#####################################################################
+				MACRO
+				_SReadInfo
+				MOVEQ	#sReadInfo,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SReadPRAMRec
+				MOVEQ	#sReadPRAMRec,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SPutPRAMRec
+				MOVEQ	#sPutPRAMRec,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SReadFHeader
+				MOVEQ	#sReadFHeader,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SNextsRsrc
+				MOVEQ	#sNextsRsrc,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SNextTypesRsrc
+				MOVEQ	#sNextTypesRsrc,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SRsrcInfo
+				MOVEQ	#sRsrcInfo,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SDisposePtr
+				MOVEQ	#sDisposePtr,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SCkCardStat
+				MOVEQ	#sCkCardStat,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SReadDrvrName
+				MOVEQ	#sReadDrvrName,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SMacBoot
+				MOVEQ	#sMacBoot,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SFindDevBase
+				MOVEQ	#sFindDevBase,D0
+				_SlotManager
+				ENDM				
+
+;#####################################################################
+;	Advanced
+;#####################################################################
+				MACRO
+				_InitSDeclMgr
+				MOVEQ	#initSDeclMgr,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SPrimaryInit
+				MOVEQ	#sPrimaryInit,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SCardChanged
+				MOVEQ	#sCardChanged,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SExec
+				MOVEQ	#sExec,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SOffsetData
+				MOVEQ	#sOffsetData,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SInitPRAMRecs
+				MOVEQ	#sInitPRAMRecs,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SReadPBSize
+				MOVEQ	#sReadPBSize,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SNewPtr
+				MOVEQ	#sNewPtr,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SCalcStep
+				MOVEQ	#sCalcStep,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SInitsRsrcTable
+				MOVEQ	#sInitsRsrcTable,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SSearchSRT
+				MOVEQ	#sSearchSRT,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SUpdateSRT
+				MOVEQ	#sUpdateSRT,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SCalcsPointer
+				MOVEQ	#sCalcsPointer,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SGetDriver
+				MOVEQ	#sGetDriver,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SPtrToSlot
+				MOVEQ	#sPtrToSlot,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SFindsInfoRecPtr
+				MOVEQ	#sFindsInfoRecPtr,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SFindsRsrcPtr
+				MOVEQ	#sFindsRsrcPtr,D0
+				_SlotManager
+				ENDM				
+
+
+				MACRO
+				_SDeleteSRTRec
+				MOVEQ	#sDeleteSRTRec,D0
+				_SlotManager
+				ENDM
+
+
+

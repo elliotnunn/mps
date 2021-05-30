@@ -1,0 +1,1324 @@
+;
+;    File:       Dictionary.a
+;
+;    Contains:   Dictionary Manager Interfaces
+;
+;    Version:    Technology: System 7
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1992-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DICTIONARY__') = 'UNDEFINED' THEN
+__DICTIONARY__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__AEREGISTRY__') = 'UNDEFINED' THEN
+	include 'AERegistry.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+; 
+;=============================================================================================
+; Modern Dictionary Manager
+;=============================================================================================
+;
+
+; 
+;    Dictionary information
+;
+
+
+kDictionaryFileType				EQU		'dict'
+kDCMDictionaryHeaderSignature	EQU		'dict'
+kDCMDictionaryHeaderVersion		EQU		2
+
+kDCMAnyFieldTag					EQU		'****'
+kDCMAnyFieldType				EQU		'****'
+; 
+;    Contents of a Field Info Record (an AERecord)
+;
+
+
+keyDCMFieldTag					EQU		'ftag'				; typeEnumeration 
+keyDCMFieldType					EQU		'ftyp'				; typeEnumeration 
+keyDCMMaxRecordSize				EQU		'mrsz'				; typeMagnitude 
+keyDCMFieldAttributes			EQU		'fatr'
+keyDCMFieldDefaultData			EQU		'fdef'
+keyDCMFieldName					EQU		'fnam'				; typeChar 
+keyDCMFieldFindMethods			EQU		'ffnd'				; typeAEList of typeDCMFindMethod 
+; 
+;    Special types for fields of a Field Info Record
+;
+
+
+typeDCMFieldAttributes			EQU		'fatr'
+typeDCMFindMethod				EQU		'fmth'
+
+; 
+;    Field attributes
+;
+
+
+kDCMIndexedFieldMask			EQU		$00000001
+kDCMRequiredFieldMask			EQU		$00000002
+kDCMIdentifyFieldMask			EQU		$00000004
+kDCMFixedSizeFieldMask			EQU		$00000008
+kDCMHiddenFieldMask				EQU		$80000000
+; typedef OptionBits 					DCMFieldAttributes
+
+; 
+;    Standard dictionary properties
+;
+
+
+pDCMAccessMethod				EQU		'amtd'				; data type: typeChar ReadOnly 
+pDCMPermission					EQU		'perm'				; data type: typeUInt16 
+pDCMListing						EQU		'list'				; data type: typeUInt16 
+pDCMMaintenance					EQU		'mtnc'				; data type: typeUInt16 
+pDCMLocale						EQU		'locl'				; data type: typeUInt32.  Optional; default = kLocaleIdentifierWildCard 
+pDCMClass						EQU		'pcls'				; data type: typeUInt16 
+pDCMCopyright					EQU		'info'				; data type: typeChar 
+; 
+;    pDCMPermission property constants
+;
+
+
+kDCMReadOnlyDictionary			EQU		0
+kDCMReadWriteDictionary			EQU		1
+; 
+;    pDCMListing property constants
+;
+
+
+kDCMAllowListing				EQU		0
+kDCMProhibitListing				EQU		1
+; 
+;    pDCMClass property constants
+;
+
+
+kDCMUserDictionaryClass			EQU		0
+kDCMSpecificDictionaryClass		EQU		1
+kDCMBasicDictionaryClass		EQU		2
+; 
+;    Standard search method
+;
+
+
+kDCMFindMethodExactMatch		EQU		'=   '
+kDCMFindMethodBeginningMatch	EQU		'bgwt'
+kDCMFindMethodContainsMatch		EQU		'cont'
+kDCMFindMethodEndingMatch		EQU		'ends'
+kDCMFindMethodForwardTrie		EQU		'ftri'				; used for morphological analysis
+kDCMFindMethodBackwardTrie		EQU		'btri'				; used for morphological analysis
+; typedef OSType 						DCMFindMethod
+
+; 
+;    AccessMethod features
+;
+
+
+kDCMCanUseFileDictionaryMask	EQU		$00000001
+kDCMCanUseMemoryDictionaryMask	EQU		$00000002
+kDCMCanStreamDictionaryMask		EQU		$00000004
+kDCMCanHaveMultipleIndexMask	EQU		$00000008
+kDCMCanModifyDictionaryMask		EQU		$00000010
+kDCMCanCreateDictionaryMask		EQU		$00000020
+kDCMCanAddDictionaryFieldMask	EQU		$00000040
+kDCMCanUseTransactionMask		EQU		$00000080
+; typedef OptionBits 					DCMAccessMethodFeature
+
+; typedef UInt32 						DCMUniqueID
+
+
+
+; typedef DCMObjectID 					DCMAccessMethodID
+
+; typedef DCMObjectID 					DCMDictionaryID
+
+
+
+; typedef DCMObjectRef 					DCMDictionaryRef
+
+; typedef DCMObjectRef 					DCMDictionaryStreamRef
+
+
+
+; typedef DCMObjectIterator 			DCMAccessMethodIterator
+
+; typedef DCMObjectIterator 			DCMDictionaryIterator
+
+
+
+; 
+;    Field specification declarations
+;
+
+; typedef DescType 						DCMFieldTag
+
+; typedef DescType 						DCMFieldType
+
+; 
+;    Dictionary header information
+;
+
+DCMDictionaryHeader		RECORD 0
+headerSignature			 ds.l	1				; offset: $0 (0)
+headerVersion			 ds.l	1				; offset: $4 (4)
+headerSize				 ds.l	1				; offset: $8 (8)
+accessMethod			 ds		Str63			; offset: $C (12)
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+; 
+;    Callback routines
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewDCMProgressFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDCMProgressFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDCMProgressFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+;    Library version
+;
+
+
+; *  DCMLibraryVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 DCMLibraryVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMLibraryVersion
+	ENDIF
+
+; 
+;    Create/delete dictionary
+;
+
+
+; *  DCMNewDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMNewDictionary(DCMAccessMethodID accessMethodID, const FSSpec *newDictionaryFile, ScriptCode scriptTag, const AEDesc *listOfFieldInfoRecords, Boolean invisible, ItemCount recordCapacity, DCMDictionaryID *newDictionary)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMNewDictionary
+	ENDIF
+
+
+; *  DCMDeriveNewDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMDeriveNewDictionary(DCMDictionaryID srcDictionary, const FSSpec *newDictionaryFile, ScriptCode scriptTag, Boolean invisible, ItemCount recordCapacity, DCMDictionaryID *newDictionary)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMDeriveNewDictionary
+	ENDIF
+
+
+; *  DCMDeleteDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMDeleteDictionary(DCMDictionaryID dictionaryID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMDeleteDictionary
+	ENDIF
+
+; 
+;    Register dictionary
+;
+
+
+; *  DCMRegisterDictionaryFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMRegisterDictionaryFile(const FSSpec *dictionaryFile, DCMDictionaryID *dictionaryID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMRegisterDictionaryFile
+	ENDIF
+
+
+; *  DCMUnregisterDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMUnregisterDictionary(DCMDictionaryID dictionaryID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMUnregisterDictionary
+	ENDIF
+
+; 
+;    Open dictionary
+;
+
+
+; *  DCMOpenDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMOpenDictionary(DCMDictionaryID dictionaryID, ByteCount protectKeySize, ConstLogicalAddress protectKey, DCMDictionaryRef *dictionaryRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMOpenDictionary
+	ENDIF
+
+
+; *  DCMCloseDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCloseDictionary(DCMDictionaryRef dictionaryRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCloseDictionary
+	ENDIF
+
+; 
+;    Change access privilege
+;
+
+
+; *  DCMGetDictionaryWriteAccess()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetDictionaryWriteAccess(DCMDictionaryRef dictionaryRef, Duration timeOutDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryWriteAccess
+	ENDIF
+
+
+; *  DCMReleaseDictionaryWriteAccess()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMReleaseDictionaryWriteAccess(DCMDictionaryRef dictionaryRef, Boolean commitTransaction)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMReleaseDictionaryWriteAccess
+	ENDIF
+
+; 
+;    Find records
+;
+
+
+; *  DCMFindRecords()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMFindRecords(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMFindMethod findMethod, ItemCount preFetchedDataNum, DCMFieldTag preFetchedData[], ItemCount skipCount, ItemCount maxRecordCount, DCMFoundRecordIterator *recordIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMFindRecords
+	ENDIF
+
+
+; *  DCMCountRecordIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ItemCount DCMCountRecordIterator(DCMFoundRecordIterator recordIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCountRecordIterator
+	ENDIF
+
+
+; *  DCMIterateFoundRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMIterateFoundRecord(DCMFoundRecordIterator recordIterator, ByteCount maxKeySize, ByteCount *actualKeySize, LogicalAddress keyData, DCMUniqueID *uniqueID, AEDesc *dataList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMIterateFoundRecord
+	ENDIF
+
+
+; *  DCMDisposeRecordIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMDisposeRecordIterator(DCMFoundRecordIterator recordIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMDisposeRecordIterator
+	ENDIF
+
+; 
+;    Dump dictionary
+;
+
+
+; *  DCMCountRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCountRecord(DCMDictionaryID dictionaryID, ItemCount *count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCountRecord
+	ENDIF
+
+
+; *  DCMGetRecordSequenceNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetRecordSequenceNumber(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID, ItemCount *sequenceNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetRecordSequenceNumber
+	ENDIF
+
+
+; *  DCMGetNthRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetNthRecord(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ItemCount serialNum, ByteCount maxKeySize, ByteCount *keySize, LogicalAddress keyData, DCMUniqueID *uniqueID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetNthRecord
+	ENDIF
+
+
+; *  DCMGetNextRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetNextRecord(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID, ByteCount maxKeySize, ByteCount *nextKeySize, LogicalAddress nextKeyData, DCMUniqueID *nextUniqueID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetNextRecord
+	ENDIF
+
+
+; *  DCMGetPrevRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetPrevRecord(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID, ByteCount maxKeySize, ByteCount *prevKeySize, LogicalAddress prevKeyData, DCMUniqueID *prevUniqueID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetPrevRecord
+	ENDIF
+
+; 
+;    Get field data
+;
+
+
+; *  DCMGetFieldData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldData(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID, ItemCount numOfData, const DCMFieldTag dataTag[], AEDesc *dataList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldData
+	ENDIF
+
+
+; *  DCMSetFieldData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMSetFieldData(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID, const AEDesc *dataList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMSetFieldData
+	ENDIF
+
+; 
+;    Add record
+;
+
+
+; *  DCMAddRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMAddRecord(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, Boolean checkOnly, const AEDesc *dataList, DCMUniqueID *newUniqueID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMAddRecord
+	ENDIF
+
+
+; *  DCMDeleteRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMDeleteRecord(DCMDictionaryRef dictionaryRef, DCMFieldTag keyFieldTag, ByteCount keySize, ConstLogicalAddress keyData, DCMUniqueID uniqueID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMDeleteRecord
+	ENDIF
+
+; 
+;    Reorganize/compact dictionary
+;
+
+
+; *  DCMReorganizeDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMReorganizeDictionary(DCMDictionaryID dictionaryID, ItemCount extraCapacity, DCMProgressFilterUPP progressProc, UInt32 userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMReorganizeDictionary
+	ENDIF
+
+
+; *  DCMCompactDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCompactDictionary(DCMDictionaryID dictionaryID, DCMProgressFilterUPP progressProc, UInt32 userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCompactDictionary
+	ENDIF
+
+; 
+;    DictionaryID utilities
+;
+
+
+; *  DCMGetFileFromDictionaryID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFileFromDictionaryID(DCMDictionaryID dictionaryID, FSSpec *fileRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFileFromDictionaryID
+	ENDIF
+
+
+; *  DCMGetDictionaryIDFromFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetDictionaryIDFromFile(const FSSpec *fileRef, DCMDictionaryID *dictionaryID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryIDFromFile
+	ENDIF
+
+
+; *  DCMGetDictionaryIDFromRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal DCMDictionaryID DCMGetDictionaryIDFromRef(DCMDictionaryRef dictionaryRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryIDFromRef
+	ENDIF
+
+; 
+;    Field information and manipulation
+;
+
+
+; *  DCMGetDictionaryFieldInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetDictionaryFieldInfo(DCMDictionaryID dictionaryID, DCMFieldTag fieldTag, AEDesc *fieldInfoRecord)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryFieldInfo
+	ENDIF
+
+; 
+;    Dictionary property
+;
+
+
+; *  DCMGetDictionaryProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetDictionaryProperty(DCMDictionaryID dictionaryID, DCMFieldTag propertyTag, ByteCount maxPropertySize, ByteCount *actualSize, LogicalAddress propertyValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryProperty
+	ENDIF
+
+
+; *  DCMSetDictionaryProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMSetDictionaryProperty(DCMDictionaryID dictionaryID, DCMFieldTag propertyTag, ByteCount propertySize, ConstLogicalAddress propertyValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMSetDictionaryProperty
+	ENDIF
+
+
+; *  DCMGetDictionaryPropertyList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetDictionaryPropertyList(DCMDictionaryID dictionaryID, ItemCount maxPropertyNum, ItemCount *numProperties, DCMFieldTag propertyTag[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetDictionaryPropertyList
+	ENDIF
+
+; 
+;    Seaarch dictionary
+;
+
+
+; *  DCMCreateDictionaryIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCreateDictionaryIterator(DCMDictionaryIterator *dictionaryIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCreateDictionaryIterator
+	ENDIF
+
+; 
+;    Search AccessMethod
+;
+
+
+; *  DCMCreateAccessMethodIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCreateAccessMethodIterator(DCMAccessMethodIterator *accessMethodIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCreateAccessMethodIterator
+	ENDIF
+
+; 
+;    Iterator Operation
+;
+
+
+; *  DCMCountObjectIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ItemCount DCMCountObjectIterator(DCMObjectIterator iterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCountObjectIterator
+	ENDIF
+
+
+; *  DCMIterateObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMIterateObject(DCMObjectIterator iterator, DCMObjectID *objectID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMIterateObject
+	ENDIF
+
+
+; *  DCMResetObjectIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMResetObjectIterator(DCMObjectIterator iterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMResetObjectIterator
+	ENDIF
+
+
+; *  DCMDisposeObjectIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMDisposeObjectIterator(DCMObjectIterator iterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMDisposeObjectIterator
+	ENDIF
+
+; 
+;    Get AccessMethod information
+;
+
+
+; *  DCMGetAccessMethodIDFromName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetAccessMethodIDFromName(ConstStr63Param accessMethodName, DCMAccessMethodID *accessMethodID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetAccessMethodIDFromName
+	ENDIF
+
+; 
+;    Field Info Record routines
+;
+
+
+; *  DCMCreateFieldInfoRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMCreateFieldInfoRecord(DescType fieldTag, DescType fieldType, ByteCount maxRecordSize, DCMFieldAttributes fieldAttributes, AEDesc *fieldDefaultData, ItemCount numberOfFindMethods, DCMFindMethod findMethods[], AEDesc *fieldInfoRecord)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMCreateFieldInfoRecord
+	ENDIF
+
+
+; *  DCMGetFieldTagAndType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldTagAndType(const AEDesc *fieldInfoRecord, DCMFieldTag *fieldTag, DCMFieldType *fieldType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldTagAndType
+	ENDIF
+
+
+; *  DCMGetFieldMaxRecordSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldMaxRecordSize(const AEDesc *fieldInfoRecord, ByteCount *maxRecordSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldMaxRecordSize
+	ENDIF
+
+
+; *  DCMGetFieldAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldAttributes(const AEDesc *fieldInfoRecord, DCMFieldAttributes *attributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldAttributes
+	ENDIF
+
+
+; *  DCMGetFieldDefaultData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldDefaultData(const AEDesc *fieldInfoRecord, DescType desiredType, AEDesc *fieldDefaultData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldDefaultData
+	ENDIF
+
+
+; *  DCMGetFieldFindMethods()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DictionaryMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DCMGetFieldFindMethods(const AEDesc *fieldInfoRecord, ItemCount findMethodsArrayMaxSize, DCMFindMethod findMethods[], ItemCount *actualNumberOfFindMethods)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DCMGetFieldFindMethods
+	ENDIF
+
+; 
+;    Check Dictionary Manager availability
+;
+
+	IF TARGET_RT_MAC_CFM THEN
+; 
+;        DCMDictionaryManagerAvailable() is a macro available only in C/C++.  
+;        To get the same functionality from pascal or assembly, you need
+;        to test if Dictionary Manager functions are not NULL.
+;        For instance:
+;        
+;            IF @DCMLibraryVersion <> kUnresolvedCFragSymbolAddress THEN
+;                gDictionaryManagerAvailable = TRUE;
+;            ELSE
+;                gDictionaryManagerAvailable = FALSE;
+;            END
+;    
+;
+
+	ELSEIF TARGET_RT_MAC_MACHO THEN
+;  Dictionary Manager is always available on OS X 
+	ENDIF	; 
+; 
+;=============================================================================================
+;    Definitions for Japanese Analysis Module
+;=============================================================================================
+;
+
+; 
+;    Default dictionary access method for Japanese analysis
+;
+
+; 
+;    Data length limitations of Apple Japanese dictionaries
+;
+
+
+kMaxYomiLengthInAppleJapaneseDictionary EQU 40
+kMaxKanjiLengthInAppleJapaneseDictionary EQU 64
+; 
+;    Defined field tags of Apple Japanese dictionary
+;
+
+
+kDCMJapaneseYomiTag				EQU		'yomi'
+kDCMJapaneseHyokiTag			EQU		'hyok'
+kDCMJapaneseHinshiTag			EQU		'hins'
+kDCMJapaneseWeightTag			EQU		'hind'
+kDCMJapanesePhoneticTag			EQU		'hton'
+kDCMJapaneseAccentTag			EQU		'acnt'
+kDCMJapaneseOnKunReadingTag		EQU		'OnKn'
+kDCMJapaneseFukugouInfoTag		EQU		'fuku'
+
+kDCMJapaneseYomiType			EQU		'utxt'
+kDCMJapaneseHyokiType			EQU		'utxt'
+kDCMJapaneseHinshiType			EQU		'hins'
+kDCMJapaneseWeightType			EQU		'shor'
+kDCMJapanesePhoneticType		EQU		'utxt'
+kDCMJapaneseAccentType			EQU		'byte'
+kDCMJapaneseOnKunReadingType	EQU		'utxt'
+kDCMJapaneseFukugouInfoType		EQU		'fuku'
+
+; 
+;=============================================================================================
+; System 7 Dictionary Manager
+;=============================================================================================
+;
+
+
+															; Dictionary data insertion modes 
+kInsert							EQU		0					; Only insert the input entry if there is nothing in the dictionary that matches the key. 
+kReplace						EQU		1					; Only replace the entries which match the key with the input entry. 
+kInsertOrReplace				EQU		2					; Insert the entry if there is nothing in the dictionary which matches the key, otherwise replaces the existing matched entries with the input entry. 
+;  This Was InsertMode 
+; typedef short 						DictionaryDataInsertMode
+
+
+															; Key attribute constants 
+kIsCaseSensitive				EQU		$10					; case sensitive = 16       
+kIsNotDiacriticalSensitive		EQU		$20					; diac not sensitive = 32    
+
+															; Registered attribute type constants.   
+kNoun							EQU		-1
+kVerb							EQU		-2
+kAdjective						EQU		-3
+kAdverb							EQU		-4
+;  This Was AttributeType 
+; typedef SInt8 						DictionaryEntryAttribute
+
+;  Dictionary information record 
+DictionaryInformation	RECORD 0
+dictionaryFSSpec		 ds		FSSpec			; offset: $0 (0)
+numberOfRecords			 ds.l	1				; offset: $46 (70)
+currentGarbageSize		 ds.l	1				; offset: $4A (74)
+script					 ds.w	1				; offset: $4E (78)
+maximumKeyLength		 ds.w	1				; offset: $50 (80)
+keyAttributes			 ds.b	1				; offset: $52 (82)
+						 ORG 84
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+DictionaryAttributeTable RECORD 0
+datSize					 ds.b	1				; offset: $0 (0)
+datTable				 ds.b	1				; offset: $1 (1) <-- really an array of length one
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+; typedef struct DictionaryAttributeTable * DictionaryAttributeTablePtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitializeDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InitializeDictionary(const FSSpec *theFsspecPtr, SInt16 maximumKeyLength, SInt8 keyAttributes, ScriptCode script)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitializeDictionary
+			move.w              #$0500,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitializeDictionary
+	ENDIF
+
+
+; *  OpenDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr OpenDictionary(const FSSpec *theFsspecPtr, SInt8 accessPermission, SInt32 *dictionaryReference)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenDictionary
+			move.w              #$0501,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenDictionary
+	ENDIF
+
+
+; *  CloseDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CloseDictionary(SInt32 dictionaryReference)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseDictionary
+			move.w              #$0202,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseDictionary
+	ENDIF
+
+
+; *  InsertRecordToDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InsertRecordToDictionary(SInt32 dictionaryReference, ConstStr255Param key, Handle recordDataHandle, DictionaryDataInsertMode whichMode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InsertRecordToDictionary
+			move.w              #$0703,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertRecordToDictionary
+	ENDIF
+
+
+; *  DeleteRecordFromDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DeleteRecordFromDictionary(SInt32 dictionaryReference, ConstStr255Param key)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DeleteRecordFromDictionary
+			move.w              #$0404,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteRecordFromDictionary
+	ENDIF
+
+
+; *  FindRecordInDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr FindRecordInDictionary(SInt32 dictionaryReference, ConstStr255Param key, DictionaryAttributeTablePtr requestedAttributeTablePointer, Handle recordDataHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindRecordInDictionary
+			move.w              #$0805,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindRecordInDictionary
+	ENDIF
+
+
+; *  FindRecordByIndexInDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr FindRecordByIndexInDictionary(SInt32 dictionaryReference, SInt32 recordIndex, DictionaryAttributeTablePtr requestedAttributeTablePointer, Str255 recordKey, Handle recordDataHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindRecordByIndexInDictionary
+			move.w              #$0A06,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindRecordByIndexInDictionary
+	ENDIF
+
+
+; *  GetDictionaryInformation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetDictionaryInformation(SInt32 dictionaryReference, DictionaryInformation *theDictionaryInformation)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDictionaryInformation
+			move.w              #$0407,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDictionaryInformation
+	ENDIF
+
+
+; *  CompactDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CompactDictionary(SInt32 dictionaryReference)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CompactDictionary
+			move.w              #$0208,D0
+			dc.w            	$AA53
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CompactDictionary
+	ENDIF
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __DICTIONARY__ 
+

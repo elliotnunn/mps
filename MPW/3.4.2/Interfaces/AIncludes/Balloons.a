@@ -1,0 +1,408 @@
+;
+;	File:		Balloons.a
+;
+;	Contains:	Balloon Help Package Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__BALLOONS__') = 'UNDEFINED' THEN
+__BALLOONS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+;		include 'Memory.a'											;
+
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+
+	IF &TYPE('__ERRORS__') = 'UNDEFINED' THEN
+	include 'Errors.a'
+	ENDIF
+
+hmBalloonHelpVersion			EQU		$0002				; The real version of the Help Manager 
+kHMHelpMenuID					EQU		-16490				; Resource ID and menu ID of help menu 
+kHMAboutHelpItem				EQU		1					; help menu item number of About Balloon Help… 
+kHMShowBalloonsItem				EQU		3					; help menu item number of Show/Hide Balloons 
+kHMHelpID						EQU		-5696				; ID of various Help Mgr package resources (in Pack14 range) 
+kBalloonWDEFID					EQU		126					; Resource ID of the WDEF proc used in standard balloons 
+; Dialog item template type constant 
+helpItem						EQU		1					; key value in DITL template that corresponds to the help item 
+; Options for Help Manager resources in 'hmnu', 'hdlg', 'hrct', 'hovr', & 'hfdr' resources 
+hmDefaultOptions				EQU		0					; default options for help manager resources 
+hmUseSubID						EQU		1					; treat resID's in resources as subID's of driver base ID (for Desk Accessories) 
+hmAbsoluteCoords				EQU		2					; ignore window port origin and treat rectangles as absolute coords (local to window) 
+
+hmSaveBitsNoWindow				EQU		4					; don't create a window, just blast bits on screen. No update event is generated 
+hmSaveBitsWindow				EQU		8					; create a window, but restore bits behind window when window goes away & generate update event 
+hmMatchInTitle					EQU		16					; for hwin resources, match string anywhere in window title string 
+; Constants for Help Types in 'hmnu', 'hdlg', 'hrct', 'hovr', & 'hfdr' resources 
+kHMStringItem					EQU		1					; pstring used in resource 
+kHMPictItem						EQU		2					; 'PICT' ResID used in resource 
+kHMStringResItem				EQU		3					; 'STR#' ResID & index used in resource 
+kHMTEResItem					EQU		6					; Styled Text Edit ResID used in resource ('TEXT' & 'styl') 
+kHMSTRResItem					EQU		7					; 'STR ' ResID used in resource 
+kHMSkipItem						EQU		256					; don't display a balloon 
+kHMCompareItem					EQU		512					; Compare pstring in menu item w/ PString in resource item ('hmnu' only) 
+kHMNamedResourceItem			EQU		1024				; Use pstring in menu item to get 'STR#', 'PICT', or 'STR ' resource ('hmnu' only) 
+kHMTrackCntlItem				EQU		2048				; Reserved 
+; Constants for hmmHelpType's when filling out HMMessageRecord 
+khmmString						EQU		1					; help message contains a PString 
+khmmPict						EQU		2					; help message contains a resource ID to a 'PICT' resource 
+khmmStringRes					EQU		3					; help message contains a res ID & index to a 'STR#' resource 
+khmmTEHandle					EQU		4					; help message contains a Text Edit handle 
+khmmPictHandle					EQU		5					; help message contains a Picture handle 
+khmmTERes						EQU		6					; help message contains a res ID to 'TEXT' & 'styl' resources 
+khmmSTRRes						EQU		7					; help message contains a res ID to a 'STR ' resource 
+kHMEnabledItem					EQU		0					; item is enabled, but not checked or control value = 0 
+
+; ResTypes for Styled TE Handles in Resources 
+kHMTETextResType				EQU		'TEXT'				; Resource Type of text data for styled TE record w/o style info 
+kHMTEStyleResType				EQU		'styl'
+
+kHMDisabledItem					EQU		1					; item is disabled, grayed in menus or disabled in dialogs 
+kHMCheckedItem					EQU		2					; item is enabled, and checked or control value = 1 
+kHMOtherItem					EQU		3					; item is enabled, and control value > 1 
+; Method parameters to pass to HMShowBalloon 
+kHMRegularWindow				EQU		0					; Create a regular window floating above all windows 
+kHMSaveBitsNoWindow				EQU		1					; Just save the bits and draw (for MDEF calls) 
+kHMSaveBitsWindow				EQU		2					; Regular window, save bits behind, AND generate update event 
+
+; Resource Types for whichType parameter used when extracting 'hmnu' & 'hdlg' messages 
+kHMMenuResType					EQU		'hmnu'				; ResType of help resource for supporting menus 
+kHMDialogResType				EQU		'hdlg'				; ResType of help resource for supporting dialogs 
+kHMWindListResType				EQU		'hwin'				; ResType of help resource for supporting windows 
+kHMRectListResType				EQU		'hrct'				; ResType of help resource for rectangles in windows 
+kHMOverrideResType				EQU		'hovr'				; ResType of help resource for overriding system balloons 
+kHMFinderApplResType			EQU		'hfdr'
+
+HMStringResType 		RECORD	0
+hmmResID				 ds.w   1		; offset: $0 (0)
+hmmIndex				 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct HMStringResType  HMStringResType
+HMMessageRecord 		RECORD	0
+hmmHelpType				 ds.w   1		; offset: $0 (0)
+hmmString				 ds.l   64		; offset: $2 (2)
+						 ORG 2
+hmmPict					 ds.w   1		; offset: $2 (2)
+						 ORG 2
+hmmTEHandle				 ds.l   1		; offset: $2 (2)
+						 ORG 2
+hmmStringRes			 ds     HMStringResType ; offset: $2 (2)
+						 ORG 2
+hmmPictRes				 ds.w   1		; offset: $2 (2)
+						 ORG 2
+hmmPictHandle			 ds.l   1		; offset: $2 (2)
+						 ORG 2
+hmmTERes				 ds.w   1		; offset: $2 (2)
+						 ORG 2
+hmmSTRRes				 ds.w   1		; offset: $2 (2)
+						 ORG 258
+sizeof					 EQU *			; size:   $102 (258)
+						ENDR
+
+; typedef struct HMMessageRecord  HMMessageRecord
+; typedef HMMessageRecord 	*HMMessageRecPtr
+;  Public Interfaces  
+;
+; pascal OSErr HMGetHelpMenuHandle(MenuRef *mh)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetHelpMenuHandle
+			move.w	#$0200,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetHelpMenuHandle
+	ENDIF
+
+;
+; pascal OSErr HMShowBalloon(const HMMessageRecord *aHelpMsg, Point tip, RectPtr alternateRect, TipFunctionUPP tipProc, SInt16 theProc, SInt16 balloonVariant, SInt16 method)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMShowBalloon
+			move.w	#$0B01,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMShowBalloon
+	ENDIF
+
+;
+; pascal OSErr HMRemoveBalloon(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMRemoveBalloon
+			move.w	#$0002,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMRemoveBalloon
+	ENDIF
+
+;
+; pascal Boolean HMGetBalloons(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetBalloons
+			move.w	#$0003,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetBalloons
+	ENDIF
+
+;
+; pascal OSErr HMSetBalloons(Boolean flag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMSetBalloons
+			move.w	#$0104,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMSetBalloons
+	ENDIF
+
+;
+; pascal OSErr HMShowMenuBalloon(SInt16 itemNum, SInt16 itemMenuID, SInt32 itemFlags, SInt32 itemReserved, Point tip, RectPtr alternateRect, TipFunctionUPP tipProc, SInt16 theProc, SInt16 balloonVariant)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMShowMenuBalloon
+			move.w	#$0E05,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMShowMenuBalloon
+	ENDIF
+
+;
+; pascal OSErr HMGetIndHelpMsg(ResType whichType, SInt16 whichResID, SInt16 whichMsg, SInt16 whichState, UInt32 *options, Point *tip, Rect *altRect, SInt16 *theProc, SInt16 *balloonVariant, HMMessageRecord *aHelpMsg, SInt16 *count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetIndHelpMsg
+			move.w	#$1306,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetIndHelpMsg
+	ENDIF
+
+;
+; pascal Boolean HMIsBalloon(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMIsBalloon
+			move.w	#$0007,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMIsBalloon
+	ENDIF
+
+;
+; pascal OSErr HMSetFont(SInt16 font)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMSetFont
+			move.w	#$0108,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMSetFont
+	ENDIF
+
+;
+; pascal OSErr HMSetFontSize(UInt16 fontSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMSetFontSize
+			move.w	#$0109,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMSetFontSize
+	ENDIF
+
+;
+; pascal OSErr HMGetFont(SInt16 *font)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetFont
+			move.w	#$020A,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetFont
+	ENDIF
+
+;
+; pascal OSErr HMGetFontSize(UInt16 *fontSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetFontSize
+			move.w	#$020B,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetFontSize
+	ENDIF
+
+;
+; pascal OSErr HMSetDialogResID(SInt16 resID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMSetDialogResID
+			move.w	#$010C,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMSetDialogResID
+	ENDIF
+
+;
+; pascal OSErr HMSetMenuResID(SInt16 menuID, SInt16 resID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMSetMenuResID
+			move.w	#$020D,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMSetMenuResID
+	ENDIF
+
+;
+; pascal OSErr HMBalloonRect(const HMMessageRecord *aHelpMsg, Rect *coolRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMBalloonRect
+			move.w	#$040E,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMBalloonRect
+	ENDIF
+
+;
+; pascal OSErr HMBalloonPict(const HMMessageRecord *aHelpMsg, PicHandle *coolPict)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMBalloonPict
+			move.w	#$040F,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMBalloonPict
+	ENDIF
+
+;
+; pascal OSErr HMScanTemplateItems(SInt16 whichID, SInt16 whichResFile, ResType whichType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMScanTemplateItems
+			move.w	#$0410,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMScanTemplateItems
+	ENDIF
+
+;
+; pascal OSErr HMExtractHelpMsg(ResType whichType, SInt16 whichResID, SInt16 whichMsg, SInt16 whichState, HMMessageRecord *aHelpMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMExtractHelpMsg
+			move.w	#$0711,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMExtractHelpMsg
+	ENDIF
+
+;
+; pascal OSErr HMGetDialogResID(SInt16 *resID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetDialogResID
+			move.w	#$0213,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetDialogResID
+	ENDIF
+
+;
+; pascal OSErr HMGetMenuResID(SInt16 menuID, SInt16 *resID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetMenuResID
+			move.w	#$0314,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetMenuResID
+	ENDIF
+
+;
+; pascal OSErr HMGetBalloonWindow(WindowRef *window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_HMGetBalloonWindow
+			move.w	#$0215,d0
+			dc.w 	$A830
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HMGetBalloonWindow
+	ENDIF
+
+	ENDIF ; __BALLOONS__

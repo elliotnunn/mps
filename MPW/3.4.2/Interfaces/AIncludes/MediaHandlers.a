@@ -1,0 +1,633 @@
+;
+;	File:		MediaHandlers.a
+;
+;	Contains:	QuickTime Interfaces.
+;
+;	Version:	Technology:	QuickTime 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__MEDIAHANDLERS__') = 'UNDEFINED' THEN
+__MEDIAHANDLERS__ SET 1
+
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+	include 'ImageCompression.a'
+	ENDIF
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+;		include 'QDOffscreen.a'									;
+;			include 'Errors.a'										;
+;		include 'Components.a'										;
+;		include 'Windows.a'										;
+;			include 'Events.a'										;
+;				include 'OSUtils.a'								;
+;			include 'Controls.a'									;
+;				include 'Menus.a'									;
+;		include 'StandardFile.a'									;
+;			include 'Dialogs.a'									;
+;				include 'TextEdit.a'								;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;			include 'AppleTalk.a'									;
+
+handlerHasSpatial				EQU		1 << 0
+handlerCanClip					EQU		1 << 1
+handlerCanMatte					EQU		1 << 2
+handlerCanTransferMode			EQU		1 << 3
+handlerNeedsBuffer				EQU		1 << 4
+handlerNoIdle					EQU		1 << 5
+handlerNoScheduler				EQU		1 << 6
+handlerWantsTime				EQU		1 << 7
+handlerCGrafPortOnly			EQU		1 << 8
+
+; media task flags 
+mMustDraw						EQU		1 << 3
+mAtEnd							EQU		1 << 4
+mPreflightDraw					EQU		1 << 5
+mSyncDrawing					EQU		1 << 6
+
+; media task result flags 
+mDidDraw						EQU		1 << 0
+mNeedsToDraw					EQU		1 << 2
+mDrawAgain						EQU		1 << 3
+mPartialDraw					EQU		1 << 4
+
+forceUpdateRedraw				EQU		1 << 0
+forceUpdateNewBuffer			EQU		1 << 1
+
+GetMovieCompleteParams 	RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+theMovie				 ds.l   1		; offset: $2 (2)
+theTrack				 ds.l   1		; offset: $6 (6)
+theMedia				 ds.l   1		; offset: $A (10)
+movieScale				 ds.l   1		; offset: $E (14)
+mediaScale				 ds.l   1		; offset: $12 (18)
+movieDuration			 ds.l   1		; offset: $16 (22)
+trackDuration			 ds.l   1		; offset: $1A (26)
+mediaDuration			 ds.l   1		; offset: $1E (30)
+effectiveRate			 ds.l   1		; offset: $22 (34)
+timeBase				 ds.l   1		; offset: $26 (38)
+volume					 ds.w   1		; offset: $2A (42)
+width					 ds.l   1		; offset: $2C (44)
+height					 ds.l   1		; offset: $30 (48)
+trackMovieMatrix		 ds     MatrixRecord ; offset: $34 (52)
+moviePort				 ds.l   1		; offset: $58 (88)
+movieGD					 ds.l   1		; offset: $5C (92)
+trackMatte				 ds.l   1		; offset: $60 (96)
+sizeof					 EQU *			; size:   $64 (100)
+						ENDR
+
+; typedef struct GetMovieCompleteParams  GetMovieCompleteParams
+;
+; pascal ComponentResult MediaInitialize(MediaHandler mh, GetMovieCompleteParams *gmc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaInitialize
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0501
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaInitialize
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetHandlerCapabilities(MediaHandler mh, long flags, long flagsMask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetHandlerCapabilities
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0502
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetHandlerCapabilities
+	ENDIF
+
+;
+; pascal ComponentResult MediaIdle(MediaHandler mh, TimeValue atMediaTime, long flagsIn, long *flagsOut, const TimeRecord *movieTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaIdle
+			dc.w 	$2F3C
+			dc.w 	$0010
+			dc.w 	$0503
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaIdle
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetMediaInfo(MediaHandler mh, Handle h)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetMediaInfo
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0504
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetMediaInfo
+	ENDIF
+
+;
+; pascal ComponentResult MediaPutMediaInfo(MediaHandler mh, Handle h)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaPutMediaInfo
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0505
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaPutMediaInfo
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetActive(MediaHandler mh, Boolean enableMedia)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetActive
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0506
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetActive
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetRate(MediaHandler mh, Fixed rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetRate
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0507
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetRate
+	ENDIF
+
+;
+; pascal ComponentResult MediaGGetStatus(MediaHandler mh, ComponentResult *statusErr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGGetStatus
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0508
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGGetStatus
+	ENDIF
+
+;
+; pascal ComponentResult MediaTrackEdited(MediaHandler mh)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaTrackEdited
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$0509
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaTrackEdited
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetMediaTimeScale(MediaHandler mh, TimeScale newTimeScale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetMediaTimeScale
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$050A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetMediaTimeScale
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetMovieTimeScale(MediaHandler mh, TimeScale newTimeScale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetMovieTimeScale
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$050B
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetMovieTimeScale
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetGWorld(MediaHandler mh, CGrafPtr aPort, GDHandle aGD)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetGWorld
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$050C
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetGWorld
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetDimensions(MediaHandler mh, Fixed width, Fixed height)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetDimensions
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$050D
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetDimensions
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetClip(MediaHandler mh, RgnHandle theClip)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetClip
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$050E
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetClip
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetMatrix(MediaHandler mh, MatrixRecord *trackMovieMatrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetMatrix
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$050F
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetMatrix
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetTrackOpaque(MediaHandler mh, Boolean *trackIsOpaque)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetTrackOpaque
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0510
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetTrackOpaque
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetGraphicsMode(MediaHandler mh, long mode, const RGBColor *opColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetGraphicsMode
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0511
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetGraphicsMode
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetGraphicsMode(MediaHandler mh, long *mode, RGBColor *opColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetGraphicsMode
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0512
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetGraphicsMode
+	ENDIF
+
+;
+; pascal ComponentResult MediaGSetVolume(MediaHandler mh, short volume)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGSetVolume
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0513
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGSetVolume
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetSoundBalance(MediaHandler mh, short balance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetSoundBalance
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$0514
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetSoundBalance
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetSoundBalance(MediaHandler mh, short *balance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetSoundBalance
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0515
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetSoundBalance
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetNextBoundsChange(MediaHandler mh, TimeValue *when)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetNextBoundsChange
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0516
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetNextBoundsChange
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetSrcRgn(MediaHandler mh, RgnHandle rgn, TimeValue atMediaTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetSrcRgn
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0517
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetSrcRgn
+	ENDIF
+
+;
+; pascal ComponentResult MediaPreroll(MediaHandler mh, TimeValue time, Fixed rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaPreroll
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$0518
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaPreroll
+	ENDIF
+
+;
+; pascal ComponentResult MediaSampleDescriptionChanged(MediaHandler mh, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSampleDescriptionChanged
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0519
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSampleDescriptionChanged
+	ENDIF
+
+;
+; pascal ComponentResult MediaHasCharacteristic(MediaHandler mh, OSType characteristic, Boolean *hasIt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaHasCharacteristic
+			dc.w 	$2F3C
+			dc.w 	$0008
+			dc.w 	$051A
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaHasCharacteristic
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetOffscreenBufferSize(MediaHandler mh, Rect *bounds, short depth, CTabHandle ctab)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetOffscreenBufferSize
+			dc.w 	$2F3C
+			dc.w 	$000A
+			dc.w 	$051B
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetOffscreenBufferSize
+	ENDIF
+
+;
+; pascal ComponentResult MediaSetHints(MediaHandler mh, long hints)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaSetHints
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$051C
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaSetHints
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetName(MediaHandler mh, Str255 name, long requestedLanguage, long *actualLanguage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetName
+			dc.w 	$2F3C
+			dc.w 	$000C
+			dc.w 	$051D
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetName
+	ENDIF
+
+;
+; pascal ComponentResult MediaForceUpdate(MediaHandler mh, long forceUpdateFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaForceUpdate
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$051E
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaForceUpdate
+	ENDIF
+
+;
+; pascal ComponentResult MediaGetDrawingRgn(MediaHandler mh, RgnHandle *partialRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MediaGetDrawingRgn
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$0521
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MediaGetDrawingRgn
+	ENDIF
+
+
+kMediaInitializeSelect			EQU		$501
+kMediaSetHandlerCapabilitiesSelect EQU		$502
+kMediaIdleSelect				EQU		$503
+kMediaGetMediaInfoSelect		EQU		$504
+kMediaPutMediaInfoSelect		EQU		$505
+kMediaSetActiveSelect			EQU		$506
+kMediaSetRateSelect				EQU		$507
+kMediaGGetStatusSelect			EQU		$508
+kMediaTrackEditedSelect			EQU		$509
+kMediaSetMediaTimeScaleSelect	EQU		$50A
+kMediaSetMovieTimeScaleSelect	EQU		$50B
+kMediaSetGWorldSelect			EQU		$50C
+kMediaSetDimensionsSelect		EQU		$50D
+kMediaSetClipSelect				EQU		$50E
+kMediaSetMatrixSelect			EQU		$50F
+kMediaGetTrackOpaqueSelect		EQU		$510
+kMediaSetGraphicsModeSelect		EQU		$511
+kMediaGetGraphicsModeSelect		EQU		$512
+kMediaGSetVolumeSelect			EQU		$513
+kMediaSetSoundBalanceSelect		EQU		$514
+kMediaGetSoundBalanceSelect		EQU		$515
+kMediaGetNextBoundsChangeSelect	EQU		$516
+kMediaGetSrcRgnSelect			EQU		$517
+kMediaPrerollSelect				EQU		$518
+kMediaSampleDescriptionChangedSelect EQU		$519
+kMediaHasCharacteristicSelect	EQU		$51A
+kMediaGetOffscreenBufferSizeSelect EQU		$51B
+kMediaSetHintsSelect			EQU		$51C
+kMediaGetNameSelect				EQU		$51D
+kMediaForceUpdateSelect			EQU		$51E
+kMediaGetDrawingRgnSelect		EQU		$521
+
+	ENDIF ; __MEDIAHANDLERS__

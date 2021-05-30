@@ -1,0 +1,1375 @@
+;
+;    File:       Drag.a
+;
+;    Contains:   Drag and Drop Interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1992-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DRAG__') = 'UNDEFINED' THEN
+__DRAG__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG MANAGER DATA TYPES
+;  _________________________________________________________________________________________________________
+
+
+
+
+
+; typedef UInt32 						DragItemRef
+
+; typedef OSType 						FlavorType
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG ATTRIBUTES
+;  _________________________________________________________________________________________________________
+
+
+
+; typedef UInt32						DragAttributes
+kDragHasLeftSenderWindow		EQU		$00000001			; drag has left the source window since TrackDrag
+kDragInsideSenderApplication	EQU		$00000002			; drag is occurring within the sender application
+kDragInsideSenderWindow			EQU		$00000004			; drag is occurring within the sender window
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG BEHAVIORS
+;  _________________________________________________________________________________________________________
+
+
+
+; typedef UInt32						DragBehaviors
+kDragBehaviorNone				EQU		0
+kDragBehaviorZoomBackAnimation	EQU		$00000001			; do zoomback animation for failed drags (normally enabled).
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG IMAGE FLAGS
+;  _________________________________________________________________________________________________________
+
+
+
+; typedef UInt32						DragImageFlags
+kDragRegionAndImage				EQU		$00000010			; drag region and image
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG IMAGE TRANSLUCENCY LEVELS
+;  _________________________________________________________________________________________________________
+
+
+
+
+kDragStandardTranslucency		EQU		0					; 65% image translucency (standard)
+kDragDarkTranslucency			EQU		1					; 50% image translucency
+kDragDarkerTranslucency			EQU		2					; 25% image translucency
+kDragOpaqueTranslucency			EQU		3					; 0% image translucency (opaque)
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG DRAWING PROCEDURE MESSAGES
+;  _________________________________________________________________________________________________________
+
+
+
+
+; typedef SInt16						DragRegionMessage
+kDragRegionBegin				EQU		1					; initialize drawing
+kDragRegionDraw					EQU		2					; draw drag feedback
+kDragRegionHide					EQU		3					; hide drag feedback
+kDragRegionIdle					EQU		4					; drag feedback idle time
+kDragRegionEnd					EQU		5					; end of drawing
+
+;  _________________________________________________________________________________________________________
+;      
+;   • ZOOM ACCELERATION
+;  _________________________________________________________________________________________________________
+
+
+
+
+; typedef SInt16						ZoomAcceleration
+kZoomNoAcceleration				EQU		0					; use linear interpolation
+kZoomAccelerate					EQU		1					; ramp up step size
+kZoomDecelerate					EQU		2					; ramp down step size
+
+;  _________________________________________________________________________________________________________
+;      
+;   • FLAVOR FLAGS
+;  _________________________________________________________________________________________________________
+
+
+
+
+; typedef UInt32						FlavorFlags
+flavorSenderOnly				EQU		$01					; flavor is available to sender only
+flavorSenderTranslated			EQU		$02					; flavor is translated by sender
+flavorNotSaved					EQU		$04					; flavor should not be saved
+flavorSystemTranslated			EQU		$0100				; flavor is translated by system
+
+;  _________________________________________________________________________________________________________
+;      
+;   • FILE SYSTEM CONSTANTS
+;  _________________________________________________________________________________________________________
+
+
+
+
+kDragFlavorTypeHFS				EQU		'hfs '				; flavor type for HFS data
+kDragFlavorTypePromiseHFS		EQU		'phfs'				; flavor type for promised HFS data
+flavorTypeHFS					EQU		'hfs '				; old name
+flavorTypePromiseHFS			EQU		'phfs'				; old name
+
+kDragPromisedFlavorFindFile		EQU		'rWm1'				; promisedFlavor value for Find File
+kDragPromisedFlavor				EQU		'fssP'				; promisedFlavor value for everything else
+
+kDragPseudoCreatorVolumeOrDirectory EQU	'MACS'				; "creator code" for volume or directory
+kDragPseudoFileTypeVolume		EQU		'disk'				; "file type" for volume
+kDragPseudoFileTypeDirectory	EQU		'fold'				; "file type" for directory
+
+;  _________________________________________________________________________________________________________
+;      
+;   • SPECIAL FLAVORS
+;  _________________________________________________________________________________________________________
+
+
+
+
+flavorTypeDirectory				EQU		'diry'				; flavor type for AOCE directories
+
+;  _________________________________________________________________________________________________________
+;      
+;   • FLAVORS FOR FINDER 8.0 AND LATER
+;  _________________________________________________________________________________________________________
+
+
+
+
+kFlavorTypeClippingName			EQU		'clnm'				; name hint for clipping file (preferred over 'clfn')
+kFlavorTypeClippingFilename		EQU		'clfn'				; name for clipping file
+kFlavorTypeDragToTrashOnly		EQU		'fdtt'				; for apps that want to allow dragging private data to the trash
+kFlavorTypeFinderNoTrackingBehavior EQU	'fntb'				; Finder completely ignores any drag containing this flavor
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG TRACKING HANDLER MESSAGES
+;  _________________________________________________________________________________________________________
+
+
+
+
+; typedef SInt16						DragTrackingMessage
+kDragTrackingEnterHandler		EQU		1					; drag has entered handler
+kDragTrackingEnterWindow		EQU		2					; drag has entered window
+kDragTrackingInWindow			EQU		3					; drag is moving within window
+kDragTrackingLeaveWindow		EQU		4					; drag has exited window
+kDragTrackingLeaveHandler		EQU		5					; drag has exited handler
+
+;  _________________________________________________________________________________________________________
+;      
+;   • HFS FLAVORS
+;  _________________________________________________________________________________________________________
+
+
+
+HFSFlavor				RECORD 0
+fileType				 ds.l	1				; offset: $0 (0)		;  file type 
+fileCreator				 ds.l	1				; offset: $4 (4)		;  file creator 
+fdFlags					 ds.w	1				; offset: $8 (8)		;  Finder flags 
+fileSpec				 ds		FSSpec			; offset: $A (10)		;  file system specification 
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+PromiseHFSFlavor		RECORD 0
+fileType				 ds.l	1				; offset: $0 (0)		;  file type 
+fileCreator				 ds.l	1				; offset: $4 (4)		;  file creator 
+fdFlags					 ds.w	1				; offset: $8 (8)		;  Finder flags 
+promisedFlavor			 ds.l	1				; offset: $A (10)		;  promised flavor containing an FSSpec 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+;  _________________________________________________________________________________________________________
+;      
+;   • APPLICATION-DEFINED DRAG HANDLER ROUTINES
+;  _________________________________________________________________________________________________________
+
+
+
+; *  NewDragTrackingHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDragReceiveHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDragTrackingHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDragReceiveHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDragTrackingHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDragReceiveHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • APPLICATION-DEFINED ROUTINES
+;  _________________________________________________________________________________________________________
+
+
+
+; *  NewDragSendDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDragInputUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDragDrawingUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDragSendDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDragInputUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDragDrawingUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDragSendDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDragInputUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDragDrawingUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • INSTALLING AND REMOVING HANDLERS API'S
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  InstallTrackingHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr InstallTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow, void *handlerRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InstallTrackingHandler
+			moveq           	#1,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallTrackingHandler
+	ENDIF
+
+
+; *  InstallReceiveHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr InstallReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow, void *handlerRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InstallReceiveHandler
+			moveq           	#2,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallReceiveHandler
+	ENDIF
+
+
+; *  RemoveTrackingHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr RemoveTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RemoveTrackingHandler
+			moveq           	#3,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveTrackingHandler
+	ENDIF
+
+
+; *  RemoveReceiveHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr RemoveReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RemoveReceiveHandler
+			moveq           	#4,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveReceiveHandler
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • CREATING & DISPOSING
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  NewDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NewDrag(DragRef *theDrag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewDrag
+			moveq           	#5,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewDrag
+	ENDIF
+
+
+; *  DisposeDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DisposeDrag(DragRef theDrag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisposeDrag
+			moveq           	#6,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeDrag
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • ADDING DRAG ITEM FLAVORS
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  AddDragItemFlavor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AddDragItemFlavor(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, FlavorFlags theFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AddDragItemFlavor
+			moveq           	#7,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AddDragItemFlavor
+	ENDIF
+
+
+; *  SetDragItemFlavorData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragItemFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, UInt32 dataOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragItemFlavorData
+			moveq           	#9,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragItemFlavorData
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • PROVIDING CALLBACK PROCEDURES
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  SetDragSendProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragSendProc(DragRef theDrag, DragSendDataUPP sendProc, void *dragSendRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragSendProc
+			moveq           	#10,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragSendProc
+	ENDIF
+
+
+
+; *  SetDragInputProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragInputProc(DragRef theDrag, DragInputUPP inputProc, void *dragInputRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragInputProc
+			moveq           	#11,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragInputProc
+	ENDIF
+
+
+; *  SetDragDrawingProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragDrawingProc(DragRef theDrag, DragDrawingUPP drawingProc, void *dragDrawingRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragDrawingProc
+			moveq           	#12,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragDrawingProc
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • SETTING THE DRAG IMAGE
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  SetDragImage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragImage(DragRef theDrag, PixMapHandle imagePixMap, RgnHandle imageRgn, Point imageOffsetPt, DragImageFlags theImageFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragImage
+			moveq           	#39,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragImage
+	ENDIF
+
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • ALTERING THE BEHAVIOR OF A DRAG
+;  _________________________________________________________________________________________________________
+
+
+
+; *  ChangeDragBehaviors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ChangeDragBehaviors(DragRef theDrag, DragBehaviors inBehaviorsToSet, DragBehaviors inBehaviorsToClear)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ChangeDragBehaviors
+			moveq           	#40,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeDragBehaviors
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • PERFORMING A DRAG
+;  _________________________________________________________________________________________________________
+
+
+
+; *  TrackDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr TrackDrag(DragRef theDrag, const EventRecord *theEvent, RgnHandle theRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TrackDrag
+			moveq           	#13,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TrackDrag
+	ENDIF
+
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • GETTING DRAG ITEM INFORMATION
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  CountDragItems()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CountDragItems(DragRef theDrag, UInt16 *numItems)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CountDragItems
+			moveq           	#14,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountDragItems
+	ENDIF
+
+
+; *  GetDragItemReferenceNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragItemReferenceNumber(DragRef theDrag, UInt16 index, DragItemRef *theItemRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragItemReferenceNumber
+			moveq           	#15,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragItemReferenceNumber
+	ENDIF
+
+
+; *  CountDragItemFlavors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CountDragItemFlavors(DragRef theDrag, DragItemRef theItemRef, UInt16 *numFlavors)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CountDragItemFlavors
+			moveq           	#16,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountDragItemFlavors
+	ENDIF
+
+
+; *  GetFlavorType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetFlavorType(DragRef theDrag, DragItemRef theItemRef, UInt16 index, FlavorType *theType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFlavorType
+			moveq           	#17,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFlavorType
+	ENDIF
+
+
+; *  GetFlavorFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetFlavorFlags(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, FlavorFlags *theFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFlavorFlags
+			moveq           	#18,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFlavorFlags
+	ENDIF
+
+
+; *  GetFlavorDataSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetFlavorDataSize(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, Size *dataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFlavorDataSize
+			moveq           	#19,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFlavorDataSize
+	ENDIF
+
+
+; *  GetFlavorData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, void *dataPtr, Size *dataSize, UInt32 dataOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetFlavorData
+			moveq           	#20,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFlavorData
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG ITEM BOUNDS
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  GetDragItemBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, Rect *itemBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragItemBounds
+			moveq           	#21,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragItemBounds
+	ENDIF
+
+
+; *  SetDragItemBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, const Rect *itemBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragItemBounds
+			moveq           	#22,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragItemBounds
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DROP LOCATIONS
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  GetDropLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDropLocation(DragRef theDrag, AEDesc *dropLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDropLocation
+			moveq           	#23,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDropLocation
+	ENDIF
+
+
+; *  SetDropLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDropLocation(DragRef theDrag, const AEDesc *dropLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDropLocation
+			moveq           	#24,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDropLocation
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • GETTING INFORMATION ABOUT A DRAG
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  GetDragAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragAttributes(DragRef theDrag, DragAttributes *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragAttributes
+			moveq           	#25,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragAttributes
+	ENDIF
+
+
+; *  GetDragMouse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragMouse(DragRef theDrag, Point *mouse, Point *globalPinnedMouse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragMouse
+			moveq           	#26,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragMouse
+	ENDIF
+
+
+; *  SetDragMouse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetDragMouse(DragRef theDrag, Point globalPinnedMouse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDragMouse
+			moveq           	#27,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDragMouse
+	ENDIF
+
+
+; *  GetDragOrigin()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragOrigin(DragRef theDrag, Point *globalInitialMouse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragOrigin
+			moveq           	#28,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragOrigin
+	ENDIF
+
+
+; *  GetDragModifiers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragModifiers(DragRef theDrag, SInt16 *modifiers, SInt16 *mouseDownModifiers, SInt16 *mouseUpModifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragModifiers
+			moveq           	#29,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragModifiers
+	ENDIF
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • DRAG HIGHLIGHTING
+;  _________________________________________________________________________________________________________
+
+
+
+
+; *  ShowDragHilite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ShowDragHilite(DragRef theDrag, RgnHandle hiliteFrame, Boolean inside)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ShowDragHilite
+			moveq           	#30,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowDragHilite
+	ENDIF
+
+
+; *  HideDragHilite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr HideDragHilite(DragRef theDrag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HideDragHilite
+			moveq           	#31,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideDragHilite
+	ENDIF
+
+
+; *  DragPreScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DragPreScroll(DragRef theDrag, SInt16 dH, SInt16 dV)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DragPreScroll
+			moveq           	#32,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DragPreScroll
+	ENDIF
+
+
+; *  DragPostScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DragPostScroll(DragRef theDrag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DragPostScroll
+			moveq           	#33,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DragPostScroll
+	ENDIF
+
+
+; *  UpdateDragHilite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr UpdateDragHilite(DragRef theDrag, RgnHandle updateRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UpdateDragHilite
+			moveq           	#34,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateDragHilite
+	ENDIF
+
+
+; *  GetDragHiliteColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetDragHiliteColor(WindowRef window, RGBColor *color)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDragHiliteColor
+			moveq           	#38,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDragHiliteColor
+	ENDIF
+
+
+
+;  _________________________________________________________________________________________________________
+;      
+;   • UTILITIES
+;  _________________________________________________________________________________________________________
+
+
+
+
+
+; *  WaitMouseMoved()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean WaitMouseMoved(Point initialMouse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_WaitMouseMoved
+			moveq           	#35,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION WaitMouseMoved
+	ENDIF
+
+
+
+; *  ZoomRects()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ZoomRects(const Rect *fromRect, const Rect *toRect, SInt16 zoomSteps, ZoomAcceleration acceleration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ZoomRects
+			moveq           	#36,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ZoomRects
+	ENDIF
+
+
+; *  ZoomRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ZoomRegion(RgnHandle region, Point zoomDistance, SInt16 zoomSteps, ZoomAcceleration acceleration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ZoomRegion
+			moveq           	#37,D0
+			dc.w            	$ABED
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ZoomRegion
+	ENDIF
+
+
+
+;  _________________________________________________________________________________________________________
+;   • OLD NAMES
+;     These are provided for compatiblity with older source bases.  It is recommended to not use them since
+;     they may removed from this interface file at any time.
+;  _________________________________________________________________________________________________________
+
+
+
+; typedef DragRef 						DragReference
+
+; typedef DragItemRef 					ItemReference
+
+	IF OLDROUTINENAMES THEN
+
+dragHasLeftSenderWindow			EQU		$00000001			; drag has left the source window since TrackDrag 
+dragInsideSenderApplication		EQU		$00000002			; drag is occurring within the sender application 
+dragInsideSenderWindow			EQU		$00000004			; drag is occurring within the sender window 
+
+dragTrackingEnterHandler		EQU		1					; drag has entered handler 
+dragTrackingEnterWindow			EQU		2					; drag has entered window 
+dragTrackingInWindow			EQU		3					; drag is moving within window 
+dragTrackingLeaveWindow			EQU		4					; drag has exited window 
+dragTrackingLeaveHandler		EQU		5					; drag has exited handler 
+
+dragRegionBegin					EQU		1					; initialize drawing 
+dragRegionDraw					EQU		2					; draw drag feedback 
+dragRegionHide					EQU		3					; hide drag feedback 
+dragRegionIdle					EQU		4					; drag feedback idle time 
+dragRegionEnd					EQU		5					; end of drawing 
+
+zoomNoAcceleration				EQU		0					; use linear interpolation 
+zoomAccelerate					EQU		1					; ramp up step size 
+zoomDecelerate					EQU		2					; ramp down step size 
+
+kDragStandardImage				EQU		0					; 65% image translucency (standard)
+kDragDarkImage					EQU		1					; 50% image translucency
+kDragDarkerImage				EQU		2					; 25% image translucency
+kDragOpaqueImage				EQU		3					; 0% image translucency (opaque)
+	ENDIF	; OLDROUTINENAMES
+	ENDIF ; __DRAG__ 
+

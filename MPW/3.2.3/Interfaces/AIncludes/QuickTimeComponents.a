@@ -1,0 +1,2524 @@
+
+; Created: Thursday, October 22, 1992
+;
+; File: QuickTimeComponents.a
+;
+; Assembler Interface to the Macintosh Libraries
+; Copyright Apple Computer, Inc. 1990-1991,1992
+; All Rights Reserved
+;
+;
+;___________________________________________________________________________
+ IF &TYPE('__IncludingQuickTimeComponents__') = 'UNDEFINED' THEN
+__IncludingQuickTimeComponents__   SET 1
+
+	
+;****
+;	Clock Component
+;****
+clockComponentType                 EQU      'clok'
+systemTickClock                    EQU      'tick'    ; subtype: 60ths since boot 
+systemSecondClock				   EQU		'seco'	  ; subtype: seconds since 1904
+systemMillisecondClock			   EQU		'mill'	  ; subtype: 1000ths since boot
+systemMicrosecondClock             EQU      'micr'    ; subtype: 1000000ths since boot 
+
+kClockRateIsLinear                 EQU      1
+kClockImplementsCallBacks          EQU      2
+
+
+kClockGetClockTimeSelect           EQU      1
+kClockNewCallBackSelect            EQU      2
+kClockDisposeCallBackSelect        EQU      3
+kClockCallMeWhenSelect             EQU      4
+kClockCancelCallBackSelect         EQU      5
+kClockRateChangedSelect            EQU      6
+kClockTimeChangedSelect            EQU      7
+kClockSetTimeBaseSelect            EQU      8
+kClockStartStopChangedSelect	   EQU		9
+kClockGetRateSelect				   EQU		10
+
+                                   MACRO
+                                   _GetClockTime
+                                   MOVE.L       #$00040001,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockGetTime
+                                   MOVE.L       #$00040001,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockNewCallBack
+                                   MOVE.L       #$00060002,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockDisposeCallBack
+                                   MOVE.L       #$00040003,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockCallMeWhen
+                                   MOVE.L       #$00100004,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockCancelCallBack
+                                   MOVE.L       #$00040005,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockRateChanged
+                                   MOVE.L       #$00040006,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockTimeChanged
+                                   MOVE.L       #$00040007,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockSetTimeBase
+                                   MOVE.L       #$00040008,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockStartStopChanged
+                                   MOVE.L       #$00080009,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _ClockGetRate
+                                   MOVE.L       #$0004000A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+; Sequence Grab Component 
+SeqGrabComponentType               EQU      'barg'
+SeqGrabComponentManagerSubType     EQU      'main'
+SeqGrabPanelType				   EQU		'sgpn'
+
+SeqGrabCompressionPanelType		   EQU		'comp'
+SeqGrabSourcePanelType			   EQU		'sour'
+
+seqGrabToDisk                      EQU      1
+seqGrabToMemory                    EQU      2
+seqGrabDontUseTempMemory           EQU      4
+seqGrabAppendToFile                EQU      8
+seqGrabDontAddMovieResource        EQU      16
+seqGrabDontMakeMovie			   EQU		32
+seqGrabPreExtendFile			   EQU		64
+
+
+seqGrabRecord                      EQU      1
+seqGrabPreview                     EQU      2
+seqGrabPlayDuringRecord            EQU      4
+
+seqGrabHasBounds                   EQU      1
+seqGrabHasVolume                   EQU      2
+seqGrabHasDiscreteSamples		   EQU		4
+
+
+SeqGrabFrameInfo                   RECORD   0
+frameOffset                        DS.L		1
+frameTime                          DS.L		1
+frameSize                          DS.L		1
+frameChannel                       DS.L		1
+frameRefCon                        DS.L		1
+size                               EQU      *
+                                   ENDR
+
+grabPictOffScreen				   EQU		1
+grabPictIgnoreClip				   EQU		2
+sgFlagControlledGrab			   EQU		(1)
+
+SGDeviceName                  	   RECORD   0
+name                        	   DS.B		64
+icon                         	   DS.L		1
+flags                         	   DS.L		1
+refCon                       	   DS.L		1
+reserved                           DS.L		1
+size                               EQU      *
+                                   ENDR
+
+sgDeviceNameFlagDeviceUnavailable  EQU		(1)
+
+
+SGDeviceListRecord                 RECORD   0
+count                        	   DS.W		1
+selectedIndex                      DS.W		1
+reserved                           DS.L		1
+entry                       	   DS 		SGDeviceName
+size                               EQU      *
+                                   ENDR
+
+sgDeviceListWithIcons			   EQU		(1)
+sgDeviceListDontCheckAvailability  EQU		(2)
+
+seqGrabWriteAppend				   EQU		0
+seqGrabWriteReserve				   EQU		1
+seqGrabWriteFill				   EQU		2
+
+seqGrabUnpause				   	   EQU		0
+seqGrabPause				  	   EQU		1
+seqGrabPauseForMenu				   EQU		3
+
+channelFlagDontOpenResFile		   EQU		2
+channelFlagHasDependency		   EQU		4
+sgPanelFlagForPanel				   EQU		1
+
+channelPlayNormal				   EQU		0
+channelPlayFast				   	   EQU		1
+channelPlayHighQuality			   EQU		2
+channelPlayAllData				   EQU		4
+
+                                   MACRO
+                                   _SGInitialize
+                                   MOVE.L       #$00000001,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetDataOutput
+                                   MOVE.L       #$00080002,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetDataOutput
+                                   MOVE.L       #$00080003,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetGWorld
+                                   MOVE.L       #$00080004,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetGWorld
+                                   MOVE.L       #$00080005,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGNewChannel
+                                   MOVE.L       #$00080006,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGDisposeChannel
+                                   MOVE.L       #$00040007,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGStartPreview
+                                   MOVE.L       #$00000010,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGStartRecord
+                                   MOVE.L       #$00000011,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGIdle
+                                   MOVE.L       #$00000012,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGStop
+                                   MOVE.L       #$00000013,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGPause
+                                   MOVE.L       #$00020014,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGPrepare
+                                   MOVE.L       #$00040015,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGRelease
+                                   MOVE.L       #$00000016,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGetMovie
+                                   MOVE.L       #$00000017,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetMaximumRecordTime
+                                   MOVE.L       #$00040018,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetMaximumRecordTime
+                                   MOVE.L       #$00040019,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGetStorageSpaceRemaining
+                                   MOVE.L       #$0004001A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetTimeRemaining
+                                   MOVE.L       #$0004001B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGrabPict
+                                   MOVE.L       #$000E001C,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+								   
+                                   MACRO
+                                   _SGGetLastMovieResID
+                                   MOVE.L       #$0004001D,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetFlags
+                                   MOVE.L       #$0004001E,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetFlags
+                                   MOVE.L       #$0004001F,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetDataProc
+                                   MOVE.L       #$00080020,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGNewChannelFromComponent
+                                   MOVE.L       #$00080021,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGDisposeDeviceList
+                                   MOVE.L       #$00040022,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGAppendDeviceListToMenu
+                                   MOVE.L       #$00080023,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetSettings
+                                   MOVE.L       #$00080024,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetSettings
+                                   MOVE.L       #$00080025,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetIndChannel
+                                   MOVE.L       #$000A0026,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGUpdate
+                                   MOVE.L       #$00040027,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetPause
+                                   MOVE.L       #$00040028,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSettingsDialog
+                                   MOVE.L       #$00160029,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetAlignmentProc
+                                   MOVE.L       #$0004002A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetChannelSettings
+                                   MOVE.L       #$000C002B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetChannelSettings
+                                   MOVE.L       #$000C002C,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+
+;  General Channel Routines  
+                                   MACRO
+                                   _SGSetChannelUsage
+                                   MOVE.L       #$00040080,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetChannelUsage
+                                   MOVE.L       #$00040081,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetChannelBounds
+                                   MOVE.L       #$00040082,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetChannelBounds
+                                   MOVE.L       #$00040083,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetChannelVolume
+                                   MOVE.L       #$00020084,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetChannelVolume
+                                   MOVE.L       #$00040085,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGetChannelInfo
+                                   MOVE.L       #$00040086,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+
+;  calls from Channel to seqGrab  
+                                   MACRO
+                                   _SGWriteMovieData
+                                   MOVE.L       #$00100100,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGAddFrameReference
+                                   MOVE.L       #$00040101,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetNextFrameReference
+                                   MOVE.L       #$000C0102,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetTimeBase
+                                   MOVE.L       #$00040103,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSortDeviceList
+                                   MOVE.L       #$00040104,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGAddMovieData
+                                   MOVE.L       #$001A0105,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGChangedSource
+                                   MOVE.L       #$00040106,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+								   
+								   MACRO
+                                   _SGSetChannelPlayFlags
+                                   MOVE.L       #$00040087,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelPlayFlags
+                                   MOVE.L       #$00040088,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+								   
+								   MACRO
+                                   _SGSetChannelMaxFrames
+                                   MOVE.L       #$00040089,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelMaxFrames
+                                   MOVE.L       #$0004008A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+								   MACRO
+                                   _SGSetChannelRefCon
+                                   MOVE.L       #$0004008B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+								   MACRO
+                                   _SGSetChannelClip
+                                   MOVE.L       #$0004008C,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelClip
+                                   MOVE.L       #$0004008D,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelSampleDescription
+                                   MOVE.L       #$0004008E,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelDeviceList
+                                   MOVE.L       #$0008008F,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGSetChannelDevice
+                                   MOVE.L       #$00040090,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+								   
+								   MACRO
+                                   _SGSetChannelMatrix
+                                   MOVE.L       #$00040091,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelMatrix
+                                   MOVE.L       #$00040092,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   MACRO
+                                   _SGGetChannelTimeScale
+                                   MOVE.L       #$00040093,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+;  calls from seqGrab to Channel  
+                                   MACRO
+                                   _SGInitChannel
+                                   MOVE.L       #$00040180,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGWriteSamples
+                                   MOVE.L       #$00080181,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetDataRate
+                                   MOVE.L       #$00040182,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGAlignChannelRect
+                                   MOVE.L       #$00040183,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelGetDitl
+                                   MOVE.L       #$00040200,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+								   
+                                   MACRO
+                                   _SGPanelGetTitle
+                                   MOVE.L       #$00040201,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelCanRun
+                                   MOVE.L       #$00040202,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelInstall
+                                   MOVE.L       #$000A0203,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelEvent
+                                   MOVE.L       #$00160204,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelItem
+                                   MOVE.L       #$000C0205,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelRemove
+                                   MOVE.L       #$000A0206,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelSetGrabber
+                                   MOVE.L       #$00040207,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelSetResFile
+                                   MOVE.L       #$00020208,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelGetSettings
+                                   MOVE.L       #$000C0209,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelSetSettings
+                                   MOVE.L       #$000C020A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGPanelValidateInput
+                                   MOVE.L       #$0004020B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+								   
+SGCompressInfo	RECORD	0
+buffer			DS.L	1
+bufferSize		DS.L	1
+similarity		DS.B	1
+reserved		DS.B	1
+size			EQU		*
+				ENDR
+						
+; Video Routines 
+VideoBottles                       RECORD   0
+procCount                          DS.W		1
+grabProc                           DS.L		1
+grabCompleteProc				   DS.L		1
+displayProc                        DS.L		1
+compressProc                       DS.L		1
+compressCompleteProc			   DS.L		1
+addFrameProc                       DS.L		1
+transferFrameProc				   DS.L		1
+grabCompressCompleteProc		   DS.L		1
+displayCompressProc				   DS.L		1
+size                               EQU      *
+                                   ENDR
+
+
+
+                                   MACRO
+                                   _SGGetSrcVideoBounds
+                                   MOVE.L       #$00040100,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetVideoRect
+                                   MOVE.L       #$00040101,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetVideoRect
+                                   MOVE.L       #$00040102,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGetVideoCompressorType
+                                   MOVE.L       #$00040103,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetVideoCompressorType
+                                   MOVE.L       #$00040104,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetVideoCompressor
+                                   MOVE.L       #$00120105,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetVideoCompressor
+                                   MOVE.L       #$00140106,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGetVideoDigitizerComponent
+                                   MOVE.L       #$00000107,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetVideoDigitizerComponent
+                                   MOVE.L       #$00040108,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGVideoDigitizerChanged
+                                   MOVE.L       #$00000109,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetVideoBottlenecks
+                                   MOVE.L       #$0000010A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetVideoBottlenecks
+                                   MOVE.L       #$0000010B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGrabFrame
+                                   MOVE.L       #$0014010C,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGGrabFrameComplete
+                                   MOVE.L       #$0014010D,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGDisplayFrame
+                                   MOVE.L       #$0008010E,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGCompressFrame
+                                   MOVE.L       #$000C010F,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGCompressFrameComplete
+                                   MOVE.L       #$000C0110,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGAddFrame
+                                   MOVE.L       #$00120111,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGTransferFrameForCompress
+                                   MOVE.L       #$00120112,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetCompressBuffer
+                                   MOVE.L       #$00120113,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetCompressBuffer
+                                   MOVE.L       #$00120114,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetCompressBufferInfo
+                                   MOVE.L       #$00120115,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetUseScreenBuffer
+                                   MOVE.L       #$00020116,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetUseScreenBuffer
+                                   MOVE.L       #$00140117,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGrabCompressComplete
+                                   MOVE.L       #$000C0118,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGDisplayCompress
+                                   MOVE.L       #$00100119,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetFrameRate
+                                   MOVE.L       #$0004011A,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetFrameRate
+                                   MOVE.L       #$0004011B,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+;  Sound Routines  
+                                   MACRO
+                                   _SGSetSoundInputDriver
+                                   MOVE.L       #$00040100,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetSoundInputDriver
+                                   MOVE.L       #$00000101,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSoundInputDriverChanged
+                                   MOVE.L       #$00000102,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetSoundRecordChunkSize
+                                   MOVE.L       #$00040103,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetSoundRecordChunkSize
+                                   MOVE.L       #$00000104,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+
+                                   MACRO
+                                   _SGSetSoundInputRate
+                                   MOVE.L       #$00040105,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetSoundInputRate
+                                   MOVE.L       #$00000106,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGSetSoundInputParameters
+                                   MOVE.L       #$00080107,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+                                   MACRO
+                                   _SGGetSoundInputParameters
+                                   MOVE.L       #$000C0108,-(A7)
+                                   MOVEQ        #$00,D0
+                                   DC.W         $A82A ; TB 002A
+                                   ENDM
+
+sgChannelAtom 				EQU 'chan'
+
+sgChannelSettingsAtom 		EQU 'ctom'
+sgChannelDescription 		EQU 'cdsc'
+sgChannelSettings 			EQU 'cset'
+
+sgDeviceNameType 			EQU 'name'
+sgUsageType 				EQU 'use '
+sgPlayFlagsType 			EQU 'plyf'
+sgClipType 					EQU 'clip'
+sgMatrixType 				EQU 'mtrx'
+sgVolumeType 				EQU 'volu'
+
+sgPanelSettingsAtom 		EQU 'ptom'
+sgPanelDescription 			EQU 'pdsc'
+sgPanelSettings 			EQU 'pset'
+
+sgcSoundCompressionType 	EQU 'scmp'
+sgcSoundSampleRateType 		EQU 'srat'
+sgcSoundChannelCountType 	EQU 'schn'
+sgcSoundSampleSizeType 		EQU 'ssiz'
+sgcSoundInputType 			EQU 'sinp'
+sgcSoundGainType 			EQU 'gain'
+
+sgcVideoHueType			 	EQU 'hue '
+sgcVideoSaturationType 		EQU 'satr'
+sgcVideoContrastType 		EQU 'trst'
+sgcVideoSharpnessType 		EQU 'shrp'
+sgcVideoBrigtnessType 		EQU 'brit'
+sgcVideoBlackLevelType 		EQU 'blkl'
+sgcVideoWhiteLevelType 		EQU 'whtl'
+
+sgcVideoInputType 			EQU 'vinp'
+sgcVideoFormatType 			EQU 'vstd'
+sgcVideoFilterType 			EQU 'vflt'
+
+sgcVideoRectType 			EQU 'vrct'
+sgVideoDigitizerType 		EQU 'vdig'
+
+; sequence grabber errors
+noDeviceForChannel 			EQU -9400
+grabTimeComplete 			EQU -9401
+cantDoThatInCurrentMode 	EQU -9402
+notEnoughMemoryToGrab 		EQU -9403
+notEnoughDiskSpaceToGrab 	EQU -9404
+couldntGetRequiredComponent EQU -9405
+badSGChannel 				EQU -9406
+seqGrabInfoNotAvailable 	EQU -9407
+deviceCantMeetRequest 		EQU -9408
+
+; SG routine selectors
+kSGInitializeSelect 			EQU $1
+kSGSetDataOutputSelect 			EQU $2
+kSGGetDataOutputSelect 			EQU $3
+kSGSetGWorldSelect 				EQU $4
+kSGGetGWorldSelect 				EQU $5
+kSGNewChannelSelect 			EQU $6
+kSGDisposeChannelSelect 		EQU $7
+kSGStartPreviewSelect 			EQU $10
+kSGStartRecordSelect 			EQU $11
+kSGIdleSelect 					EQU $12
+kSGStopSelect 					EQU $13
+kSGPauseSelect 					EQU $14
+kSGPrepareSelect 				EQU $15
+kSGReleaseSelect 				EQU $16
+kSGGetMovieSelect 				EQU $17
+kSGSetMaximumRecordTimeSelect 	EQU $18
+kSGGetMaximumRecordTimeSelect 	EQU $19
+kSGGetStorageSpaceRemainingSelect EQU $1A
+kSGGetTimeRemainingSelect 		EQU $1B
+kSGGrabPictSelect 				EQU $1C
+kSGGetLastMovieResIDSelect 		EQU $1D
+kSGSetFlagsSelect 				EQU $1E
+kSGGetFlagsSelect 				EQU $1F
+
+
+kSGSetDataProcSelect 				EQU $20
+kSGNewChannelFromComponentSelect 	EQU $21
+kSGDisposeDeviceListSelect 			EQU $22
+kSGAppendDeviceListToMenuSelect 	EQU $23
+kSGSetSettingsSelect 				EQU $24
+kSGGetSettingsSelect 				EQU $25
+kSGGetIndChannelSelect 				EQU $26
+kSGUpdateSelect 					EQU $27
+kSGGetPauseSelect 					EQU $28
+kSGSettingsDialogSelect 			EQU $29
+kSGGetAlignmentProcSelect 			EQU $2A
+kSGSetChannelSettingsSelect 		EQU $2B
+kSGGetChannelSettingsSelect 		EQU $2C
+
+kSGWriteMovieDataSelect 			EQU $100
+kSGAddFrameReferenceSelect 			EQU $101
+kSGGetNextFrameReferenceSelect 		EQU $102
+kSGGetTimeBaseSelect 				EQU $103
+kSGSortDeviceListSelect 			EQU $104
+kSGAddMovieDataSelect 				EQU $105
+kSGChangedSourceSelect 				EQU $106
+
+kSGCSetChannelUsageSelect 			EQU $80
+kSGCGetChannelUsageSelect 			EQU $81
+kSGCSetChannelBoundsSelect 			EQU $82
+kSGCGetChannelBoundsSelect 			EQU $83
+kSGCSetChannelVolumeSelect 			EQU $84
+kSGCGetChannelVolumeSelect 			EQU $85
+kSGCGetChannelInfoSelect 			EQU $86
+kSGCSetChannelPlayFlagsSelect 		EQU $87
+kSGCGetChannelPlayFlagsSelect 		EQU $88
+kSGCSetChannelMaxFramesSelect 		EQU $89
+kSGCGetChannelMaxFramesSelect 		EQU $8A
+kSGCSetChannelRefConSelect 			EQU $8B
+
+kSGCSetChannelClipSelect 			EQU $8C
+kSGCGetChannelClipSelect 			EQU $8D
+kSGCGetChannelSampleDescriptionSelect EQU $8E
+kSGCGetChannelDeviceListSelect 		EQU $8F
+kSGCSetChannelDeviceSelect 			EQU $90
+kSGCSetChannelMatrixSelect 			EQU $91
+kSGCGetChannelMatrixSelect 			EQU $92
+kSGCGetChannelTimeScaleSelect 		EQU $93
+
+kSGCInitChannelSelect 				EQU $180
+kSGCWriteSamplesSelect 				EQU $181
+kSGCGetDataRateSelect 				EQU $182
+kSGCAlignChannelRectSelect 			EQU $183
+
+kSGCPanelGetDitlSelect 				EQU $200
+kSGCPanelGetTitleSelect 			EQU $201
+kSGCPanelCanRunSelect 				EQU $202
+kSGCPanelInstallSelect 				EQU $203
+kSGCPanelEventSelect 				EQU $204
+kSGCPanelItemSelect 				EQU $205
+kSGCPanelRemoveSelect 				EQU $206
+kSGCPanelSetGrabberSelect 			EQU $207
+kSGCPanelSetResFileSelect 			EQU $208
+kSGCPanelGetSettingsSelect 			EQU $209
+kSGCPanelSetSettingsSelect 			EQU $20A
+kSGCPanelValidateInputSelect 		EQU $20B
+
+kSGCGetSrcVideoBoundsSelect 		EQU $100
+kSGCSetVideoRectSelect 				EQU $101
+kSGCGetVideoRectSelect 				EQU $102
+kSGCGetVideoCompressorTypeSelect 	EQU $103
+kSGCSetVideoCompressorTypeSelect 	EQU $104
+kSGCSetVideoCompressorSelect 		EQU $105
+kSGCGetVideoCompressorSelect 		EQU $106
+kSGCGetVideoDigitizerComponentSelect EQU $107
+kSGCSetVideoDigitizerComponentSelect EQU $108
+kSGCVideoDigitizerChangedSelect 	EQU $109
+kSGCSetVideoBottlenecksSelect 		EQU $10a
+kSGCGetVideoBottlenecksSelect 		EQU $10b
+kSGCGrabFrameSelect 				EQU $10c
+kSGCGrabFrameCompleteSelect 		EQU $10d
+kSGCDisplayFrameSelect 				EQU $10e
+kSGCCompressFrameSelect 			EQU $10f
+kSGCCompressFrameCompleteSelect 	EQU $110
+kSGCAddFrameSelect 					EQU $111
+kSGCTransferFrameForCompressSelect 	EQU $112
+kSGCSetCompressBufferSelect 		EQU $113
+kSGCGetCompressBufferSelect 		EQU $114
+kSGCGetBufferInfoSelect 			EQU $115
+kSGCSetUseScreenBufferSelect 		EQU $116
+kSGCGetUseScreenBufferSelect 		EQU $117
+kSGCGrabCompressCompleteSelect 		EQU $118
+kSGCDisplayCompressSelect 			EQU $119
+kSGCSetFrameRateSelect 				EQU $11A
+kSGCGetFrameRateSelect 				EQU $11B
+
+
+kSGCSetSoundInputDriverSelect 		EQU $100
+kSGCGetSoundInputDriverSelect 		EQU $101
+kSGCSoundInputDriverChangedSelect 	EQU $102
+kSGCSetSoundRecordChunkSizeSelect 	EQU $103
+kSGCGetSoundRecordChunkSizeSelect 	EQU $104
+kSGCSetSoundInputRateSelect 		EQU $105
+kSGCGetSoundInputRateSelect 		EQU $106
+kSGCSetSoundInputParametersSelect 	EQU $107
+kSGCGetSoundInputParametersSelect 	EQU $108 
+
+
+
+
+;	Video Digitizer Component
+
+
+;  Standard type for video digitizers 
+videoDigitizerComponentType        EQU      'vdig'
+vdigInterfaceRev 				   EQU		2
+
+; Input Format Standards 
+ntscIn                             EQU      0         ; ntsc input format 
+currentIn						   EQU		0		  ; current input format 
+palIn                              EQU      1         ; pal input format 
+secamIn                            EQU      2         ; secam input format 
+ntscReallyIn                       EQU      3         ; ntsc input format 
+
+; Input Formats 
+compositeIn                        EQU      0         ; input is composite format 
+sVideoIn                           EQU      1         ; input is sVideo format 
+rgbComponentIn                     EQU      2         ; input is rgb component format 
+
+; Video Digitizer PlayThru States 
+vdPlayThruOff                      EQU      0
+vdPlayThruOn                       EQU      1
+
+; Input Color Space Modes 
+vdDigitizerBW                      EQU      0         ; black and white 
+vdDigitizerRGB                     EQU      1         ; rgb color 
+
+; Phase Lock Loop Modes 
+vdBroadcastMode                    EQU      0         ; Broadcast / Laser Disk video mode 
+vdVTRMode                          EQU      1         ; VCR / Magnetic media mode 
+
+; Field Select Options 
+vdUseAnyField					   EQU		0
+vdUseOddField 					   EQU		1
+vdUseEvenField 					   EQU		2
+
+; vdig types 
+vdTypeBasic                        EQU      0         ; basic, no clipping 
+vdTypeAlpha                        EQU      1         ; supports clipping with alpha channel 
+vdTypeMask                         EQU      2         ; supports clipping with mask plane 
+vdTypeKey                          EQU      3         ; supports clipping with key color(s) 
+
+; Digitizer Error Codes 
+digiUnimpErr                       EQU      -2201     ; feature unimplemented 
+qtParamErr                         EQU      -2202     ; bad input parameter ( out of range, etc ) 
+matrixErr                          EQU      -2203     ; bad matrix, digitizer did nothing 
+notExactMatrix                     EQU      -2204     ; warning of bad matrix, digitizer did its best 
+noMoreKeyColors                    EQU      -2205     ; all key indexes in use 
+notExactSize                       EQU      -2206     ; Can’t do exact size requested 
+badDepth                           EQU      -2207     ; Can’t digitize into this depth 
+noDMA                              EQU      -2208     ; Can’t do DMA digitizing ( i.e. can't go to requested dest 
+badCallOrder					   EQU		-2209	  ; Usually due to a status call being called prior to being setup first 
+
+; Digitizer Input Capability/Current Flags 
+digiInDoesNTSC                     EQU      $1        ; digitizer supports NTSC input format 
+digiInDoesPAL                      EQU      $2        ; digitizer supports PAL input format 
+digiInDoesSECAM                    EQU      $4        ; digitizer supports SECAM input format 
+digiInDoesGenLock                  EQU      $80       ; digitizer does genlock 
+
+digiInDoesComposite                EQU      $100      ; digitizer supports composite input type 
+digiInDoesSVideo                   EQU      $200      ; digitizer supports S-Video input type 
+digiInDoesComponent                EQU      $400      ; digitizer supports component (rgb) input type 
+digiInVTR_Broadcast                EQU      $800      ; digitizer can differentiate between the two 
+
+digiInDoesColor                    EQU      $1000     ; digitizer supports color 
+digiInDoesBW                       EQU      $2000     ; digitizer supports black & white 
+
+; Digitizer Input Current Flags (these are valid only during active operating conditions) 
+digiInSignalLock                   EQU      $80000000 ; digitizer detects input signal is locked - this bit = horiz lock || vertical lock 
+
+; Digitizer Output Capability/Current Flags 
+digiOutDoes1                       EQU      $1        ; digitizer supports 1 bit pixels 
+digiOutDoes2                       EQU      $2        ; digitizer supports 2 bit pixels 
+digiOutDoes4                       EQU      $4        ; digitizer supports 4 bit pixels 
+digiOutDoes8                       EQU      $8        ; digitizer supports 8 bit pixels 
+digiOutDoes16                      EQU      $10       ; digitizer supports 16 bit pixels 
+digiOutDoes32                      EQU      $20       ; digitizer supports 32 bit pixels 
+digiOutDoesDither                  EQU      $40       ; digitizer dithers in indexed modes 
+digiOutDoesStretch                 EQU      $80       ; digitizer can arbitrarily stretch 
+digiOutDoesShrink                  EQU      $100      ; digitizer can arbitrarily shrink 
+digiOutDoesMask                    EQU      $200      ; digitizer can mask to clipping regions 
+
+digiOutDoesDouble                  EQU      $800      ; digitizer can stretch to exactly double size 
+digiOutDoesQuad                    EQU      $1000     ; digitizer can stretch exactly quadruple size 
+digiOutDoesQuarter                 EQU      $2000     ; digitizer can shrink to exactly quarter size 
+digiOutDoesSixteenth               EQU      $4000     ; digitizer can shrink to exactly sixteenth size 
+
+digiOutDoesRotate                  EQU      $8000     ; digitizer supports rotate transformations 
+digiOutDoesHorizFlip               EQU      $10000    ; digitizer supports horizontal flips Sx < 0 
+digiOutDoesVertFlip                EQU      $20000    ; digitizer supports vertical flips Sy < 0 
+digiOutDoesSkew                    EQU      $40000    ; digitizer supports skew (shear, twist) 
+digiOutDoesBlend                   EQU      $80000
+digiOutDoesWarp                    EQU      $100000
+
+digiOutDoesHW_DMA                  EQU      $200000   ; digitizer not constrained to local device 
+digiOutDoesHWPlayThru              EQU      $400000   ; digitizer doesn't need time to play thru 
+digiOutDoesILUT                    EQU      $800000   ; digitizer does inverse LUT for index modes 
+digiOutDoesKeyColor                EQU      $1000000  ; digitizer does key color functions too 
+digiOutDoesAsyncGrabs              EQU      $2000000  ; digitizer supports async grabs 
+digiOutDoesUnreadableScreenBits    EQU 		$4000000  ; playthru doesn't generate readable bits on screen
+digiOutDoesCompress				   EQU      $8000000  ; supports alternate output data types
+digiOutDoesCompressOnly			   EQU 		$10000000 ;	can't provide raw frames anywhere 
+digiOutDoesPlayThruDuringCompress  EQU      $20000000 ; digi can do playthru while providing compressed data
+
+; Types 
+DigitizerInfo                      RECORD   0
+vdigType                           DS.W		1
+inputCapabilityFlags               DS.L		1
+outputCapabilityFlags              DS.L		1
+inputCurrentFlags                  DS.L		1
+outputCurrentFlags                 DS.L		1
+slot                               DS.W		1     	  ; temporary for connection purposes 
+gdh                                DS.L		1  		  ; temporary for digitizers that have preferred screen 
+maskgdh                            DS.L		1  		  ; temporary for digitizers that have mask planes 
+minDestHeight                      DS.W		1     	  ; Smallest resizable height 
+minDestWidth                       DS.W		1     	  ; Smallest resizable width 
+maxDestHeight                      DS.W		1     	  ; Largest resizable height 
+maxDestWidth                       DS.W		1     	  ; Largest resizable height 
+blendLevels                        DS.W		1     	  ; Number of blend levels supported (2 if 1 bit mask) 
+Private                            DS.L		1      	  ; reserved 
+size                               EQU      *
+                                   ENDR
+
+VdigType							RECORD	0
+type								DS.L	1
+reserved							DS.L	1
+size								EQU		*
+									ENDR
+
+VdigTypeList						RECORD	0
+count								DS.W	1
+list								DS.L	2
+size								EQU		*
+									ENDR
+
+VdigBufferRec						RECORD	0
+dest								DS.L	1
+location							DS.L	1
+reserved							DS.L	1
+size								EQU		*
+									ENDR
+
+								   
+VdigBufferRecList				   RECORD	0
+count							   DS.W		1
+matrix							   DS.L		1
+mask							   DS.L		1
+list							   DS		VdigBufferRec
+size							   EQU		*
+                                   ENDR
+
+VDCompressionList				   RECORD	0
+codec							   DS.L		1
+cType							   DS.L		1
+typeName						   DS.B		64
+name							   DS.B		64
+formatFlags						   DS.L		1
+compressFlags					   DS.L		1
+reserved						   DS.L 	1
+size							   EQU		*
+                                   ENDR
+
+dmaDepth1 							EQU 	1
+dmaDepth2 							EQU 	2
+dmaDepth4 							EQU 	4 
+dmaDepth8 							EQU 	8
+dmaDepth16							EQU 	16
+dmaDepth32 							EQU 	32
+dmaDepth2Gray 						EQU 	64
+dmaDepth4Gray 						EQU 	128
+dmaDepth8Gray 						EQU 	256
+
+
+; Video Digitizer Interface 
+kSelectVDGetMaxSrcRect             EQU      1
+kSelectVDGetActiveSrcRect          EQU      2
+kSelectVDSetDigitizerRect          EQU      3
+kSelectVDGetDigitizerRect          EQU      4
+kSelectVDGetVBlankRect             EQU      5
+kSelectVDGetMaskPixMap             EQU      6
+kSelectVDGetPlayThruDestination    EQU      8
+kSelectVDUseThisCLUT               EQU      9
+kSelectVDSetInputGammaValue        EQU      10
+kSelectVDGetInputGammaValue        EQU      11
+kSelectVDSetBrightness             EQU      12
+kSelectVDGetBrightness             EQU      13
+kSelectVDSetContrast               EQU      14
+kSelectVDSetHue                    EQU      15
+kSelectVDSetSharpness              EQU      16
+kSelectVDSetSaturation             EQU      17
+kSelectVDGetContrast               EQU      18
+kSelectVDGetHue                    EQU      19
+kSelectVDGetSharpness              EQU      20
+kSelectVDGetSaturation             EQU      21
+kSelectVDGrabOneFrame              EQU      22
+kSelectVDGetMaxAuxBuffer           EQU      23
+kSelectVDGetDigitizerInfo          EQU      25
+kSelectVDGetCurrentFlags           EQU      26
+kSelectVDSetKeyColor               EQU      27
+kSelectVDGetKeyColor               EQU      28
+kSelectVDAddKeyColor               EQU      29
+kSelectVDGetNextKeyColor           EQU      30
+kSelectVDSetKeyColorRange          EQU      31
+kSelectVDGetKeyColorRange          EQU      32
+kSelectVDSetDigitizerUserInterrupt EQU      33
+kSelectVDSetInputColorSpaceMode    EQU      34
+kSelectVDGetInputColorSpaceMode    EQU      35
+kSelectVDSetClipState              EQU      36
+kSelectVDGetClipState              EQU      37
+kSelectVDSetClipRgn                EQU      38
+kSelectVDClearClipRgn              EQU      39
+kSelectVDGetCLUTInUse              EQU      40
+kSelectVDSetPLLFilterType          EQU      41
+kSelectVDGetPLLFilterType          EQU      42
+kSelectVDGetMaskandValue           EQU      43
+kSelectVDSetMasterBlendLevel       EQU      44
+kSelectVDSetPlayThruDestination    EQU      45
+kSelectVDSetPlayThruOnOff          EQU      46
+kSelectVDSetFieldPreference        EQU      47
+kSelectVDGetFieldPreference        EQU      48
+kSelectVDPreflightDestination      EQU      50
+kSelectVDPreflightGlobalRect       EQU      51
+kSelectVDSetPlayThruGlobalRect     EQU      52
+kSelectVDSetInputGammaRecord       EQU      53
+kSelectVDGetInputGammaRecord       EQU      54
+kSelectVDSetBlackLevelValue        EQU      55
+kSelectVDGetBlackLevelValue        EQU      56
+kSelectVDSetWhiteLevelValue        EQU      57
+kSelectVDGetWhiteLevelValue        EQU      58
+kSelectVDGetVideoDefaults          EQU      59
+kSelectVDGetNumberOfInputs         EQU      60
+kSelectVDGetInputFormat            EQU      61
+kSelectVDSetInput                  EQU      62
+kSelectVDGetInput                  EQU      63
+kSelectVDSetInputStandard          EQU      64
+kSelectVDSetupBuffers 			   EQU		65
+kSelectVDGrabOneFrameAsync		   EQU		66
+kSelectVDDone					   EQU		67
+kSelectVDSetCompression 		   EQU 		$44
+kSelectVDCompressOneFrameAsync 	   EQU 		$45
+kSelectVDCompressDone 			   EQU 		$46
+kSelectVDReleaseCompressBuffer 	   EQU 		$47
+kSelectVDGetImageDescription 	   EQU 		$48
+kSelectVDResetCompressSequence 	   EQU 		$49
+kSelectVDSetCompressionOnOff 	   EQU 		$4A
+kSelectVDGetCompressionTypes 	   EQU 		$4B
+kSelectVDSetTimeBase 			   EQU 		$4C
+kSelectVDSetFrameRate 			   EQU 		$4D
+kSelectVDGetDataRate 			   EQU 		$4E
+kSelectVDGetSoundInputDriver 	   EQU 		$4F
+kSelectVDGetDMADepths 			   EQU 		$50
+kSelectVDGetPreferredTimeScale 	   EQU 		$51
+kSelectVDReleaseAsyncBuffers 	   EQU 		$52 
+
+
+kvdigSelectors                     EQU      82
+
+								   MACRO
+								   _VDGetMaxSrcRect
+								   MOVE.L       #$00060001,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetActiveSrcRect
+								   MOVE.L       #$00060002,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetDigitizerRect
+								   MOVE.L       #$00040003,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetDigitizerRect
+								   MOVE.L       #$00040004,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetVBlankRect
+								   MOVE.L       #$00060005,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetMaskPixMap
+								   MOVE.L       #$00040006,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetPlayThruDestination
+								   MOVE.L       #$00100008,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDUseThisCLUT
+								   MOVE.L       #$00040009,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetInputGammaValue
+								   MOVE.L       #$000C000B,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetBrightness
+								   MOVE.L       #$0004000C,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetBrightness
+								   MOVE.L       #$0004000D,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetContrast
+								   MOVE.L       #$0004000E,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetHue
+								   MOVE.L       #$0004000F,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetSharpness
+								   MOVE.L       #$00040010,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetSaturation
+								   MOVE.L       #$00040011,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetContrast
+								   MOVE.L       #$00040012,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetHue
+								   MOVE.L       #$00040013,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetSharpness
+								   MOVE.L       #$00040014,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetSaturation
+								   MOVE.L       #$00040015,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGrabOneFrame
+								   MOVE.L       #$00000016,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetMaxAuxBuffer
+								   MOVE.L       #$00080017,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetDigitizerInfo
+								   MOVE.L       #$00040019,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetCurrentFlags
+								   MOVE.L       #$0008001A,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetKeyColor
+								   MOVE.L       #$0004001B,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetKeyColor
+								   MOVE.L       #$0004001C,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDAddKeyColor
+								   MOVE.L       #$0004001D,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetNextKeyColor
+								   MOVE.L       #$0004001E,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetKeyColorRange
+								   MOVE.L       #$0008001F,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetKeyColorRange
+								   MOVE.L       #$00080020,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+								   
+								   MACRO
+								   _VDSetDigitizerUserInterrupt
+								   MOVE.L       #$000C0021,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetInputColorSpaceMode
+								   MOVE.L       #$00020022,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetInputColorSpaceMode
+								   MOVE.L       #$00040023,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetClipState
+								   MOVE.L       #$00020024,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetClipState
+								   MOVE.L       #$00040025,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetClipRgn
+								   MOVE.L       #$00040026,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDClearClipRgn
+								   MOVE.L       #$00040027,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetCLUTInUse
+								   MOVE.L       #$00040028,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetPLLFilterType
+								   MOVE.L       #$00020029,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetPLLFilterType
+								   MOVE.L       #$0004002A,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetMasterBlendLevel
+								   MOVE.L       #$0004002C,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetPlayThruDestination
+								   MOVE.L       #$0010002D,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetPlayThruOnOff
+								   MOVE.L       #$0002002E,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+								   
+								   MACRO
+								   _VDSetFieldPreference
+								   MOVE.L       #$0002002F,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+								   
+								   MACRO
+								   _VDGetFieldPreference
+								   MOVE.L       #$00040030,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDPreflightDestination
+								   MOVE.L       #$00100032,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDPreflightGlobalRect
+								   MOVE.L       #$00080033,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetPlayThruGlobalRect
+								   MOVE.L       #$00080034,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetInputGammaRecord
+								   MOVE.L       #$00040035,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetInputGammaRecord
+								   MOVE.L       #$00040036,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetBlackLevelValue
+								   MOVE.L       #$00040037,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetBlackLevelValue
+								   MOVE.L       #$00040038,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetWhiteLevelValue
+								   MOVE.L       #$00040039,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetWhiteLevelValue
+								   MOVE.L       #$0004003A,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetVideoDefaults
+								   MOVE.L       #$001C003B,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetNumberOfInputs
+								   MOVE.L       #$0004003C,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetInputFormat
+								   MOVE.L       #$0006003D,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetInput
+								   MOVE.L       #$0002003E,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetInput
+								   MOVE.L       #$0004003F,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetInputStandard
+								   MOVE.L       #$00020040,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetupBuffers
+								   MOVE.L       #$00040041,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGrabOneFrameAsync
+								   MOVE.L       #$00020042,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDDone
+								   MOVE.L       #$00020043,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetCompression
+								   MOVE.L       #$00160044,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDCompressOneFrameAsync
+								   MOVE.L       #$00000045,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDCompressDone
+								   MOVE.L       #$00140046,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDReleaseCompressBuffer
+								   MOVE.L       #$00040047,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetImageDescription
+								   MOVE.L       #$00040048,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDResetCompressSequence
+								   MOVE.L       #$00000049,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetCompressionOnOff
+								   MOVE.L       #$0002004A,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetCompressionTypes
+								   MOVE.L       #$0002004B,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetTimeBase
+								   MOVE.L       #$0004004C,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDSetFrameRate
+								   MOVE.L       #$0004004D,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetDataRate
+								   MOVE.L       #$000C004E,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetSoundInputDriver
+								   MOVE.L       #$0004004F,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetDMADepths
+								   MOVE.L       #$00080050,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDGetPreferredTimeScale
+								   MOVE.L       #$00040051,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+								   MACRO
+								   _VDReleaseAsyncBuffers
+								   MOVE.L       #$00000052,-(A7)
+								   MOVEQ        #$00,D0
+								   DC.W         $A82A ; TB 002A
+								   ENDM
+					
+					
+
+StandardCompressionType		EQU		'scdi'
+StandardCompressionSubType	EQU		'imag'
+
+
+scListEveryCodec 			EQU 	2
+scAllowZeroFrameRate 		EQU 	4
+scAllowZeroKeyFrameRate 	EQU 	8
+scShowBestDepth 			EQU 	16
+scUseMovableModal 			EQU 	32
+
+scPreferCropping 			EQU 	1
+scPreferScaling 			EQU 	2
+scPreferScalingAndCropping 	EQU 	3
+
+scTestImageWidth 			EQU 	80
+scTestImageHeight 			EQU 	80
+
+scOKItem 					EQU 	1
+scCancelItem 				EQU 	2
+scCustomItem 				EQU 	3
+
+scUserCancelled				EQU		1
+
+scPositionRect				EQU		2
+scPositionDialog			EQU		3
+scSetTestImagePictHandle 	EQU		4
+scSetTestImagePictFile		EQU		5
+scSetTestImagePixMap		EQU		6
+scGetBestDeviceRect			EQU		7
+
+scRequestImageSettings		EQU		10
+scCompressImage				EQU		11
+scCompressPicture			EQU		12
+scCompressPictureFile		EQU		13
+scRequestSequenceSettings	EQU		14
+scCompressSequenceBegin		EQU		15
+scCompressSequenceFrame		EQU		16
+scCompressSequenceEnd		EQU		17
+scDefaultPictHandleSettings	EQU		18
+scDefaultPictFileSettings	EQU		19
+scDefaultPixMapSettings		EQU		20
+scGetInfo					EQU		21
+scSetInfo					EQU		22
+scNewGWorld					EQU		23
+
+SCSpatialSettings	RECORD	0
+codecType			DS.L	1
+codec				DS.L	1
+depth				DS.W	1
+spatialQuality		DS.L	1
+size				EQU		*
+					ENDR
+
+SCTemporalSettings	RECORD	0
+temporalQuality		DS.L	1
+frameRate			DS.L	1
+keyFrameRate		DS.L	1
+size				EQU		*
+					ENDR
+					
+SCDataRateSettings		RECORD	0
+dataRate				DS.L	1
+frameDuration			DS.L	1
+minSpatialQuality		DS.L	1
+minTemporalQuality		DS.L	1
+size					EQU		*
+						ENDR
+
+SCExtendedProcs			RECORD	0
+filterProc				DS.L	1
+hookProc				DS.L	1
+customName				DS.B	32
+size					EQU		*
+						ENDR
+
+scSpatialSettingsType		EQU	'sptl'		; pointer to SCSpatialSettings struct
+scTemporalSettingsType		EQU	'tprl'		; pointer to SCTemporalSettings struct
+scDataRateSettingsType		EQU	'drat'		; pointer to SCDataRateSettings struct
+scColorTableType			EQU	'clut'		; pointer to CTabHandle
+scProgressProcType			EQU	'prog'		; pointer to ProgressRecord struct
+scExtendedProcsType			EQU	'xprc'		; pointer to SCExtendedProcs struct
+scPreferenceFlagsType		EQU	'pref'		; pointer to long
+scSettingsStateType			EQU	'ssta'		; pointer to Handle
+scSequenceIDType			EQU	'sequ'		; pointer to ImageSequence
+scWindowPositionType		EQU	'wndw'		; pointer to Point
+scCodecFlagsType			EQU	'cflg'		; pointer to CodecFlags
+
+
+;	Result returned by Get/SetInfo when type cannot be found.
+
+scTypeNotFoundErr	EQU		-8971		; same number as codecExtensionNotFoundErr
+
+
+			   MACRO
+			   _SCPositionRect
+			   MOVE.L       #$00080002,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCPositionDialog
+			   MOVE.L       #$00060003,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCSetTestImagePictHandle
+			   MOVE.L       #$000A0004,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCSetTestImagePictFile
+			   MOVE.L       #$00080005,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCSetTestImagePixMap
+			   MOVE.L       #$000A0006,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCGetBestDeviceRect
+			   MOVE.L       #$00040007,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCRequestImageSettings
+			   MOVE.L       #$0000000A,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressImage
+			   MOVE.L       #$0010000B,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressPicture
+			   MOVE.L       #$0008000C,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressPictureFile
+			   MOVE.L       #$0004000D,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+			   
+			   MACRO
+			   _SCRequestSequenceSettings
+			   MOVE.L       #$0000000E,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressSequenceBegin
+			   MOVE.L       #$000C000F,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressSequenceFrame
+			   MOVE.L       #$00140010,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCCompressSequenceEnd
+			   MOVE.L       #$00000011,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCDefaultPictHandleSettings
+			   MOVE.L       #$00060012,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCDefaultPictFileSettings
+			   MOVE.L       #$00040013,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCDefaultPixMapSettings
+			   MOVE.L       #$00060014,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCGetInfo
+			   MOVE.L       #$00080015,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCSetInfo
+			   MOVE.L       #$00080016,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+			   MACRO
+			   _SCNewGWorld
+			   MOVE.L       #$000C0017,-(A7)
+			   MOVEQ        #$00,D0
+			   DC.W         $A82A ; TB 002A
+			   ENDM
+
+; For compatibility with earlier linked StdCompression
+
+SCParams		RECORD   0
+flags			DS.L	1
+theCodecType	DS.L	1
+theCodec		DS.L	1
+spatialQuality	DS.L	1
+temporalQuality	DS.L	1
+depth			DS.W	1
+frameRate		DS.L	1
+keyFrameRate	DS.L	1
+reserved1		DS.L	1
+reserved2		DS.L	1
+size			EQU		*
+				ENDR
+				
+scGetCompression 		EQU 	1
+scShowMotionSettings 	EQU 	1
+scSettingsChangedItem 	EQU 	-1
+
+
+	   MACRO
+	   _SCGetCompressionExtended
+	   MOVE.L       #$00180001,-(A7)
+	   MOVEQ        #$00,D0
+	   DC.W         $A82A ; TB 002A
+	   ENDM
+
+	   MACRO
+	   _SCGetCompression
+	   CLR.L		-(A7)
+	   CLR.L		-(A7)
+	   CLR.L		-(A7)
+	   CLR.L		-(A7)
+	   MOVE.L       #$00180001,-(A7)
+	   MOVEQ        #$00,D0
+	   DC.W         $A82A ; TB 002A
+	   ENDM
+
+
+MovieImportType						EQU 'eat '
+MovieExportType						EQU 'spit'
+
+canMovieImportHandles 				EQU 1
+canMovieImportFiles 				EQU 2
+hasMovieImportUserInterface 		EQU 4
+canMovieExportHandles 				EQU 8
+canMovieExportFiles 				EQU 16
+hasMovieExportUserInterface 		EQU 32
+dontAutoFileMovieImport 			EQU 64
+
+kMovieImportExportOpenSelect 		EQU -1
+kMovieImportExportCloseSelect 		EQU -2
+kMovieImportExportCanDoSelect 		EQU -3
+kMovieImportExportVersionSelect 	EQU -4 
+
+kMovieImportHandleSelect 			EQU 1
+kMovieImportFileSelect 				EQU 2
+kMovieImportSetFrameDurationSelect 	EQU 3
+kMovieImportSetSampleDescriptionSelect EQU 4
+kMovieImportSetMediaFileSelect 		EQU 5
+kMovieImportSetDimensionsSelect 	EQU 6
+kMovieImportSetChunkSizeSelect 		EQU 7
+kMovieImportSetProgressProcSelect 	EQU 8
+kMovieImportSetAuxiliaryDataSelect 	EQU 9
+kMovieImportSetFromScrapSelect 		EQU 10
+kMovieImportDoUserDialogSelect 		EQU 11
+kMovieImportSetDurationSelect 		EQU 12
+
+kMovieExportToHandleSelect 			EQU 128
+kMovieExportToFileSelect 			EQU 129
+kMovieExportDoUserDialogSelect 		EQU 130
+kMovieExportGetAuxiliaryDataSelect 	EQU 131
+kMovieExportSetProgressProcSelect 	EQU 132
+
+movieImportCreateTrack 				EQU 1
+movieImportInParallel 				EQU 2
+movieImportMustUseTrack 			EQU 4
+
+movieImportResultUsedMultipleTracks EQU 8
+
+	MACRO
+	_MovieImportHandle
+	MOVE.L       #$00200001,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportFile
+	MOVE.L       #$00200002,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetSampleDuration
+	MOVE.L       #$00080003,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetSampleDescription
+	MOVE.L       #$00080004,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetMediaFile
+	MOVE.L       #$00040005,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetDimensions
+	MOVE.L       #$00080006,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetChunkSize
+	MOVE.L       #$00040007,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetProgressProc
+	MOVE.L       #$00080008,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetAuxiliaryData
+	MOVE.L       #$00080009,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetFromScrap
+	MOVE.L       #$0002000A,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+	
+	MACRO
+	_MovieImportDoUserDialog
+	MOVE.L       #$000C000B,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieImportSetDuration
+	MOVE.L       #$0004000C,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieExportToHandle
+	MOVE.L       #$00140080,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieExportToFile
+	MOVE.L       #$00140081,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieExportDoUserDialog
+	MOVE.L       #$000C0082,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieExportGetAuxiliaryData
+	MOVE.L       #$00080083,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_MovieExportSetProgressProc
+	MOVE.L       #$00080084,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+
+pnotComponentWantsEvents 				EQU 	1
+pnotComponentNeedsNoCache 				EQU 	2
+
+kPreviewOpenSelector 					EQU 	0
+kPreviewCloseSelector 					EQU 	-1
+kPreviewCanDoSelector 					EQU 	-2
+kPreviewVersionSelector 				EQU 	-3 
+
+kPreviewShowDataSelector 				EQU 	1
+kPreviewMakePreviewSelector 			EQU 	2
+kPreviewMakePreviewReferenceSelector 	EQU 	3
+kPreviewEventSelector 					EQU 	4
+
+ShowFilePreviewComponentType 			EQU 	'pnot'
+CreateFilePreviewrComponentType 		EQU 	'pmak'
+
+	MACRO
+	_PreviewShowData
+	MOVE.L       #$000C0001,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_PreviewMakePreview
+	MOVE.L       #$00100002,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_PreviewMakePreviewReference
+	MOVE.L       #$000C0003,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	MACRO
+	_PreviewEvent
+	MOVE.L       #$00080004,-(A7)
+	MOVEQ        #$00,D0
+	DC.W         $A82A ; TB 002A
+	ENDM
+
+	ENDIF	;   ...already included

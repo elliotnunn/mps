@@ -1,0 +1,644 @@
+;
+;    File:       MacHelp.a
+;
+;    Contains:   Macintosh Help Package Interfaces.
+;
+;    Version:    Technology: CarbonLib 1.x
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1998-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MACHELP__') = 'UNDEFINED' THEN
+__MACHELP__ SET 1
+
+	IF &TYPE('__BALLOONS__') = 'UNDEFINED' THEN
+	include 'Balloons.a'
+	ENDIF
+	IF &TYPE('__CONTROLS__') = 'UNDEFINED' THEN
+	include 'Controls.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__MACWINDOWS__') = 'UNDEFINED' THEN
+	include 'MacWindows.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————
+;  Help Manager constants, etc.                                                     
+; ——————————————————————————————————————————————————————————————————————————————————
+
+kMacHelpVersion					EQU		$0003
+
+; typedef SInt16						HMContentRequest
+kHMSupplyContent				EQU		0
+kHMDisposeContent				EQU		1
+
+; typedef UInt32						HMContentType
+kHMNoContent					EQU		'none'
+kHMCFStringContent				EQU		'cfst'				; CFStringRef
+kHMPascalStrContent				EQU		'pstr'
+kHMStringResContent				EQU		'str#'
+kHMTEHandleContent				EQU		'txth'				; NOT SUPPORTED ON MAC OS X
+kHMTextResContent				EQU		'text'				; NOT SUPPORTED ON MAC OS X
+kHMStrResContent				EQU		'str '
+
+
+; *  HMTagDisplaySide
+; *  
+; *  Discussion:
+; *    Help tag display locations relative to absolute hot rect
+; 
+
+
+; typedef SInt16						HMTagDisplaySide
+kHMDefaultSide					EQU		0
+kHMOutsideTopScriptAligned		EQU		1
+kHMOutsideLeftCenterAligned		EQU		2
+kHMOutsideBottomScriptAligned	EQU		3
+kHMOutsideRightCenterAligned	EQU		4
+kHMOutsideTopLeftAligned		EQU		5
+kHMOutsideTopRightAligned		EQU		6
+kHMOutsideLeftTopAligned		EQU		7
+kHMOutsideLeftBottomAligned		EQU		8
+kHMOutsideBottomLeftAligned		EQU		9
+kHMOutsideBottomRightAligned	EQU		10
+kHMOutsideRightTopAligned		EQU		11
+kHMOutsideRightBottomAligned	EQU		12
+kHMOutsideTopCenterAligned		EQU		13
+kHMOutsideBottomCenterAligned	EQU		14
+kHMInsideRightCenterAligned		EQU		15
+kHMInsideLeftCenterAligned		EQU		16
+kHMInsideBottomCenterAligned	EQU		17
+kHMInsideTopCenterAligned		EQU		18
+kHMInsideTopLeftCorner			EQU		19
+kHMInsideTopRightCorner			EQU		20
+kHMInsideBottomLeftCorner		EQU		21
+kHMInsideBottomRightCorner		EQU		22
+kHMAbsoluteCenterAligned		EQU		23
+;  Obsoleted constants HMTagDisplaySides, use the new ones, please 
+
+kHMTopSide						EQU		1
+kHMLeftSide						EQU		2
+kHMBottomSide					EQU		3
+kHMRightSide					EQU		4
+kHMTopLeftCorner				EQU		5
+kHMTopRightCorner				EQU		6
+kHMLeftTopCorner				EQU		7
+kHMLeftBottomCorner				EQU		8
+kHMBottomLeftCorner				EQU		9
+kHMBottomRightCorner			EQU		10
+kHMRightTopCorner				EQU		11
+kHMRightBottomCorner			EQU		12
+
+; typedef SInt16						HMContentProvidedType
+kHMContentProvided				EQU		0
+kHMContentNotProvided			EQU		1
+kHMContentNotProvidedDontPropagate EQU	2
+
+kHMMinimumContentIndex			EQU		0					; first entry in HMHelpContentRec.content is the minimum content 
+kHMMaximumContentIndex			EQU		1					; second entry in HMHelpContentRec.content is the maximum content 
+
+errHMIllegalContentForMinimumState EQU	-10980				; unrecognized content type for minimum content 
+errHMIllegalContentForMaximumState EQU	-10981				; unrecognized content type for maximum content 
+;  obsolete names; will be removed
+
+kHMIllegalContentForMinimumState EQU	-10980
+
+kHelpTagEventHandlerTag			EQU		'hevt'
+HMHelpContent			RECORD 0
+contentType				 ds.l	1				; offset: $0 (0)
+tagCFString				 ds.l	1				; offset: $4 (4)		;  CFStringRef
+						 ORG 4
+tagString				 ds		Str255			; offset: $4 (4)		;  Pascal String
+						 ORG 4
+tagStringRes			 ds		HMStringResType ; offset: $4 (4)		;  STR# resource ID and index
+						 ORG 4
+tagTEHandle				 ds.l	1				; offset: $4 (4)		;  TextEdit handle (NOT SUPPORTED ON MAC OS X)
+						 ORG 4
+tagTextRes				 ds.w	1				; offset: $4 (4)		;  TEXT/styl resource ID (NOT SUPPORTED ON MAC OS X)
+						 ORG 4
+tagStrRes				 ds.w	1				; offset: $4 (4)		;  STR resource ID
+						 ORG 260
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+HMHelpContentRec		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+absHotRect				 ds		Rect			; offset: $4 (4)
+tagSide					 ds.w	1				; offset: $C (12)
+content					 ds.b	2 * HMHelpContent.sizeof ; offset: $E (14)
+sizeof					 EQU *					; size:   $216 (534)
+						ENDR
+; typedef struct HMHelpContentRec *		HMHelpContentPtr
+
+; ——————————————————————————————————————————————————————————————————————————————————————————
+;  Callback procs                                       
+; —————————————————————————————————————————————————————————————————————————————————————————— 
+
+; *  NewHMControlContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewHMWindowContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewHMMenuTitleContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewHMMenuItemContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHMControlContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHMWindowContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHMMenuTitleContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHMMenuItemContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHMControlContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHMWindowContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHMMenuTitleContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHMMenuItemContentUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+; ——————————————————————————————————————————————————————————————————————————————————————————
+;  API                                                                                      
+; ——————————————————————————————————————————————————————————————————————————————————————————
+;  Help Menu 
+
+; *  HMGetHelpMenu()
+; *  
+; *  Summary:
+; *    Returns a menu to which applications may add their own help items.
+; *  
+; *  Parameters:
+; *    
+; *    outHelpMenu:
+; *      On exit, contains the help menu.
+; *    
+; *    outFirstCustomItemIndex:
+; *      On exit, contains the menu item index that will be used by the
+; *      first item added by the application. This parameter may be NULL.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetHelpMenu(MenuRef *outHelpMenu, MenuItemIndex *outFirstCustomItemIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetHelpMenu
+	ENDIF
+
+;  Installing/Retrieving Content 
+;  Menu title and item help tags are not yet supported by Carbon or CarbonLib. 
+;  They will be fully supported in a future release. 
+
+; *  HMSetControlHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetControlHelpContent(ControlRef inControl, const HMHelpContentRec *inContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetControlHelpContent
+	ENDIF
+
+
+; *  HMGetControlHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetControlHelpContent(ControlRef inControl, HMHelpContentRec *outContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetControlHelpContent
+	ENDIF
+
+
+; *  HMSetWindowHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetWindowHelpContent(WindowRef inWindow, const HMHelpContentRec *inContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetWindowHelpContent
+	ENDIF
+
+
+; *  HMGetWindowHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetWindowHelpContent(WindowRef inWindow, HMHelpContentRec *outContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetWindowHelpContent
+	ENDIF
+
+
+; *  HMSetMenuItemHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetMenuItemHelpContent(MenuRef inMenu, MenuItemIndex inItem, const HMHelpContentRec *inContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetMenuItemHelpContent
+	ENDIF
+
+
+; *  HMGetMenuItemHelpContent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetMenuItemHelpContent(MenuRef inMenu, MenuItemIndex inItem, HMHelpContentRec *outContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetMenuItemHelpContent
+	ENDIF
+
+;  Installing/Retrieving Content Callbacks 
+
+; *  HMInstallControlContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMInstallControlContentCallback(ControlRef inControl, HMControlContentUPP inContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMInstallControlContentCallback
+	ENDIF
+
+
+; *  HMInstallWindowContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMInstallWindowContentCallback(WindowRef inWindow, HMWindowContentUPP inContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMInstallWindowContentCallback
+	ENDIF
+
+
+; *  HMInstallMenuTitleContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMInstallMenuTitleContentCallback(MenuRef inMenu, HMMenuTitleContentUPP inContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMInstallMenuTitleContentCallback
+	ENDIF
+
+
+; *  HMInstallMenuItemContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMInstallMenuItemContentCallback(MenuRef inMenu, HMMenuItemContentUPP inContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMInstallMenuItemContentCallback
+	ENDIF
+
+
+; *  HMGetControlContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetControlContentCallback(ControlRef inControl, HMControlContentUPP *outContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetControlContentCallback
+	ENDIF
+
+
+; *  HMGetWindowContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetWindowContentCallback(WindowRef inWindow, HMWindowContentUPP *outContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetWindowContentCallback
+	ENDIF
+
+
+; *  HMGetMenuTitleContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetMenuTitleContentCallback(MenuRef inMenu, HMMenuTitleContentUPP *outContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetMenuTitleContentCallback
+	ENDIF
+
+
+; *  HMGetMenuItemContentCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetMenuItemContentCallback(MenuRef inMenu, HMMenuItemContentUPP *outContentUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetMenuItemContentCallback
+	ENDIF
+
+;  Enabling and Disabling Help Tags 
+
+; *  HMAreHelpTagsDisplayed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean HMAreHelpTagsDisplayed(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMAreHelpTagsDisplayed
+	ENDIF
+
+
+; *  HMSetHelpTagsDisplayed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetHelpTagsDisplayed(Boolean inDisplayTags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetHelpTagsDisplayed
+	ENDIF
+
+
+; *  HMSetTagDelay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetTagDelay(Duration inDelay)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetTagDelay
+	ENDIF
+
+
+; *  HMGetTagDelay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMGetTagDelay(Duration *outDelay)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetTagDelay
+	ENDIF
+
+;  Compatibility 
+
+; *  HMSetMenuHelpFromBalloonRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetMenuHelpFromBalloonRsrc(MenuRef inMenu, SInt16 inHmnuRsrcID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetMenuHelpFromBalloonRsrc
+	ENDIF
+
+
+; *  HMSetDialogHelpFromBalloonRsrc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMSetDialogHelpFromBalloonRsrc(DialogRef inDialog, SInt16 inHdlgRsrcID, SInt16 inItemStart)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetDialogHelpFromBalloonRsrc
+	ENDIF
+
+;  Displaying tags 
+
+; *  HMDisplayTag()
+; *  
+; *  Summary:
+; *    Displays a help tag at a user defined location.
+; *  
+; *  Parameters:
+; *    
+; *    inContent:
+; *      HMHelpContentRec describing the help tag to be displayed.
+; *  
+; *  Result:
+; *    An OSStatus code indicating success or failure.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HMDisplayTag(const HMHelpContentRec *inContent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMDisplayTag
+	ENDIF
+
+	ENDIF ; __MACHELP__ 
+

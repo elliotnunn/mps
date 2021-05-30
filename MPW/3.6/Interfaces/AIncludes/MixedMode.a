@@ -1,0 +1,500 @@
+;
+;    File:       MixedMode.a
+;
+;    Contains:   Mixed Mode Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1992-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+__MIXEDMODE__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+;  Mixed Mode constants 
+;  Current Routine Descriptor Version 
+
+kRoutineDescriptorVersion		EQU		7
+;  MixedModeMagic Magic Cookie/Trap number 
+
+_MixedModeMagic					EQU		$AAFE
+;  MixedModeState Version for CFM68K Mixed Mode 
+
+kCurrentMixedModeStateRecord	EQU		1
+;  Calling Conventions 
+; typedef unsigned short 				CallingConventionType
+
+
+kPascalStackBased				EQU		0
+kCStackBased					EQU		1
+kRegisterBased					EQU		2
+kD0DispatchedPascalStackBased	EQU		8
+kD1DispatchedPascalStackBased	EQU		12
+kD0DispatchedCStackBased		EQU		9
+kStackDispatchedPascalStackBased EQU	14
+kThinkCStackBased				EQU		5
+;  ISA Types 
+; typedef SInt8 						ISAType
+
+
+kM68kISA						EQU		0
+kPowerPCISA						EQU		1
+;  RTA Types 
+; typedef SInt8 						RTAType
+
+
+kOld68kRTA						EQU		$00
+kPowerPCRTA						EQU		$00
+kCFM68kRTA						EQU		$10
+;  Constants for specifing 68k registers 
+
+kRegisterD0						EQU		0
+kRegisterD1						EQU		1
+kRegisterD2						EQU		2
+kRegisterD3						EQU		3
+kRegisterD4						EQU		8
+kRegisterD5						EQU		9
+kRegisterD6						EQU		10
+kRegisterD7						EQU		11
+kRegisterA0						EQU		4
+kRegisterA1						EQU		5
+kRegisterA2						EQU		6
+kRegisterA3						EQU		7
+kRegisterA4						EQU		12
+kRegisterA5						EQU		13
+kRegisterA6						EQU		14					; A7 is the same as the PowerPC SP 
+kCCRegisterCBit					EQU		16
+kCCRegisterVBit					EQU		17
+kCCRegisterZBit					EQU		18
+kCCRegisterNBit					EQU		19
+kCCRegisterXBit					EQU		20
+; typedef unsigned short 				registerSelectorType
+
+;  SizeCodes we use everywhere 
+
+kNoByteCode						EQU		0
+kOneByteCode					EQU		1
+kTwoByteCode					EQU		2
+kFourByteCode					EQU		3
+;  Mixed Mode Routine Records 
+; typedef unsigned long 				ProcInfoType
+
+;  Routine Flag Bits 
+; typedef unsigned short 				RoutineFlagsType
+
+
+kProcDescriptorIsAbsolute		EQU		$00
+kProcDescriptorIsRelative		EQU		$01
+
+kFragmentIsPrepared				EQU		$00
+kFragmentNeedsPreparing			EQU		$02
+
+kUseCurrentISA					EQU		$00
+kUseNativeISA					EQU		$04
+
+kPassSelector					EQU		$00
+kDontPassSelector				EQU		$08
+
+kRoutineIsNotDispatchedDefaultRoutine EQU $00
+kRoutineIsDispatchedDefaultRoutine EQU	$10
+
+kProcDescriptorIsProcPtr		EQU		$00
+kProcDescriptorIsIndex			EQU		$20
+RoutineRecord			RECORD 0
+procInfo				 ds.l	1				; offset: $0 (0)		;  calling conventions 
+reserved1				 ds.b	1				; offset: $4 (4)		;  Must be 0 
+ISA						 ds.b	1				; offset: $5 (5)		;  Instruction Set Architecture 
+routineFlags			 ds.w	1				; offset: $6 (6)		;  Flags for each routine 
+procDescriptor			 ds.l	1				; offset: $8 (8)		;  Where is the thing we’re calling? 
+reserved2				 ds.l	1				; offset: $C (12)		;  Must be 0 
+selector				 ds.l	1				; offset: $10 (16)		;  For dispatched routines, the selector 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct RoutineRecord *		RoutineRecordPtr
+
+; typedef RoutineRecordPtr *			RoutineRecordHandle
+
+;  Mixed Mode Routine Descriptors 
+;  Definitions of the Routine Descriptor Flag Bits 
+; typedef UInt8 						RDFlagsType
+
+
+kSelectorsAreNotIndexable		EQU		$00
+kSelectorsAreIndexable			EQU		$01
+;  Routine Descriptor Structure 
+RoutineDescriptor		RECORD 0
+goMixedModeTrap			 ds.w	1				; offset: $0 (0)		;  Our A-Trap 
+version					 ds.b	1				; offset: $2 (2)		;  Current Routine Descriptor version 
+routineDescriptorFlags	 ds.b	1				; offset: $3 (3)		;  Routine Descriptor Flags 
+reserved1				 ds.l	1				; offset: $4 (4)		;  Unused, must be zero 
+reserved2				 ds.b	1				; offset: $8 (8)		;  Unused, must be zero 
+selectorInfo			 ds.b	1				; offset: $9 (9)		;  If a dispatched routine, calling convention, else 0 
+routineCount			 ds.w	1				; offset: $A (10)		;  Number of routines in this RD 
+routineRecords			 ds		RoutineRecord	; offset: $C (12) <-- really an array of length one ;  The individual routines 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct RoutineDescriptor *	RoutineDescriptorPtr
+
+; typedef RoutineDescriptorPtr *		RoutineDescriptorHandle
+
+;  68K MixedModeStateRecord 
+MixedModeStateRecord	RECORD 0
+state1					 ds.l	1				; offset: $0 (0)
+state2					 ds.l	1				; offset: $4 (4)
+state3					 ds.l	1				; offset: $8 (8)
+state4					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;  Mixed Mode ProcInfos 
+
+															; Calling Convention Offsets 
+kCallingConventionWidth			EQU		4
+kCallingConventionPhase			EQU		0
+kCallingConventionMask			EQU		$0F					; Result Offsets 
+kResultSizeWidth				EQU		2
+kResultSizePhase				EQU		4
+kResultSizeMask					EQU		$30					; Parameter offsets & widths 
+kStackParameterWidth			EQU		2
+kStackParameterPhase			EQU		6
+kStackParameterMask				EQU		$FFFFFFC0			; Register Result Location offsets & widths 
+kRegisterResultLocationWidth	EQU		5
+kRegisterResultLocationPhase	EQU		6					; Register Parameter offsets & widths 
+kRegisterParameterWidth			EQU		5
+kRegisterParameterPhase			EQU		11
+kRegisterParameterMask			EQU		$7FFFF800
+kRegisterParameterSizePhase		EQU		0
+kRegisterParameterSizeWidth		EQU		2
+kRegisterParameterWhichPhase	EQU		2
+kRegisterParameterWhichWidth	EQU		3					; Dispatched Stack Routine Selector offsets & widths 
+kDispatchedSelectorSizeWidth	EQU		2
+kDispatchedSelectorSizePhase	EQU		6					; Dispatched Stack Routine Parameter offsets 
+kDispatchedParameterPhase		EQU		8					; Special Case offsets & widths 
+kSpecialCaseSelectorWidth		EQU		6
+kSpecialCaseSelectorPhase		EQU		4
+kSpecialCaseSelectorMask		EQU		$03F0
+
+kSpecialCase					EQU		$000F				; (CallingConventionType) 
+
+															; all of the special cases enumerated.  The selector field is 6 bits wide 
+kSpecialCaseHighHook			EQU		0
+kSpecialCaseCaretHook			EQU		0					; same as kSpecialCaseHighHook 
+kSpecialCaseEOLHook				EQU		1
+kSpecialCaseWidthHook			EQU		2
+kSpecialCaseTextWidthHook		EQU		2					; same as kSpecialCaseWidthHook 
+kSpecialCaseNWidthHook			EQU		3
+kSpecialCaseDrawHook			EQU		4
+kSpecialCaseHitTestHook			EQU		5
+kSpecialCaseTEFindWord			EQU		6
+kSpecialCaseProtocolHandler		EQU		7
+kSpecialCaseSocketListener		EQU		8
+kSpecialCaseTERecalc			EQU		9
+kSpecialCaseTEDoText			EQU		10
+kSpecialCaseGNEFilterProc		EQU		11
+kSpecialCaseMBarHook			EQU		12
+
+; 
+;    NOTES ON USING ROUTINE DESCRIPTOR FUNCTIONS
+;    
+;    When calling these routine from classic 68k code there are two possible intentions.
+;
+;    The first is source compatibility with code ported to CFM (either PowerPC or 68k CFM). When
+;    the code is compiled for CFM the functions create routine descriptors that can be used by
+;    the mixed mode manager operating on that machine. When the code is compiled for classic 68k
+;    these functions do nothing so that the code will run on Macintoshes that do not have a
+;    mixed mode manager. The dual nature of these functions is achieved by turning the CFM calls
+;    into "no-op" macros for classic 68k: You can put "NewRoutineDescriptor" in your source,
+;    compile it for any runtime or instruction set architecture, and it will run correctly on the
+;    intended runtime/instruction platform. All without source changes and/or conditional source.
+;    
+;    The other intention is for code that "knows" that it is executing as classic 68k runtime
+;    and is specifically trying to call code of another architecture using mixed mode. Since the
+;    routines were designed with classic <-> CFM source compatibility in mind this second case
+;    is treated special. For classic 68k code to create routines descriptors for use by mixed mode
+;    it must call the "Trap" versions of the routines (NewRoutineDescriptorTrap). These versions
+;    are only available to classic 68k callers: rigging the interfaces to allow calling them
+;    from CFM code will result in runtime failure because no shared library implements or exports
+;    the functions.
+;    
+;
+;    This almost appears seamless until you consider "fat" routine descriptors and the advent of
+;    CFM-68K. What does "fat" mean? CFM-68K is not emulated on PowerPC and PowerPC is not emulated
+;    on CFM-68K. It makes no sense to create a routine descriptor having both a CFM-68K routine
+;    and a PowerPC native routine pointer. Therefore "fat" is defined to be a mix of classic and
+;    CFM for the hardware's native instruction set: on PowerPC fat is classic and PowerPC native,
+;    on a 68k machine with CFM-68K installed fat is classic and CFM-68K.
+;    
+;    By definition fat routine descriptors are only constructed by code that is aware of the 
+;    architecture it is executing as and that another architecture exists. Source compatibility
+;    between code intented as pure classic and pure CFM is not an issue and so NewFatRoutineDescriptor
+;    is not available when building pure classic code.
+;    
+;    NewFatRoutineDescriptorTrap is available to classic code on both PowerPC and CFM-68K. The
+;    classic code can use the code fragment manager routine "FindSymbol" to obtain the address of 
+;    a routine in a shared library and then construct a routine descriptor with both the CFM routine 
+;    and classic routine.
+;
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewRoutineDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later or as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UniversalProcPtr NewRoutineDescriptor(ProcPtr theProc, ProcInfoType theProcInfo, ISAType theISA)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewRoutineDescriptor
+	ENDIF
+
+
+
+; *  DisposeRoutineDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later or as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void DisposeRoutineDescriptor(UniversalProcPtr theUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeRoutineDescriptor
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewFatRoutineDescriptor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal UniversalProcPtr NewFatRoutineDescriptor(ProcPtr theM68kProc, ProcPtr thePowerPCProc, ProcInfoType theProcInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewFatRoutineDescriptor
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+; 
+;    The "Trap" versions of the MixedMode calls are only for classic 68K clients that 
+;    want to load and use CFM based code.
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewRoutineDescriptorTrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal UniversalProcPtr NewRoutineDescriptorTrap(ProcPtr theProc, ProcInfoType theProcInfo, ISAType theISA)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewRoutineDescriptorTrap
+			moveq           	#0,D0
+			dc.w            	$AA59
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewRoutineDescriptorTrap
+	ENDIF
+
+
+; *  DisposeRoutineDescriptorTrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void DisposeRoutineDescriptorTrap(UniversalProcPtr theProcPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisposeRoutineDescriptorTrap
+			moveq           	#1,D0
+			dc.w            	$AA59
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeRoutineDescriptorTrap
+	ENDIF
+
+
+; *  NewFatRoutineDescriptorTrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal UniversalProcPtr NewFatRoutineDescriptorTrap(ProcPtr theM68kProc, ProcPtr thePowerPCProc, ProcInfoType theProcInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewFatRoutineDescriptorTrap
+			moveq           	#2,D0
+			dc.w            	$AA59
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewFatRoutineDescriptorTrap
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF ¬ TARGET_CPU_68K ++ TARGET_RT_MAC_CFM THEN
+; 
+;    CallUniversalProc is defined for all targets except classic 68k code.  This will 
+;    catch accidental calls from classic 68K code that previously only showed up as 
+;    linker errors.
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CallUniversalProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern long CallUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallUniversalProc
+	ENDIF
+
+
+; *  CallOSTrapUniversalProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern long CallOSTrapUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallOSTrapUniversalProc
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	IF TARGET_CPU_68K THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SaveMixedModeState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SaveMixedModeState(MixedModeStateRecord *stateStorage, UInt32 stateVersion)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SaveMixedModeState
+			moveq           	#3,D0
+			dc.w            	$AA59
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SaveMixedModeState
+	ENDIF
+
+
+; *  RestoreMixedModeState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr RestoreMixedModeState(MixedModeStateRecord *stateStorage, UInt32 stateVersion)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RestoreMixedModeState
+			moveq           	#4,D0
+			dc.w            	$AA59
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RestoreMixedModeState
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_CPU_68K
+;  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+; *
+; *  Macros for building ProcInfos.  Examples:
+; *  
+; *  
+; *  uppModalFilterProcInfo = kPascalStackBased
+; *       | RESULT_SIZE(SIZE_CODE(sizeof(Boolean)))
+; *       | STACK_ROUTINE_PARAMETER(1, SIZE_CODE(sizeof(DialogRef)))
+; *       | STACK_ROUTINE_PARAMETER(2, SIZE_CODE(sizeof(EventRecord*)))
+; *       | STACK_ROUTINE_PARAMETER(3, SIZE_CODE(sizeof(short*))),
+; *
+; *  uppDeskHookProcInfo = kRegisterBased
+; *       | REGISTER_ROUTINE_PARAMETER(1, kRegisterD0, SIZE_CODE(sizeof(Boolean)))
+; *       | REGISTER_ROUTINE_PARAMETER(2, kRegisterA0, SIZE_CODE(sizeof(EventRecord*)))
+; *
+; *  uppGXSpoolResourceProcInfo = kCStackBased
+; *       | RESULT_SIZE(SIZE_CODE(sizeof(OSErr)))
+; *       | STACK_ROUTINE_PARAMETER(1, SIZE_CODE(sizeof(gxSpoolFile)))
+; *       | STACK_ROUTINE_PARAMETER(2, SIZE_CODE(sizeof(Handle)))
+; *       | STACK_ROUTINE_PARAMETER(3, SIZE_CODE(sizeof(ResType)))
+; *       | STACK_ROUTINE_PARAMETER(4, SIZE_CODE(sizeof(long)))
+; *
+; *  uppTEFindWordProcInfo = SPECIAL_CASE_PROCINFO( 6 ),
+; *
+; 
+
+
+
+
+
+
+	ENDIF ; __MIXEDMODE__ 
+

@@ -1,0 +1,225 @@
+;
+;	File:		SFNTTypes.a
+;
+;	Contains:	Font file structures.
+;
+;	Version:	Technology:	Quickdraw GX 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SFNTTYPES__') = 'UNDEFINED' THEN
+__SFNTTYPES__ SET 1
+
+
+	IF &TYPE('__GXMATH__') = 'UNDEFINED' THEN
+	include 'GXMath.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+;		include 'Types.a'											;
+;		include 'FixMath.a'										;
+
+	IF &TYPE('__GXTYPES__') = 'UNDEFINED' THEN
+	include 'GXTypes.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+sfntDirectoryEntry 		RECORD	0
+tableTag				 ds.l   1		; offset: $0 (0)
+checkSum				 ds.l   1		; offset: $4 (4)
+offset					 ds.l   1		; offset: $8 (8)
+length					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct sfntDirectory  sfntDirectory
+; The search fields limits numOffsets to 4096. 
+sfntDirectory 			RECORD	0
+format					 ds.l   1		; offset: $0 (0)
+numOffsets				 ds.w   1		; offset: $4 (4)		; number of tables 
+searchRange				 ds.w   1		; offset: $6 (6)		; (max2 <= numOffsets)*16 
+entrySelector			 ds.w   1		; offset: $8 (8)		; log2(max2 <= numOffsets) 
+rangeShift				 ds.w   1		; offset: $A (10)		; numOffsets*16-searchRange
+table					 ds     sfntDirectoryEntry ; offset: $C (12) ; table[numOffsets] 
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct sfntDirectoryEntry  sfntDirectoryEntry
+
+sizeof_sfntDirectory			EQU		12
+
+; Cmap - character id to glyph id gxMapping 
+cmapFontTableTag				EQU		'cmap'
+
+sfntCMapSubHeader 		RECORD	0
+format					 ds.w   1		; offset: $0 (0)
+length					 ds.w   1		; offset: $2 (2)
+languageID				 ds.w   1		; offset: $4 (4)		; base-1 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct sfntCMapSubHeader  sfntCMapSubHeader
+
+sizeof_sfntCMapSubHeader		EQU		6
+
+sfntCMapEncoding 		RECORD	0
+platformID				 ds.w   1		; offset: $0 (0)		; base-0 
+scriptID				 ds.w   1		; offset: $2 (2)		; base-0 
+offset					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct sfntCMapEncoding  sfntCMapEncoding
+
+sizeof_sfntCMapEncoding			EQU		8
+
+sfntCMapHeader 			RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+numTables				 ds.w   1		; offset: $2 (2)
+encoding				 ds     sfntCMapEncoding ; offset: $4 (4)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct sfntCMapHeader  sfntCMapHeader
+
+sizeof_sfntCMapHeader			EQU		4
+
+; Name table 
+nameFontTableTag				EQU		'name'
+
+sfntNameRecord 			RECORD	0
+platformID				 ds.w   1		; offset: $0 (0)		; base-0 
+scriptID				 ds.w   1		; offset: $2 (2)		; base-0 
+languageID				 ds.w   1		; offset: $4 (4)		; base-0 
+nameID					 ds.w   1		; offset: $6 (6)		; base-0 
+length					 ds.w   1		; offset: $8 (8)
+offset					 ds.w   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct sfntNameRecord  sfntNameRecord
+
+sizeof_sfntNameRecord			EQU		12
+
+sfntNameHeader 			RECORD	0
+format					 ds.w   1		; offset: $0 (0)
+count					 ds.w   1		; offset: $2 (2)
+stringOffset			 ds.w   1		; offset: $4 (4)
+rec						 ds     sfntNameRecord ; offset: $6 (6)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct sfntNameHeader  sfntNameHeader
+
+sizeof_sfntNameHeader			EQU		6
+
+; Fvar table - gxFont variations 
+variationFontTableTag			EQU		'fvar'
+
+; These define each gxFont variation 
+sfntVariationAxis 		RECORD	0
+axisTag					 ds.l   1		; offset: $0 (0)
+minValue				 ds.l   1		; offset: $4 (4)
+defaultValue			 ds.l   1		; offset: $8 (8)
+maxValue				 ds.l   1		; offset: $C (12)
+flags					 ds.w   1		; offset: $10 (16)
+nameID					 ds.w   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct sfntVariationAxis  sfntVariationAxis
+
+sizeof_sfntVariationAxis		EQU		20
+
+; These are named locations in gxStyle-space for the user 
+sfntInstance 			RECORD	0
+nameID					 ds.w   1		; offset: $0 (0)
+flags					 ds.w   1		; offset: $2 (2)
+coord					 ds.l   1		; offset: $4 (4)		; [axisCount] 
+; room to grow since the header carries a tupleSize field 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct sfntInstance  sfntInstance
+
+sizeof_sfntInstance				EQU		4
+
+sfntVariationHeader 	RECORD	0
+version					 ds.l   1		; offset: $0 (0)		; 1.0 Fixed 
+offsetToData			 ds.w   1		; offset: $4 (4)		; to first axis = 16
+countSizePairs			 ds.w   1		; offset: $6 (6)		; axis+inst = 2 
+axisCount				 ds.w   1		; offset: $8 (8)
+axisSize				 ds.w   1		; offset: $A (10)
+instanceCount			 ds.w   1		; offset: $C (12)
+instanceSize			 ds.w   1		; offset: $E (14)
+; …other <count,size> pairs 
+axis					 ds     sfntVariationAxis ; offset: $10 (16) ; [axisCount] 
+instance				 ds     sfntInstance ; offset: $24 (36)	; [instanceCount]  …other arrays of data 
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct sfntVariationHeader  sfntVariationHeader
+
+sizeof_sfntVariationHeader		EQU		16
+
+; Fdsc table - gxFont descriptor 
+descriptorFontTableTag			EQU		'fdsc'
+
+sfntDescriptorHeader 	RECORD	0
+version					 ds.l   1		; offset: $0 (0)		; 1.0 in Fixed 
+descriptorCount			 ds.l   1		; offset: $4 (4)
+descriptor				 ds.l   2		; offset: $8 (8)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct sfntDescriptorHeader  sfntDescriptorHeader
+
+sizeof_sfntDescriptorHeader		EQU		8
+
+; Feat Table - layout feature table 
+featureFontTableTag				EQU		'feat'
+
+sfntFeatureName 		RECORD	0
+featureType				 ds.w   1		; offset: $0 (0)
+settingCount			 ds.w   1		; offset: $2 (2)
+offsetToSettings		 ds.l   1		; offset: $4 (4)
+featureFlags			 ds.w   1		; offset: $8 (8)
+nameID					 ds.w   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct sfntFeatureName  sfntFeatureName
+sfntFontRunFeature 		RECORD	0
+featureType				 ds.w   1		; offset: $0 (0)
+setting					 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+sfntFeatureHeader 		RECORD	0
+version					 ds.l   1		; offset: $0 (0)		; 1.0 
+featureNameCount		 ds.w   1		; offset: $4 (4)
+featureSetCount			 ds.w   1		; offset: $6 (6)
+reserved				 ds.l   1		; offset: $8 (8)		; set to 0 
+names					 ds     sfntFeatureName ; offset: $C (12)
+settings				 ds     gxFontFeatureSetting ; offset: $18 (24)
+runs					 ds     sfntFontRunFeature ; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct sfntFeatureHeader  sfntFeatureHeader
+; OS/2 Table 
+
+os2FontTableTag					EQU		'OS/2'
+
+;  Special invalid glyph ID value, useful as a sentinel value, for example 
+nonGlyphID						EQU		65535
+
+	ENDIF ; __SFNTTYPES__

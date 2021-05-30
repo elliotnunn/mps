@@ -1,0 +1,1117 @@
+;
+;    File:       NetSprocket.a
+;
+;    Contains:   Games Sprockets: NetSprocket interfaces
+;
+;    Version:    Technology: NetSprocket 1.7
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__NETSPROCKET__') = 'UNDEFINED' THEN
+__NETSPROCKET__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__OPENTRANSPORT__') = 'UNDEFINED' THEN
+	include 'OpenTransport.a'
+	ENDIF
+	IF &TYPE('__OPENTRANSPORTPROVIDERS__') = 'UNDEFINED' THEN
+	include 'OpenTransportProviders.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+	IF TARGET_OS_MAC THEN
+
+kNSpMaxPlayerNameLen			EQU		31
+kNSpMaxGroupNameLen				EQU		31
+kNSpMaxPasswordLen				EQU		31
+kNSpMaxGameNameLen				EQU		31
+kNSpMaxDefinitionStringLen		EQU		255
+
+;  NetSprocket basic types 
+
+
+
+
+
+
+
+
+; typedef SInt32 						NSpEventCode
+
+; typedef SInt32 						NSpGameID
+
+; typedef SInt32 						NSpPlayerID
+
+; typedef NSpPlayerID 					NSpGroupID
+
+; typedef UInt32 						NSpPlayerType
+
+; typedef SInt32 						NSpFlags
+
+NSpPlayerName			RECORD 0
+f						 ds		Str31
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+;  Individual player info 
+NSpPlayerInfo			RECORD 0
+id						 ds.l	1				; offset: $0 (0)
+playerType				 ds.l	1				; offset: $4 (4)		;  "type" in C
+name					 ds		Str31			; offset: $8 (8)
+groupCount				 ds.l	1				; offset: $28 (40)
+groups					 ds.l	1				; offset: $2C (44) <-- really an array of length one
+sizeof					 EQU *					; size:   $30 (48)
+						ENDR
+; typedef struct NSpPlayerInfo *		NSpPlayerInfoPtr
+
+;  list of all players 
+NSpPlayerEnumeration	RECORD 0
+count					 ds.l	1				; offset: $0 (0)
+playerInfo				 ds.l	1				; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NSpPlayerEnumeration *	NSpPlayerEnumerationPtr
+
+;  Individual group info 
+NSpGroupInfo			RECORD 0
+id						 ds.l	1				; offset: $0 (0)
+playerCount				 ds.l	1				; offset: $4 (4)
+players					 ds.l	1				; offset: $8 (8) <-- really an array of length one
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct NSpGroupInfo *			NSpGroupInfoPtr
+
+;  List of all groups 
+NSpGroupEnumeration		RECORD 0
+count					 ds.l	1				; offset: $0 (0)
+groups					 ds.l	1				; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NSpGroupEnumeration *	NSpGroupEnumerationPtr
+
+;  Topology types 
+; typedef UInt32 						NSpTopology
+
+
+kNSpClientServer				EQU		$00000001
+;  Game information 
+NSpGameInfo				RECORD 0
+maxPlayers				 ds.l	1				; offset: $0 (0)
+currentPlayers			 ds.l	1				; offset: $4 (4)
+currentGroups			 ds.l	1				; offset: $8 (8)
+topology				 ds.l	1				; offset: $C (12)
+reserved				 ds.l	1				; offset: $10 (16)
+name					 ds		Str31			; offset: $14 (20)
+password				 ds		Str31			; offset: $34 (52)
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+;  Structure used for sending and receiving network messages 
+NSpMessageHeader		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  Used by NetSprocket.  Don't touch this 
+what					 ds.l	1				; offset: $4 (4)		;  The kind of message (e.g. player joined) 
+from					 ds.l	1				; offset: $8 (8)		;  ID of the sender 
+toID					 ds.l	1				; offset: $C (12)		;  (player or group) id of the intended recipient (was "to) 
+id						 ds.l	1				; offset: $10 (16)		;  Unique ID for this message & (from) player 
+when					 ds.l	1				; offset: $14 (20)		;  Timestamp for the message 
+messageLen				 ds.l	1				; offset: $18 (24)		;  Bytes of data in the entire message (including the header) 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  NetSprocket-defined message structures 
+NSpErrorMessage			RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+error					 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+NSpJoinRequestMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+name					 ds		Str31			; offset: $1C (28)
+password				 ds		Str31			; offset: $3C (60)
+theType					 ds.l	1				; offset: $5C (92)
+customDataLen			 ds.l	1				; offset: $60 (96)
+customData				 ds.b	1				; offset: $64 (100) <-- really an array of length one
+						 ORG 102
+sizeof					 EQU *					; size:   $66 (102)
+						ENDR
+NSpJoinApprovedMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+NSpJoinDeniedMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+reason					 ds		Str255			; offset: $1C (28)
+sizeof					 EQU *					; size:   $11C (284)
+						ENDR
+NSpPlayerJoinedMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+playerCount				 ds.l	1				; offset: $1C (28)
+playerInfo				 ds		NSpPlayerInfo	; offset: $20 (32)
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+NSpPlayerLeftMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+playerCount				 ds.l	1				; offset: $1C (28)
+playerID				 ds.l	1				; offset: $20 (32)
+playerName				 ds		NSpPlayerName	; offset: $24 (36)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+NSpHostChangedMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+newHost					 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+NSpGameTerminatedMessage RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+NSpCreateGroupMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+groupID					 ds.l	1				; offset: $1C (28)
+requestingPlayer		 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+NSpDeleteGroupMessage	RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+groupID					 ds.l	1				; offset: $1C (28)
+requestingPlayer		 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+NSpAddPlayerToGroupMessage RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+group					 ds.l	1				; offset: $1C (28)
+player					 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+NSpRemovePlayerFromGroupMessage RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+group					 ds.l	1				; offset: $1C (28)
+player					 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+NSpPlayerTypeChangedMessage RECORD 0
+header					 ds		NSpMessageHeader ; offset: $0 (0)
+player					 ds.l	1				; offset: $1C (28)
+newType					 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+;  Different kinds of messages.  These can NOT be bitwise ORed together 
+
+kNSpSendFlag_Junk				EQU		$00100000			; will be sent (try once) when there is nothing else pending 
+kNSpSendFlag_Normal				EQU		$00200000			; will be sent immediately (try once) 
+kNSpSendFlag_Registered			EQU		$00400000			; will be sent immediately (guaranteed, in order) 
+
+;  Options for message delivery.  These can be bitwise ORed together with each other,
+;        as well as with ONE of the above 
+
+kNSpSendFlag_FailIfPipeFull		EQU		$00000001
+kNSpSendFlag_SelfSend			EQU		$00000002
+kNSpSendFlag_Blocking			EQU		$00000004
+
+;  Options for Hosting Joining, and Deleting games 
+
+kNSpGameFlag_DontAdvertise		EQU		$00000001
+kNSpGameFlag_ForceTerminateGame	EQU		$00000002
+;  Message "what" types 
+;  Apple reserves all negative "what" values (anything with high bit set) 
+
+kNSpSystemMessagePrefix			EQU		$80000000
+kNSpError						EQU		$FFFFFFFF
+kNSpJoinRequest					EQU		$80000001
+kNSpJoinApproved				EQU		$80000002
+kNSpJoinDenied					EQU		$80000003
+kNSpPlayerJoined				EQU		$80000004
+kNSpPlayerLeft					EQU		$80000005
+kNSpHostChanged					EQU		$80000006
+kNSpGameTerminated				EQU		$80000007
+kNSpGroupCreated				EQU		$80000008
+kNSpGroupDeleted				EQU		$80000009
+kNSpPlayerAddedToGroup			EQU		$8000000A
+kNSpPlayerRemovedFromGroup		EQU		$8000000B
+kNSpPlayerTypeChanged			EQU		$8000000C
+
+;  Special TPlayerIDs  for sending messages 
+
+kNSpAllPlayers					EQU		$00000000
+kNSpHostOnly					EQU		$FFFFFFFF
+
+
+; ************************  Initialization  ***********************
+
+; *  NSpInitialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpInitialize(UInt32 inStandardMessageSize, UInt32 inBufferSize, UInt32 inQElements, NSpGameID inGameID, UInt32 inTimeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpInitialize
+	ENDIF
+
+
+
+
+; **************************  Protocols  *************************
+;  Programmatic protocol routines 
+
+; *  NSpProtocol_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocol_New(const char *inDefinitionString, NSpProtocolReference *outReference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocol_New
+	ENDIF
+
+
+; *  NSpProtocol_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpProtocol_Dispose(NSpProtocolReference inProtocolRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocol_Dispose
+	ENDIF
+
+
+; *  NSpProtocol_ExtractDefinitionString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocol_ExtractDefinitionString(NSpProtocolReference inProtocolRef, char *outDefinitionString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocol_ExtractDefinitionString
+	ENDIF
+
+
+;  Protocol list routines 
+
+; *  NSpProtocolList_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocolList_New(NSpProtocolReference inProtocolRef, NSpProtocolListReference *outList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_New
+	ENDIF
+
+
+; *  NSpProtocolList_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpProtocolList_Dispose(NSpProtocolListReference inProtocolList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_Dispose
+	ENDIF
+
+
+; *  NSpProtocolList_Append()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocolList_Append(NSpProtocolListReference inProtocolList, NSpProtocolReference inProtocolRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_Append
+	ENDIF
+
+
+; *  NSpProtocolList_Remove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocolList_Remove(NSpProtocolListReference inProtocolList, NSpProtocolReference inProtocolRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_Remove
+	ENDIF
+
+
+; *  NSpProtocolList_RemoveIndexed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpProtocolList_RemoveIndexed(NSpProtocolListReference inProtocolList, UInt32 inIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_RemoveIndexed
+	ENDIF
+
+
+; *  NSpProtocolList_GetCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 NSpProtocolList_GetCount(NSpProtocolListReference inProtocolList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_GetCount
+	ENDIF
+
+
+; *  NSpProtocolList_GetIndexedRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpProtocolReference NSpProtocolList_GetIndexedRef(NSpProtocolListReference inProtocolList, UInt32 inIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocolList_GetIndexedRef
+	ENDIF
+
+
+;  Helpers 
+
+; *  NSpProtocol_CreateAppleTalk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpProtocolReference NSpProtocol_CreateAppleTalk(ConstStr31Param inNBPName, ConstStr31Param inNBPType, UInt32 inMaxRTT, UInt32 inMinThruput)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocol_CreateAppleTalk
+	ENDIF
+
+
+; *  NSpProtocol_CreateIP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpProtocolReference NSpProtocol_CreateIP(InetPort inPort, UInt32 inMaxRTT, UInt32 inMinThruput)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpProtocol_CreateIP
+	ENDIF
+
+
+; ***********************  Human Interface  ***********************
+
+; *  NSpDoModalJoinDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpAddressReference NSpDoModalJoinDialog(ConstStr31Param inGameType, ConstStr255Param inEntityListLabel, Str31 ioName, Str31 ioPassword, NSpEventProcPtr inEventProcPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpDoModalJoinDialog
+	ENDIF
+
+
+; *  NSpDoModalHostDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean NSpDoModalHostDialog(NSpProtocolListReference ioProtocolList, Str31 ioGameName, Str31 ioPlayerName, Str31 ioPassword, NSpEventProcPtr inEventProcPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpDoModalHostDialog
+	ENDIF
+
+
+; *********************  Hosting and Joining  *********************
+
+; *  NSpGame_Host()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGame_Host(NSpGameReference *outGame, NSpProtocolListReference inProtocolList, UInt32 inMaxPlayers, ConstStr31Param inGameName, ConstStr31Param inPassword, ConstStr31Param inPlayerName, NSpPlayerType inPlayerType, NSpTopology inTopology, NSpFlags inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGame_Host
+	ENDIF
+
+
+; *  NSpGame_Join()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGame_Join(NSpGameReference *outGame, NSpAddressReference inAddress, ConstStr31Param inName, ConstStr31Param inPassword, NSpPlayerType inType, void *inCustomData, UInt32 inCustomDataLen, NSpFlags inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGame_Join
+	ENDIF
+
+
+; *  NSpGame_EnableAdvertising()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGame_EnableAdvertising(NSpGameReference inGame, NSpProtocolReference inProtocol, Boolean inEnable)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGame_EnableAdvertising
+	ENDIF
+
+
+; *  NSpGame_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGame_Dispose(NSpGameReference inGame, NSpFlags inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGame_Dispose
+	ENDIF
+
+
+; *  NSpGame_GetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0.3 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGame_GetInfo(NSpGameReference inGame, NSpGameInfo *ioInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGame_GetInfo
+	ENDIF
+
+; **************************  Messaging  *************************
+
+; *  NSpMessage_Send()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpMessage_Send(NSpGameReference inGame, NSpMessageHeader *inMessage, NSpFlags inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpMessage_Send
+	ENDIF
+
+
+; *  NSpMessage_Get()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpMessageHeader *NSpMessage_Get(NSpGameReference inGame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpMessage_Get
+	ENDIF
+
+
+; *  NSpMessage_Release()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpMessage_Release(NSpGameReference inGame, NSpMessageHeader *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpMessage_Release
+	ENDIF
+
+;  Helpers 
+
+; *  NSpMessage_SendTo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpMessage_SendTo(NSpGameReference inGame, NSpPlayerID inTo, SInt32 inWhat, void *inData, UInt32 inDataLen, NSpFlags inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpMessage_SendTo
+	ENDIF
+
+
+; *********************  Player Information  *********************
+
+; *  NSpPlayer_ChangeType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpPlayer_ChangeType(NSpGameReference inGame, NSpPlayerID inPlayerID, NSpPlayerType inNewType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_ChangeType
+	ENDIF
+
+
+; *  NSpPlayer_Remove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpPlayer_Remove(NSpGameReference inGame, NSpPlayerID inPlayerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_Remove
+	ENDIF
+
+
+; *  NSpPlayer_GetAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpPlayer_GetAddress(NSpGameReference inGame, NSpPlayerID inPlayerID, OTAddress **outAddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetAddress
+	ENDIF
+
+
+; *  NSpPlayer_GetMyID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpPlayerID NSpPlayer_GetMyID(NSpGameReference inGame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetMyID
+	ENDIF
+
+
+; *  NSpPlayer_GetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpPlayer_GetInfo(NSpGameReference inGame, NSpPlayerID inPlayerID, NSpPlayerInfoPtr *outInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetInfo
+	ENDIF
+
+
+; *  NSpPlayer_ReleaseInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpPlayer_ReleaseInfo(NSpGameReference inGame, NSpPlayerInfoPtr inInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_ReleaseInfo
+	ENDIF
+
+
+; *  NSpPlayer_GetEnumeration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpPlayer_GetEnumeration(NSpGameReference inGame, NSpPlayerEnumerationPtr *outPlayers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetEnumeration
+	ENDIF
+
+
+; *  NSpPlayer_ReleaseEnumeration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpPlayer_ReleaseEnumeration(NSpGameReference inGame, NSpPlayerEnumerationPtr inPlayers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_ReleaseEnumeration
+	ENDIF
+
+
+; *  NSpPlayer_GetRoundTripTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 NSpPlayer_GetRoundTripTime(NSpGameReference inGame, NSpPlayerID inPlayer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetRoundTripTime
+	ENDIF
+
+
+; *  NSpPlayer_GetThruput()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 NSpPlayer_GetThruput(NSpGameReference inGame, NSpPlayerID inPlayer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpPlayer_GetThruput
+	ENDIF
+
+
+; *********************  Group Management  *********************
+
+; *  NSpGroup_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_New(NSpGameReference inGame, NSpGroupID *outGroupID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_New
+	ENDIF
+
+
+; *  NSpGroup_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_Dispose(NSpGameReference inGame, NSpGroupID inGroupID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_Dispose
+	ENDIF
+
+
+; *  NSpGroup_AddPlayer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_AddPlayer(NSpGameReference inGame, NSpGroupID inGroupID, NSpPlayerID inPlayerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_AddPlayer
+	ENDIF
+
+
+; *  NSpGroup_RemovePlayer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_RemovePlayer(NSpGameReference inGame, NSpGroupID inGroupID, NSpPlayerID inPlayerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_RemovePlayer
+	ENDIF
+
+
+; *  NSpGroup_GetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_GetInfo(NSpGameReference inGame, NSpGroupID inGroupID, NSpGroupInfoPtr *outInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_GetInfo
+	ENDIF
+
+
+; *  NSpGroup_ReleaseInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpGroup_ReleaseInfo(NSpGameReference inGame, NSpGroupInfoPtr inInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_ReleaseInfo
+	ENDIF
+
+
+; *  NSpGroup_GetEnumeration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpGroup_GetEnumeration(NSpGameReference inGame, NSpGroupEnumerationPtr *outGroups)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_GetEnumeration
+	ENDIF
+
+
+; *  NSpGroup_ReleaseEnumeration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpGroup_ReleaseEnumeration(NSpGameReference inGame, NSpGroupEnumerationPtr inGroups)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGroup_ReleaseEnumeration
+	ENDIF
+
+
+; **************************  Utilities  **************************
+
+; *  NSpGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0.3 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NumVersion NSpGetVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGetVersion
+	ENDIF
+
+
+; *  NSpSetConnectTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpSetConnectTimeout(UInt32 inSeconds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpSetConnectTimeout
+	ENDIF
+
+
+; *  NSpClearMessageHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpClearMessageHeader(NSpMessageHeader *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpClearMessageHeader
+	ENDIF
+
+
+; *  NSpGetCurrentTimeStamp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 NSpGetCurrentTimeStamp(NSpGameReference inGame)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpGetCurrentTimeStamp
+	ENDIF
+
+
+; *  NSpConvertOTAddrToAddressReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern NSpAddressReference NSpConvertOTAddrToAddressReference(OTAddress *inAddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpConvertOTAddrToAddressReference
+	ENDIF
+
+
+; *  NSpConvertAddressReferenceToOTAddr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTAddress *NSpConvertAddressReferenceToOTAddr(NSpAddressReference inAddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpConvertAddressReferenceToOTAddr
+	ENDIF
+
+
+; *  NSpReleaseAddressReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void NSpReleaseAddressReference(NSpAddressReference inAddress)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpReleaseAddressReference
+	ENDIF
+
+
+; ************************ Advanced/Async routines ***************
+
+; *  NSpInstallCallbackHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpInstallCallbackHandler(NSpCallbackProcPtr inHandler, void *inContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpInstallCallbackHandler
+	ENDIF
+
+
+
+; *  NSpInstallJoinRequestHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpInstallJoinRequestHandler(NSpJoinRequestHandlerProcPtr inHandler, void *inContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpInstallJoinRequestHandler
+	ENDIF
+
+
+
+; *  NSpInstallAsyncMessageHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NetSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but NetSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus NSpInstallAsyncMessageHandler(NSpMessageHandlerProcPtr inHandler, void *inContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSpInstallAsyncMessageHandler
+	ENDIF
+
+
+
+	ENDIF	; TARGET_OS_MAC
+	ENDIF ; __NETSPROCKET__ 
+

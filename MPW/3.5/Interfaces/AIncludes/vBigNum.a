@@ -1,0 +1,1438 @@
+;
+;    File:       vBigNum.a
+;
+;    Contains:   Algebraic and logical operations on large operands.
+;
+;    Version:    Technology: 1.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__VBIGNUM__') = 'UNDEFINED' THEN
+__VBIGNUM__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__VEC__') <> 'UNDEFINED' THEN
+; ************************************************************************************
+;*                                                                                   *
+;*  This library provides a set of subroutines for basic algebraic and some logical  *
+;*  operations performed on operands with the following sizes:                       *
+;*                                                                                   *
+;*            128 - bits                                                             *
+;*            256 - bits                                                             *
+;*            512 - bits                                                             *
+;*           1024 - bits                                                             *
+;*                                                                                   *
+;*  Following basic and algebraic operations are included:                           *
+;*                                                                                   *
+;*            Addition                                                               *
+;*            Subtraction                                                            *
+;*            Multiplication                                                         *
+;*            Division                                                               *
+;*            Mod                                                                    *
+;*            Shift Right                                                            *
+;*            Shift Right Arithmatic                                                 *
+;*            Shift Left                                                             *
+;*            Rotate Right                                                           *
+;*            Rotate Left                                                            *
+;*                                                                                   *
+;*                                                                                   *
+;***********************************************************************************
+
+; ***********************************************************************************
+;*   Following abbreviations are used in the names of functions in this library:    *
+;*                                                                                  *
+;*      v            Vector                                                         *
+;*      U            Unsigned                                                       *
+;*      S            Signed                                                         *
+;*      128          128  - bit                                                     *
+;*      256          256  - bit                                                     *
+;*      512          512  - bit                                                     *
+;*      1024         1024 - bit                                                     *
+;*      Add          Addition, modular arithmetic                                   *
+;*      AddS         Addition with Saturation                                       *
+;*      Sub          Subtraction, modular arithmetic                                *
+;*      SubS         Subtraction with Saturation                                    *
+;*      Multiply     Multiplication                                                 *
+;*      Divide       Division                                                       *
+;*      Half         Half (multiplication, width of result is the same as width of  *
+;*                      operands)                                                   *                         
+;*      Full         Full (multiplication, width of result is twice width of each   *
+;*                      operand)                                                    *
+;*                                                                                  *
+;*      Mod          Modular operation                                              *
+;*      Neg          Negate a number                                                *
+;*      A            Algebraic                                                      *
+;*      LL           Logical Left                                                   *
+;*      LR           Logical Right                                                  *
+;*      Shift        Shift                                                          *
+;*      Rotate       Rotation                                                       *
+;*                                                                                  *
+;**********************************************************************************
+
+; ************************************************************************************
+;*                                                                                   *
+;*  A few explanations for the choices made in naming, passing arguments, and        *
+;*  various functions.                                                               *
+;*                                                                                   *
+;*      1) Names for the functions are made compatible with the names used in the    *
+;*      vBasicOps library. The format of the names are the same and include a        *
+;*      designation to show a vector operation, then a symbol for the type of data   *
+;*      (signed or unsigned), followed by the size of operands, then the operation   *
+;*      performed.                                                                   *
+;*                                                                                   *
+;*      2) Note that the logical and arithmetic shiftLeft operation are the same.    *
+;*                                                                                   *
+;*      3) Rotate operation is performed on unsigned and signed numbers.             *
+;*                                                                                   *
+;***********************************************************************************
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*  Following are a set of structures for vector data types and scalar data types    *
+;*                                                                                   *
+;***********************************************************************************
+
+
+vU128					RECORD 0
+v						 ds.l	4				; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+LSW						 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+vS128					RECORD 0
+v						 ds.l	4				; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+LSW						 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+vU256					RECORD 0
+v						 ds.l	4 * 2			; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+LSW						 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+vS256					RECORD 0
+v						 ds.l	4 * 2			; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+LSW						 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+vU512					RECORD 0
+v						 ds.l	4 * 4			; offset: $0 (0)
+						 ORG 0
+MSB						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+d8						 ds.l	1				; offset: $1C (28)
+d9						 ds.l	1				; offset: $20 (32)
+d10						 ds.l	1				; offset: $24 (36)
+d11						 ds.l	1				; offset: $28 (40)
+d12						 ds.l	1				; offset: $2C (44)
+d13						 ds.l	1				; offset: $30 (48)
+d14						 ds.l	1				; offset: $34 (52)
+d15						 ds.l	1				; offset: $38 (56)
+LSB						 ds.l	1				; offset: $3C (60)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+vS512					RECORD 0
+v						 ds.l	4 * 4			; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+d8						 ds.l	1				; offset: $1C (28)
+d9						 ds.l	1				; offset: $20 (32)
+d10						 ds.l	1				; offset: $24 (36)
+d11						 ds.l	1				; offset: $28 (40)
+d12						 ds.l	1				; offset: $2C (44)
+d13						 ds.l	1				; offset: $30 (48)
+d14						 ds.l	1				; offset: $34 (52)
+d15						 ds.l	1				; offset: $38 (56)
+LSW						 ds.l	1				; offset: $3C (60)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+vU1024					RECORD 0
+v						 ds.l	4 * 8			; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+d8						 ds.l	1				; offset: $1C (28)
+d9						 ds.l	1				; offset: $20 (32)
+d10						 ds.l	1				; offset: $24 (36)
+d11						 ds.l	1				; offset: $28 (40)
+d12						 ds.l	1				; offset: $2C (44)
+d13						 ds.l	1				; offset: $30 (48)
+d14						 ds.l	1				; offset: $34 (52)
+d15						 ds.l	1				; offset: $38 (56)
+d16						 ds.l	1				; offset: $3C (60)
+d17						 ds.l	1				; offset: $40 (64)
+d18						 ds.l	1				; offset: $44 (68)
+d19						 ds.l	1				; offset: $48 (72)
+d20						 ds.l	1				; offset: $4C (76)
+d21						 ds.l	1				; offset: $50 (80)
+d22						 ds.l	1				; offset: $54 (84)
+d23						 ds.l	1				; offset: $58 (88)
+d24						 ds.l	1				; offset: $5C (92)
+d25						 ds.l	1				; offset: $60 (96)
+d26						 ds.l	1				; offset: $64 (100)
+d27						 ds.l	1				; offset: $68 (104)
+d28						 ds.l	1				; offset: $6C (108)
+d29						 ds.l	1				; offset: $70 (112)
+d30						 ds.l	1				; offset: $74 (116)
+d31						 ds.l	1				; offset: $78 (120)
+LSW						 ds.l	1				; offset: $7C (124)
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+vS1024					RECORD 0
+v						 ds.l	4 * 8			; offset: $0 (0)
+						 ORG 0
+MSW						 ds.l	1				; offset: $0 (0)
+d2						 ds.l	1				; offset: $4 (4)
+d3						 ds.l	1				; offset: $8 (8)
+d4						 ds.l	1				; offset: $C (12)
+d5						 ds.l	1				; offset: $10 (16)
+d6						 ds.l	1				; offset: $14 (20)
+d7						 ds.l	1				; offset: $18 (24)
+d8						 ds.l	1				; offset: $1C (28)
+d9						 ds.l	1				; offset: $20 (32)
+d10						 ds.l	1				; offset: $24 (36)
+d11						 ds.l	1				; offset: $28 (40)
+d12						 ds.l	1				; offset: $2C (44)
+d13						 ds.l	1				; offset: $30 (48)
+d14						 ds.l	1				; offset: $34 (52)
+d15						 ds.l	1				; offset: $38 (56)
+d16						 ds.l	1				; offset: $3C (60)
+d17						 ds.l	1				; offset: $40 (64)
+d18						 ds.l	1				; offset: $44 (68)
+d19						 ds.l	1				; offset: $48 (72)
+d20						 ds.l	1				; offset: $4C (76)
+d21						 ds.l	1				; offset: $50 (80)
+d22						 ds.l	1				; offset: $54 (84)
+d23						 ds.l	1				; offset: $58 (88)
+d24						 ds.l	1				; offset: $5C (92)
+d25						 ds.l	1				; offset: $60 (96)
+d26						 ds.l	1				; offset: $64 (100)
+d27						 ds.l	1				; offset: $68 (104)
+d28						 ds.l	1				; offset: $6C (108)
+d29						 ds.l	1				; offset: $70 (112)
+d30						 ds.l	1				; offset: $74 (116)
+d31						 ds.l	1				; offset: $78 (120)
+LSW						 ds.l	1				; offset: $7C (124)
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                Division operations                                *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+
+; *  vU256Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256Divide(const vU256 *numerator, const vU256 *divisor, vU256 *result, vU256 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256Divide
+	ENDIF
+
+
+; *  vS256Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256Divide(const vS256 *numerator, const vS256 *divisor, vS256 *result, vS256 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256Divide
+	ENDIF
+
+
+; *  vU512Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512Divide(const vU512 *numerator, const vU512 *divisor, vU512 *result, vU512 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512Divide
+	ENDIF
+
+
+; *  vS512Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512Divide(const vS512 *numerator, const vS512 *divisor, vS512 *result, vS512 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512Divide
+	ENDIF
+
+
+; *  vU1024Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024Divide(const vU1024 *numerator, const vU1024 *divisor, vU1024 *result, vU1024 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024Divide
+	ENDIF
+
+
+; *  vS1024Divide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024Divide(const vS1024 *numerator, const vS1024 *divisor, vS1024 *result, vS1024 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024Divide
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                              Multiply operations                                  *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vU128FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU128FullMultiply(const vU128 *a, const vU128 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU128FullMultiply
+	ENDIF
+
+
+; *  vS128FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS128FullMultiply(const vS128 *a, const vS128 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS128FullMultiply
+	ENDIF
+
+
+; *  vU256FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256FullMultiply(const vU256 *a, const vU256 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256FullMultiply
+	ENDIF
+
+
+; *  vS256FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256FullMultiply(const vS256 *a, const vS256 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256FullMultiply
+	ENDIF
+
+
+; *  vU512FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512FullMultiply(const vU512 *a, const vU512 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512FullMultiply
+	ENDIF
+
+
+; *  vS512FullMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512FullMultiply(const vS512 *a, const vS512 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512FullMultiply
+	ENDIF
+
+
+; *  vU256HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256HalfMultiply(const vU256 *a, const vU256 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256HalfMultiply
+	ENDIF
+
+
+; *  vS256HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256HalfMultiply(const vS256 *a, const vS256 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256HalfMultiply
+	ENDIF
+
+
+; *  vU512HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512HalfMultiply(const vU512 *a, const vU512 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512HalfMultiply
+	ENDIF
+
+
+; *  vS512HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512HalfMultiply(const vS512 *a, const vS512 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512HalfMultiply
+	ENDIF
+
+
+; *  vU1024HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024HalfMultiply(const vU1024 *a, const vU1024 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024HalfMultiply
+	ENDIF
+
+
+; *  vS1024HalfMultiply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024HalfMultiply(const vS1024 *a, const vS1024 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024HalfMultiply
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                             Subtraction operations                                *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vU256Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256Sub(const vU256 *a, const vU256 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256Sub
+	ENDIF
+
+
+; *  vS256Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256Sub(const vS256 *a, const vS256 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256Sub
+	ENDIF
+
+
+; *  vU256SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256SubS(const vU256 *a, const vU256 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256SubS
+	ENDIF
+
+
+; *  vS256SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256SubS(const vS256 *a, const vS256 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256SubS
+	ENDIF
+
+
+; *  vU512Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512Sub(const vU512 *a, const vU512 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512Sub
+	ENDIF
+
+
+; *  vS512Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512Sub(const vS512 *a, const vS512 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512Sub
+	ENDIF
+
+
+; *  vU512SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512SubS(const vU512 *a, const vU512 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512SubS
+	ENDIF
+
+
+; *  vS512SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512SubS(const vS512 *a, const vS512 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512SubS
+	ENDIF
+
+
+; *  vU1024Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024Sub(const vU1024 *a, const vU1024 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024Sub
+	ENDIF
+
+
+; *  vS1024Sub()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024Sub(const vS1024 *a, const vS1024 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024Sub
+	ENDIF
+
+
+; *  vU1024SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024SubS(const vU1024 *a, const vU1024 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024SubS
+	ENDIF
+
+
+; *  vS1024SubS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024SubS(const vS1024 *a, const vS1024 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024SubS
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                Negate operations                                  *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vU256Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256Neg(const vU256 *a, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256Neg
+	ENDIF
+
+
+; *  vS256Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256Neg(const vS256 *a, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256Neg
+	ENDIF
+
+
+; *  vU512Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512Neg(const vU512 *a, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512Neg
+	ENDIF
+
+
+; *  vS512Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512Neg(const vS512 *a, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512Neg
+	ENDIF
+
+
+; *  vU1024Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024Neg(const vU1024 *a, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024Neg
+	ENDIF
+
+
+; *  vS1024Neg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024Neg(const vS1024 *a, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024Neg
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                Addition operations                                *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vU256Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256Add(const vU256 *a, const vU256 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256Add
+	ENDIF
+
+
+; *  vS256Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256Add(const vS256 *a, const vS256 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256Add
+	ENDIF
+
+
+; *  vU256AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256AddS(const vU256 *a, const vU256 *b, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256AddS
+	ENDIF
+
+
+; *  vS256AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256AddS(const vS256 *a, const vS256 *b, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256AddS
+	ENDIF
+
+
+; *  vU512Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512Add(const vU512 *a, const vU512 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512Add
+	ENDIF
+
+
+; *  vS512Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512Add(const vS512 *a, const vS512 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512Add
+	ENDIF
+
+
+; *  vU512AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512AddS(const vU512 *a, const vU512 *b, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512AddS
+	ENDIF
+
+
+; *  vS512AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512AddS(const vS512 *a, const vS512 *b, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512AddS
+	ENDIF
+
+
+; *  vU1024Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024Add(const vU1024 *a, const vU1024 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024Add
+	ENDIF
+
+
+; *  vS1024Add()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024Add(const vS1024 *a, const vS1024 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024Add
+	ENDIF
+
+
+; *  vU1024AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024AddS(const vU1024 *a, const vU1024 *b, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024AddS
+	ENDIF
+
+
+; *  vS1024AddS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024AddS(const vS1024 *a, const vS1024 *b, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024AddS
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                   Mod operations                                  *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vU256Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU256Mod(const vU256 *numerator, const vU256 *divisor, vU256 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU256Mod
+	ENDIF
+
+
+; *  vS256Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS256Mod(const vS256 *numerator, const vS256 *divisor, vS256 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS256Mod
+	ENDIF
+
+
+; *  vU512Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU512Mod(const vU512 *numerator, const vU512 *divisor, vU512 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU512Mod
+	ENDIF
+
+
+; *  vS512Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS512Mod(const vS512 *numerator, const vS512 *divisor, vS512 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS512Mod
+	ENDIF
+
+
+; *  vU1024Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vU1024Mod(const vU1024 *numerator, const vU1024 *divisor, vU1024 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vU1024Mod
+	ENDIF
+
+
+; *  vS1024Mod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vS1024Mod(const vS1024 *numerator, const vS1024 *divisor, vS1024 *remainder)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vS1024Mod
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                Shift operations                                   *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vLL256Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLL256Shift(const vU256 *a, unsigned long shiftAmount, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLL256Shift
+	ENDIF
+
+
+; *  vLL512Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLL512Shift(const vU512 *a, unsigned long shiftAmount, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLL512Shift
+	ENDIF
+
+
+; *  vLL1024Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLL1024Shift(const vU1024 *a, unsigned long shiftAmount, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLL1024Shift
+	ENDIF
+
+
+; *  vLR256Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLR256Shift(const vU256 *a, unsigned long shiftAmount, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLR256Shift
+	ENDIF
+
+
+; *  vLR512Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLR512Shift(const vU512 *a, unsigned long shiftAmount, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLR512Shift
+	ENDIF
+
+
+; *  vLR1024Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vLR1024Shift(const vU1024 *a, unsigned long shiftAmount, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vLR1024Shift
+	ENDIF
+
+
+; *  vA256Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vA256Shift(const vS256 *a, unsigned long shiftAmount, vS256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vA256Shift
+	ENDIF
+
+
+; *  vA512Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vA512Shift(const vS512 *a, unsigned long shiftAmount, vS512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vA512Shift
+	ENDIF
+
+
+; *  vA1024Shift()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vA1024Shift(const vS1024 *a, unsigned long shiftAmount, vS1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vA1024Shift
+	ENDIF
+
+
+; ************************************************************************************
+;*                                                                                   *
+;*                                  Rotate operations                                *
+;*                                                                                   *
+;***********************************************************************************
+
+
+
+; *  vL256Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vL256Rotate(const vU256 *a, unsigned long rotateAmount, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vL256Rotate
+	ENDIF
+
+
+; *  vL512Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vL512Rotate(const vU512 *a, unsigned long rotateAmount, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vL512Rotate
+	ENDIF
+
+
+; *  vL1024Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vL1024Rotate(const vU1024 *a, unsigned long rotateAmount, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vL1024Rotate
+	ENDIF
+
+
+; *  vR256Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vR256Rotate(const vU256 *a, unsigned long rotateAmount, vU256 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vR256Rotate
+	ENDIF
+
+
+; *  vR512Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vR512Rotate(const vU512 *a, unsigned long rotateAmount, vU512 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vR512Rotate
+	ENDIF
+
+
+; *  vR1024Rotate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in vecLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but vecLib is compatible with Carbon
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void vR1024Rotate(const vU1024 *a, unsigned long rotateAmount, vU1024 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vR1024Rotate
+	ENDIF
+
+
+	ENDIF
+	ENDIF ; __VBIGNUM__ 
+

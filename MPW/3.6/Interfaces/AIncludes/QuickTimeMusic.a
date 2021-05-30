@@ -1,0 +1,3751 @@
+;
+;    File:       QuickTimeMusic.a
+;
+;    Contains:   QuickTime Interfaces.
+;
+;    Version:    Technology: QuickTime 5.0.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QUICKTIMEMUSIC__') = 'UNDEFINED' THEN
+__QUICKTIMEMUSIC__ SET 1
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__VIDEO__') = 'UNDEFINED' THEN
+	include 'Video.a'
+	ENDIF
+	IF &TYPE('__MACMEMORY__') = 'UNDEFINED' THEN
+	include 'MacMemory.a'
+	ENDIF
+	IF &TYPE('__SOUND__') = 'UNDEFINED' THEN
+	include 'Sound.a'
+	ENDIF
+	IF &TYPE('__ENDIAN__') = 'UNDEFINED' THEN
+	include 'Endian.a'
+	ENDIF
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+	include 'ImageCompression.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+
+
+
+kaiToneDescType					EQU		'tone'
+kaiNoteRequestInfoType			EQU		'ntrq'
+kaiKnobListType					EQU		'knbl'
+kaiKeyRangeInfoType				EQU		'sinf'
+kaiSampleDescType				EQU		'sdsc'
+kaiSampleInfoType				EQU		'smin'
+kaiSampleDataType				EQU		'sdat'
+kaiSampleDataQUIDType			EQU		'quid'
+kaiInstInfoType					EQU		'iinf'
+kaiPictType						EQU		'pict'
+kaiWriterType					EQU		'©wrt'
+kaiCopyrightType				EQU		'©cpy'
+kaiOtherStrType					EQU		'str '
+kaiInstrumentRefType			EQU		'iref'
+kaiInstGMQualityType			EQU		'qual'
+kaiLibraryInfoType				EQU		'linf'
+kaiLibraryDescType				EQU		'ldsc'
+InstLibDescRec			RECORD 0
+libIDName				 ds		Str31			; offset: $0 (0)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+InstKnobRec				RECORD 0
+number					 ds		BigEndianLong	; offset: $0 (0)
+value					 ds		BigEndianLong	; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+kInstKnobMissingUnknown			EQU		0
+kInstKnobMissingDefault			EQU		$01
+InstKnobList			RECORD 0
+knobCount				 ds		BigEndianLong	; offset: $0 (0)
+knobFlags				 ds		BigEndianLong	; offset: $4 (4)
+knob					 ds		InstKnobRec		; offset: $8 (8) <-- really an array of length one
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+kMusicLoopTypeNormal			EQU		0
+kMusicLoopTypePalindrome		EQU		1					; back & forth
+
+instSamplePreProcessFlag		EQU		$01
+InstSampleDescRec		RECORD 0
+dataFormat				 ds		BigEndianOSType ; offset: $0 (0)
+numChannels				 ds		BigEndianShort ; offset: $4 (4)
+sampleSize				 ds		BigEndianShort ; offset: $6 (6)
+sampleRate				 ds		BigEndianUnsignedFixed ; offset: $8 (8)
+sampleDataID			 ds		BigEndianShort ; offset: $C (12)
+offset					 ds		BigEndianLong	; offset: $E (14)		;  offset within SampleData - this could be just for internal use
+numSamples				 ds		BigEndianLong	; offset: $12 (18)		;  this could also just be for internal use, we'll see
+loopType				 ds		BigEndianLong	; offset: $16 (22)
+loopStart				 ds		BigEndianLong	; offset: $1A (26)
+loopEnd					 ds		BigEndianLong	; offset: $1E (30)
+pitchNormal				 ds		BigEndianLong	; offset: $22 (34)
+pitchLow				 ds		BigEndianLong	; offset: $26 (38)
+pitchHigh				 ds		BigEndianLong	; offset: $2A (42)
+sizeof					 EQU *					; size:   $2E (46)
+						ENDR
+; typedef Handle 						AtomicInstrument
+
+; typedef Ptr 							AtomicInstrumentPtr
+
+
+kQTMIDIComponentType			EQU		'midi'
+
+kOMSComponentSubType			EQU		'OMS '
+kFMSComponentSubType			EQU		'FMS '
+kMIDIManagerComponentSubType	EQU		'mmgr'
+kOSXMIDIComponentSubType		EQU		'osxm'
+; typedef ComponentInstance 			QTMIDIComponent
+
+
+kMusicPacketPortLost			EQU		1					; received when application loses the default input port 
+kMusicPacketPortFound			EQU		2					; received when application gets it back out from under someone else's claim 
+kMusicPacketTimeGap				EQU		3					; data[0] = number of milliseconds to keep the MIDI line silent 
+
+kAppleSysexID					EQU		$11					; apple sysex is followed by 2-byte command. 0001 is the command for samplesize 
+kAppleSysexCmdSampleSize		EQU		$0001				; 21 bit number in 3 midi bytes follows sysex ID and 2 cmd bytes 
+kAppleSysexCmdSampleBreak		EQU		$0002				; specifies that the sample should break right here 
+kAppleSysexCmdAtomicInstrument	EQU		$0010				; contents of atomic instrument handle 
+kAppleSysexCmdDeveloper			EQU		$7F00				; F0 11 7F 00 ww xx yy zz ... F7 is available for non-Apple developers, where wxyz is unique app signature with 8th bit cleared, unique to developer, and 00 and 7f are reserved 
+MusicMIDIPacket			RECORD 0
+length					 ds.w	1				; offset: $0 (0)
+reserved				 ds.l	1				; offset: $2 (2)		;  if length zero, then reserved = above enum 
+data					 ds.b	249				; offset: $6 (6)
+						 ORG 256
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+
+kSynthesizerConnectionFMS		EQU		1					; this connection imported from FMS 
+kSynthesizerConnectionMMgr		EQU		2					; this connection imported from the MIDI Mgr 
+kSynthesizerConnectionOMS		EQU		4					; this connection imported from OMS 
+kSynthesizerConnectionQT		EQU		8					; this connection is a QuickTime-only port 
+kSynthesizerConnectionOSXMIDI	EQU		16					; this connection is an OS X CoreMIDI port 
+															; lowest five bits are mutually exclusive; combinations reserved for future use.
+kSynthesizerConnectionUnavailable EQU	256					; port exists, but cannot be used just now 
+; 
+;    The sampleBankFile field of this structure can be used to pass in a pointer to an FSSpec
+;    that specifies a SoundFont 2 or DLS file (otherwise set it to NULL ).
+;    
+;    You then pass in a structure with this field set (all other fields should be zero) to
+;    NARegisterMusicDevice:
+;        - with synthType as kSoftSynthComponentSubType 
+;        - with name being used to return to the application the "name" of the synth 
+;        that should be used in the synthesiserName field of the ToneDescription structure
+;        and is also used to retrieve a particular MusicComponent with the
+;        NAGetRegisteredMusicDevice call
+;    
+;    This call will create a MusicComponent of kSoftSynthComponentSubType, with the specified
+;    sound bank as the sample data source.
+;
+;    This field requires QuickTime 5.0 or later and should be set to NULL for prior versions.
+;
+
+SynthesizerConnections	RECORD 0
+clientID				 ds.l	1				; offset: $0 (0)
+inputPortID				 ds.l	1				; offset: $4 (4)		;  terminology death: this port is used to SEND to the midi synth 
+outputPortID			 ds.l	1				; offset: $8 (8)		;  terminology death: this port receives from a keyboard or other control device 
+midiChannel				 ds.l	1				; offset: $C (12)		;  The system channel; others are configurable (or the nubus slot number) 
+flags					 ds.l	1				; offset: $10 (16)
+unique					 ds.l	1				; offset: $14 (20)		;  unique id may be used instead of index, to getinfo and unregister calls 
+sampleBankFile			 ds.l	1				; offset: $18 (24)		;  see notes above 
+reserved2				 ds.l	1				; offset: $1C (28)		;  should be zero 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+QTMIDIPort				RECORD 0
+portConnections			 ds		SynthesizerConnections ; offset: $0 (0)
+portName				 ds		Str63			; offset: $20 (32)
+sizeof					 EQU *					; size:   $60 (96)
+						ENDR
+QTMIDIPortList			RECORD 0
+portCount				 ds.w	1				; offset: $0 (0)
+port					 ds		QTMIDIPort		; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $62 (98)
+						ENDR
+; typedef struct QTMIDIPortList *		QTMIDIPortListPtr
+
+; typedef QTMIDIPortListPtr *			QTMIDIPortListHandle
+
+
+; *  QTMIDIGetMIDIPorts()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTMIDIGetMIDIPorts(QTMIDIComponent ci, QTMIDIPortListHandle *inputPorts, QTMIDIPortListHandle *outputPorts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTMIDIGetMIDIPorts
+			move.l              #$00080001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTMIDIGetMIDIPorts
+	ENDIF
+
+
+; *  QTMIDIUseSendPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTMIDIUseSendPort(QTMIDIComponent ci, long portIndex, long inUse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTMIDIUseSendPort
+			move.l              #$00080002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTMIDIUseSendPort
+	ENDIF
+
+
+; *  QTMIDISendMIDI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTMIDISendMIDI(QTMIDIComponent ci, long portIndex, MusicMIDIPacket *mp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTMIDISendMIDI
+			move.l              #$00080003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTMIDISendMIDI
+	ENDIF
+
+
+
+
+kMusicComponentType				EQU		'musi'
+kInstrumentComponentType		EQU		'inst'
+
+kSoftSynthComponentSubType		EQU		'ss  '
+kGMSynthComponentSubType		EQU		'gm  '
+
+; typedef ComponentInstance 			MusicComponent
+
+;  MusicSynthesizerFlags
+
+kSynthesizerDynamicVoice		EQU		$01					; can assign voices on the fly (else, polyphony is very important 
+kSynthesizerUsesMIDIPort		EQU		$02					; must be patched through MIDI Manager 
+kSynthesizerMicrotone			EQU		$04					; can play microtonal scales 
+kSynthesizerHasSamples			EQU		$08					; synthesizer has some use for sampled data 
+kSynthesizerMixedDrums			EQU		$10					; any part can play drum parts, total = instrument parts 
+kSynthesizerSoftware			EQU		$20					; implemented in main CPU software == uses cpu cycles 
+kSynthesizerHardware			EQU		$40					; is a hardware device (such as nubus, or maybe DSP?) 
+kSynthesizerDynamicChannel		EQU		$80					; can move any part to any channel or disable each part. (else we assume it lives on all channels in masks) 
+kSynthesizerHogsSystemChannel	EQU		$0100				; can be channelwise dynamic, but always responds on its system channel 
+kSynthesizerHasSystemChannel	EQU		$0200				; has some "system channel" notion to distinguish it from multiple instances of the same device (GM devices dont) 
+kSynthesizerSlowSetPart			EQU		$0400				; SetPart() and SetPartInstrumentNumber() calls do not have rapid response, may glitch notes 
+kSynthesizerOffline				EQU		$1000				; can enter an offline synthesis mode 
+kSynthesizerGM					EQU		$4000				; synth is a GM device 
+kSynthesizerDLS					EQU		$8000				; synth supports DLS level 1 
+kSynthesizerSoundLocalization	EQU		$00010000			; synth supports extremely baroque, nonstandard, and proprietary "apple game sprockets" localization parameter set 
+; 
+; * Note that these controller numbers
+; * are _not_ identical to the MIDI controller numbers.
+; * These are _signed_ 8.8 values, and the LSB's are
+; * always sent to a MIDI device. Controllers 32-63 are
+; * reserved (for MIDI, they are LSB's for 0-31, but we
+; * always send both).
+; *
+; * The full range, therefore, is -128.00 to 127.7f.
+; *
+; * _Excepting_ _volume_, all controls default to zero.
+; *
+; * Pitch bend is specified in fractional semitones! No
+; * more "pitch bend range" nonsense. You can bend as far
+; * as you want, any time you want.
+; 
+
+; typedef SInt32 						MusicController
+
+
+kControllerModulationWheel		EQU		1
+kControllerBreath				EQU		2
+kControllerFoot					EQU		4
+kControllerPortamentoTime		EQU		5					; time in 8.8 seconds, portamento on/off is omitted, 0 time = 'off' 
+kControllerVolume				EQU		7					; main volume control 
+kControllerBalance				EQU		8
+kControllerPan					EQU		10					; 0 - "default", 1 - n: positioned in output 1-n (incl fractions) 
+kControllerExpression			EQU		11					; secondary volume control 
+kControllerLever1				EQU		16					; general purpose controllers 
+kControllerLever2				EQU		17					; general purpose controllers 
+kControllerLever3				EQU		18					; general purpose controllers 
+kControllerLever4				EQU		19					; general purpose controllers 
+kControllerLever5				EQU		80					; general purpose controllers 
+kControllerLever6				EQU		81					; general purpose controllers 
+kControllerLever7				EQU		82					; general purpose controllers 
+kControllerLever8				EQU		83					; general purpose controllers 
+kControllerPitchBend			EQU		32					; positive & negative semitones, with 8 bits fraction, same units as transpose controllers
+kControllerAfterTouch			EQU		33					; aka channel pressure 
+kControllerPartTranspose		EQU		40					; identical to pitchbend, for overall part xpose 
+kControllerTuneTranspose		EQU		41					; another pitchbend, for "song global" pitch offset 
+kControllerPartVolume			EQU		42					; another volume control, passed right down from note allocator part volume 
+kControllerTuneVolume			EQU		43					; another volume control, used for "song global" volume - since we share one synthesizer across multiple tuneplayers
+kControllerSustain				EQU		64					; boolean - positive for on, 0 or negative off 
+kControllerPortamento			EQU		65					; boolean
+kControllerSostenuto			EQU		66					; boolean 
+kControllerSoftPedal			EQU		67					; boolean 
+kControllerReverb				EQU		91
+kControllerTremolo				EQU		92
+kControllerChorus				EQU		93
+kControllerCeleste				EQU		94
+kControllerPhaser				EQU		95
+kControllerEditPart				EQU		113					; last 16 controllers 113-128 and above are global controllers which respond on part zero 
+kControllerMasterTune			EQU		114
+kControllerMasterTranspose		EQU		114					; preferred
+kControllerMasterVolume			EQU		115
+kControllerMasterCPULoad		EQU		116
+kControllerMasterPolyphony		EQU		117
+kControllerMasterFeatures		EQU		118
+
+;  ID's of knobs supported by the QuickTime Music Synthesizer built into QuickTime
+
+
+kQTMSKnobStartID				EQU		$02000000
+kQTMSKnobVolumeAttackTimeID		EQU		$02000001
+kQTMSKnobVolumeDecayTimeID		EQU		$02000002
+kQTMSKnobVolumeSustainLevelID	EQU		$02000003
+kQTMSKnobVolumeRelease1RateID	EQU		$02000004
+kQTMSKnobVolumeDecayKeyScalingID EQU	$02000005
+kQTMSKnobVolumeReleaseTimeID	EQU		$02000006
+kQTMSKnobVolumeLFODelayID		EQU		$02000007
+kQTMSKnobVolumeLFORampTimeID	EQU		$02000008
+kQTMSKnobVolumeLFOPeriodID		EQU		$02000009
+kQTMSKnobVolumeLFOShapeID		EQU		$0200000A
+kQTMSKnobVolumeLFODepthID		EQU		$0200000B
+kQTMSKnobVolumeOverallID		EQU		$0200000C
+kQTMSKnobVolumeVelocity127ID	EQU		$0200000D
+kQTMSKnobVolumeVelocity96ID		EQU		$0200000E
+kQTMSKnobVolumeVelocity64ID		EQU		$0200000F
+kQTMSKnobVolumeVelocity32ID		EQU		$02000010
+kQTMSKnobVolumeVelocity16ID		EQU		$02000011			; Pitch related knobs
+kQTMSKnobPitchTransposeID		EQU		$02000012
+kQTMSKnobPitchLFODelayID		EQU		$02000013
+kQTMSKnobPitchLFORampTimeID		EQU		$02000014
+kQTMSKnobPitchLFOPeriodID		EQU		$02000015
+kQTMSKnobPitchLFOShapeID		EQU		$02000016
+kQTMSKnobPitchLFODepthID		EQU		$02000017
+kQTMSKnobPitchLFOQuantizeID		EQU		$02000018			; Stereo related knobs
+kQTMSKnobStereoDefaultPanID		EQU		$02000019
+kQTMSKnobStereoPositionKeyScalingID EQU	$0200001A
+kQTMSKnobPitchLFOOffsetID		EQU		$0200001B
+kQTMSKnobExclusionGroupID		EQU		$0200001C			; Misc knobs, late additions
+kQTMSKnobSustainTimeID			EQU		$0200001D
+kQTMSKnobSustainInfiniteID		EQU		$0200001E
+kQTMSKnobVolumeLFOStereoID		EQU		$0200001F
+kQTMSKnobVelocityLowID			EQU		$02000020
+kQTMSKnobVelocityHighID			EQU		$02000021
+kQTMSKnobVelocitySensitivityID	EQU		$02000022
+kQTMSKnobPitchSensitivityID		EQU		$02000023
+kQTMSKnobVolumeLFODepthFromWheelID EQU	$02000024
+kQTMSKnobPitchLFODepthFromWheelID EQU	$02000025			; Volume Env again
+kQTMSKnobVolumeExpOptionsID		EQU		$02000026			; Env1
+kQTMSKnobEnv1AttackTimeID		EQU		$02000027
+kQTMSKnobEnv1DecayTimeID		EQU		$02000028
+kQTMSKnobEnv1SustainLevelID		EQU		$02000029
+kQTMSKnobEnv1SustainTimeID		EQU		$0200002A
+kQTMSKnobEnv1SustainInfiniteID	EQU		$0200002B
+kQTMSKnobEnv1ReleaseTimeID		EQU		$0200002C
+kQTMSKnobEnv1ExpOptionsID		EQU		$0200002D			; Env2
+kQTMSKnobEnv2AttackTimeID		EQU		$0200002E
+kQTMSKnobEnv2DecayTimeID		EQU		$0200002F
+kQTMSKnobEnv2SustainLevelID		EQU		$02000030
+kQTMSKnobEnv2SustainTimeID		EQU		$02000031
+kQTMSKnobEnv2SustainInfiniteID	EQU		$02000032
+kQTMSKnobEnv2ReleaseTimeID		EQU		$02000033
+kQTMSKnobEnv2ExpOptionsID		EQU		$02000034			; Pitch Env
+kQTMSKnobPitchEnvelopeID		EQU		$02000035
+kQTMSKnobPitchEnvelopeDepthID	EQU		$02000036			; Filter
+kQTMSKnobFilterKeyFollowID		EQU		$02000037
+kQTMSKnobFilterTransposeID		EQU		$02000038
+kQTMSKnobFilterQID				EQU		$02000039
+kQTMSKnobFilterFrequencyEnvelopeID EQU	$0200003A
+kQTMSKnobFilterFrequencyEnvelopeDepthID EQU $0200003B
+kQTMSKnobFilterQEnvelopeID		EQU		$0200003C
+kQTMSKnobFilterQEnvelopeDepthID	EQU		$0200003D			; Reverb Threshhold
+kQTMSKnobReverbThresholdID		EQU		$0200003E
+kQTMSKnobVolumeAttackVelScalingID EQU	$0200003F
+kQTMSKnobLastIDPlus1			EQU		$02000040
+
+
+
+
+kControllerMaximum				EQU		$00007FFF			; +01111111.11111111 
+kControllerMinimum				EQU		$FFFF8000			; -10000000.00000000 
+SynthesizerDescription	RECORD 0
+synthesizerType			 ds.l	1				; offset: $0 (0)		;  synthesizer type (must be same as component subtype) 
+name					 ds		Str31			; offset: $4 (4)		;  text name of synthesizer type 
+flags					 ds.l	1				; offset: $24 (36)		;  from the above enum 
+voiceCount				 ds.l	1				; offset: $28 (40)		;  maximum polyphony 
+partCount				 ds.l	1				; offset: $2C (44)		;  maximum multi-timbrality (and midi channels) 
+instrumentCount			 ds.l	1				; offset: $30 (48)		;  non gm, built in (rom) instruments only 
+modifiableInstrumentCount  ds.l	1				; offset: $34 (52)		;  plus n-more are user modifiable 
+channelMask				 ds.l	1				; offset: $38 (56)		;  (midi device only) which channels device always uses 
+drumPartCount			 ds.l	1				; offset: $3C (60)		;  maximum multi-timbrality of drum parts 
+drumCount				 ds.l	1				; offset: $40 (64)		;  non gm, built in (rom) drumkits only 
+modifiableDrumCount		 ds.l	1				; offset: $44 (68)		;  plus n-more are user modifiable 
+drumChannelMask			 ds.l	1				; offset: $48 (72)		;  (midi device only) which channels device always uses 
+outputCount				 ds.l	1				; offset: $4C (76)		;  number of audio outputs (usually two) 
+latency					 ds.l	1				; offset: $50 (80)		;  response time in µSec 
+controllers				 ds.l	4				; offset: $54 (84)		;  array of 128 bits 
+gmInstruments			 ds.l	4				; offset: $64 (100)		;  array of 128 bits 
+gmDrums					 ds.l	4				; offset: $74 (116)		;  array of 128 bits 
+sizeof					 EQU *					; size:   $84 (132)
+						ENDR
+
+kVoiceCountDynamic				EQU		-1					; constant to use to specify dynamic voicing 
+
+ToneDescription			RECORD 0
+synthesizerType			 ds		BigEndianOSType ; offset: $0 (0)		;  synthesizer type 
+synthesizerName			 ds		Str31			; offset: $4 (4)		;  name of instantiation of synth 
+instrumentName			 ds		Str31			; offset: $24 (36)		;  preferred name for human use 
+instrumentNumber		 ds		BigEndianLong	; offset: $44 (68)		;  inst-number used if synth-name matches 
+gmNumber				 ds		BigEndianLong	; offset: $48 (72)		;  Best matching general MIDI number 
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+
+kFirstGMInstrument				EQU		$00000001
+kLastGMInstrument				EQU		$00000080
+kFirstGSInstrument				EQU		$00000081
+kLastGSInstrument				EQU		$00003FFF
+kFirstDrumkit					EQU		$00004000			; (first value is "no drum". instrument numbers from 16384->16384+128 are drumkits, and for GM they are _defined_ drumkits! 
+kLastDrumkit					EQU		$00004080
+kFirstROMInstrument				EQU		$00008000
+kLastROMInstrument				EQU		$0000FFFF
+kFirstUserInstrument			EQU		$00010000
+kLastUserInstrument				EQU		$0001FFFF
+;  InstrumentMatch
+
+kInstrumentMatchSynthesizerType	EQU		1
+kInstrumentMatchSynthesizerName	EQU		2
+kInstrumentMatchName			EQU		4
+kInstrumentMatchNumber			EQU		8
+kInstrumentMatchGMNumber		EQU		16
+kInstrumentMatchGSNumber		EQU		32
+;  KnobFlags
+
+kKnobBasic						EQU		8					; knob shows up in certain simplified lists of knobs 
+kKnobReadOnly					EQU		16					; knob value cannot be changed by user or with a SetKnob call 
+kKnobInterruptUnsafe			EQU		32					; only alter this knob from foreground task time (may access toolbox) 
+kKnobKeyrangeOverride			EQU		64					; knob can be overridden within a single keyrange (software synth only) 
+kKnobGroupStart					EQU		128					; knob is first in some logical group of knobs 
+kKnobFixedPoint8				EQU		1024
+kKnobFixedPoint16				EQU		2048				; One of these may be used at a time. 
+kKnobTypeNumber					EQU		$00
+kKnobTypeGroupName				EQU		$1000				; "knob" is really a group name for display purposes 
+kKnobTypeBoolean				EQU		$2000				; if range is greater than 1, its a multi-checkbox field 
+kKnobTypeNote					EQU		$3000				; knob range is equivalent to MIDI keys 
+kKnobTypePan					EQU		$4000				; range goes left/right (lose this? ) 
+kKnobTypeInstrument				EQU		$5000				; knob value = reference to another instrument number 
+kKnobTypeSetting				EQU		$6000				; knob value is 1 of n different things (eg, fm algorithms) popup menu 
+kKnobTypeMilliseconds			EQU		$7000				; knob is a millisecond time range 
+kKnobTypePercentage				EQU		$8000				; knob range is displayed as a Percentage 
+kKnobTypeHertz					EQU		$9000				; knob represents frequency 
+kKnobTypeButton					EQU		$A000				; momentary trigger push button 
+
+
+kUnknownKnobValue				EQU		$7FFFFFFF			; a knob with this value means, we don't know it. 
+kDefaultKnobValue				EQU		$7FFFFFFE			; used to SET a knob to its default value. 
+KnobDescription			RECORD 0
+name					 ds		Str63			; offset: $0 (0)
+lowValue				 ds.l	1				; offset: $40 (64)
+highValue				 ds.l	1				; offset: $44 (68)
+defaultValue			 ds.l	1				; offset: $48 (72)		;  a default instrument is made of all default values 
+flags					 ds.l	1				; offset: $4C (76)
+knobID					 ds.l	1				; offset: $50 (80)
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+GCInstrumentData		RECORD 0
+tone					 ds		ToneDescription ; offset: $0 (0)
+knobCount				 ds.l	1				; offset: $4C (76)
+knob					 ds.l	1				; offset: $50 (80) <-- really an array of length one
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+; typedef struct GCInstrumentData *		GCInstrumentDataPtr
+
+; typedef GCInstrumentDataPtr *			GCInstrumentDataHandle
+
+InstrumentAboutInfo		RECORD 0
+p						 ds.l	1				; offset: $0 (0)
+author					 ds		Str255			; offset: $4 (4)
+copyright				 ds		Str255			; offset: $104 (260)
+other					 ds		Str255			; offset: $204 (516)
+sizeof					 EQU *					; size:   $304 (772)
+						ENDR
+
+
+notImplementedMusicErr			EQU		$8000F7E9
+cantSendToSynthesizerErr		EQU		$8000F7E8
+cantReceiveFromSynthesizerErr	EQU		$8000F7E7
+illegalVoiceAllocationErr		EQU		$8000F7E6
+illegalPartErr					EQU		$8000F7E5
+illegalChannelErr				EQU		$8000F7E4
+illegalKnobErr					EQU		$8000F7E3
+illegalKnobValueErr				EQU		$8000F7E2
+illegalInstrumentErr			EQU		$8000F7E1
+illegalControllerErr			EQU		$8000F7E0
+midiManagerAbsentErr			EQU		$8000F7DF
+synthesizerNotRespondingErr		EQU		$8000F7DE
+synthesizerErr					EQU		$8000F7DD
+illegalNoteChannelErr			EQU		$8000F7DC
+noteChannelNotAllocatedErr		EQU		$8000F7DB
+tunePlayerFullErr				EQU		$8000F7DA
+tuneParseErr					EQU		$8000F7D9
+
+kGetAtomicInstNoExpandedSamples	EQU		$01
+kGetAtomicInstNoOriginalSamples	EQU		$02
+kGetAtomicInstNoSamples			EQU		$03
+kGetAtomicInstNoKnobList		EQU		$04
+kGetAtomicInstNoInstrumentInfo	EQU		$08
+kGetAtomicInstOriginalKnobList	EQU		$10
+kGetAtomicInstAllKnobs			EQU		$20					; return even those that are set to default
+
+;   For non-gm instruments, instrument number of tone description == 0
+;   If you want to speed up while running, slam the inst num with what Get instrument number returns
+;   All missing knobs are slammed to the default value
+
+
+
+kSetAtomicInstKeepOriginalInstrument EQU $01
+kSetAtomicInstShareAcrossParts	EQU		$02					; inst disappears when app goes away
+kSetAtomicInstCallerTosses		EQU		$04					; the caller isn't keeping a copy around (for NASetAtomicInstrument)
+kSetAtomicInstCallerGuarantees	EQU		$08					; the caller guarantees a copy is around
+kSetAtomicInstInterruptSafe		EQU		$10					; dont move memory at this time (but process at next task time)
+kSetAtomicInstDontPreprocess	EQU		$80					; perform no further preprocessing because either 1)you know the instrument is digitally clean, or 2) you got it from a GetPartAtomic
+
+kInstrumentNamesModifiable		EQU		1
+kInstrumentNamesBoth			EQU		2
+; 
+; * Structures specific to the GenericMusicComponent
+; 
+
+
+
+kGenericMusicComponentSubtype	EQU		'gene'
+GenericKnobDescription	RECORD 0
+kd						 ds		KnobDescription ; offset: $0 (0)
+hw1						 ds.l	1				; offset: $54 (84)		;  driver defined 
+hw2						 ds.l	1				; offset: $58 (88)		;  driver defined 
+hw3						 ds.l	1				; offset: $5C (92)		;  driver defined 
+settingsID				 ds.l	1				; offset: $60 (96)		;  resource ID list for boolean and popup names 
+sizeof					 EQU *					; size:   $64 (100)
+						ENDR
+GenericKnobDescriptionList RECORD 0
+knobCount				 ds.l	1				; offset: $0 (0)
+knob					 ds		GenericKnobDescription ; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $68 (104)
+						ENDR
+; typedef struct GenericKnobDescriptionList * GenericKnobDescriptionListPtr
+
+; typedef GenericKnobDescriptionListPtr * GenericKnobDescriptionListHandle
+
+;  knobTypes for MusicDerivedSetKnob 
+
+kGenericMusicKnob				EQU		1
+kGenericMusicInstrumentKnob		EQU		2
+kGenericMusicDrumKnob			EQU		3
+kGenericMusicGlobalController	EQU		4
+
+
+
+kGenericMusicResFirst			EQU		0
+kGenericMusicResMiscStringList	EQU		1					; STR# 1: synth name, 2:about author,3:aboutcopyright,4:aboutother 
+kGenericMusicResMiscLongList	EQU		2					; Long various params, see list below 
+kGenericMusicResInstrumentList	EQU		3					; NmLs of names and shorts, categories prefixed by '••' 
+kGenericMusicResDrumList		EQU		4					; NmLs of names and shorts 
+kGenericMusicResInstrumentKnobDescriptionList EQU 5			; Knob 
+kGenericMusicResDrumKnobDescriptionList EQU 6				; Knob 
+kGenericMusicResKnobDescriptionList EQU	7					; Knob 
+kGenericMusicResBitsLongList	EQU		8					; Long back to back bitmaps of controllers, gminstruments, and drums 
+kGenericMusicResModifiableInstrumentHW EQU 9				; Shrt same as the hw shorts trailing the instrument names, a shortlist 
+kGenericMusicResGMTranslation	EQU		10					; Long 128 long entries, 1 for each gm inst, of local instrument numbers 1-n (not hw numbers) 
+kGenericMusicResROMInstrumentData EQU	11					; knob lists for ROM instruments, so the knob values may be known 
+kGenericMusicResAboutPICT		EQU		12					; picture for aboutlist. must be present for GetAbout call to work 
+kGenericMusicResLast			EQU		13
+;  elements of the misc long list 
+
+kGenericMusicMiscLongFirst		EQU		0
+kGenericMusicMiscLongVoiceCount	EQU		1
+kGenericMusicMiscLongPartCount	EQU		2
+kGenericMusicMiscLongModifiableInstrumentCount EQU 3
+kGenericMusicMiscLongChannelMask EQU	4
+kGenericMusicMiscLongDrumPartCount EQU	5
+kGenericMusicMiscLongModifiableDrumCount EQU 6
+kGenericMusicMiscLongDrumChannelMask EQU 7
+kGenericMusicMiscLongOutputCount EQU	8
+kGenericMusicMiscLongLatency	EQU		9
+kGenericMusicMiscLongFlags		EQU		10
+kGenericMusicMiscLongFirstGMHW	EQU		11					; number to add to locate GM main instruments 
+kGenericMusicMiscLongFirstGMDrumHW EQU	12					; number to add to locate GM drumkits 
+kGenericMusicMiscLongFirstUserHW EQU	13					; First hw number of user instruments (presumed sequential) 
+kGenericMusicMiscLongLast		EQU		14
+GCPart					RECORD 0
+hwInstrumentNumber		 ds.l	1				; offset: $0 (0)		;  internal number of recalled instrument 
+controller				 ds.w	128				; offset: $4 (4)		;  current values for all controllers 
+volume					 ds.l	1				; offset: $104 (260)	;  ctrl 7 is special case 
+polyphony				 ds.l	1				; offset: $108 (264)
+midiChannel				 ds.l	1				; offset: $10C (268)	;  1-16 if in use 
+id						 ds		GCInstrumentData ; offset: $110 (272)	;  ToneDescription & knoblist, uncertain length 
+sizeof					 EQU *					; size:   $164 (356)
+						ENDR
+; 
+; * Calls specific to the GenericMusicComponent
+; 
+
+
+kMusicGenericRange				EQU		$0100
+kMusicDerivedRange				EQU		$0200
+; 
+; * Flags in GenericMusicConfigure call
+; 
+
+
+kGenericMusicDoMIDI				EQU		$01					; implement normal MIDI messages for note, controllers, and program changes 0-127 
+kGenericMusicBank0				EQU		$02					; implement instrument bank changes on controller 0 
+kGenericMusicBank32				EQU		$04					; implement instrument bank changes on controller 32 
+kGenericMusicErsatzMIDI			EQU		$08					; construct MIDI packets, but send them to the derived component 
+kGenericMusicCallKnobs			EQU		$10					; call the derived component with special knob format call 
+kGenericMusicCallParts			EQU		$20					; call the derived component with special part format call 
+kGenericMusicCallInstrument		EQU		$40					; call MusicDerivedSetInstrument for MusicSetInstrument calls 
+kGenericMusicCallNumber			EQU		$80					; call MusicDerivedSetPartInstrumentNumber for MusicSetPartInstrumentNumber calls, & don't send any C0 or bank stuff 
+kGenericMusicCallROMInstrument	EQU		$0100				; call MusicSetInstrument for MusicSetPartInstrumentNumber for "ROM" instruments, passing params from the ROMi resource 
+kGenericMusicAllDefaults		EQU		$0200				; indicates that when a new instrument is recalled, all knobs are reset to DEFAULT settings. True for GS modules 
+
+
+
+
+OfflineSampleType		RECORD 0
+numChannels				 ds.l	1				; offset: $0 (0)		; number of channels,  ie mono = 1
+sampleRate				 ds.l	1				; offset: $4 (4)		; sample rate in Apples Fixed point representation
+sampleSize				 ds.w	1				; offset: $8 (8)		; number of bits in sample
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+InstrumentInfoRecord	RECORD 0
+instrumentNumber		 ds.l	1				; offset: $0 (0)		;  instrument number (if 0, name is a catagory)
+flags					 ds.l	1				; offset: $4 (4)		;  show in picker, etc.
+toneNameIndex			 ds.l	1				; offset: $8 (8)		;  index in toneNames (1 based)
+itxtNameAtomID			 ds.l	1				; offset: $C (12)		;  index in itxtNames (itxt/name by index)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+InstrumentInfoList		RECORD 0
+recordCount				 ds.l	1				; offset: $0 (0)
+toneNames				 ds.l	1				; offset: $4 (4)		;  name from tone description
+itxtNames				 ds.l	1				; offset: $8 (8)		;  itxt/name atoms for instruments
+info					 ds		InstrumentInfoRecord ; offset: $C (12) <-- really an array of length one
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+; typedef struct InstrumentInfoList *	InstrumentInfoListPtr
+
+; typedef InstrumentInfoListPtr *		InstrumentInfoListHandle
+
+
+; *  MusicGetDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetDescription(MusicComponent mc, SynthesizerDescription *sd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetDescription
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetDescription
+	ENDIF
+
+
+; *  MusicGetPart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPart(MusicComponent mc, long part, long *midiChannel, long *polyphony)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPart
+			move.l              #$000C0002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPart
+	ENDIF
+
+
+; *  MusicSetPart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPart(MusicComponent mc, long part, long midiChannel, long polyphony)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPart
+			move.l              #$000C0003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPart
+	ENDIF
+
+
+; *  MusicSetPartInstrumentNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartInstrumentNumber(MusicComponent mc, long part, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartInstrumentNumber
+			move.l              #$00080004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartInstrumentNumber
+	ENDIF
+
+
+
+; *  MusicGetPartInstrumentNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPartInstrumentNumber(MusicComponent mc, long part)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPartInstrumentNumber
+			move.l              #$00040005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPartInstrumentNumber
+	ENDIF
+
+
+; *  MusicStorePartInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicStorePartInstrument(MusicComponent mc, long part, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicStorePartInstrument
+			move.l              #$00080006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicStorePartInstrument
+	ENDIF
+
+
+
+; *  MusicGetPartAtomicInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPartAtomicInstrument(MusicComponent mc, long part, AtomicInstrument *ai, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPartAtomicInstrument
+			move.l              #$000C0009,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPartAtomicInstrument
+	ENDIF
+
+
+; *  MusicSetPartAtomicInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartAtomicInstrument(MusicComponent mc, long part, AtomicInstrumentPtr aiP, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartAtomicInstrument
+			move.l              #$000C000A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartAtomicInstrument
+	ENDIF
+
+
+
+; *  MusicGetPartKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPartKnob(MusicComponent mc, long part, long knobID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPartKnob
+			move.l              #$00080010,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPartKnob
+	ENDIF
+
+
+; *  MusicSetPartKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartKnob(MusicComponent mc, long part, long knobID, long knobValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartKnob
+			move.l              #$000C0011,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartKnob
+	ENDIF
+
+
+; *  MusicGetKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetKnob(MusicComponent mc, long knobID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetKnob
+			move.l              #$00040012,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetKnob
+	ENDIF
+
+
+; *  MusicSetKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetKnob(MusicComponent mc, long knobID, long knobValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetKnob
+			move.l              #$00080013,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetKnob
+	ENDIF
+
+
+; *  MusicGetPartName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPartName(MusicComponent mc, long part, StringPtr name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPartName
+			move.l              #$00080014,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPartName
+	ENDIF
+
+
+; *  MusicSetPartName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartName(MusicComponent mc, long part, StringPtr name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartName
+			move.l              #$00080015,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartName
+	ENDIF
+
+
+; *  MusicFindTone()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicFindTone(MusicComponent mc, ToneDescription *td, long *libraryIndexOut, unsigned long *fit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicFindTone
+			move.l              #$000C0016,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicFindTone
+	ENDIF
+
+
+; *  MusicPlayNote()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicPlayNote(MusicComponent mc, long part, long pitch, long velocity)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicPlayNote
+			move.l              #$000C0017,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicPlayNote
+	ENDIF
+
+
+; *  MusicResetPart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicResetPart(MusicComponent mc, long part)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicResetPart
+			move.l              #$00040018,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicResetPart
+	ENDIF
+
+
+; *  MusicSetPartController()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartController(MusicComponent mc, long part, MusicController controllerNumber, long controllerValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartController
+			move.l              #$000C0019,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartController
+	ENDIF
+
+
+
+; *  MusicGetPartController()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetPartController(MusicComponent mc, long part, MusicController controllerNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetPartController
+			move.l              #$0008001A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetPartController
+	ENDIF
+
+
+; *  MusicGetMIDIProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetMIDIProc(MusicComponent mc, MusicMIDISendUPP *midiSendProc, long *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetMIDIProc
+			move.l              #$0008001B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetMIDIProc
+	ENDIF
+
+
+; *  MusicSetMIDIProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetMIDIProc(MusicComponent mc, MusicMIDISendUPP midiSendProc, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetMIDIProc
+			move.l              #$0008001C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetMIDIProc
+	ENDIF
+
+
+; *  MusicGetInstrumentNames()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetInstrumentNames(MusicComponent mc, long modifiableInstruments, Handle *instrumentNames, Handle *instrumentCategoryLasts, Handle *instrumentCategoryNames)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetInstrumentNames
+			move.l              #$0010001D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetInstrumentNames
+	ENDIF
+
+
+; *  MusicGetDrumNames()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetDrumNames(MusicComponent mc, long modifiableInstruments, Handle *instrumentNumbers, Handle *instrumentNames)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetDrumNames
+			move.l              #$000C001E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetDrumNames
+	ENDIF
+
+
+; *  MusicGetMasterTune()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetMasterTune(MusicComponent mc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetMasterTune
+			move.l              #$0000001F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetMasterTune
+	ENDIF
+
+
+; *  MusicSetMasterTune()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetMasterTune(MusicComponent mc, long masterTune)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetMasterTune
+			move.l              #$00040020,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetMasterTune
+	ENDIF
+
+
+
+; *  MusicGetInstrumentAboutInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetInstrumentAboutInfo(MusicComponent mc, long part, InstrumentAboutInfo *iai)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetInstrumentAboutInfo
+			move.l              #$00080022,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetInstrumentAboutInfo
+	ENDIF
+
+
+; *  MusicGetDeviceConnection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetDeviceConnection(MusicComponent mc, long index, long *id1, long *id2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetDeviceConnection
+			move.l              #$000C0023,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetDeviceConnection
+	ENDIF
+
+
+; *  MusicUseDeviceConnection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicUseDeviceConnection(MusicComponent mc, long id1, long id2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicUseDeviceConnection
+			move.l              #$00080024,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicUseDeviceConnection
+	ENDIF
+
+
+; *  MusicGetKnobSettingStrings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetKnobSettingStrings(MusicComponent mc, long knobIndex, long isGlobal, Handle *settingsNames, Handle *settingsCategoryLasts, Handle *settingsCategoryNames)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetKnobSettingStrings
+			move.l              #$00140025,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetKnobSettingStrings
+	ENDIF
+
+
+; *  MusicGetMIDIPorts()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetMIDIPorts(MusicComponent mc, long *inputPortCount, long *outputPortCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetMIDIPorts
+			move.l              #$00080026,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetMIDIPorts
+	ENDIF
+
+
+; *  MusicSendMIDI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSendMIDI(MusicComponent mc, long portIndex, MusicMIDIPacket *mp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSendMIDI
+			move.l              #$00080027,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSendMIDI
+	ENDIF
+
+
+; *  MusicStartOffline()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicStartOffline(MusicComponent mc, unsigned long *numChannels, UnsignedFixed *sampleRate, unsigned short *sampleSize, MusicOfflineDataUPP dataProc, long dataProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicStartOffline
+			move.l              #$00140029,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicStartOffline
+	ENDIF
+
+
+; *  MusicSetOfflineTimeTo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetOfflineTimeTo(MusicComponent mc, long newTimeStamp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetOfflineTimeTo
+			move.l              #$0004002A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetOfflineTimeTo
+	ENDIF
+
+
+; *  MusicGetInstrumentKnobDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetInstrumentKnobDescription(MusicComponent mc, long knobIndex, KnobDescription *mkd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetInstrumentKnobDescription
+			move.l              #$0008002B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetInstrumentKnobDescription
+	ENDIF
+
+
+; *  MusicGetDrumKnobDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetDrumKnobDescription(MusicComponent mc, long knobIndex, KnobDescription *mkd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetDrumKnobDescription
+			move.l              #$0008002C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetDrumKnobDescription
+	ENDIF
+
+
+; *  MusicGetKnobDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetKnobDescription(MusicComponent mc, long knobIndex, KnobDescription *mkd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetKnobDescription
+			move.l              #$0008002D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetKnobDescription
+	ENDIF
+
+
+; *  MusicGetInfoText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetInfoText(MusicComponent mc, long selector, Handle *textH, Handle *styleH)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetInfoText
+			move.l              #$000C002E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetInfoText
+	ENDIF
+
+
+kGetInstrumentInfoNoBuiltIn		EQU		$01
+kGetInstrumentInfoMidiUserInst	EQU		$02
+kGetInstrumentInfoNoIText		EQU		$04
+
+; *  MusicGetInstrumentInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGetInstrumentInfo(MusicComponent mc, long getInstrumentInfoFlags, InstrumentInfoListHandle *infoListH)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGetInstrumentInfo
+			move.l              #$0008002F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGetInstrumentInfo
+	ENDIF
+
+
+
+
+
+; *  MusicTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicTask(MusicComponent mc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicTask
+			move.l              #$00000031,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicTask
+	ENDIF
+
+
+; *  MusicSetPartInstrumentNumberInterruptSafe()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartInstrumentNumberInterruptSafe(MusicComponent mc, long part, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartInstrumentNumberInterruptSafe
+			move.l              #$00080032,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartInstrumentNumberInterruptSafe
+	ENDIF
+
+
+; *  MusicSetPartSoundLocalization()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicSetPartSoundLocalization(MusicComponent mc, long part, Handle data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicSetPartSoundLocalization
+			move.l              #$00080033,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicSetPartSoundLocalization
+	ENDIF
+
+
+; *  MusicGenericConfigure()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGenericConfigure(MusicComponent mc, long mode, long flags, long baseResID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGenericConfigure
+			move.l              #$000C0100,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGenericConfigure
+	ENDIF
+
+
+; *  MusicGenericGetPart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGenericGetPart(MusicComponent mc, long partNumber, GCPart **part)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGenericGetPart
+			move.l              #$00080101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGenericGetPart
+	ENDIF
+
+
+; *  MusicGenericGetKnobList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGenericGetKnobList(MusicComponent mc, long knobType, GenericKnobDescriptionListHandle *gkdlH)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGenericGetKnobList
+			move.l              #$00080102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGenericGetKnobList
+	ENDIF
+
+
+; *  MusicGenericSetResourceNumbers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicGenericSetResourceNumbers(MusicComponent mc, Handle resourceIDH)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicGenericSetResourceNumbers
+			move.l              #$00040103,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicGenericSetResourceNumbers
+	ENDIF
+
+
+; *  MusicDerivedMIDISend()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedMIDISend(MusicComponent mc, MusicMIDIPacket *packet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedMIDISend
+			move.l              #$00040200,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedMIDISend
+	ENDIF
+
+
+; *  MusicDerivedSetKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedSetKnob(MusicComponent mc, long knobType, long knobNumber, long knobValue, long partNumber, GCPart *p, GenericKnobDescription *gkd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedSetKnob
+			move.l              #$00180201,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedSetKnob
+	ENDIF
+
+
+; *  MusicDerivedSetPart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedSetPart(MusicComponent mc, long partNumber, GCPart *p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedSetPart
+			move.l              #$00080202,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedSetPart
+	ENDIF
+
+
+; *  MusicDerivedSetInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedSetInstrument(MusicComponent mc, long partNumber, GCPart *p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedSetInstrument
+			move.l              #$00080203,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedSetInstrument
+	ENDIF
+
+
+; *  MusicDerivedSetPartInstrumentNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedSetPartInstrumentNumber(MusicComponent mc, long partNumber, GCPart *p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedSetPartInstrumentNumber
+			move.l              #$00080204,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedSetPartInstrumentNumber
+	ENDIF
+
+
+; *  MusicDerivedSetMIDI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedSetMIDI(MusicComponent mc, MusicMIDISendUPP midiProc, long refcon, long midiChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedSetMIDI
+			move.l              #$000C0205,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedSetMIDI
+	ENDIF
+
+
+; *  MusicDerivedStorePartInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedStorePartInstrument(MusicComponent mc, long partNumber, GCPart *p, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedStorePartInstrument
+			move.l              #$000C0206,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedStorePartInstrument
+	ENDIF
+
+
+; *  MusicDerivedOpenResFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedOpenResFile(MusicComponent mc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedOpenResFile
+			move.l              #$00000207,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedOpenResFile
+	ENDIF
+
+
+; *  MusicDerivedCloseResFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult MusicDerivedCloseResFile(MusicComponent mc, short resRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MusicDerivedCloseResFile
+			move.l              #$00020208,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MusicDerivedCloseResFile
+	ENDIF
+
+
+
+
+
+
+; --------------------------
+;    Types
+;--------------------------
+
+; typedef ComponentInstance 			NoteAllocator
+
+
+kNoteRequestNoGM				EQU		1					; don't degrade to a GM synth 
+kNoteRequestNoSynthType			EQU		2					; don't degrade to another synth of same type but different name 
+kNoteRequestSynthMustMatch		EQU		4					; synthType must be a match, including kGMSynthComponentSubType 
+
+
+kNoteRequestSpecifyMIDIChannel	EQU		$80
+; 
+;    The midiChannelAssignment field of this structure is used to assign a MIDI channel 
+;    when a NoteChannel is created from a NoteRequest.
+;    A value of 0 indicates a MIDI channel has *not* been assigned
+;    A value of (kNoteRequestSpecifyMIDIChannel | 1->16) is a MIDI channel assignment
+;
+;    This field requires QuickTime 5.0 or later and should be set to 0 for prior versions.
+;
+
+; typedef UInt8 						NoteRequestMIDIChannel
+
+NoteRequestInfo			RECORD 0
+flags					 ds.b	1				; offset: $0 (0)		;  kNoteRequest flags, above 
+midiChannelAssignment	 ds.b	1				; offset: $1 (1)		;  (kNoteRequestSpecifyMIDIChannel | 1->16) as MIDI Channel assignment or zero - see notes above 
+polyphony				 ds		BigEndianShort ; offset: $2 (2)			;  Maximum number of voices 
+typicalPolyphony		 ds		BigEndianFixed ; offset: $4 (4)			;  Hint for level mixing 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+NoteRequest				RECORD 0
+info					 ds		NoteRequestInfo ; offset: $0 (0)
+tone					 ds		ToneDescription ; offset: $8 (8)
+sizeof					 EQU *					; size:   $54 (84)
+						ENDR
+
+
+
+
+
+kPickDontMix					EQU		1					; dont mix instruments with drum sounds 
+kPickSameSynth					EQU		2					; only allow the same device that went in, to come out 
+kPickUserInsts					EQU		4					; show user insts in addition to ROM voices 
+kPickEditAllowEdit				EQU		8					; lets user switch over to edit mode 
+kPickEditAllowPick				EQU		16					; lets the user switch over to pick mode 
+kPickEditSynthGlobal			EQU		32					; edit the global knobs of the synth 
+kPickEditControllers			EQU		64					; edit the controllers of the notechannel 
+
+
+kNoteAllocatorComponentType		EQU		'nota'
+
+; --------------------------------
+;    Note Allocator Prototypes
+;--------------------------------
+
+
+; *  NARegisterMusicDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NARegisterMusicDevice(NoteAllocator na, OSType synthType, Str31 name, SynthesizerConnections *connections)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NARegisterMusicDevice
+			move.l              #$000C0000,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NARegisterMusicDevice
+	ENDIF
+
+
+; *  NAUnregisterMusicDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAUnregisterMusicDevice(NoteAllocator na, long index)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAUnregisterMusicDevice
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAUnregisterMusicDevice
+	ENDIF
+
+
+; *  NAGetRegisteredMusicDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetRegisteredMusicDevice(NoteAllocator na, long index, OSType *synthType, Str31 name, SynthesizerConnections *connections, MusicComponent *mc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetRegisteredMusicDevice
+			move.l              #$00140002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetRegisteredMusicDevice
+	ENDIF
+
+
+; *  NASaveMusicConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASaveMusicConfiguration(NoteAllocator na)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASaveMusicConfiguration
+			move.l              #$00000003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASaveMusicConfiguration
+	ENDIF
+
+
+; *  NANewNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NANewNoteChannel(NoteAllocator na, NoteRequest *noteRequest, NoteChannel *outChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NANewNoteChannel
+			move.l              #$00080004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NANewNoteChannel
+	ENDIF
+
+
+; *  NADisposeNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NADisposeNoteChannel(NoteAllocator na, NoteChannel noteChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NADisposeNoteChannel
+			move.l              #$00040005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NADisposeNoteChannel
+	ENDIF
+
+
+; *  NAGetNoteChannelInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetNoteChannelInfo(NoteAllocator na, NoteChannel noteChannel, long *index, long *part)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetNoteChannelInfo
+			move.l              #$000C0006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetNoteChannelInfo
+	ENDIF
+
+
+; *  NAPrerollNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAPrerollNoteChannel(NoteAllocator na, NoteChannel noteChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAPrerollNoteChannel
+			move.l              #$00040007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAPrerollNoteChannel
+	ENDIF
+
+
+; *  NAUnrollNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAUnrollNoteChannel(NoteAllocator na, NoteChannel noteChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAUnrollNoteChannel
+			move.l              #$00040008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAUnrollNoteChannel
+	ENDIF
+
+
+
+; *  NASetNoteChannelVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetNoteChannelVolume(NoteAllocator na, NoteChannel noteChannel, Fixed volume)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetNoteChannelVolume
+			move.l              #$0008000B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetNoteChannelVolume
+	ENDIF
+
+
+; *  NAResetNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAResetNoteChannel(NoteAllocator na, NoteChannel noteChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAResetNoteChannel
+			move.l              #$0004000C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAResetNoteChannel
+	ENDIF
+
+
+; *  NAPlayNote()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAPlayNote(NoteAllocator na, NoteChannel noteChannel, long pitch, long velocity)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAPlayNote
+			move.l              #$000C000D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAPlayNote
+	ENDIF
+
+
+; *  NASetController()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetController(NoteAllocator na, NoteChannel noteChannel, long controllerNumber, long controllerValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetController
+			move.l              #$000C000E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetController
+	ENDIF
+
+
+; *  NASetKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetKnob(NoteAllocator na, NoteChannel noteChannel, long knobNumber, long knobValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetKnob
+			move.l              #$000C000F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetKnob
+	ENDIF
+
+
+; *  NAFindNoteChannelTone()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAFindNoteChannelTone(NoteAllocator na, NoteChannel noteChannel, ToneDescription *td, long *instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAFindNoteChannelTone
+			move.l              #$000C0010,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAFindNoteChannelTone
+	ENDIF
+
+
+; *  NASetInstrumentNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetInstrumentNumber(NoteAllocator na, NoteChannel noteChannel, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetInstrumentNumber
+			move.l              #$00080011,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetInstrumentNumber
+	ENDIF
+
+
+
+
+; *  NAPickInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAPickInstrument(NoteAllocator na, ModalFilterUPP filterProc, StringPtr prompt, ToneDescription *sd, unsigned long flags, long refCon, long reserved1, long reserved2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAPickInstrument
+			move.l              #$001C0012,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAPickInstrument
+	ENDIF
+
+
+; *  NAPickArrangement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAPickArrangement(NoteAllocator na, ModalFilterUPP filterProc, StringPtr prompt, long zero1, long zero2, Track t, StringPtr songName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAPickArrangement
+			move.l              #$00180013,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAPickArrangement
+	ENDIF
+
+
+
+; *  NAStuffToneDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAStuffToneDescription(NoteAllocator na, long gmNumber, ToneDescription *td)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAStuffToneDescription
+			move.l              #$0008001B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAStuffToneDescription
+	ENDIF
+
+
+; *  NACopyrightDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NACopyrightDialog(NoteAllocator na, PicHandle p, StringPtr author, StringPtr copyright, StringPtr other, StringPtr title, ModalFilterUPP filterProc, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NACopyrightDialog
+			move.l              #$001C001C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NACopyrightDialog
+	ENDIF
+
+
+
+;    kNADummyOneSelect = 29
+;    kNADummyTwoSelect = 30
+
+
+
+
+; *  NAGetIndNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetIndNoteChannel(NoteAllocator na, long index, NoteChannel *nc, long *seed)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetIndNoteChannel
+			move.l              #$000C001F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetIndNoteChannel
+	ENDIF
+
+
+
+; *  NAGetMIDIPorts()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetMIDIPorts(NoteAllocator na, QTMIDIPortListHandle *inputPorts, QTMIDIPortListHandle *outputPorts)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetMIDIPorts
+			move.l              #$00080021,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetMIDIPorts
+	ENDIF
+
+
+; *  NAGetNoteRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetNoteRequest(NoteAllocator na, NoteChannel noteChannel, NoteRequest *nrOut)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetNoteRequest
+			move.l              #$00080022,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetNoteRequest
+	ENDIF
+
+
+; *  NASendMIDI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASendMIDI(NoteAllocator na, NoteChannel noteChannel, MusicMIDIPacket *mp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASendMIDI
+			move.l              #$00080023,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASendMIDI
+	ENDIF
+
+
+; *  NAPickEditInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAPickEditInstrument(NoteAllocator na, ModalFilterUPP filterProc, StringPtr prompt, long refCon, NoteChannel nc, AtomicInstrument ai, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAPickEditInstrument
+			move.l              #$00180024,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAPickEditInstrument
+	ENDIF
+
+
+; *  NANewNoteChannelFromAtomicInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NANewNoteChannelFromAtomicInstrument(NoteAllocator na, AtomicInstrumentPtr instrument, long flags, NoteChannel *outChannel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NANewNoteChannelFromAtomicInstrument
+			move.l              #$000C0025,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NANewNoteChannelFromAtomicInstrument
+	ENDIF
+
+
+; *  NASetAtomicInstrument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetAtomicInstrument(NoteAllocator na, NoteChannel noteChannel, AtomicInstrumentPtr instrument, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetAtomicInstrument
+			move.l              #$000C0026,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetAtomicInstrument
+	ENDIF
+
+
+
+
+; *  NAGetKnob()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetKnob(NoteAllocator na, NoteChannel noteChannel, long knobNumber, long *knobValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetKnob
+			move.l              #$000C0028,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetKnob
+	ENDIF
+
+
+; *  NATask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NATask(NoteAllocator na)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NATask
+			move.l              #$00000029,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NATask
+	ENDIF
+
+
+; *  NASetNoteChannelBalance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetNoteChannelBalance(NoteAllocator na, NoteChannel noteChannel, long balance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetNoteChannelBalance
+			move.l              #$0008002A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetNoteChannelBalance
+	ENDIF
+
+
+; *  NASetInstrumentNumberInterruptSafe()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetInstrumentNumberInterruptSafe(NoteAllocator na, NoteChannel noteChannel, long instrumentNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetInstrumentNumberInterruptSafe
+			move.l              #$0008002B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetInstrumentNumberInterruptSafe
+	ENDIF
+
+
+; *  NASetNoteChannelSoundLocalization()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NASetNoteChannelSoundLocalization(NoteAllocator na, NoteChannel noteChannel, Handle data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NASetNoteChannelSoundLocalization
+			move.l              #$0008002C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NASetNoteChannelSoundLocalization
+	ENDIF
+
+
+; *  NAGetController()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult NAGetController(NoteAllocator na, NoteChannel noteChannel, long controllerNumber, long *controllerValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NAGetController
+			move.l              #$000C002D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NAGetController
+	ENDIF
+
+
+
+
+
+
+kTuneQueueDepth					EQU		8					; Deepest you can queue tune segments 
+
+TuneStatus				RECORD 0
+tune					 ds.l	1				; offset: $0 (0)		;  currently playing tune 
+tunePtr					 ds.l	1				; offset: $4 (4)		;  position within currently playing piece 
+time					 ds.l	1				; offset: $8 (8)		;  current tune time 
+queueCount				 ds.w	1				; offset: $C (12)		;  how many pieces queued up? 
+queueSpots				 ds.w	1				; offset: $E (14)		;  How many more tunepieces can be queued 
+queueTime				 ds.l	1				; offset: $10 (16)		;  How much time is queued up? (can be very inaccurate) 
+reserved				 ds.l	3				; offset: $14 (20)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef ComponentInstance 			TunePlayer
+
+
+kTunePlayerComponentType		EQU		'tune'
+
+
+; *  TuneSetHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetHeader(TunePlayer tp, unsigned long *header)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetHeader
+			move.l              #$00040004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetHeader
+	ENDIF
+
+
+; *  TuneGetTimeBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetTimeBase(TunePlayer tp, TimeBase *tb)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetTimeBase
+			move.l              #$00040005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetTimeBase
+	ENDIF
+
+
+; *  TuneSetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetTimeScale(TunePlayer tp, TimeScale scale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetTimeScale
+			move.l              #$00040006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetTimeScale
+	ENDIF
+
+
+; *  TuneGetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetTimeScale(TunePlayer tp, TimeScale *scale)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetTimeScale
+			move.l              #$00040007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetTimeScale
+	ENDIF
+
+
+; *  TuneGetIndexedNoteChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetIndexedNoteChannel(TunePlayer tp, long i, NoteChannel *nc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetIndexedNoteChannel
+			move.l              #$00080008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetIndexedNoteChannel
+	ENDIF
+
+
+;  Values for when to start. 
+
+kTuneStartNow					EQU		1					; start after buffer is implied 
+kTuneDontClipNotes				EQU		2					; allow notes to finish their durations outside sample 
+kTuneExcludeEdgeNotes			EQU		4					; dont play notes that start at end of tune 
+kTuneQuickStart					EQU		8					; Leave all the controllers where they are, ignore start time 
+kTuneLoopUntil					EQU		16					; loop a queued tune if there's nothing else in the queue
+kTunePlayDifference				EQU		32					; by default, the tune difference is skipped
+kTunePlayConcurrent				EQU		64					; dont block the next tune sequence with this one
+kTuneStartNewMaster				EQU		16384
+
+; *  TuneQueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneQueue(TunePlayer tp, unsigned long *tune, Fixed tuneRate, unsigned long tuneStartPosition, unsigned long tuneStopPosition, unsigned long queueFlags, TuneCallBackUPP callBackProc, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneQueue
+			move.l              #$001C000A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneQueue
+	ENDIF
+
+
+; *  TuneInstant()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneInstant(TunePlayer tp, unsigned long *tune, unsigned long tunePosition)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneInstant
+			move.l              #$0008000B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneInstant
+	ENDIF
+
+
+; *  TuneGetStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetStatus(TunePlayer tp, TuneStatus *status)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetStatus
+			move.l              #$0004000C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetStatus
+	ENDIF
+
+;  Values for stopping. 
+
+kTuneStopFade					EQU		1					; do a quick, synchronous fadeout 
+kTuneStopSustain				EQU		2					; don't silece notes 
+kTuneStopInstant				EQU		4					; silence notes fast (else, decay them) 
+kTuneStopReleaseChannels		EQU		8					; afterwards, let the channels go 
+
+; *  TuneStop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneStop(TunePlayer tp, long stopFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneStop
+			move.l              #$0004000D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneStop
+	ENDIF
+
+
+
+; *  TuneSetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetVolume(TunePlayer tp, Fixed volume)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetVolume
+			move.l              #$00040010,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetVolume
+	ENDIF
+
+
+; *  TuneGetVolume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetVolume(TunePlayer tp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetVolume
+			move.l              #$00000011,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetVolume
+	ENDIF
+
+
+; *  TunePreroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TunePreroll(TunePlayer tp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TunePreroll
+			move.l              #$00000012,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TunePreroll
+	ENDIF
+
+
+; *  TuneUnroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneUnroll(TunePlayer tp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneUnroll
+			move.l              #$00000013,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneUnroll
+	ENDIF
+
+
+; *  TuneSetNoteChannels()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetNoteChannels(TunePlayer tp, unsigned long count, NoteChannel *noteChannelList, TunePlayCallBackUPP playCallBackProc, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetNoteChannels
+			move.l              #$00100014,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetNoteChannels
+	ENDIF
+
+
+; *  TuneSetPartTranspose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetPartTranspose(TunePlayer tp, unsigned long part, long transpose, long velocityShift)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetPartTranspose
+			move.l              #$000C0015,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetPartTranspose
+	ENDIF
+
+
+
+; *  TuneGetNoteAllocator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal NoteAllocator TuneGetNoteAllocator(TunePlayer tp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetNoteAllocator
+			move.l              #$00000017,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetNoteAllocator
+	ENDIF
+
+
+; *  TuneSetSofter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetSofter(TunePlayer tp, long softer)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetSofter
+			move.l              #$00040018,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetSofter
+	ENDIF
+
+
+; *  TuneTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneTask(TunePlayer tp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneTask
+			move.l              #$00000019,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneTask
+	ENDIF
+
+
+; *  TuneSetBalance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetBalance(TunePlayer tp, long balance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetBalance
+			move.l              #$0004001A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetBalance
+	ENDIF
+
+
+; *  TuneSetSoundLocalization()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetSoundLocalization(TunePlayer tp, Handle data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetSoundLocalization
+			move.l              #$0004001B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetSoundLocalization
+	ENDIF
+
+
+; *  TuneSetHeaderWithSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetHeaderWithSize(TunePlayer tp, unsigned long *header, unsigned long size)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetHeaderWithSize
+			move.l              #$0008001C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetHeaderWithSize
+	ENDIF
+
+;  flags for part mix. 
+
+kTuneMixMute					EQU		1					; disable a part 
+kTuneMixSolo					EQU		2					; if any parts soloed, play only soloed parts 
+
+
+; *  TuneSetPartMix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneSetPartMix(TunePlayer tp, unsigned long partNumber, long volume, long balance, long mixFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneSetPartMix
+			move.l              #$0010001D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneSetPartMix
+	ENDIF
+
+
+; *  TuneGetPartMix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult TuneGetPartMix(TunePlayer tp, unsigned long partNumber, long *volumeOut, long *balanceOut, long *mixFlagsOut)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TuneGetPartMix
+			move.l              #$0010001E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TuneGetPartMix
+	ENDIF
+
+
+
+
+
+; typedef unsigned long 				MusicOpWord
+
+; typedef MusicOpWord *					MusicOpWordPtr
+
+;     QuickTime Music Track Event Formats:
+;
+;    At this time, QuickTime music tracks support 5 different event types -- REST events,
+;    short NOTE events, short CONTROL events, short GENERAL events, Long NOTE events, 
+;    long CONTROL events, and variable GENERAL events.
+; 
+;        • REST Event (4 bytes/event):
+;    
+;            (0 0 0) (5-bit UNUSED) (24-bit Rest Duration)
+;        
+;        • Short NOTE Events (4 bytes/event):
+;    
+;            (0 0 1) (5-bit Part) (6-bit Pitch) (7-bit Volume) (11-bit Duration)
+;        
+;            where:  Pitch is offset by 32 (Actual pitch = pitch field + 32)
+;
+;        • Short CONTROL Events (4 bytes/event):
+;    
+;            (0 1 0) (5-bit Part) (8-bit Controller) (1-bit UNUSED) (1-bit Sign) (7-bit MSB) (7-bit LSB)
+;                                                                         ( or 15-bit Signed Value)
+;        • Short GENERAL Event (4 bytes/event):
+;    
+;            (0 1 1) (1-bit UNUSED) (12-bit Sub-Type) (16-bit Value)
+;    
+;        • Long NOTE Events (8 bytes/event):
+;    
+;            (1 0 0 1) (12-bit Part) (1-bit UNUSED) (7-bit Pitch) (1-bit UNUSED) (7-bit Volume)
+;            (1 0) (8-bit UNUSED) (22-bit Duration)
+;        
+;        • Long CONTROL Event (8 bytes/event):
+;        
+;            (1 0 1 0) (12-bit Part) (16-bit Value MSB) 
+;            (1 0) (14-bit Controller) (16-bit Value LSB)
+;    
+;        • Long KNOB Event (8 bytes/event):
+;    
+;            (1 0 1 1) (12-bit Sub-Type) (16-bit Value MSB)
+;            (1 0) (14-bit KNOB) (16-bit Value LSB)
+;    
+;        • Variable GENERAL Length Events (N bytes/event):
+;    
+;            (1 1 1 1) (12-bit Sub-Type) (16-bit Length)
+;                :
+;            (32-bit Data values)
+;                :
+;            (1 1) (14-bit UNUSED) (16-bit Length)
+;    
+;            where:  Length field is the number of LONG words in the record.
+;                    Lengths include the first and last long words (Minimum length = 2)
+;                
+;    The following event type values have not been used yet and are reserved for 
+;    future expansion:
+;        
+;        • (1 0 0 0)     (8 bytes/event)
+;        • (1 1 0 0)     (N bytes/event)
+;        • (1 1 0 1)     (N bytes/event)
+;        • (1 1 1 0)     (N bytes/event)
+;        
+;    For all events, the following generalizations apply:
+;    
+;        -   All duration values are specified in Millisecond units.
+;        -   Pitch values are intended to map directly to the MIDI key numbers.
+;        -   Controllers from 0 to 127 correspond to the standard MIDI controllers.
+;            Controllers greater than 127 correspond to other controls (i.e., Pitch Bend, 
+;            Key Pressure, and Channel Pressure).    
+;
+
+
+;  Defines for the implemented music event data fields
+
+kRestEventType					EQU		$00000000			; lower 3-bits 
+kNoteEventType					EQU		$00000001			; lower 3-bits 
+kControlEventType				EQU		$00000002			; lower 3-bits 
+kMarkerEventType				EQU		$00000003			; lower 3-bits 
+kUndefined1EventType			EQU		$00000008			; 4-bits 
+kXNoteEventType					EQU		$00000009			; 4-bits 
+kXControlEventType				EQU		$0000000A			; 4-bits 
+kKnobEventType					EQU		$0000000B			; 4-bits 
+kUndefined2EventType			EQU		$0000000C			; 4-bits 
+kUndefined3EventType			EQU		$0000000D			; 4-bits 
+kUndefined4EventType			EQU		$0000000E			; 4-bits 
+kGeneralEventType				EQU		$0000000F			; 4-bits 
+kXEventLengthBits				EQU		$00000002			; 2 bits: indicates 8-byte event record 
+kGeneralEventLengthBits			EQU		$00000003			; 2 bits: indicates variable length event record 
+kEventLen						EQU		1					; length of events in long words 
+kXEventLen						EQU		2
+kRestEventLen					EQU		1					; length of events in long words 
+kNoteEventLen					EQU		1
+kControlEventLen				EQU		1
+kMarkerEventLen					EQU		1
+kXNoteEventLen					EQU		2
+kXControlEventLen				EQU		2
+kGeneralEventLen				EQU		2					; 2 or more, however 
+															; Universal Event Defines
+kEventLengthFieldPos			EQU		30					; by looking at these two bits of the 1st or last word         
+kEventLengthFieldWidth			EQU		2					; of an event you can determine the event length                
+															; length field: 0 & 1 => 1 long; 2 => 2 longs; 3 => variable length 
+kEventTypeFieldPos				EQU		29					; event type field for short events 
+kEventTypeFieldWidth			EQU		3					; short type is 3 bits 
+kXEventTypeFieldPos				EQU		28					; event type field for extended events 
+kXEventTypeFieldWidth			EQU		4					; extended type is 4 bits 
+kEventPartFieldPos				EQU		24
+kEventPartFieldWidth			EQU		5
+kXEventPartFieldPos				EQU		16					; in the 1st long word 
+kXEventPartFieldWidth			EQU		12					; Rest Events
+kRestEventDurationFieldPos		EQU		0
+kRestEventDurationFieldWidth	EQU		24
+kRestEventDurationMax			EQU		$00FFFFFF			; Note Events
+kNoteEventPitchFieldPos			EQU		18
+kNoteEventPitchFieldWidth		EQU		6
+kNoteEventPitchOffset			EQU		32					; add to value in pitch field to get actual pitch 
+kNoteEventVolumeFieldPos		EQU		11
+kNoteEventVolumeFieldWidth		EQU		7
+kNoteEventVolumeOffset			EQU		0					; add to value in volume field to get actual volume 
+kNoteEventDurationFieldPos		EQU		0
+kNoteEventDurationFieldWidth	EQU		11
+kNoteEventDurationMax			EQU		$000007FF
+kXNoteEventPitchFieldPos		EQU		0					; in the 1st long word 
+kXNoteEventPitchFieldWidth		EQU		16
+kXNoteEventDurationFieldPos		EQU		0					; in the 2nd long word 
+kXNoteEventDurationFieldWidth	EQU		22
+kXNoteEventDurationMax			EQU		$003FFFFF
+kXNoteEventVolumeFieldPos		EQU		22					; in the 2nd long word 
+kXNoteEventVolumeFieldWidth		EQU		7					; Control Events
+kControlEventControllerFieldPos	EQU		16
+kControlEventControllerFieldWidth EQU	8
+kControlEventValueFieldPos		EQU		0
+kControlEventValueFieldWidth	EQU		16
+kXControlEventControllerFieldPos EQU	0					; in the 2nd long word 
+kXControlEventControllerFieldWidth EQU	16
+kXControlEventValueFieldPos		EQU		0					; in the 1st long word 
+kXControlEventValueFieldWidth	EQU		16					; Knob Events
+kKnobEventValueHighFieldPos		EQU		0					; 1st long word 
+kKnobEventValueHighFieldWidth	EQU		16
+kKnobEventKnobFieldPos			EQU		16					; 2nd long word 
+kKnobEventKnobFieldWidth		EQU		14
+kKnobEventValueLowFieldPos		EQU		0					; 2nd long word 
+kKnobEventValueLowFieldWidth	EQU		16					; Marker Events
+kMarkerEventSubtypeFieldPos		EQU		16
+kMarkerEventSubtypeFieldWidth	EQU		8
+kMarkerEventValueFieldPos		EQU		0
+kMarkerEventValueFieldWidth		EQU		16					; General Events
+kGeneralEventSubtypeFieldPos	EQU		16					; in the last long word 
+kGeneralEventSubtypeFieldWidth	EQU		14
+kGeneralEventLengthFieldPos		EQU		0					; in the 1st & last long words 
+kGeneralEventLengthFieldWidth	EQU		16
+	IF TARGET_RT_LITTLE_ENDIAN THEN
+
+kEndMarkerValue					EQU		$00000060
+	ELSE
+
+kEndMarkerValue					EQU		$60000000
+	ENDIF	; TARGET_RT_LITTLE_ENDIAN
+;  macros for extracting various fields from the QuickTime event records
+
+
+;  General Event Defined Types
+
+kGeneralEventNoteRequest		EQU		1					; Encapsulates NoteRequest data structure 
+kGeneralEventPartKey			EQU		4
+kGeneralEventTuneDifference		EQU		5					; Contains a standard sequence, with end marker, for the tune difference of a sequence piece (halts QuickTime 2.0 Music) 
+kGeneralEventAtomicInstrument	EQU		6					; Encapsulates AtomicInstrument record 
+kGeneralEventKnob				EQU		7					; knobID/knobValue pairs; smallest event is 4 longs 
+kGeneralEventMIDIChannel		EQU		8					; used in tune header, one longword identifies the midi channel it originally came from 
+kGeneralEventPartChange			EQU		9					; used in tune sequence, one longword identifies the tune part which can now take over this part's note channel (similar to program change) (halts QuickTime 2.0 Music)
+kGeneralEventNoOp				EQU		10					; guaranteed to do nothing and be ignored. (halts QuickTime 2.0 Music) 
+kGeneralEventUsedNotes			EQU		11					; four longwords specifying which midi notes are actually used, 0..127 msb to lsb 
+kGeneralEventPartMix			EQU		12					; three longwords: Fixed volume, long balance, long flags 
+;  Marker Event Defined Types       // marker is 60 ee vv vv in hex, where e = event type, and v = value
+
+kMarkerEventEnd					EQU		0					; marker type 0 means: value 0 - stop, value != 0 - ignore
+kMarkerEventBeat				EQU		1					; value 0 = single beat; anything else is 65536ths-of-a-beat (quarter note)
+kMarkerEventTempo				EQU		2					; value same as beat marker, but indicates that a tempo event should be computed (based on where the next beat or tempo marker is) and emitted upon export
+
+kCurrentlyNativeEndian			EQU		1
+kCurrentlyNotNativeEndian		EQU		2
+;  UPP call backs 
+
+; *  NewMusicMIDISendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewMusicOfflineDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTuneCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTunePlayCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeMusicMIDISendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeMusicOfflineDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTuneCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTunePlayCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeMusicMIDISendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeMusicOfflineDataUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTuneCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTunePlayCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+	ENDIF ; __QUICKTIMEMUSIC__ 
+

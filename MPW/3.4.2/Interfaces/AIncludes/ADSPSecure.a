@@ -1,0 +1,128 @@
+;
+;	File:		ADSPSecure.a
+;
+;	Contains:	Secure AppleTalk Data Stream Protocol Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__ADSPSECURE__') = 'UNDEFINED' THEN
+__ADSPSECURE__ SET 1
+
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Quickdraw.a'										;
+;			include 'MixedMode.a'									;
+;			include 'QuickdrawText.a'								;
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__NOTIFICATION__') = 'UNDEFINED' THEN
+	include 'Notification.a'
+	ENDIF
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__ADSP__') = 'UNDEFINED' THEN
+	include 'ADSP.a'
+	ENDIF
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__OCE__') = 'UNDEFINED' THEN
+	include 'OCE.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;		include 'Script.a'											;
+;			include 'IntlResources.a'								;
+
+	IF &TYPE('__OCEAUTHDIR__') = 'UNDEFINED' THEN
+	include 'OCEAuthDir.a'
+	ENDIF
+
+sdspOpen						EQU		229
+
+;
+;For secure connections, the eom field of ioParams contains two single-bit flags
+;(instead of a zero/non-zero byte). They are an encrypt flag (see below), and an
+;eom flag.  All other bits in that field should be zero.
+;
+;To write an encrypted message, you must set an encrypt bit in the eom field of
+;the ioParams of your write call. Note: this flag is only checked on the first
+;write of a message (the first write on a connection, or the first write following
+;a write with eom set.
+;
+dspEOMBit						EQU		0					; set if EOM at end of write 
+dspEncryptBit					EQU		1					; set to encrypt message 
+
+dspEOMMask						EQU		1
+dspEncryptMask					EQU		2
+
+sdspWorkSize					EQU		2048
+
+TRSecureParams 			RECORD	0
+localCID				 ds.w   1		; offset: $0 (0)		; local connection id 
+remoteCID				 ds.w   1		; offset: $2 (2)		; remote connection id 
+remoteAddress			 ds     AddrBlock ; offset: $4 (4)		; address of remote end 
+filterAddress			 ds     AddrBlock ; offset: $8 (8)		; address filter 
+sendSeq					 ds.l   1		; offset: $C (12)		; local send sequence number 
+sendWindow				 ds.w   1		; offset: $10 (16)		; send window size 
+recvSeq					 ds.l   1		; offset: $12 (18)		; receive sequence number 
+attnSendSeq				 ds.l   1		; offset: $16 (22)		; attention send sequence number 
+attnRecvSeq				 ds.l   1		; offset: $1A (26)		; attention receive sequence number 
+ocMode					 ds.b   1		; offset: $1E (30)		; open connection mode 
+ocInterval				 ds.b   1		; offset: $1F (31)		; open connection request retry interval 
+ocMaximum				 ds.b   1		; offset: $20 (32)		; open connection request retry maximum 
+secure					 ds.b   1		; offset: $21 (33)		;  --> TRUE if session was authenticated 
+sessionKey				 ds.l   1		; offset: $22 (34)		; <--> encryption key for session 
+credentialsSize			 ds.l   1		; offset: $26 (38)		;  --> length of credentials 
+credentials				 ds.l   1		; offset: $2A (42)		;  --> pointer to credentials 
+workspace				 ds.l   1		; offset: $2E (46)		;  --> pointer to workspace for connection
+;										   align on even boundary and length = sdspWorkSize 
+recipient				 ds.l   1		; offset: $32 (50)		;  --> identity of recipient (or initiator if active mode 
+issueTime				 ds.l   1		; offset: $36 (54)		;  --> when credentials were issued 
+expiry					 ds.l   1		; offset: $3A (58)		;  --> when credentials expiry 
+initiator				 ds.l   1		; offset: $3E (62)		; <--  RecordID of initiator returned here.
+;											Must give appropriate Buffer to hold RecordID
+;											(Only for passive or accept mode) 
+hasIntermediary			 ds.b   1		; offset: $42 (66)		; <--  will be set if credentials has an intermediary 
+filler1					 ds.b   1		; offset: $43 (67)
+intermediary			 ds.l   1		; offset: $44 (68)		; <--  RecordID of intermediary returned here.
+;											(If intermediary is found in credentials
+;											Must give appropriate Buffer to hold RecordID
+;											(Only for passive or accept mode) 
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct TRSecureParams  TRSecureParams
+	ENDIF ; __ADSPSECURE__

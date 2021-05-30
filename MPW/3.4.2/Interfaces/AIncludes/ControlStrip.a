@@ -1,0 +1,387 @@
+;
+;	File:		ControlStrip.a
+;
+;	Contains:	Control Strip (for Powerbooks and Duos) Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CONTROLSTRIP__') = 'UNDEFINED' THEN
+__CONTROLSTRIP__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Controls.a'										;
+;		include 'Windows.a'										;
+;			include 'Events.a'										;
+;				include 'OSUtils.a'								;
+;		include 'TextEdit.a'										;
+
+sdevInitModule					EQU		0					; initialize the module
+sdevCloseModule					EQU		1					; clean up before being closed
+sdevFeatures					EQU		2					; return feature bits
+sdevGetDisplayWidth				EQU		3					; returns the width of the module's display
+sdevPeriodicTickle				EQU		4					; periodic tickle when nothing else is happening
+sdevDrawStatus					EQU		5					; update the interface in the Control Strip
+sdevMouseClick					EQU		6					; user clicked on the module's display area in the Control Strip
+sdevSaveSettings				EQU		7					; saved any changed settings in module's preferences file
+sdevShowBalloonHelp				EQU		8					; puts up a help balloon, if the module has one to display
+
+;********************************************************************************************
+;
+;	Features supported by the module.  If a bit is set, it means that feature is supported.
+;	All undefined bits are reserved for future use by Apple, and should be set to zero.
+;
+;********************************************************************************************
+sdevWantMouseClicks				EQU		0					; notify the module of mouseDown events
+sdevDontAutoTrack				EQU		1					; call the module to do mouse tracking
+sdevHasCustomHelp				EQU		2					; module provides its own help messages
+sdevKeepModuleLocked			EQU		3					; module needs to be locked in the heap
+
+;********************************************************************************************
+;
+;	Result values returned by the sdevPeriodicTickle and sdevIconMouseClick selectors.
+;	If a bit is set, the module can request that a specific function is performed by
+;	the Control Strip.  A result of zero will do nothing.  All undefined bits are reserved
+;	for future use by Apple, and should be set to zero.
+;
+;********************************************************************************************
+sdevResizeDisplay				EQU		0					; resize the module's display
+sdevNeedToSave					EQU		1					; need to save changed settings, when convenient
+sdevHelpStateChange				EQU		2					; need to update the help message because of a state change
+sdevCloseNow					EQU		3					; close a module because it doesn't want to stay around
+
+;********************************************************************************************
+;
+;	miscellaneous
+;
+;********************************************************************************************
+sdevFileType					EQU		'sdev'
+
+sdevMenuItemMark				EQU		'•'
+
+;	direction values for SBDrawBarGraph
+BarGraphSlopeLeft				EQU		-1					; max end of sloping bar graph is on the left
+BarGraphFlatRight				EQU		0					; max end of flat bar graph is on the right
+BarGraphSlopeRight				EQU		1					; max end of sloping bar graph is on the right
+
+;********************************************************************************************
+;
+;	utility routines to provide standard interface elements and support for common functions
+;
+;********************************************************************************************
+;
+; pascal Boolean SBIsControlStripVisible(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBIsControlStripVisible
+			moveq	#0,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBIsControlStripVisible
+	ENDIF
+
+;
+; pascal void SBShowHideControlStrip(Boolean showIt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBShowHideControlStrip
+			move.w	#$0101,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBShowHideControlStrip
+	ENDIF
+
+;
+; pascal Boolean SBSafeToAccessStartupDisk(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBSafeToAccessStartupDisk
+			moveq	#2,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBSafeToAccessStartupDisk
+	ENDIF
+
+;
+; pascal short SBOpenModuleResourceFile(OSType fileCreator)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBOpenModuleResourceFile
+			move.w	#$0203,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBOpenModuleResourceFile
+	ENDIF
+
+;
+; pascal OSErr SBLoadPreferences(ConstStr255Param prefsResourceName, Handle *preferences)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBLoadPreferences
+			move.w	#$0404,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBLoadPreferences
+	ENDIF
+
+;
+; pascal OSErr SBSavePreferences(ConstStr255Param prefsResourceName, Handle preferences)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBSavePreferences
+			move.w	#$0405,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBSavePreferences
+	ENDIF
+
+;
+; pascal void SBGetDetachedIndString(StringPtr theString, Handle stringList, short whichString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetDetachedIndString
+			move.w	#$0506,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetDetachedIndString
+	ENDIF
+
+;
+; pascal OSErr SBGetDetachIconSuite(Handle *theIconSuite, short theResID, unsigned long selector)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetDetachIconSuite
+			move.w	#$0507,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetDetachIconSuite
+	ENDIF
+
+;
+; pascal OSErr SBTrackPopupMenu(const Rect *moduleRect, MenuHandle theMenu)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBTrackPopupMenu
+			move.w	#$0408,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBTrackPopupMenu
+	ENDIF
+
+;
+; pascal OSErr SBTrackSlider(const Rect *moduleRect, short ticksOnSlider, short initialValue)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBTrackSlider
+			move.w	#$0409,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBTrackSlider
+	ENDIF
+
+;
+; pascal OSErr SBShowHelpString(const Rect *moduleRect, StringPtr helpString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBShowHelpString
+			move.w	#$040A,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBShowHelpString
+	ENDIF
+
+;
+; pascal short SBGetBarGraphWidth(short barCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetBarGraphWidth
+			move.w	#$010B,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetBarGraphWidth
+	ENDIF
+
+;
+; pascal void SBDrawBarGraph(short level, short barCount, short direction, Point barGraphTopLeft)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBDrawBarGraph
+			move.w	#$050C,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBDrawBarGraph
+	ENDIF
+
+;
+; pascal void SBModalDialogInContext(ModalFilterUPP filterProc, short *itemHit)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBModalDialogInContext
+			move.w	#$040D,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBModalDialogInContext
+	ENDIF
+
+; The following routines are available in Control Strip 1.2 and later. 
+;
+; pascal OSErr SBGetControlStripFontID(short *fontID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetControlStripFontID
+			move.w	#$020E,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetControlStripFontID
+	ENDIF
+
+;
+; pascal OSErr SBSetControlStripFontID(short fontID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBSetControlStripFontID
+			move.w	#$010F,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBSetControlStripFontID
+	ENDIF
+
+;
+; pascal OSErr SBGetControlStripFontSize(short *fontSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetControlStripFontSize
+			move.w	#$0210,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetControlStripFontSize
+	ENDIF
+
+;
+; pascal OSErr SBSetControlStripFontSize(short fontSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBSetControlStripFontSize
+			move.w	#$0111,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBSetControlStripFontSize
+	ENDIF
+
+;
+; pascal OSErr SBGetShowHideHotKey(short *modifiers, unsigned char *keyCode)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBGetShowHideHotKey
+			move.w	#$0412,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBGetShowHideHotKey
+	ENDIF
+
+;
+; pascal OSErr SBSetShowHideHotKey(short modifiers, unsigned char keyCode)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBSetShowHideHotKey
+			move.w	#$0213,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBSetShowHideHotKey
+	ENDIF
+
+;
+; pascal OSErr SBIsShowHideHotKeyEnabled(Boolean *enabled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBIsShowHideHotKeyEnabled
+			move.w	#$0214,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBIsShowHideHotKeyEnabled
+	ENDIF
+
+;
+; pascal OSErr SBEnableShowHideHotKey(Boolean enabled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SBEnableShowHideHotKey
+			move.w	#$0115,d0
+			dc.w 	$AAF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SBEnableShowHideHotKey
+	ENDIF
+
+	ENDIF ; __CONTROLSTRIP__

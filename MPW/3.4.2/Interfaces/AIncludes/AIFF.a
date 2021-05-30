@@ -1,0 +1,225 @@
+;
+;	File:		AIFF.a
+;
+;	Contains:	Definition of AIFF file format components.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__AIFF__') = 'UNDEFINED' THEN
+__AIFF__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+AIFFID							EQU		'AIFF'
+AIFCID							EQU		'AIFC'
+FormatVersionID					EQU		'FVER'
+CommonID						EQU		'COMM'
+FORMID							EQU		'FORM'
+SoundDataID						EQU		'SSND'
+MarkerID						EQU		'MARK'
+InstrumentID					EQU		'INST'
+MIDIDataID						EQU		'MIDI'
+AudioRecordingID				EQU		'AESD'
+ApplicationSpecificID			EQU		'APPL'
+CommentID						EQU		'COMT'
+NameID							EQU		'NAME'
+AuthorID						EQU		'AUTH'
+CopyrightID						EQU		'(c) '
+AnnotationID					EQU		'ANNO'
+
+NoLooping						EQU		0
+ForwardLooping					EQU		1
+ForwardBackwardLooping			EQU		2
+; AIFF-C Versions 
+AIFCVersion1					EQU		$A2805140
+
+; Compression Types 
+NoneType						EQU		'NONE'
+ACE2Type						EQU		'ACE2'
+ACE8Type						EQU		'ACE8'
+MACE3Type						EQU		'MAC3'
+MACE6Type						EQU		'MAC6'
+
+; typedef unsigned long 	ID
+; typedef short 			MarkerIdType
+ChunkHeader 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ChunkHeader  ChunkHeader
+ContainerChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+formType				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct ContainerChunk  ContainerChunk
+FormatVersionChunk 		RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+timestamp				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct FormatVersionChunk  FormatVersionChunk
+; typedef FormatVersionChunk  *FormatVersionChunkPtr
+CommonChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+numChannels				 ds.w   1		; offset: $8 (8)
+numSampleFrames			 ds.l   1		; offset: $A (10)
+sampleSize				 ds.w   1		; offset: $E (14)
+sampleRate				 ds.w   5		; offset: $10 (16)
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct CommonChunk  CommonChunk
+; typedef CommonChunk 		*CommonChunkPtr
+ExtCommonChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+numChannels				 ds.w   1		; offset: $8 (8)
+numSampleFrames			 ds.l   1		; offset: $A (10)
+sampleSize				 ds.w   1		; offset: $E (14)
+sampleRate				 ds.w   5		; offset: $10 (16)
+compressionType			 ds.l   1		; offset: $1A (26)
+compressionName			 ds.b   1		; offset: $1E (30)		; variable length array, Pascal string 
+						 ORG 32
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct ExtCommonChunk  ExtCommonChunk
+; typedef ExtCommonChunk 	*ExtCommonChunkPtr
+SoundDataChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+offset					 ds.l   1		; offset: $8 (8)
+blockSize				 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct SoundDataChunk  SoundDataChunk
+; typedef SoundDataChunk 	*SoundDataChunkPtr
+Marker 					RECORD	0
+id						 ds.w   1		; offset: $0 (0)
+position				 ds.l   1		; offset: $2 (2)
+markerName				 ds.l   64		; offset: $6 (6)
+sizeof					 EQU *			; size:   $106 (262)
+						ENDR
+
+; typedef struct Marker 	Marker
+MarkerChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+numMarkers				 ds.w   1		; offset: $8 (8)
+Markers					 ds     Marker	; offset: $A (10)		; variable length array 
+sizeof					 EQU *			; size:   $110 (272)
+						ENDR
+
+; typedef struct MarkerChunk  MarkerChunk
+; typedef MarkerChunk 		*MarkerChunkPtr
+AIFFLoop 				RECORD	0
+playMode				 ds.w   1		; offset: $0 (0)
+beginLoop				 ds.w   1		; offset: $2 (2)
+endLoop					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct AIFFLoop 	AIFFLoop
+InstrumentChunk 		RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+baseFrequency			 ds.b   1		; offset: $8 (8)
+detune					 ds.b   1		; offset: $9 (9)
+lowFrequency			 ds.b   1		; offset: $A (10)
+highFrequency			 ds.b   1		; offset: $B (11)
+lowVelocity				 ds.b   1		; offset: $C (12)
+highVelocity			 ds.b   1		; offset: $D (13)
+gain					 ds.w   1		; offset: $E (14)
+sustainLoop				 ds     AIFFLoop ; offset: $10 (16)
+releaseLoop				 ds     AIFFLoop ; offset: $16 (22)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct InstrumentChunk  InstrumentChunk
+; typedef InstrumentChunk 	*InstrumentChunkPtr
+MIDIDataChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+MIDIdata				 ds.b   1		; offset: $8 (8)		; variable length array 
+						 ORG 10
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct MIDIDataChunk  MIDIDataChunk
+; typedef MIDIDataChunk 	*MIDIDataChunkPtr
+AudioRecordingChunk 	RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+AESChannelStatus		 ds.b   24		; offset: $8 (8)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct AudioRecordingChunk  AudioRecordingChunk
+; typedef AudioRecordingChunk  *AudioRecordingChunkPtr
+ApplicationSpecificChunk RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+applicationSignature	 ds.l   1		; offset: $8 (8)
+data					 ds.b   1		; offset: $C (12)		; variable length array 
+						 ORG 14
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct ApplicationSpecificChunk  ApplicationSpecificChunk
+; typedef ApplicationSpecificChunk  *ApplicationSpecificChunkPtr
+Comment 				RECORD	0
+timeStamp				 ds.l   1		; offset: $0 (0)
+marker					 ds.w   1		; offset: $4 (4)
+count					 ds.w   1		; offset: $6 (6)
+text					 ds.b   1		; offset: $8 (8)		; variable length array, Pascal string 
+						 ORG 10
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct Comment 	Comment
+CommentsChunk 			RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+numComments				 ds.w   1		; offset: $8 (8)
+comments				 ds     Comment	; offset: $A (10)		; variable length array 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct CommentsChunk  CommentsChunk
+; typedef CommentsChunk 	*CommentsChunkPtr
+TextChunk 				RECORD	0
+ckID					 ds.l   1		; offset: $0 (0)
+ckSize					 ds.l   1		; offset: $4 (4)
+text					 ds.b   1		; offset: $8 (8)		; variable length array, Pascal string 
+						 ORG 10
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct TextChunk 	TextChunk
+; typedef TextChunk 		*TextChunkPtr
+	ENDIF ; __AIFF__

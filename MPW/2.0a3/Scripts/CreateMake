@@ -1,0 +1,150 @@
+#	  CreateMake - create a program makefile
+#
+#	  Usage:
+#			 CreateMake [ -Application | -Tool | -DA ] program source…
+#
+#	  Script CreateMake creates a simple MakeFile for building the specified
+#	  program.	The program parameter is the name of the program.	Makefile
+#	  <program>.make is created.	The default program type is Application.
+#	  The program may be written in any combination of Assembly Language, C,
+#	  Pascal, and/or Rez.
+#
+#	  CreateMake links the program with the following set of MPW Libraries:
+#
+#			 Inside Macintosh Interfaces
+#					 {Libraries}Interface.o 	
+#		
+#			 Runtime support - one of the following:
+#					 {Libraries}Runtime.o			# no C object files
+#					 {CLibraries}CRuntime.o 		# any C object files
+#
+#			 C Libraries - if any source is in C
+#					 {CLibraries}StdCLib.o
+#					 {CLibraries}CSANELib.o
+#					 {CLibraries}Math.o
+#					 {CLibraries}CInterface.o
+#
+#			 Pascal Libraries - if any source is in Pascal
+#					 {PLibraries}PasLib.o
+#					 {PLibraries}SANELib.o
+#
+#			 For tools:
+#					 {Libraries}ToolLibs.o
+#
+#			 For desk accessories:
+#					 {Libraries}DRVRRuntime.o
+#
+#	  Copyright Apple Computer, Inc. 1987
+#	  All rights reserved.
+
+Set Exit 0
+Alias Tab 'Echo -n ∂t'
+Set CaseSensitive 0
+Set type Application
+Set options "-w -t 'APPL' -c '????'"
+Set runtime '{Libraries}Runtime.o'
+Set interface '{Libraries}Interface.o'
+Unset sources clibs plibs toollibs DRVRRuntime resource objects program suffix
+
+#	  Collect the script parameters.
+
+For i in {"Parameters"}
+	  If "{i}" =~ /-Application/
+	  Else If "{i}" =~ /-Tool/
+			 Set type Tool
+			 Set options '-w -t "MPST" -c "MPS "'
+			 Set toollibs '{Libraries}ToolLibs.o'
+	  Else If "{i}" =~ /-DA/
+			 Set type DA
+	  Else If "{i}" =~ /≈.[acpr]/
+			 Set sources "{sources}'{i}' "
+	  Else If "{program}" == ""
+			 Set program "{i}"
+	  Else If "{i}" =~ /-≈/
+			 Echo "### {0} - ∂"{i}∂" is not an option." > Dev:StdErr
+			 Echo "# Usage - {0} [ -Application | -Tool | -DA ] program source…" > Dev:StdErr
+			 Exit 1
+	  Else
+			 Echo "### {0} - Source files must end in .a, .c, .p or .r." > Dev:StdErr
+			 Echo "# Usage - {0} [ -Application | -Tool | -DA ] program source…" > Dev:StdErr
+			 Exit 1
+	  End
+End
+If "{program}" == ""
+	  Echo "### {0} - A program name is required." > Dev:StdErr
+	  Echo "# Usage - {0} [ -Application | -Tool | -DA ] program source…" > Dev:StdErr
+	  Exit 1
+End
+If "{sources}" == ""
+	  Echo "### {0} - A source file is required." > Dev:StdErr
+	  Echo "# Usage - {0} [ -Application | -Tool | -DA ] program source…" > Dev:StdErr
+	  Exit 1
+End
+
+#	  Create the heading at the top of the makefile.
+
+Begin
+	  Echo -n '#   File:       '; Quote "{program}".make
+	  Echo -n '#   Target:     '; Quote "{program}"
+	  Echo -n '#   Sources:    '; Quote  {sources}
+	  Echo -n '#   Created:    '; Date
+	  Echo
+
+#	  Generate Asm, C, Pascal, and Rez rules.
+
+	  For file in {sources}
+			 If "{file}" =~ /≈.a/
+					 Quote "{file}".o ƒ "{program}".make "{file}"
+					 Tab; Quote Asm "{file}"
+					 Set objects "{objects}'{file}.o' "
+			 Else If "{file}" =~ /≈.c/
+					 Quote "{file}".o ƒ "{program}".make "{file}"
+					 Tab; Quote C "{file}"
+					 Set objects "{objects}'{file}.o' "
+					 Set runtime '{CLibraries}CRuntime.o'
+					 Set clibs '{CLibraries}StdCLib.o {CLibraries}CSANELib.o ∂
+							{CLibraries}Math.o {CLibraries}CInterface.o'
+			 Else If "{file}" =~ /≈.p/
+					 Quote "{file}".o ƒ "{program}".make "{file}"
+					 Tab; Quote Pascal "{file}"
+					 Set objects "{objects}'{file}.o' "
+					 Set plibs '{PLibraries}PasLib.o {PLibraries}SANELib.o'
+			 Else If "{file}" =~ /(≈)®1.r/
+					 Set resource "{file}"
+					 If {type} == DA
+							Quote "{program}" ƒ "{program}".make "{program}".DRVW "{file}"
+							Tab; Quote Rez -rd -t DFIL -c DMOV "{file}" -o "{program}"
+							Set DRVRruntime '{Libraries}DRVRRuntime.o'
+					 Else
+							Quote "{program}" ƒƒ "{program}".make "{file}"
+							Tab; Quote Rez -append "{file}" -o "{program}"
+					 End
+			 End
+	  End
+
+#	  Generate Link rule.
+
+	  If {type} == DA AND "{resource}" == ""
+			 Quote "{program}" ƒ "{program}".make {objects}
+			 Set options '-w -da -t DFIL -c DMOV -rt DRVR=12 -sg "'"{program}"'"=Main,%A5Init,INTENV,SADEV,SACONSOL,STDIO,SANELib,CSANELib,ErrMgr'
+	  Else If {type} == DA
+			 Quote "{program}".DRVW ƒ "{program}".make {objects}
+			 Set options '-w -t DFIL -c DMOV -rt DRVW=0 -sg "'"{program}"'"=Main,%A5Init,INTENV,SADEV,SACONSOL,STDIO,SANELib,CSANELib,ErrMgr'
+			 Set suffix '.DRVW'
+	  Else
+			 Quote "{program}" ƒƒ "{program}".make {objects}
+	  End
+	  Tab; Quote -n Link {options} {DRVRRuntime}; Echo ' ∂'
+	  For i In {DRVRRuntime} {objects} {interface} {runtime} {clibs} {plibs} {toollibs}
+			 If "{i}" =~ /(≈)®1(∂{≈∂})®2(≈)®3/	 # contains {}s ?
+					 Tab; Tab; Echo "{®1}∂"{®2}∂"{®3}" ∂∂
+			 Else
+					 Tab; Tab; Quote -n "{i}"; Echo ' ∂'
+			 End
+	  End
+	  Tab; Tab; Quote -o "{program}{suffix}"
+End > "{program}".make
+
+#	  Update the Build menu
+
+BuildMenu "{program}"

@@ -1,0 +1,478 @@
+;
+;    File:       AVLTree.a
+;
+;    Contains:   Prototypes for routines which create, destroy, allow for
+;
+;    Version:    Technology: 
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__AVLTREE__') = 'UNDEFINED' THEN
+__AVLTREE__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+;  The visit stage for AVLWalk() walkProcs 
+
+; typedef UInt16						AVLVisitStage
+kAVLPreOrder					EQU		0
+kAVLInOrder						EQU		1
+kAVLPostOrder					EQU		2
+;  The order the tree is walked or disposed of. 
+
+; typedef UInt16						AVLOrder
+kLeftToRight					EQU		0
+kRightToLeft					EQU		1
+;  The type of the node being passed to a callback proc. 
+
+; typedef UInt16						AVLNodeType
+kAVLIsTree						EQU		0
+kAVLIsLeftBranch				EQU		1
+kAVLIsRightBranch				EQU		2
+kAVLIsLeaf						EQU		3
+kAVLNullNode					EQU		4
+
+errItemAlreadyInTree			EQU		-960
+errNotValidTree					EQU		-961
+errItemNotFoundInTree			EQU		-962
+errCanNotInsertWhileWalkProcInProgress EQU -963
+errTreeIsLocked					EQU		-964
+;   The structure of a tree.  It's opaque; don't assume it's 36 bytes in size.
+AVLTreeStruct			RECORD 0
+signature				 ds.l	1				; offset: $0 (0)
+privateStuff			 ds.l	8				; offset: $4 (4)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct AVLTreeStruct *		AVLTreePtr
+
+
+;    Every tree must have a function which compares the data for two items and returns < 0, 0, or >0
+;    for the items - < 0 if the first item is 'before' the second item according to some criteria,
+;    == 0 if the two items are identical according to the criteria, or > 0 if the first item is
+;    'after' the second item according to the criteria.  The comparison function is also passed the
+;    node type, but most of the time this can be ignored.
+
+
+
+;    Every tree must have a itemSizeProc; this routine gets passed a pointer to the item's data and
+;    returns the size of the data.  If a tree contains records of a fixed size, this function can
+;    just return sizeof( that-struct ); otherwise it should calculate the size of the item based on
+;    the data for the item.
+
+
+
+;    A tree may have an optional disposeItemProc, which gets called whenever an item is removed
+;    from the tree ( via AVLRemove() or when AVLDispose() deletes all of the items in the tree ).
+;    This might be useful if the nodes in the tree own 'resources'  ( like, open files ) which
+;    should be released before the item is removed.
+
+
+
+;    The common way to iterate across all of the items in a tree is via AVLWalk(), which takes
+;    a walkProcPtr.  This function will get called for every item in the tree three times, as
+;    the tree is being walked across.  First, the walkProc will get called with visitStage ==
+;    kAVLPreOrder, at which point internally the node of the tree for the given data has just
+;    been reached.  Later, this function will get called with visitStage == kAVLInOrder, and
+;    lastly this function will get called with visitStage == kAVLPostOrder.
+;    The 'minimum' item in the tree will get called with visitStage == kInOrder first, followed
+;    by the 'next' item in the tree, up until the last item in the tree structure is called.
+;    In general, you'll only care about calls to this function when visitStage == kAVLInOrder.
+
+
+
+; *  NewAVLCompareItemsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewAVLItemSizeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewAVLDisposeItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewAVLWalkUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeAVLCompareItemsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeAVLItemSizeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeAVLDisposeItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeAVLWalkUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeAVLCompareItemsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeAVLItemSizeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeAVLDisposeItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeAVLWalkUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;    Create an AVL tree.  The compareItemsProc and the sizeItemProc are required; disposeItemProc is
+;    optional and can be nil.  The refCon is stored with the list, and is passed back to the
+;    compareItemsProc, sizeItemProc, and disposeItemsProc calls.  The allocation of the tree ( and all
+;    nodes later added to the list with AVLInsert ) will be created in what is the current zone at the
+;    time AVLInit() is called.  Always call AVLDispose() to dispose of a list created with AVLInit().
+
+
+
+; *  AVLInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLInit(UInt32 flags, AVLCompareItemsUPP compareItemsProc, AVLItemSizeUPP sizeItemProc, AVLDisposeItemUPP disposeItemProc, void *refCon, AVLTreePtr *tree)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLInit
+			move.w              #$0C01,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLInit
+	ENDIF
+
+
+;    Dispose of an AVL tree.  This will dispose of each item in the tree in the order specified,
+;    call the tree's disposeProc proc for each item, and then dispose of the space allocated for
+;    the tree itself.
+
+
+
+; *  AVLDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLDispose(AVLTreePtr *tree, AVLOrder order)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLDispose
+			move.w              #$0302,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLDispose
+	ENDIF
+
+
+;    Iterate across all of the items in the tree, in the order specified.  kLeftToRight is
+;    basically lowest-to-highest order, kRightToLeft is highest-to-lowest order.  For each
+;    node in the tree, it will call the walkProc with three messages ( at the appropriate 
+;    time ).  First, with kAVLPreOrder when the walking gets to this node in the tree,
+;    before handling either the left or right subtree, secondly, with kAVLInOrder after
+;    handling one subtree but before handling the other, and lastly with kAVLPostOrder after
+;    handling both subtrees.  If you want to handle items in order, then only do something
+;    if the visit stage is kAVLInOrder.  You can only call AVLRemove() from inside a walkProc
+;    if visit stage is kAVLPostOrder ( because if you remove a node during the pre or in order
+;    stages you will corrupt the list ) OR if you return a non-zero result from the walkProc
+;    call which called AVLRemove() to immediately terminate the walkProc.  Do not call AVLInsert()
+;    to insert a node into the tree from inside a walkProc.
+;    The walkProc function gets called with the AVLTreePtr, a pointer to the data for the
+;    current node ( which you can change in place as long as you do not affect the order within
+;    the tree ), the visit stage, the type of the current node ( leaf node, right or left branch,
+;    or full tree ), the level within the tree ( the root is level 1 ), the balance for the
+;    current node, and the refCon passed to AVLWalk().  This refCon is different from the one passed
+;    into AVLInit(); use AVLGetRefCon() to get that refCon if you want it inside a walkProc.
+;    ( Most walkProcs will not care about the values for node type, level, or balance. )
+
+
+
+; *  AVLWalk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLWalk(AVLTreePtr tree, AVLWalkUPP walkProc, AVLOrder order, void *walkRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLWalk
+			move.w              #$0703,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLWalk
+	ENDIF
+
+;   Return  the number of items in the given tree.
+
+; *  AVLCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLCount(AVLTreePtr tree, UInt32 *count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLCount
+			move.w              #$0804,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLCount
+	ENDIF
+
+
+;    Return the one-based index-th item from the tree by putting it's data at dataPtr
+;    if dataPtr is non-nil, and it's size into *itemSize if itemSize is non-nil.
+;    If index is out of range, return errItemNotFoundInTree.  ( Internally, this does
+;    an AVLWalk(), so the tree can not be modified while this call is in progress ).
+
+
+
+; *  AVLGetIndItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLGetIndItem(AVLTreePtr tree, UInt32 index, void *dataPtr, UInt32 *itemSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLGetIndItem
+			move.w              #$0805,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLGetIndItem
+	ENDIF
+
+
+;    Insert the given item into the tree.  This will call the tree's sizeItemProc
+;    to determine how big the item at data is, and then will make a copy of the
+;    item and insert it into the tree in the appropriate place.  If an item already
+;    exists in the tree with the same key ( so that the compareItemsUPP returns 0
+;    when asked to compare this item to an existing one ), then it will return
+;    errItemNotFoundInTree.
+
+
+
+; *  AVLInsert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLInsert(AVLTreePtr tree, const void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLInsert
+			move.w              #$0406,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLInsert
+	ENDIF
+
+
+;    Remove any item from the tree with the given key.  If dataPtr != nil, then
+;    copy the item's data to dataPtr before removing it from the tree.  Before
+;    removing the item, call the tree's disposeItemProc to let it release anything
+;    used by the data in the tree.  It is not necessary to fill in a complete
+;    record for key, only that the compareItemsProc return 0 when asked to compare
+;    the data at key with the node in the tree to be deleted.  If the item cannot
+;    be found in the tree, this will return errItemNotFoundInTree.
+
+
+
+; *  AVLRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLRemove(AVLTreePtr tree, const void *key, void *dataPtr, UInt32 *itemSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLRemove
+			move.w              #$0807,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLRemove
+	ENDIF
+
+
+;    Find the item in the tree with the given key, and return it's data in
+;    dataPtr ( if dataPtr != nil ), and it's size in *itemSize ( if itemSize
+;    != nil ).  It is not necessary to fill in a complete record for key,
+;    only that the compareItemsProc return 0 when asked to compare the data
+;    at key with the node in the tree to be deleted.  If the item cannot
+;    be found in the tree, this will return errItemNotFoundInTree.
+
+
+
+; *  AVLFind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLFind(AVLTreePtr tree, const void *key, void *dataPtr, UInt32 *itemSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLFind
+			move.w              #$0808,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLFind
+	ENDIF
+
+
+;    Get the refCon for the given tree ( set in AVLInit ) and return it.
+;    If the given tree is invalid, then return nil.
+
+
+
+; *  AVLGetRefcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr AVLGetRefcon(AVLTreePtr tree, void **refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AVLGetRefcon
+			move.w              #$0409,D0
+			dc.w            	$AA80
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AVLGetRefcon
+	ENDIF
+
+	ENDIF ; __AVLTREE__ 
+

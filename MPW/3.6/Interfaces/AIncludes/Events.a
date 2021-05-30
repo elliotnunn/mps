@@ -1,0 +1,948 @@
+;
+;    File:       Events.a
+;
+;    Contains:   Event Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+__EVENTS__ SET 1
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF ¬ TARGET_OS_MAC ++ ¬ TARGET_API_MAC_OS8 THEN
+	IF &TYPE('__ENDIAN__') = 'UNDEFINED' THEN
+	include 'Endian.a'
+	ENDIF
+	ENDIF
+; typedef UInt16 						EventKind
+
+; typedef UInt16 						EventMask
+
+
+nullEvent						EQU		0
+mouseDown						EQU		1
+mouseUp							EQU		2
+keyDown							EQU		3
+keyUp							EQU		4
+autoKey							EQU		5
+updateEvt						EQU		6
+diskEvt							EQU		7
+activateEvt						EQU		8
+osEvt							EQU		15
+kHighLevelEvent					EQU		23
+
+mDownMask						EQU		$02					; mouse button pressed
+mUpMask							EQU		$04					; mouse button released
+keyDownMask						EQU		$08					; key pressed
+keyUpMask						EQU		$10					; key released
+autoKeyMask						EQU		$20					; key repeatedly held down
+updateMask						EQU		$40					; window needs updating
+diskMask						EQU		$80					; disk inserted
+activMask						EQU		$0100				; activate/deactivate window
+highLevelEventMask				EQU		$0400				; high-level events (includes AppleEvents)
+osMask							EQU		$8000				; operating system events (suspend, resume)
+everyEvent						EQU		$FFFF				; all of the above
+
+charCodeMask					EQU		$000000FF
+keyCodeMask						EQU		$0000FF00
+adbAddrMask						EQU		$00FF0000
+osEvtMessageMask				EQU		$FF000000
+
+															; OS event messages.  Event (sub)code is in the high byte of the message field.
+mouseMovedMessage				EQU		$00FA
+suspendResumeMessage			EQU		$0001
+
+resumeFlag						EQU		1					; Bit 0 of message indicates resume vs suspend
+	IF CALL_NOT_IN_CARBON THEN
+;   convertClipboardFlag is not ever set under Carbon. This is because scrap conversion is  
+;   not tied to suspend/resume events any longer. Your application should instead use the   
+;   scrap promise mechanism and fulfill scrap requests only when your promise keeper proc   
+;   is called. If you need to know if the scrap has changed, you can cache the last         
+;   ScrapRef you received and compare it with the current ScrapRef                          
+
+convertClipboardFlag			EQU		2					; Bit 1 in resume message indicates clipboard change
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef UInt16 						EventModifiers
+
+
+															; modifiers 
+activeFlagBit					EQU		0					; activate? (activateEvt and mouseDown)
+btnStateBit						EQU		7					; state of button?
+cmdKeyBit						EQU		8					; command key down?
+shiftKeyBit						EQU		9					; shift key down?
+alphaLockBit					EQU		10					; alpha lock down?
+optionKeyBit					EQU		11					; option key down?
+controlKeyBit					EQU		12					; control key down?
+rightShiftKeyBit				EQU		13					; right shift key down?
+rightOptionKeyBit				EQU		14					; right Option key down?
+rightControlKeyBit				EQU		15					; right Control key down?
+
+activeFlag						EQU		$01
+btnState						EQU		$80
+cmdKey							EQU		$0100
+shiftKey						EQU		$0200
+alphaLock						EQU		$0400
+optionKey						EQU		$0800
+controlKey						EQU		$1000
+rightShiftKey					EQU		$2000
+rightOptionKey					EQU		$4000
+rightControlKey					EQU		$8000
+
+kNullCharCode					EQU		0
+kHomeCharCode					EQU		1
+kEnterCharCode					EQU		3
+kEndCharCode					EQU		4
+kHelpCharCode					EQU		5
+kBellCharCode					EQU		7
+kBackspaceCharCode				EQU		8
+kTabCharCode					EQU		9
+kLineFeedCharCode				EQU		10
+kVerticalTabCharCode			EQU		11
+kPageUpCharCode					EQU		11
+kFormFeedCharCode				EQU		12
+kPageDownCharCode				EQU		12
+kReturnCharCode					EQU		13
+kFunctionKeyCharCode			EQU		16
+kEscapeCharCode					EQU		27
+kClearCharCode					EQU		27
+kLeftArrowCharCode				EQU		28
+kRightArrowCharCode				EQU		29
+kUpArrowCharCode				EQU		30
+kDownArrowCharCode				EQU		31
+kDeleteCharCode					EQU		127
+kNonBreakingSpaceCharCode		EQU		202
+EventRecord				RECORD 0
+what					 ds.w	1				; offset: $0 (0)
+message					 ds.l	1				; offset: $2 (2)
+when					 ds.l	1				; offset: $6 (6)
+where					 ds		Point			; offset: $A (10)
+modifiers				 ds.w	1				; offset: $E (14)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewFKEYUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeFKEYUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeFKEYUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  GetMouse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetMouse(Point *mouseLoc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMouse:	OPWORD	$A972
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMouse
+	ENDIF
+
+
+; *  Button()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean Button(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_Button:	OPWORD	$A974
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Button
+	ENDIF
+
+
+; *  StillDown()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean StillDown(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_StillDown:	OPWORD	$A973
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StillDown
+	ENDIF
+
+
+; *  WaitMouseUp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean WaitMouseUp(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_WaitMouseUp:	OPWORD	$A977
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION WaitMouseUp
+	ENDIF
+
+
+; *  KeyTranslate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 KeyTranslate(const void *transData, UInt16 keycode, UInt32 *state)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_KeyTranslate:	OPWORD	$A9C3
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KeyTranslate
+	ENDIF
+
+
+; *  GetCaretTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 GetCaretTime(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetCaretTime         &dest=(sp)
+			move.l            $02F4,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCaretTime
+	ENDIF
+
+
+KeyMap					RECORD 0
+map						 ds.b	16				; offset: $0 (0)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+; *  GetKeys()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetKeys(KeyMap theKeys)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetKeys:	OPWORD	$A976
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetKeys
+	ENDIF
+
+;  Obsolete event types & masks 
+
+networkEvt						EQU		10
+driverEvt						EQU		11
+app1Evt							EQU		12
+app2Evt							EQU		13
+app3Evt							EQU		14
+app4Evt							EQU		15
+networkMask						EQU		$0400
+driverMask						EQU		$0800
+app1Mask						EQU		$1000
+app2Mask						EQU		$2000
+app3Mask						EQU		$4000
+app4Mask						EQU		$8000
+EvQEl					RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)
+qType					 ds.w	1				; offset: $4 (4)
+evtQWhat				 ds.w	1				; offset: $6 (6)		;  this part is identical to the EventRecord as defined above 
+evtQMessage				 ds.l	1				; offset: $8 (8)
+evtQWhen				 ds.l	1				; offset: $C (12)
+evtQWhere				 ds		Point			; offset: $10 (16)
+evtQModifiers			 ds.w	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+; typedef struct EvQEl *				EvQElPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewGetNextEventFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeGetNextEventFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeGetNextEventFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef GetNextEventFilterUPP 		GNEFilterUPP
+
+
+; *  GetDblTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 GetDblTime(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDblTime           &dest=(sp)
+			move.l            $02F0,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDblTime
+	ENDIF
+
+
+; *  SetEventMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetEventMask(EventMask value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetEventMask         &src=(sp)+
+			move.w            &src,$0144
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetEventMask
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetEvQHdr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal QHdrPtr GetEvQHdr(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetEvQHdr            &dest=(sp)
+			move.l            #$0000014A,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetEvQHdr
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PPostEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PPostEvent(EventKind eventCode, UInt32 eventMsg, EvQElPtr *qEl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_PPostEvent:	OPWORD	$A12F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PPostEvent
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  GetNextEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean GetNextEvent(EventMask eventMask, EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetNextEvent:	OPWORD	$A970
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNextEvent
+	ENDIF
+
+
+; *  WaitNextEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean WaitNextEvent(EventMask eventMask, EventRecord *theEvent, UInt32 sleep, RgnHandle mouseRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_WaitNextEvent:	OPWORD	$A860
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION WaitNextEvent
+	ENDIF
+
+
+; *  EventAvail()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean EventAvail(EventMask eventMask, EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_EventAvail:	OPWORD	$A971
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EventAvail
+	ENDIF
+
+
+; *  PostEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PostEvent(EventKind eventNum, UInt32 eventMsg)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	eventNum        => A0
+		;	eventMsg        => D0
+		; returns:
+		;	OSErr           <= D0
+		_PostEvent:	OPWORD	$A02F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PostEvent
+	ENDIF
+
+
+;    For Carbon, use EventAvail, TickCount, GetGlobalMouse,
+;    GetKeys, or GetCurrentKeyModifiers instead of
+;    OSEventAvail, and use GetNextEvent or WaitNextEvent
+;    instead of GetOSEvent.
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OSEventAvail()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OSEventAvail(EventMask mask, EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_OSEventAvail:	OPWORD	$A030
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OSEventAvail
+	ENDIF
+
+
+; *  GetOSEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean GetOSEvent(EventMask mask, EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetOSEvent:	OPWORD	$A031
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetOSEvent
+	ENDIF
+
+
+; *  FlushEvents()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void FlushEvents(EventMask whichMask, EventMask stopMask)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FlushEvents:	OPWORD	$A032
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FlushEvents
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SystemClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SystemClick(const EventRecord *theEvent, WindowRef theWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SystemClick:	OPWORD	$A9B3
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SystemClick
+	ENDIF
+
+
+; *  SystemTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SystemTask(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SystemTask:	OPWORD	$A9B4
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SystemTask
+	ENDIF
+
+
+; *  SystemEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean SystemEvent(const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SystemEvent:	OPWORD	$A9B2
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SystemEvent
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+
+;    GetGlobalMouse, GetCurrentKeyModifiers, and CheckEventQueueForUserCancel
+;    are only available as part of the Carbon API.
+
+
+
+
+; *  GetGlobalMouse()
+; *  
+; *  Summary:
+; *    Returns the position of the mouse in global coordinates.
+; *  
+; *  Parameters:
+; *    
+; *    globalMouse:
+; *      On exit, contains the mouse position in global coordinates.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetGlobalMouse(Point *globalMouse)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetGlobalMouse
+	ENDIF
+
+
+; *  GetCurrentKeyModifiers()
+; *  
+; *  Summary:
+; *    Returns the current state of the keyboard modifier keys.
+; *  
+; *  Discussion:
+; *    The format of the return value is the same as the modifiers field
+; *    of the EventRecord.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 GetCurrentKeyModifiers(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCurrentKeyModifiers
+	ENDIF
+
+
+; *  CheckEventQueueForUserCancel()
+; *  
+; *  Summary:
+; *    Determines if there is a cancel event in the event queue.
+; *  
+; *  Discussion:
+; *    This API supports two cancel events: Escape and Cmd-Period. Mouse
+; *    or keyboard events in front of the cancel event in the event
+; *    queue will be removed.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean CheckEventQueueForUserCancel(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CheckEventQueueForUserCancel
+	ENDIF
+
+
+
+;    The core data structure for the Carbon event system. It is declared here instead of
+;    in CarbonEvents.h to avoid recursive include problems.
+
+
+
+
+
+; *  KeyScript()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void KeyScript(short code)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_KeyScript
+			move.l              #$80020004,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KeyScript
+	ENDIF
+
+
+; *  IsCmdChar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsCmdChar(const EventRecord *event, short test)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IsCmdChar
+			move.l              #$8206FFD0,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsCmdChar
+	ENDIF
+
+
+;  
+;    LowMem accessor functions previously in LowMem.h
+;
+
+
+; *  LMGetKeyThresh()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 LMGetKeyThresh(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetKeyThresh       &dest=(sp)
+			move.w            $018E,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetKeyThresh
+	ENDIF
+
+
+; *  LMSetKeyThresh()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LMSetKeyThresh(SInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMSetKeyThresh       &src=(sp)+
+			move.w            &src,$018E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMSetKeyThresh
+	ENDIF
+
+
+
+; *  LMGetKeyRepThresh()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 LMGetKeyRepThresh(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetKeyRepThresh    &dest=(sp)
+			move.w            $0190,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetKeyRepThresh
+	ENDIF
+
+
+; *  LMSetKeyRepThresh()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LMSetKeyRepThresh(SInt16 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMSetKeyRepThresh    &src=(sp)+
+			move.w            &src,$0190
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMSetKeyRepThresh
+	ENDIF
+
+
+; *  LMGetKbdLast()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 LMGetKbdLast(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetKbdLast         &dest=(sp)
+			move.b            $0218,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetKbdLast
+	ENDIF
+
+
+; *  LMSetKbdLast()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LMSetKbdLast(UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMSetKbdLast         &src=(sp)+
+			move.b            &src,$0218
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMSetKbdLast
+	ENDIF
+
+
+
+; *  LMGetKbdType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 LMGetKbdType(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetKbdType         &dest=(sp)
+			move.b            $021E,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetKbdType
+	ENDIF
+
+
+; *  LMSetKbdType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LMSetKbdType(UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMSetKbdType         &src=(sp)+
+			move.b            &src,$021E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMSetKbdType
+	ENDIF
+
+	ENDIF ; __EVENTS__ 
+

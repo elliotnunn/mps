@@ -1,0 +1,237 @@
+;
+;    File:       NumberFormatting.a
+;
+;    Contains:   Utilites for formatting numbers
+;
+;    Version:    Technology: 
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__NUMBERFORMATTING__') = 'UNDEFINED' THEN
+__NUMBERFORMATTING__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__INTLRESOURCES__') = 'UNDEFINED' THEN
+	include 'IntlResources.a'
+	ENDIF
+
+
+; 
+;
+;    Here are the current System 7 routine names and the translations to the older forms.
+;    Please use the newer forms in all new code and migrate the older names out of existing
+;    code as maintainance permits.
+;    
+;    New Name                    Old Name(s)
+;    
+;    ExtendedToString            FormatX2Str
+;    FormatRecToString           Format2Str
+;    NumToString             
+;    StringToExtended            FormatStr2X
+;    StringToFormatRec           Str2Format
+;    StringToNum             
+;
+;
+
+NumFormatString			RECORD 0
+fLength					 ds.b	1				; offset: $0 (0)
+fVersion				 ds.b	1				; offset: $1 (1)
+data					 ds.b	254				; offset: $2 (2)		;  private data 
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+NumFormatStringRec		RECORD 0
+f						 ds		NumFormatString
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+
+
+; typedef short 						FormatStatus
+
+
+fVNumber						EQU		0					; first version of NumFormatString 
+; typedef SInt8 						FormatClass
+
+
+fPositive						EQU		0
+fNegative						EQU		1
+fZero							EQU		2
+; typedef SInt8 						FormatResultType
+
+
+fFormatOK						EQU		0
+fBestGuess						EQU		1
+fOutOfSynch						EQU		2
+fSpuriousChars					EQU		3
+fMissingDelimiter				EQU		4
+fExtraDecimal					EQU		5
+fMissingLiteral					EQU		6
+fExtraExp						EQU		7
+fFormatOverflow					EQU		8
+fFormStrIsNAN					EQU		9
+fBadPartsTable					EQU		10
+fExtraPercent					EQU		11
+fExtraSeparator					EQU		12
+fEmptyFormatString				EQU		13
+FVector					RECORD 0
+start					 ds.w	1				; offset: $0 (0)
+length					 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  index by [fPositive..fZero] 
+TripleInt				RECORD 0
+elements				 ds.b	3 * FVector.sizeof
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  StringToNum()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void StringToNum(ConstStr255Param theString, long *theNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StringToNum
+			move.w              #$0001,-(sp)
+			dc.w            	$A9EE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringToNum
+	ENDIF
+
+
+; *  NumToString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void NumToString(long theNum, Str255 theString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NumToString
+			move.w              #$0000,-(sp)
+			dc.w            	$A9EE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NumToString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  ExtendedToString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal FormatStatus ExtendedToString(const extended80 *x, const NumFormatString *myCanonical, const NumberParts *partsTable, Str255 outString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ExtendedToString
+			move.l              #$8210FFE8,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ExtendedToString
+	ENDIF
+
+
+; *  StringToExtended()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal FormatStatus StringToExtended(ConstStr255Param source, const NumFormatString *myCanonical, const NumberParts *partsTable, extended80 *x)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StringToExtended
+			move.l              #$8210FFE6,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringToExtended
+	ENDIF
+
+
+; *  StringToFormatRec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal FormatStatus StringToFormatRec(ConstStr255Param inString, const NumberParts *partsTable, NumFormatString *outString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StringToFormatRec
+			move.l              #$820CFFEC,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StringToFormatRec
+	ENDIF
+
+
+; *  FormatRecToString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal FormatStatus FormatRecToString(const NumFormatString *myCanonical, const NumberParts *partsTable, Str255 outString, TripleInt positions)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FormatRecToString
+			move.l              #$8210FFEA,-(sp)
+			dc.w            	$A8B5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FormatRecToString
+	ENDIF
+
+
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+	ENDIF ; __NUMBERFORMATTING__ 
+

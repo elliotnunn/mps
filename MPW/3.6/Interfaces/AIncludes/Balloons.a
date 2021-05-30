@@ -1,0 +1,655 @@
+;
+;    File:       Balloons.a
+;
+;    Contains:   Balloon Help Package Interfaces.
+;
+;    Version:    Technology: System 7.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__BALLOONS__') = 'UNDEFINED' THEN
+__BALLOONS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+
+;   Carbon clients should use MacHelp. The definitions below will NOT work for Carbon and
+;   are only defined for those files that need to build pre-Carbon applications.
+
+
+;  • constants
+
+
+; typedef SInt16						BalloonVariant
+kTopLeftTipPointsLeftVariant	EQU		0
+kTopLeftTipPointsUpVariant		EQU		1
+kTopRightTipPointsUpVariant		EQU		2
+kTopRightTipPointsRightVariant	EQU		3
+kBottomRightTipPointsRightVariant EQU	4
+kBottomRightTipPointsDownVariant EQU	5
+kBottomLeftTipPointsDownVariant	EQU		6
+kBottomLeftTipPointsLeftVariant	EQU		7
+kBalloonVariantCount			EQU		8
+
+
+hmBalloonHelpVersion			EQU		$0002				; The real version of the Help Manager 
+
+kHMHelpMenuID					EQU		-16490				; Resource ID and menu ID of help menu 
+kHMAboutHelpItem				EQU		1					; help menu item number of About Balloon Help… 
+kHMShowBalloonsItem				EQU		3					; help menu item number of Show/Hide Balloons 
+
+kHMHelpID						EQU		-5696				; ID of various Help Mgr package resources (in Pack14 range) 
+kBalloonWDEFID					EQU		126					; Resource ID of the WDEF proc used in standard balloons 
+
+															; Dialog item template type constant 
+helpItem						EQU		1					; key value in DITL template that corresponds to the help item 
+
+															; Options for Help Manager resources in 'hmnu', 'hdlg', 'hrct', 'hovr', & 'hfdr' resources 
+hmDefaultOptions				EQU		0					; default options for help manager resources 
+hmUseSubIDBit					EQU		0
+hmAbsoluteCoordsBit				EQU		1
+hmSaveBitsNoWindowBit			EQU		2
+hmSaveBitsWindowBit				EQU		3
+hmMatchInTitleBit				EQU		4
+hmUseSubIDMask					EQU		$01					; treat resID's in resources as subID's of driver base ID (for Desk Accessories) 
+hmAbsoluteCoordsMask			EQU		$02					; ignore window port origin and treat rectangles as absolute coords (local to window) 
+hmSaveBitsNoWindowMask			EQU		$04					; don't create a window, just blast bits on screen. No update event is generated 
+hmSaveBitsWindowMask			EQU		$08					; create a window, but restore bits behind window when window goes away & generate update event 
+hmMatchInTitleMask				EQU		$10					; for hwin resources, match string anywhere in window title string 
+	IF OLDROUTINENAMES THEN
+
+hmUseSubID						EQU		$01
+hmAbsoluteCoords				EQU		$02
+hmSaveBitsNoWindow				EQU		$04
+hmSaveBitsWindow				EQU		$08
+hmMatchInTitle					EQU		$10
+	ENDIF	; OLDROUTINENAMES
+
+															; Constants for Help Types in 'hmnu', 'hdlg', 'hrct', 'hovr', & 'hfdr' resources 
+kHMStringItem					EQU		1					; pstring used in resource 
+kHMPictItem						EQU		2					; 'PICT' ResID used in resource 
+kHMStringResItem				EQU		3					; 'STR#' ResID & index used in resource 
+kHMTEResItem					EQU		6					; Styled Text Edit ResID used in resource ('TEXT' & 'styl') 
+kHMSTRResItem					EQU		7					; 'STR ' ResID used in resource 
+kHMSkipItem						EQU		256					; don't display a balloon 
+kHMCompareItem					EQU		512					; Compare pstring in menu item w/ PString in resource item ('hmnu' only) 
+kHMNamedResourceItem			EQU		1024				; Use pstring in menu item to get 'STR#', 'PICT', or 'STR ' resource ('hmnu' only) 
+kHMTrackCntlItem				EQU		2048				; Reserved 
+
+															; Constants for hmmHelpType's when filling out HMMessageRecord 
+khmmString						EQU		1					; help message contains a PString 
+khmmPict						EQU		2					; help message contains a resource ID to a 'PICT' resource 
+khmmStringRes					EQU		3					; help message contains a res ID & index to a 'STR#' resource 
+khmmTEHandle					EQU		4					; help message contains a Text Edit handle 
+khmmPictHandle					EQU		5					; help message contains a Picture handle 
+khmmTERes						EQU		6					; help message contains a res ID to 'TEXT' & 'styl' resources 
+khmmSTRRes						EQU		7					; help message contains a res ID to a 'STR ' resource 
+kHMEnabledItem					EQU		0					; item is enabled, but not checked or control value = 0 
+
+															; ResTypes for Styled TE Handles in Resources 
+kHMTETextResType				EQU		'TEXT'				; Resource Type of text data for styled TE record w/o style info 
+kHMTEStyleResType				EQU		'styl'				; Resource Type of style information for styled TE record 
+
+kHMDisabledItem					EQU		1					; item is disabled, grayed in menus or disabled in dialogs 
+kHMCheckedItem					EQU		2					; item is enabled, and checked or control value = 1 
+kHMOtherItem					EQU		3					; item is enabled, and control value > 1 
+															; Method parameters to pass to HMShowBalloon 
+kHMRegularWindow				EQU		0					; Create a regular window floating above all windows 
+kHMSaveBitsNoWindow				EQU		1					; Just save the bits and draw (for MDEF calls) 
+kHMSaveBitsWindow				EQU		2					; Regular window, save bits behind, AND generate update event 
+
+															; Resource Types for whichType parameter used when extracting 'hmnu' & 'hdlg' messages 
+kHMMenuResType					EQU		'hmnu'				; ResType of help resource for supporting menus 
+kHMDialogResType				EQU		'hdlg'				; ResType of help resource for supporting dialogs 
+kHMWindListResType				EQU		'hwin'				; ResType of help resource for supporting windows 
+kHMRectListResType				EQU		'hrct'				; ResType of help resource for rectangles in windows 
+kHMOverrideResType				EQU		'hovr'				; ResType of help resource for overriding system balloons 
+kHMFinderApplResType			EQU		'hfdr'				; ResType of help resource for custom balloon in Finder 
+HMStringResType			RECORD 0
+hmmResID				 ds.w	1				; offset: $0 (0)
+hmmIndex				 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+HMMessageRecord			RECORD 0
+hmmHelpType				 ds.w	1				; offset: $0 (0)
+hmmString				 ds		Str255			; offset: $2 (2)
+						 ORG 2
+hmmPict					 ds.w	1				; offset: $2 (2)
+						 ORG 2
+hmmTEHandle				 ds.l	1				; offset: $2 (2)
+						 ORG 2
+hmmStringRes			 ds		HMStringResType ; offset: $2 (2)
+						 ORG 2
+hmmPictRes				 ds.w	1				; offset: $2 (2)
+						 ORG 2
+hmmPictHandle			 ds.l	1				; offset: $2 (2)
+						 ORG 2
+hmmTERes				 ds.w	1				; offset: $2 (2)
+						 ORG 2
+hmmSTRRes				 ds.w	1				; offset: $2 (2)
+						 ORG 258
+sizeof					 EQU *					; size:   $102 (258)
+						ENDR
+; typedef struct HMMessageRecord *		HMMessageRecPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewTipFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTipFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTipFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;   Public Interfaces  
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  HMGetHelpMenuHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetHelpMenuHandle(MenuRef *mh)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetHelpMenuHandle
+			move.w              #$0200,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetHelpMenuHandle
+	ENDIF
+
+
+; *  HMShowBalloon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMShowBalloon(const HMMessageRecord *inHelpMessage, Point inTip, Rect *inHotRect, TipFunctionUPP inTipProc, SInt16 inWindowProcID, BalloonVariant inBalloonVariant, SInt16 inMethod)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMShowBalloon
+			move.w              #$0B01,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMShowBalloon
+	ENDIF
+
+
+; *  HMShowMenuBalloon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMShowMenuBalloon(SInt16 itemNum, SInt16 itemMenuID, SInt32 itemFlags, SInt32 itemReserved, Point tip, Rect *alternateRect, TipFunctionUPP tipProc, SInt16 theProc, BalloonVariant balloonVariant)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMShowMenuBalloon
+			move.w              #$0E05,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMShowMenuBalloon
+	ENDIF
+
+
+; *  HMRemoveBalloon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMRemoveBalloon(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMRemoveBalloon
+			move.w              #$0002,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMRemoveBalloon
+	ENDIF
+
+
+; *  HMGetIndHelpMsg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetIndHelpMsg(ResType inWhichResType, SInt16 inWhichResID, SInt16 inMessageIndex, SInt16 inMessageState, UInt32 *outOptions, Point *outTip, Rect *outHotRect, SInt16 *outWindowProcID, BalloonVariant *outBalloonVariant, HMMessageRecord *outHelpMessage, SInt16 *outMessageCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetIndHelpMsg
+			move.w              #$1306,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetIndHelpMsg
+	ENDIF
+
+
+; *  HMIsBalloon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean HMIsBalloon(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMIsBalloon
+			move.w              #$0007,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMIsBalloon
+	ENDIF
+
+
+; *  HMGetBalloons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean HMGetBalloons(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetBalloons
+			move.w              #$0003,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetBalloons
+	ENDIF
+
+
+; *  HMSetBalloons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMSetBalloons(Boolean flag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMSetBalloons
+			move.w              #$0104,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetBalloons
+	ENDIF
+
+
+; *  HMSetFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMSetFont(SInt16 font)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMSetFont
+			move.w              #$0108,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetFont
+	ENDIF
+
+
+; *  HMSetFontSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMSetFontSize(UInt16 fontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMSetFontSize
+			move.w              #$0109,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetFontSize
+	ENDIF
+
+
+; *  HMGetFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetFont(SInt16 *font)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetFont
+			move.w              #$020A,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetFont
+	ENDIF
+
+
+; *  HMGetFontSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetFontSize(UInt16 *fontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetFontSize
+			move.w              #$020B,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetFontSize
+	ENDIF
+
+
+; *  HMSetDialogResID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMSetDialogResID(SInt16 resID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMSetDialogResID
+			move.w              #$010C,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetDialogResID
+	ENDIF
+
+
+; *  HMSetMenuResID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMSetMenuResID(SInt16 menuID, SInt16 resID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMSetMenuResID
+			move.w              #$020D,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMSetMenuResID
+	ENDIF
+
+
+; *  HMBalloonRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMBalloonRect(const HMMessageRecord *inMessage, Rect *outRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMBalloonRect
+			move.w              #$040E,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMBalloonRect
+	ENDIF
+
+
+; *  HMBalloonPict()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMBalloonPict(const HMMessageRecord *inMessage, PicHandle *outPict)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMBalloonPict
+			move.w              #$040F,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMBalloonPict
+	ENDIF
+
+
+; *  HMScanTemplateItems()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMScanTemplateItems(SInt16 whichID, SInt16 whichResFile, ResType whichType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMScanTemplateItems
+			move.w              #$0410,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMScanTemplateItems
+	ENDIF
+
+
+; *  HMExtractHelpMsg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMExtractHelpMsg(ResType inType, SInt16 inResID, SInt16 inMessageIndex, SInt16 inMessageState, HMMessageRecord *outMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMExtractHelpMsg
+			move.w              #$0711,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMExtractHelpMsg
+	ENDIF
+
+
+; *  HMGetDialogResID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetDialogResID(SInt16 *resID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetDialogResID
+			move.w              #$0213,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetDialogResID
+	ENDIF
+
+
+; *  HMGetMenuResID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetMenuResID(SInt16 menuID, SInt16 *resID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetMenuResID
+			move.w              #$0314,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetMenuResID
+	ENDIF
+
+
+; *  HMGetBalloonWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr HMGetBalloonWindow(WindowRef *window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HMGetBalloonWindow
+			move.w              #$0215,D0
+			dc.w            	$A830
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HMGetBalloonWindow
+	ENDIF
+
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __BALLOONS__ 
+

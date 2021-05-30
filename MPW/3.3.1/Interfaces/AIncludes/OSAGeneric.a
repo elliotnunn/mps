@@ -1,0 +1,112 @@
+;////////////////////////////////////////////////////////////////////////////////
+;// OPEN SCRIPTING ARCHITECTURE: Generic Component Interface
+;////////////////////////////////////////////////////////////////////////////////
+;// Copyright © 1992 Apple Computer, Inc. All rights reserved.
+;// Authors: Jens Alfke, William Cook, Donn Denman, and Warren Harris
+;////////////////////////////////////////////////////////////////////////////////
+;// This interface defines a "generic scripting component."
+;// The Generic Scripting Component allows automatic dispatch to a
+;// specific scripting component that conforms to the OSA interface.
+;// This component supports OSA, by calling AppleScript or some other 
+;// scripting component.  Additionally it provides access to the default
+;// and the user-prefered scripting component.
+;////////////////////////////////////////////////////////////////////////////////
+
+ IF &TYPE('__INCLUDINGOSAGENERIC__') = 'UNDEFINED' THEN
+__INCLUDINGOSAGENERIC__ SET 1
+
+ IF &TYPE('__INCLUDINGOSA__') = 'UNDEFINED' THEN
+ INCLUDE 'OSA.a'
+ ENDIF
+
+errOSAComponentMismatch	EQU	-1761	; Parameters are from 2 different components
+errOSACantOpenComponent	EQU	-1762	; Can't connect to scripting system with that ID
+
+kGenericComponentVersion	EQU	$0100	; Component version this header file describes
+
+kGSSSelectGetDefaultScriptingComponent EQU	$1001	; == kOSASelectComponentSpecificStart
+kGSSSelectSetDefaultScriptingComponent EQU	$1002
+kGSSSelectGetScriptingComponent	EQU	$1003
+kGSSSelectGetScriptingComponentFromStored EQU	$1004
+kGSSSelectGenericToRealID	EQU	$1005
+kGSSSelectRealToGenericID	EQU	$1006
+kGSSSelectOutOfRange	EQU	$1007
+
+;// get and set the default scripting component
+;pascal OSAError 
+;OSAGetDefaultScriptingComponent( ComponentInstance genericScriptingComponent,
+;		  ScriptingComponentSelector* scriptingSubType);
+	
+		MACRO
+		_OSAGetDefaultScriptingComponent
+		MOVE.L	#((4<<16)|kGSSSelectGetDefaultScriptingComponent),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+;pascal OSAError 
+;OSASetDefaultScriptingComponent( ComponentInstance genericScriptingComponent,
+;		  ScriptingComponentSelector scriptingSubType );
+
+		MACRO
+		_OSASetDefaultScriptingComponent
+		MOVE.L	#((4<<16)|kGSSSelectSetDefaultScriptingComponent),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+;// get a scripting component instance from its subtype code
+;pascal OSAError 
+;OSAGetScriptingComponent( ComponentInstance genericScriptingComponent,
+;	           ScriptingComponentSelector scriptingSubType, 				// in
+;	           ComponentInstance* scriptingInstance );
+
+		MACRO
+		_OSAGetScriptingComponent
+		MOVE.L	#((8<<16)|kGSSSelectGetScriptingComponent),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+;// get a scripting component selector (subType) from a stored script
+;pascal OSAError 
+;OSAGetScriptingComponentFromStored( ComponentInstance genericScriptingComponent,
+;		     const AEDesc *scriptData, 						// in
+;		     ScriptingComponentSelector* scriptingSubType );
+
+		MACRO
+		_OSAGetScriptingComponentFromStored
+		MOVE.L	#((8<<16)|kGSSSelectGetScriptingComponentFromStored),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+;// get a real component instance and script id from a generic id
+;pascal OSAError 
+;OSAGenericToRealID( ComponentInstance genericScriptingComponent,
+;	     OSAID *theScriptID,												// in/out
+;	     ComponentInstance *theExactComponent );
+
+		MACRO
+		_OSAGenericToRealID
+		MOVE.L	#((8<<16)|kGSSSelectGenericToRealID),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+;// get a generic id from a real component instance and script id
+;pascal OSAError 
+;OSARealToGenericID( ComponentInstance genericScriptingComponent,
+;	     OSAID *theScriptID,												// in/out
+;	     ComponentInstance theExactComponent );
+
+		MACRO
+		_OSARealToGenericID
+		MOVE.L	#((8<<16)|kGSSSelectRealToGenericID),-(A7)
+		MOVEQ	#$0,D0
+		DC.W	$A82A	; TB 002A
+		ENDM
+
+ ENDIF
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+

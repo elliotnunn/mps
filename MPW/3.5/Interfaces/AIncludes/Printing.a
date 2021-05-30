@@ -1,0 +1,958 @@
+;
+;    File:       Printing.a
+;
+;    Contains:   Print Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+__PRINTING__ SET 1
+
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+
+
+kFirstPageMin					EQU		1					; min value for first page 
+kLastPageMax					EQU		32767				; max value for last page 
+
+iPFMaxPgs						EQU		128
+iPrPgFract						EQU		120					;Page scale factor. ptPgSize (below) is in units of 1/iPrPgFract
+iPrPgFst						EQU		1					;Page range constants
+iPrPgMax						EQU		9999
+iPrRelease						EQU		3					;Current version number of the code.
+iPrSavPFil						EQU		-1
+iPrAbort						EQU		$0080
+iPrDevCtl						EQU		7					;The PrDevCtl Proc's ctl number
+lPrReset						EQU		$00010000			;The PrDevCtl Proc's CParam for reset
+lPrLineFeed						EQU		$00030000
+lPrLFStd						EQU		$0003FFFF			;The PrDevCtl Proc's CParam for std paper advance
+lPrLFSixth						EQU		$0003FFFF
+lPrPageEnd						EQU		$00020000			;The PrDevCtl Proc's CParam for end page
+lPrDocOpen						EQU		$00010000
+lPrPageOpen						EQU		$00040000
+lPrPageClose					EQU		$00020000
+lPrDocClose						EQU		$00050000
+iFMgrCtl						EQU		8					;The FMgr's Tail-hook Proc's ctl number
+iMscCtl							EQU		9					;The FMgr's Tail-hook Proc's ctl number
+iPvtCtl							EQU		10					;The FMgr's Tail-hook Proc's ctl number
+;   Error Codes moved to Errors.(hap) 
+
+pPrGlobals						EQU		$00000944			;The PrVars lo mem area:
+bDraftLoop						EQU		0
+bSpoolLoop						EQU		1
+bUser1Loop						EQU		2
+bUser2Loop						EQU		3
+fNewRunBit						EQU		2
+fHiResOK						EQU		3
+fWeOpenedRF						EQU		4					;Driver constants 
+iPrBitsCtl						EQU		4
+lScreenBits						EQU		0
+lPaintBits						EQU		1
+lHiScreenBits					EQU		$00000002			;The Bitmap Print Proc's Screen Bitmap param
+lHiPaintBits					EQU		$00000003			;The Bitmap Print Proc's Paint [sq pix] param
+iPrIOCtl						EQU		5
+iPrEvtCtl						EQU		6					;The PrEvent Proc's ctl number
+lPrEvtAll						EQU		$0002FFFD			;The PrEvent Proc's CParam for the entire screen
+lPrEvtTop						EQU		$0001FFFD			;The PrEvent Proc's CParam for the top folder
+iPrDrvrRef						EQU		-3
+
+getRslDataOp					EQU		4
+setRslOp						EQU		5
+draftBitsOp						EQU		6
+noDraftBitsOp					EQU		7
+getRotnOp						EQU		8
+NoSuchRsl						EQU		1
+OpNotImpl						EQU		2					;the driver doesn't support this opcode
+RgType1							EQU		1
+
+; typedef SInt8							TFeed
+feedCut							EQU		0
+feedFanfold						EQU		1
+feedMechCut						EQU		2
+feedOther						EQU		3
+
+; typedef SInt8							TScan
+scanTB							EQU		0
+scanBT							EQU		1
+scanLR							EQU		2
+scanRL							EQU		3
+;  A Rect Ptr 
+; typedef union Rect *					TPRect
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewPrIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewPItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePrIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePrIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePItemUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+TPrPort					RECORD 0
+gPort					 ds		GrafPort		; offset: $0 (0)		; The Printer's graf port.
+gProcs					 ds		QDProcs			; offset: $6C (108)		; ..and its procs
+lGParam1				 ds.l	1				; offset: $A0 (160)		; 16 bytes for private parameter storage.
+lGParam2				 ds.l	1				; offset: $A4 (164)
+lGParam3				 ds.l	1				; offset: $A8 (168)
+lGParam4				 ds.l	1				; offset: $AC (172)
+fOurPtr					 ds.b	1				; offset: $B0 (176)		; Whether the PrPort allocation was done by us.
+fOurBits				 ds.b	1				; offset: $B1 (177)		; Whether the BitMap allocation was done by us.
+sizeof					 EQU *					; size:   $B2 (178)
+						ENDR
+; typedef struct TPrPort *				TPPrPort
+
+	ELSE
+
+
+	ENDIF
+; typedef TPPrPort 						TPPrPortRef
+
+;  Printing Graf Port. All printer imaging, whether spooling, banding, etc, happens "thru" a GrafPort.
+;  This is the "PrPeek" record. 
+TPrInfo					RECORD 0
+iDev					 ds.w	1				; offset: $0 (0)		; Font mgr/QuickDraw device code
+iVRes					 ds.w	1				; offset: $2 (2)		; Resolution of device, in device coordinates
+iHRes					 ds.w	1				; offset: $4 (4)		; ..note: V before H => compatable with Point.
+rPage					 ds		Rect			; offset: $6 (6)		; The page (printable) rectangle in device coordinates.
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; typedef struct TPrInfo *				TPPrInfo
+
+;  Print Info Record: The parameters needed for page composition. 
+TPrStl					RECORD 0
+wDev					 ds.w	1				; offset: $0 (0)
+iPageV					 ds.w	1				; offset: $2 (2)
+iPageH					 ds.w	1				; offset: $4 (4)
+bPort					 ds.b	1				; offset: $6 (6)
+feed					 ds.b	1				; offset: $7 (7)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct TPrStl *				TPPrStl
+
+TPrXInfo				RECORD 0
+iRowBytes				 ds.w	1				; offset: $0 (0)
+iBandV					 ds.w	1				; offset: $2 (2)
+iBandH					 ds.w	1				; offset: $4 (4)
+iDevBytes				 ds.w	1				; offset: $6 (6)
+iBands					 ds.w	1				; offset: $8 (8)
+bPatScale				 ds.b	1				; offset: $A (10)
+bUlThick				 ds.b	1				; offset: $B (11)
+bUlOffset				 ds.b	1				; offset: $C (12)
+bUlShadow				 ds.b	1				; offset: $D (13)
+scan					 ds.b	1				; offset: $E (14)
+bXInfoX					 ds.b	1				; offset: $F (15)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct TPrXInfo *				TPPrXInfo
+
+TPrJob					RECORD 0
+iFstPage				 ds.w	1				; offset: $0 (0)		; Page Range.
+iLstPage				 ds.w	1				; offset: $2 (2)
+iCopies					 ds.w	1				; offset: $4 (4)		; No. copies.
+bJDocLoop				 ds.b	1				; offset: $6 (6)		; The Doc style: Draft, Spool, .., and ..
+fFromUsr				 ds.b	1				; offset: $7 (7)		; Printing from an User's App (not PrApp) flag
+pIdleProc				 ds.l	1				; offset: $8 (8)		; The Proc called while waiting on IO etc.
+pFileName				 ds.l	1				; offset: $C (12)		; Spool File Name: NIL for default.
+iFileVol				 ds.w	1				; offset: $10 (16)		; Spool File vol, set to 0 initially
+bFileVers				 ds.b	1				; offset: $12 (18)		; Spool File version, set to 0 initially
+bJobX					 ds.b	1				; offset: $13 (19)		; An eXtra byte.
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct TPrJob *				TPPrJob
+
+;  Print Job: Print "form" for a single print request. 
+TPrint					RECORD 0
+iPrVersion				 ds.w	1				; offset: $0 (0)		; (2) Printing software version
+prInfo					 ds		TPrInfo			; offset: $2 (2)		; (14) the PrInfo data associated with the current style.
+rPaper					 ds		Rect			; offset: $10 (16)		; (8) The paper rectangle [offset from rPage]
+prStl					 ds		TPrStl			; offset: $18 (24)		; (8)  This print request's style.
+prInfoPT				 ds		TPrInfo			; offset: $20 (32)		; (14)  Print Time Imaging metrics
+prXInfo					 ds		TPrXInfo		; offset: $2E (46)		; (16)  Print-time (expanded) Print info record.
+prJob					 ds		TPrJob			; offset: $3E (62)		; (20) The Print Job request (82)  Total of the above; 120-82 = 38 bytes needed to fill 120
+printX					 ds.w	19				; offset: $52 (82)		; Spare to fill to 120 bytes!
+sizeof					 EQU *					; size:   $78 (120)
+						ENDR
+; typedef struct TPrint *				TPPrint
+
+; typedef TPPrint *						THPrint
+
+TPrStatus				RECORD 0
+iTotPages				 ds.w	1				; offset: $0 (0)		; Total pages in Print File.
+iCurPage				 ds.w	1				; offset: $2 (2)		; Current page number
+iTotCopies				 ds.w	1				; offset: $4 (4)		; Total copies requested
+iCurCopy				 ds.w	1				; offset: $6 (6)		; Current copy number
+iTotBands				 ds.w	1				; offset: $8 (8)		; Total bands per page.
+iCurBand				 ds.w	1				; offset: $A (10)		; Current band number
+fPgDirty				 ds.b	1				; offset: $C (12)		; True if current page has been written to.
+fImaging				 ds.b	1				; offset: $D (13)		; Set while in band's DrawPic call.
+hPrint					 ds.l	1				; offset: $E (14)		; Handle to the active Printer record
+pPrPort					 ds.l	1				; offset: $12 (18)		; Ptr to the active PrPort
+hPic					 ds.l	1				; offset: $16 (22)		; Handle to the active Picture
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+; typedef struct TPrStatus *			TPPrStatus
+
+; typedef TPPrStatus 					TPPrStatusRef
+
+
+;  Print Status: Print information during printing. 
+TPfPgDir				RECORD 0
+iPages					 ds.w	1				; offset: $0 (0)
+iPgPos					 ds.l	129				; offset: $2 (2)		; ARRAY [0..iPfMaxPgs] OF LONGINT
+sizeof					 EQU *					; size:   $206 (518)
+						ENDR
+; typedef struct TPfPgDir *				TPPfPgDir
+
+; typedef TPPfPgDir *					THPfPgDir
+
+;  PicFile = a TPfHeader followed by n QuickDraw Pics (whose PicSize is invalid!) 
+;  This is the Printing Dialog Record. Only used by folks appending their own
+;   DITLs to the print dialogs.  Print Dialog: The Dialog Stream object. 
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+TPrDlg					RECORD 0
+Dlg						 ds		DialogRecord	; offset: $0 (0)		; The Dialog window
+pFltrProc				 ds.l	1				; offset: $AA (170)		; The Filter Proc.
+pItemProc				 ds.l	1				; offset: $AE (174)		; The Item evaluating proc.
+hPrintUsr				 ds.l	1				; offset: $B2 (178)		; The user's print record.
+fDoIt					 ds.b	1				; offset: $B6 (182)
+fDone					 ds.b	1				; offset: $B7 (183)
+lUser1					 ds.l	1				; offset: $B8 (184)		; Four longs for apps to hang global data.
+lUser2					 ds.l	1				; offset: $BC (188)		; Plus more stuff needed by the particular
+lUser3					 ds.l	1				; offset: $C0 (192)		; printing dialog.
+lUser4					 ds.l	1				; offset: $C4 (196)
+sizeof					 EQU *					; size:   $C8 (200)
+						ENDR
+; typedef struct TPrDlg *				TPPrDlg
+
+	ELSE
+
+
+	ENDIF
+; typedef TPPrDlg 						TPPrDlgRef
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewPDlgInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePDlgInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePDlgInitUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+TGnlData				RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)		; more fields here depending on call
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TRslRg					RECORD 0
+iMin					 ds.w	1				; offset: $0 (0)
+iMax					 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+TRslRec					RECORD 0
+iXRsl					 ds.w	1				; offset: $0 (0)
+iYRsl					 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+TGetRslBlk				RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+iRgType					 ds.w	1				; offset: $8 (8)
+xRslRg					 ds		TRslRg			; offset: $A (10)
+yRslRg					 ds		TRslRg			; offset: $E (14)
+iRslRecCnt				 ds.w	1				; offset: $12 (18)
+rgRslRec				 ds.b	27 * TRslRec.sizeof ; offset: $14 (20)
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+TSetRslBlk				RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+hPrint					 ds.l	1				; offset: $8 (8)
+iXRsl					 ds.w	1				; offset: $C (12)
+iYRsl					 ds.w	1				; offset: $E (14)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TDftBitsBlk				RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+hPrint					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TGetRotnBlk				RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+hPrint					 ds.l	1				; offset: $8 (8)
+fLandscape				 ds.b	1				; offset: $C (12)
+bXtra					 ds.b	1				; offset: $D (13)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PrPurge()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrPurge(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrPurge
+			move.l              #$A8000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrPurge
+	ENDIF
+
+
+; *  PrNoPurge()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrNoPurge(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrNoPurge
+			move.l              #$B0000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrNoPurge
+	ENDIF
+
+
+; *  PrOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrOpen(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrOpen
+			move.l              #$C8000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrOpen
+	ENDIF
+
+
+; *  PrClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrClose(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrClose
+			move.l              #$D0000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrClose
+	ENDIF
+
+
+; *  PrintDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrintDefault(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrintDefault
+			move.l              #$20040480,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrintDefault
+	ENDIF
+
+
+; *  PrValidate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean PrValidate(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrValidate
+			move.l              #$52040498,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrValidate
+	ENDIF
+
+
+; *  PrStlDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean PrStlDialog(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrStlDialog
+			move.l              #$2A040484,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrStlDialog
+	ENDIF
+
+
+; *  PrJobDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean PrJobDialog(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrJobDialog
+			move.l              #$32040488,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrJobDialog
+	ENDIF
+
+
+; *  PrStlInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TPPrDlgRef PrStlInit(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrStlInit
+			move.l              #$3C04040C,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrStlInit
+	ENDIF
+
+
+; *  PrJobInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TPPrDlgRef PrJobInit(THPrint hPrint)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrJobInit
+			move.l              #$44040410,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrJobInit
+	ENDIF
+
+
+; *  PrJobMerge()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrJobMerge(THPrint hPrintSrc, THPrint hPrintDst)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrJobMerge
+			move.l              #$5804089C,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrJobMerge
+	ENDIF
+
+
+; *  PrDlgMain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean PrDlgMain(THPrint hPrint, PDlgInitUPP pDlgInit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrDlgMain
+			move.l              #$4A040894,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrDlgMain
+	ENDIF
+
+
+; *  PrOpenDoc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TPPrPort PrOpenDoc(THPrint hPrint, TPPrPort pPrPort, Ptr pIOBuf)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrOpenDoc
+			move.l              #$04000C00,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrOpenDoc
+	ENDIF
+
+
+; *  PrCloseDoc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrCloseDoc(TPPrPort pPrPort)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrCloseDoc
+			move.l              #$08000484,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrCloseDoc
+	ENDIF
+
+
+; *  PrOpenPage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrOpenPage(TPPrPort pPrPort, TPRect pPageFrame)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrOpenPage
+			move.l              #$10000808,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrOpenPage
+	ENDIF
+
+
+; *  PrClosePage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrClosePage(TPPrPort pPrPort)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrClosePage
+			move.l              #$1800040C,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrClosePage
+	ENDIF
+
+
+; *  PrPicFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrPicFile(THPrint hPrint, TPPrPort pPrPort, Ptr pIOBuf, Ptr pDevBuf, TPPrStatus prStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrPicFile
+			move.l              #$60051480,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrPicFile
+	ENDIF
+
+
+; *  PrError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short PrError(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrError
+			move.l              #$BA000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrError
+	ENDIF
+
+
+; *  PrSetError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrSetError(short iErr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrSetError
+			move.l              #$C0000200,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrSetError
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PrGeneral()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrGeneral(Ptr pData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrGeneral
+			move.l              #$70070480,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrGeneral
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PrDrvrOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrDrvrOpen(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrDrvrOpen
+			move.l              #$80000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrDrvrOpen
+	ENDIF
+
+
+; *  PrDrvrClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrDrvrClose(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrDrvrClose
+			move.l              #$88000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrDrvrClose
+	ENDIF
+
+
+; *  PrCtlCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void PrCtlCall(short iWhichCtl, long lParam1, long lParam2, long lParam3)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrCtlCall
+			move.l              #$A0000E00,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrCtlCall
+	ENDIF
+
+
+; *  PrDrvrDCE()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle PrDrvrDCE(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrDrvrDCE
+			move.l              #$94000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrDrvrDCE
+	ENDIF
+
+
+; *  PrDrvrVers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short PrDrvrVers(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrDrvrVers
+			move.l              #$9A000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrDrvrVers
+	ENDIF
+
+
+; *  PrLoadDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short PrLoadDriver(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PrLoadDriver
+			move.l              #$D8000000,-(sp)
+			dc.w            	$A8FD
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PrLoadDriver
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __PRINTING__ 
+

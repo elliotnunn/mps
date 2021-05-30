@@ -1,0 +1,226 @@
+; Version: 1.03
+; Created: Tuesday, August 2, 1988 at 9:52:23 PM
+;
+; File: SCSIEqu.a
+;
+; Assembler Interface to the Macintosh Libraries
+; Copyright Apple Computer, Inc. 1986-1988
+; All Rights Reserved
+;
+; Equates for SCSI boot, mgr routines
+; SCSI Traps
+;________________________________________________________________________________
+
+
+; misc SCSI driver equates
+
+scMacID 		EQU 		$80 					; SCSI ID for Macintosh Plus (bit 7)
+SCSIDrvrs		EQU 		$B2E					; (word) bitmap for loaded SCSI drivers
+
+; SCSI error codes
+
+scCommErr		EQU 		2						; communications error (operation timeout)
+scArbNBErr		EQU 		3						; arbitration timeout waiting for not BSY
+scBadparmsErr	EQU 		4						; bad parameter or TIB opcode
+scPhaseErr		EQU 		5						; SCSI bus not in correct phase for attempted operation
+scCompareErr	EQU 		6						; data compare error
+scMgrBusyErr	EQU 		7						; SCSI Manager busy with another operation
+; when SCSIGet was called
+
+scSequenceErr	EQU 		8						; attempted operation is out of sequence;
+; e.g., calling SCSISelect before doing
+; SCSIGet. Incorrectly written drivers
+; can cause this error.
+
+scBusTOErr		EQU 		9						; CPU bus timeout when attempting read or
+; write in pseudo-DMA mode -- indicates
+; that the data wasn't ready within the
+; 'bus timeout' period. (Mac SE & Mac II only)
+
+scComplPhaseErr   EQU		10						; SCSI bus wasn't in Status phase when
+; SCSIComplete was called -- the SCSI
+; Manager may have had to throw away data
+; (or write 'filler' bytes) in order to
+; reach the Status phase. Indicates that
+; the driver didn't handle SCSI bus phase
+; changes correctly.
+
+
+; misc SCSI driver equates
+
+scDefaultID 	EQU 		7						; default CPU SCSI id
+
+;---------------------------------------------------
+;
+; the information pertaining to the read/write
+; command block interpreter.
+;
+; SCSI command block equates.
+;
+
+scOpcode		EQU 		0						; offsets into command "line" for data xfer
+scParam1		EQU 		2
+scParam2		EQU 		6
+scSize			EQU 		10						; size of a command line
+
+
+scInc			EQU 		1						; xfer with address increment
+scNoInc 		EQU 		2						; xfer without address increment
+scAdd			EQU 		3						; add count to address
+scMove			EQU 		4						; MOVE data from addr1 to addr2
+scLoop			EQU 		5						; decrement loop counter and branch
+scNop			EQU 		6						; do very little
+scStop			EQU 		7						; then stop doing even that
+scComp			EQU 		8						; compare bytes with address increment
+
+;
+; The layout of block 0 of a bootable SCSI device.
+;
+
+sbSigWord		EQU 		$4552					; block 0 validator
+sbSig			EQU 		0						; signature word
+sbBlkSize		EQU 		2						; block size of device
+sbBlkCount		EQU 		4						; # blocks on device
+sbDevType		EQU 		8						; device type code
+sbDevID 		EQU 		10
+sbData			EQU 		12						; start of data section
+sbDrvCount		EQU 		16						; # drivers following
+sbDrvrs 		EQU 		18						; start of driver descriptors
+
+; Driver descriptors
+
+ddBlock 		EQU 		0						; physical block of driver
+ddSize			EQU 		4						; block count of driver
+ddType			EQU 		6						; Processor type of driver
+ddLen			EQU 		8
+sbMac			EQU 		1						; Macintosh driver type
+
+;
+; Partition Descriptors
+;
+pdSigWord		EQU 		$5453					; block 1 validator
+pmSig			EQU 		0						; unique value for map entry blk
+pmSigPad		EQU 		2						; currently unused
+pmMapBlkCnt 	EQU 		4						; # of blks in partition map
+pmPyPartStart	EQU 		8						; first physical block of partition
+pmPartBlkCnt	EQU 		12						; number of blocks in partition
+pmPartName		EQU 		16						; ASCII partition name
+pmParType		EQU 		48						; ASCII partition type
+pmLgDataStart	EQU 		80						; log. # of partition's 1st data blk
+pmDataCnt		EQU 		84						; # of blks in partition's data area
+pmPartStatus	EQU 		88						; bit field for partition status
+pmLgBootStart	EQU 		92						; logical blk of partition's boot code
+pmBootSize		EQU 		96						; number of bytes in boot code
+pmBootAddr		EQU 		100 					; memory load address of boot code
+pmBootAddr2 	EQU 		104 					; currently unused
+pmBootEntry 	EQU 		108 					; entry point of boot code
+pmBootEntry2	EQU 		112 					; currently unused
+pmBootCksum 	EQU 		116 					; checksum of boot code
+pmProcessor 	EQU 		120 					; ASCII for the processor type
+pmPad			EQU 		124 					; 512 bytes long, currently unused
+
+
+hfsID			EQU 		'TFS1'					; The HFS filesystem ID
+
+;Routine Selectors
+
+scsiReset		EQU 		0
+scsiGet 		EQU 		1
+scsiSelect		EQU 		2
+scsiCmd 		EQU 		3
+scsiComplete	EQU 		4
+scsiRead		EQU 		5
+scsiWrite		EQU 		6
+scsiRBlind		EQU 		8
+scsiWBlind		EQU 		9
+scsiStat		EQU 		10
+scsiSelAtn		EQU 		11
+scsiMsgIn		EQU 		12
+scsiMsgOut		EQU 		13
+numSelectors	EQU 		14
+
+
+				MACRO
+				_SCSIReset
+				MOVE		#scsiReset,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIGet
+				MOVE		#scsiGet,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSISelect
+				MOVE		#scsiSelect,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSICmd
+				MOVE		#scsiCmd,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIComplete
+				MOVE		#scsiComplete,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIRead
+				MOVE		#scsiRead,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIWrite
+				MOVE		#scsiWrite,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIInstall
+				MOVE		#scsiInstall,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIRBlind
+				MOVE		#scsiRBlind,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIWBlind
+				MOVE		#scsiWBlind,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIStat
+				MOVE		#scsiStat,-(sp)
+				_SCSIDispatch
+				ENDM
+
+
+				MACRO
+				_scsiSelAtn
+				MOVE		#scsiSelAtn,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIMsgIn
+				MOVE		#scsiMsgIn,-(sp)
+				_SCSIDispatch
+				ENDM
+
+				MACRO
+				_SCSIMsgOut
+				MOVE		#scsiMsgOut,-(sp)
+				_SCSIDispatch
+				ENDM

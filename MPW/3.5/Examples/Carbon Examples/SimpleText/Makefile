@@ -1,0 +1,103 @@
+#   File:       Makefile
+#   Target:     SimpleText
+#   Created:    Monday, October 30, 2000 05:02:53 PM
+
+
+MAKEFILE        = Makefile
+•MondoBuild•    = {MAKEFILE}  # Make blank to avoid rebuilds when makefile is modified
+
+ObjDir          = :obj:
+Includes        = 
+TypeAndCreator	= -t APPL -c ttxt
+
+Sym-cbn         = -sym off
+
+PPCCOptions     = {Includes} {Sym-cbn} -proto strict ∂
+					-d TARGET_API_MAC_CARBON=1 ∂
+					-d COMPILING_CARBONLIB=1 ∂
+					-d PM_USE_SESSION_APIS=0
+
+### Source Files ###
+
+SrcFiles        =  ∂
+				SimpleText.c ∂
+				AboutBox.c ∂
+				Clipboard.c ∂
+				MovieFile.c ∂
+				PICTFile.c ∂
+				TextFile.c ∂
+				NavigationServicesSupport.c ∂
+				TextDrag.c ∂
+				#GXFile.c ∂
+				ThreeDMetafile.c ∂
+				#
+
+### Object Files ###
+
+ObjFiles-cbn    =  ∂
+				"{ObjDir}SimpleText.c.y" ∂
+				"{ObjDir}AboutBox.c.y" ∂
+				"{ObjDir}Clipboard.c.y" ∂
+				"{ObjDir}MovieFile.c.y" ∂
+				"{ObjDir}PICTFile.c.y" ∂
+				"{ObjDir}TextFile.c.y" ∂
+				"{ObjDir}NavigationServicesSupport.c.y" ∂
+				"{ObjDir}TextDrag.c.y" ∂
+				#"{ObjDir}GXFile.c.y" ∂
+				"{ObjDir}ThreeDMetafile.c.y" ∂
+				  #
+
+### Libraries ###
+
+LibFiles-cbn    =  ∂
+				  "{SharedLibraries}CarbonLib" ∂
+#				  "{SharedLibraries}StdCLib" ∂
+#				  "{SharedLibraries}MathLib" ∂
+#				  "{PPCLibraries}StdCRuntime.o" ∂
+				  "{PPCLibraries}PPCCRuntime.o" ∂
+#				  "{PPCLibraries}PPCToolLibs.o"
+
+
+### Default Rules ###
+
+:obj:	ƒ	:
+
+.c.y  ƒ  .c  {•MondoBuild•}
+	{PPCC} {depDir}{default}.c -o {targDir}{default}.c.y {PPCCOptions}
+
+
+### Build Rules ###
+
+All				ƒƒ	SimpleTextCarbon
+
+SimpleText		ƒƒ	SimpleTextCarbon
+
+SimpleTextCarbon	ƒƒ  {ObjFiles-cbn} {LibFiles-cbn} {•MondoBuild•}
+	PPCLink ∂
+		-o {Targ} -m main ∂
+		{ObjFiles-cbn} ∂
+		{LibFiles-cbn} ∂
+		{Sym-cbn} ∂
+		-mf -d ∂
+		{TypeAndCreator}
+
+SimpleTextCarbon  ƒƒ SimpleText.r Size.r
+	Rez {NewerDeps} -o {Targ} -a {TypeAndCreator}
+
+### Optional Dependencies ###
+### Build this target to generate "include file" dependencies. ###
+
+Dependencies  ƒ  $OutOfDate
+	MakeDepend ∂
+		-append {MAKEFILE} ∂
+		-ignore "{CIncludes}" ∂
+		-objdir "{ObjDir}" ∂
+		-objext .y ∂
+		{Includes} ∂
+		{SrcFiles}
+
+Clean		ƒ	$OutOfDate
+	Delete -i -y ∂
+		{ObjFiles-cbn} ∂
+		SimpleTextCarbon
+

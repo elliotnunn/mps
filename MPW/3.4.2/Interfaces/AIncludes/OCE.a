@@ -1,0 +1,1855 @@
+;
+;	File:		OCE.a
+;
+;	Contains:	Apple Open Collaboration Environment (AOCE) Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OCE__') = 'UNDEFINED' THEN
+__OCE__ SET 1
+
+
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+	include 'Aliases.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'AppleTalk.a'										;
+;			include 'OSUtils.a'									;
+;				include 'MixedMode.a'								;
+;				include 'Memory.a'									;
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__SCRIPT__') = 'UNDEFINED' THEN
+	include 'Script.a'
+	ENDIF
+;		include 'IntlResources.a'									;
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+; All utility routines defined here are callable at interrupt level. 
+; typedef unsigned short 	OCERecordTypeIndex
+; typedef unsigned short 	OCEAttributeTypeIndex
+; For anyone who absolutely needs a define of the body of the standard record or
+;attribute type, use these below.  CAUTION!  All the types below are assumed to be
+;in character set 'smRoman'.  If you try to compare these to some RString or
+;AttributeType variable, you must take the character set code into account.  Future
+;standard types may be defined using character sets other than 'smRoman'. 
+; All these standard definitions begin with the Apple symbol (not shown here).
+;
+;NOTE:  To access these, you must call OCEGetIndRecordType or OCEGetIndAttributeType
+;with the proper index.  These routines return pointers to the standard type.
+;This was done so that code fragments (INITs, CDEVs, CSAMs, etc). which cannot
+;use global data can also use these. 
+; Indices for the standard definitions for certain record types (OCERecordTypeIndex): 
+
+kUserRecTypeNum					EQU		1					; "User" 
+kGroupRecTypeNum				EQU		2					; "Group" 
+kMnMRecTypeNum					EQU		3					; "AppleMail™ M&M" 
+kMnMForwarderRecTypeNum			EQU		4					; "AppleMail™ Fwdr" 
+kNetworkSpecRecTypeNum			EQU		5					; "NetworkSpec" 
+kADAPServerRecTypeNum			EQU		6					; "ADAP Server" 
+kADAPDNodeRecTypeNum			EQU		7					; "ADAP DNode" 
+kADAPDNodeRepRecTypeNum			EQU		8					; "ADAP DNode Rep" 
+kServerSetupRecTypeNum			EQU		9					; "Server Setup" 
+kDirectoryRecTypeNum			EQU		10					; "Directory" 
+kDNodeRecTypeNum				EQU		11					; "DNode" 
+kSetupRecTypeNum				EQU		12					; "Setup" 
+kMSAMRecTypeNum					EQU		13					; "MSAM" 
+kDSAMRecTypeNum					EQU		14					; "DSAM" 
+kAttributeValueRecTypeNum		EQU		15					; "Attribute Value" 
+kBusinessCardRecTypeNum			EQU		16					; "Business Card" 
+kMailServiceRecTypeNum			EQU		17					; "Mail Service" 
+kCombinedRecTypeNum				EQU		18					; "Combined" 
+kOtherServiceRecTypeNum			EQU		19					; "Other Service" 
+kAFPServiceRecTypeNum			EQU		20					; "Other Service afps" 
+kFirstOCERecTypeNum				EQU		kUserRecTypeNum		; first standard OCE record type 
+kLastOCERecTypeNum				EQU		kAFPServiceRecTypeNum ; last standard OCE record type 
+kNumOCERecTypes					EQU		(kLastOCERecTypeNum - kFirstOCERecTypeNum + 1)
+
+; Indices for the standard definitions for certain attribute types (OCEAttributeTypeIndex): 
+kMemberAttrTypeNum				EQU		1001				; "Member" 
+kAdminsAttrTypeNum				EQU		1002				; "Administrators" 
+kMailSlotsAttrTypeNum			EQU		1003				; "mailslots" 
+kPrefMailAttrTypeNum			EQU		1004				; "pref mailslot" 
+kAddressAttrTypeNum				EQU		1005				; "Address" 
+kPictureAttrTypeNum				EQU		1006				; "Picture" 
+kAuthKeyAttrTypeNum				EQU		1007				; "auth key" 
+kTelephoneAttrTypeNum			EQU		1008				; "Telephone" 
+kNBPNameAttrTypeNum				EQU		1009				; "NBP Name" 
+kQMappingAttrTypeNum			EQU		1010				; "ForwarderQMap" 
+kDialupSlotAttrTypeNum			EQU		1011				; "DialupSlotInfo" 
+kHomeNetAttrTypeNum				EQU		1012				; "Home Internet" 
+kCoResAttrTypeNum				EQU		1013				; "Co-resident M&M" 
+kFwdrLocalAttrTypeNum			EQU		1014				; "FwdrLocalRecord" 
+kConnectAttrTypeNum				EQU		1015				; "Connected To" 
+kForeignAttrTypeNum				EQU		1016				; "Foreign RLIs" 
+kOwnersAttrTypeNum				EQU		1017				; "Owners" 
+kReadListAttrTypeNum			EQU		1018				; "ReadList" 
+kWriteListAttrTypeNum			EQU		1019				; "WriteList" 
+kDescriptorAttrTypeNum			EQU		1020				; "Descriptor" 
+kCertificateAttrTypeNum			EQU		1021				; "Certificate" 
+kMsgQsAttrTypeNum				EQU		1022				; "MessageQs" 
+kPrefMsgQAttrTypeNum			EQU		1023				; "PrefMessageQ" 
+kMasterPFAttrTypeNum			EQU		1024				; "MasterPF" 
+kMasterNetSpecAttrTypeNum		EQU		1025				; "MasterNetSpec" 
+kServersOfAttrTypeNum			EQU		1026				; "Servers Of" 
+kParentCIDAttrTypeNum			EQU		1027				; "Parent CID" 
+kNetworkSpecAttrTypeNum			EQU		1028				; "NetworkSpec" 
+kLocationAttrTypeNum			EQU		1029				; "Location" 
+kTimeSvrTypeAttrTypeNum			EQU		1030				; "TimeServer Type" 
+kUpdateTimerAttrTypeNum			EQU		1031				; "Update Timer" 
+kShadowsOfAttrTypeNum			EQU		1032				; "Shadows Of" 
+kShadowServerAttrTypeNum		EQU		1033				; "Shadow Server" 
+kTBSetupAttrTypeNum				EQU		1034				; "TB Setup" 
+kMailSetupAttrTypeNum			EQU		1035				; "Mail Setup" 
+kSlotIDAttrTypeNum				EQU		1036				; "SlotID" 
+kGatewayFileIDAttrTypeNum		EQU		1037				; "Gateway FileID" 
+kMailServiceAttrTypeNum			EQU		1038				; "Mail Service" 
+kStdSlotInfoAttrTypeNum			EQU		1039				; "Std Slot Info" 
+kAssoDirectoryAttrTypeNum		EQU		1040				; "Asso. Directory" 
+kDirectoryAttrTypeNum			EQU		1041				; "Directory" 
+kDirectoriesAttrTypeNum			EQU		1042				; "Directories" 
+kSFlagsAttrTypeNum				EQU		1043				; "SFlags" 
+kLocalNameAttrTypeNum			EQU		1044				; "Local Name" 
+kLocalKeyAttrTypeNum			EQU		1045				; "Local Key" 
+kDirUserRIDAttrTypeNum			EQU		1046				; "Dir User RID" 
+kDirUserKeyAttrTypeNum			EQU		1047				; "Dir User Key" 
+kDirNativeNameAttrTypeNum		EQU		1048				; "Dir Native Name" 
+kCommentAttrTypeNum				EQU		1049				; "Comment" 
+kRealNameAttrTypeNum			EQU		1050				; "Real Name" 
+kPrivateDataAttrTypeNum			EQU		1051				; "Private Data" 
+kDirTypeAttrTypeNum				EQU		1052				; "Directory Type" 
+kDSAMFileAliasAttrTypeNum		EQU		1053				; "DSAM File Alias" 
+kCanAddressToAttrTypeNum		EQU		1054				; "Can Address To" 
+kDiscriminatorAttrTypeNum		EQU		1055				; "Discriminator" 
+kAliasAttrTypeNum				EQU		1056				; "Alias" 
+kParentMSAMAttrTypeNum			EQU		1057				; "Parent MSAM" 
+kParentDSAMAttrTypeNum			EQU		1058				; "Parent DSAM" 
+kSlotAttrTypeNum				EQU		1059				; "Slot" 
+kAssoMailServiceAttrTypeNum		EQU		1060				; "Asso. Mail Service" 
+kFakeAttrTypeNum				EQU		1061				; "Fake" 
+kInheritSysAdminAttrTypeNum		EQU		1062				; "Inherit SysAdministrators" 
+kPreferredPDAttrTypeNum			EQU		1063				; "Preferred PD" 
+kLastLoginAttrTypeNum			EQU		1064				; "Last Login" 
+kMailerAOMStateAttrTypeNum		EQU		1065				; "Mailer AOM State" 
+kMailerSendOptionsAttrTypeNum	EQU		1066				; "Mailer Send Options" 
+kJoinedAttrTypeNum				EQU		1067				; "Joined" 
+kUnconfiguredAttrTypeNum		EQU		1068				; "Unconfigured" 
+kVersionAttrTypeNum				EQU		1069				; "Version" 
+kLocationNamesAttrTypeNum		EQU		1070				; "Location Names" 
+kActiveAttrTypeNum				EQU		1071				; "Active" 
+kDeleteRequestedAttrTypeNum		EQU		1072				; "Delete Requested" 
+kGatewayTypeAttrTypeNum			EQU		1073				; "Gateway Type" 
+kFirstOCEAttrTypeNum			EQU		kMemberAttrTypeNum	; first standard OCE attr type 
+kLastOCEAttrTypeNum				EQU		kGatewayTypeAttrTypeNum ; last standard OCE attr type 
+kNumOCEAttrTypes				EQU		(kLastOCEAttrTypeNum - kFirstOCEAttrTypeNum + 1)
+
+; Miscellaneous enums: 
+kRString32Size					EQU		32					; max size of the body field in RString32 
+kRString64Size					EQU		64					; max size of the body field in RString64 
+kNetworkSpecMaxBytes			EQU		32					; max size of the body field in NetworkSpec 
+kPathNameMaxBytes				EQU		1024				; max size of the data field in PackedPathName 
+kDirectoryNameMaxBytes			EQU		32					; max size of the body field in DirectoryName 
+kAttributeTypeMaxBytes			EQU		32					; max size of the body field in AttributeType 
+kAttrValueMaxBytes				EQU		65536				; max size of any attribute value 
+kRStringMaxBytes				EQU		256					; max size (in bytes) of the body field of a recordName or recordType 
+kRStringMaxChars				EQU		128					; max size (in chars) of the body field of a recordName or recordType 
+
+kNULLDNodeNumber				EQU		0					; Special value meaning none specified 
+kRootDNodeNumber				EQU		2					; DNodeNum corresponding to the root of the tree 
+
+; This enum is used to select the kind of RString in calls such as OCERelRString,
+;OCEEqualRString, and OCEValidRString.
+;
+;eGenericSensitive and eGenericInsensitive are enumerators that can be used if you
+;use RStrings for things other than what you see in this file.  If you want them to
+;be compared in a case- and diacritical-sensitive manner (c ≠ C ≠ ç), use
+;eGenericSensitive.  If you want them to be compared in a case- and diacritical-
+;insensitive manner (c = C = ç), use eGenericInensitive.
+;WARNING:  do not use eGenericSensitive and eGenericInsensitive with catalog
+;names, entity names, pathname parts, entity types, network specs, or attribute
+;types!  Don't assume that you know how they should be compared!!! 
+kOCEDirName						EQU		0
+kOCERecordOrDNodeName			EQU		1
+kOCERecordType					EQU		2
+kOCENetworkSpec					EQU		3
+kOCEAttrType					EQU		4
+kOCEGenericSensitive			EQU		5
+kOCEGenericInsensitive			EQU		6
+
+; typedef unsigned short 	RStringKind
+; Values for the signature field in Discriminator 
+
+kDirAllKinds					EQU		0
+kDirADAPKind					EQU		'adap'
+kDirPersonalDirectoryKind		EQU		'pdir'
+kDirDSAMKind					EQU		'dsam'
+
+; typedef unsigned long 	OCEDirectoryKind
+; Values returned by GetDSSpecInfo() 
+
+kOCEInvalidDSSpec				EQU		$3F3F3F3F			; could not be determined 
+kOCEDirsRootDSSpec				EQU		'root'				; root of all catalogs ("Catalogs" icon) 
+kOCEDirectoryDSSpec				EQU		'dire'				; catalog 
+kOCEDNodeDSSpec					EQU		'dnod'				; d-node 
+kOCERecordDSSpec				EQU		'reco'				; record 
+kOCEentnDSSpec					EQU		'entn'				; extensionType is 'entn' 
+kOCENOTentnDSSpec				EQU		'not '
+
+; Values for AttributeTag 
+typeRString						EQU		'rstr'
+typePackedDSSpec				EQU		'dspc'
+typeBinary						EQU		'bnry'
+
+; Bit flag corresponding to the canContainRecords bit.  Use it like this:
+;	if (foo & kCanContainRecords)
+;		then this dNode can contain records!
+;kForeignNode is used to indicate nodes in the name hierarchy that correspond to
+;foreign catalogs (meaning ADAP sees no clusters or DNodes beneath it, but
+;mail routers might be able to route to clusters beneath it. 
+kCanContainRecordsBit			EQU		0
+kForeignNodeBit					EQU		1
+
+; DirNodeKind 
+kCanContainRecords				EQU		1 << kCanContainRecordsBit
+kForeignNode					EQU		1 << kForeignNodeBit
+
+; typedef unsigned long 	DirNodeKind
+;*** Toolbox Control ***
+; We will have a version number and attributes for toolboxes off the aa5e trap
+;and the S&F server trap.
+;
+;This includes the OCE toolbox and S&F Server.  [Note: the S&F server will
+;change to ONLY service ServerGateway calls —it will then be necessary to run
+;it co–resident with an OCE toolbox].
+;
+;The high order word will represent the S&F Server version number.  The low
+;order word will represent the OCE toolbox version number.  These will be zero
+;until the component is up and running.  It is not possible to know these
+;a–priori. Note: there will not be a seperate version numbers for each component
+;in the OCE toolbox or S&F server.
+;
+;The above is consistent with the standard System 7.0 usage of Gestalt.
+;
+;The oce tb attribute gestaltOCETBPresent implies the existence of OCE on a
+;machine.
+;
+;The OCE TB attribute gestaltOCETBAvailable implies the availablity of OCE calls.
+;
+;The attribute gestaltOCESFServerAvailable implies the availablity of OCE calls
+;available through the S&F server. This are essentially the server gateway calls.
+;
+;Any (future) remaining OCE attributes may not be established correctly until
+;the attribute gestaltOCETBAvailable is set.
+;
+;The gestalt selectors and values are listed below: 
+
+gestaltOCEToolboxVersion		EQU		'ocet'				; OCE Toolbox version 
+gestaltOCEToolboxAttr			EQU		'oceu'
+
+; version includes:
+; *  dirtb
+; *  authtb
+; *  mailtb
+; *  ipmtb
+; *  personal catalog
+; *  ADSPSecure
+; * e.g. all interfaces dependent on the aa5e trap. 
+gestaltOCETB					EQU		$0102				; OCE Toolbox version 1.02 
+gestaltSFServer					EQU		$0100				; S&F Server version 1.0 
+gestaltOCETBPresent				EQU		$01					; OCE toolbox is present, not running 
+gestaltOCETBAvailable			EQU		$02					; OCE toolbox is running and available 
+gestaltOCESFServerAvailable		EQU		$04					; S&F Server is running and available 
+gestaltOCETBNativeGlueAvailable	EQU		$10					; Native PowerPC Glue routines are availible 
+
+;	Constants used for Transitions. 
+ATTransIPMStart					EQU		'ipms'
+ATTransIPMShutdown				EQU		'ipmd'
+ATTransDirStart					EQU		'dirs'
+ATTransDirShutdown				EQU		'dird'
+ATTransAuthStart				EQU		'auts'
+ATTransAuthShutdown				EQU		'autd'
+ATTransSFStart					EQU		's&fs'
+ATTransSFShutdown				EQU		's&fd'
+
+; Some definitions for time-related parameters: 
+; Interpreted as UTC seconds since 1/1/1904 
+; typedef unsigned long 	UTCTime
+; seconds EAST of Greenwich 
+; typedef long 				UTCOffset
+; This is the same as the ScriptManager script. 
+; typedef short 			CharacterSet
+;*** RString ***
+; struct RString is a maximum-sized structure.  Allocate one of these and it will
+;hold any valid RString. 
+RString 				RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   256		; offset: $4 (4)		; place for characters 
+sizeof					 EQU *			; size:   $104 (260)
+						ENDR
+
+; typedef struct RString 	RString
+; struct ProtoRString is a minimum-sized structure.  Use this for a variable-length RString. 
+ProtoRString 			RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ProtoRString  ProtoRString
+; typedef RString 			*RStringPtr, **RStringHandle
+; typedef ProtoRString 		*ProtoRStringPtr
+RString64 				RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   64		; offset: $4 (4)
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct RString64 	RString64
+RString32 				RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   32		; offset: $4 (4)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct RString32 	RString32
+; Standard definitions for the entity type field and attribute type
+;have been moved to the end of the file. 
+; Copies str1 to str2.  str2Length is the size of str2, excluding header.
+;A memFull error will be returned if that is not as large as str1->dataLength. 
+;
+; pascal OSErr OCECopyRString(const RString *str1, RString *str2, unsigned short str2Length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyRString
+			move.w	#776,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyRString
+	ENDIF
+
+;	Make an RString from a C string.  If the c string is bigger than rStrLength,
+;only rStrLength bytes will be copied. (rStrLength does not include the header size) 
+;
+; pascal void OCECToRString(const char *cStr, CharacterSet charSet, RString *rStr, unsigned short rStrLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECToRString
+			move.w	#825,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECToRString
+	ENDIF
+
+;	Make an RString from a Pascal string.  If the Pascal string is bigger than rStrLength,
+;only rStrLength bytes will be copied. (rStrLength does not include the header size) 
+;
+; pascal void OCEPToRString(ConstStr255Param pStr, CharacterSet charSet, RString *rStr, unsigned short rStrLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPToRString
+			move.w	#826,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPToRString
+	ENDIF
+
+;	Make a Pascal string from an RString.  It's up to you to check the char set of
+;the RString, or if the length of the RString is greater than 255 (the Pascal string's
+;length will simply be the lower byte of the RString's length).  The StringPtr that is
+;returned will point directly into the RString (no memory will be allocated). 
+;
+; pascal StringPtr OCERToPString(const RString *rStr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCERToPString
+			move.w	#827,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCERToPString
+	ENDIF
+
+;	Check the relative equality of two RStrings.  Determines if str1 is greater than,
+;equal to, or less than str2.  Result types for OCERelRString are defined in <OSUtils.h>
+;(same as for RelString). 
+;
+; pascal short OCERelRString(const void *str1, const void *str2, RStringKind kind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCERelRString
+			move.w	#813,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCERelRString
+	ENDIF
+
+;	Check for equality of two RStrings. Returns true if equal. 
+;
+; pascal Boolean OCEEqualRString(const void *str1, const void *str2, RStringKind kind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualRString
+			move.w	#790,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualRString
+	ENDIF
+
+;	Check the validity of an RString.  Returns true if the RString is valid 
+;
+; pascal Boolean OCEValidRString(const void *str, RStringKind kind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidRString
+			move.w	#824,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidRString
+	ENDIF
+
+;*** CreationID ***
+CreationID 				RECORD	0
+source					 ds.l   1		; offset: $0 (0)		; Fields definitions and usage are not defined 
+seq						 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CreationID  CreationID
+; typedef CreationID 		AttributeCreationID
+; Returns a pointer to a null CreationID . 
+;
+; pascal const CreationID *OCENullCID(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCENullCID
+			move.w	#836,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCENullCID
+	ENDIF
+
+; Returns a pointer to a special CreationID used within the PathFinder. 
+;
+; pascal const CreationID *OCEPathFinderCID(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPathFinderCID
+			move.w	#828,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPathFinderCID
+	ENDIF
+
+; Sets the CreationID to a null value. 
+;
+; pascal void OCESetCreationIDtoNull(CreationID *cid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCESetCreationIDtoNull
+			move.w	#814,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCESetCreationIDtoNull
+	ENDIF
+
+; Copies the value of cid1 to cid2. 
+;
+; pascal void OCECopyCreationID(const CreationID *cid1, CreationID *cid2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyCreationID
+			move.w	#768,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyCreationID
+	ENDIF
+
+; Check the equality of two CreationIDs. 
+;
+; pascal Boolean OCEEqualCreationID(const CreationID *cid1, const CreationID *cid2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualCreationID
+			move.w	#780,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualCreationID
+	ENDIF
+
+;*** NetworkSpec ***
+; For the record, a NetworkSpec is an RString with a smaller maximum size.
+;I don't just typedef it to an RString, because I want the definition of the NetworkSpec
+;struct to contain the max length.  But it should be possible to typecast any
+;NetworkSpec to an RString and use all the RString utilities on it. 
+NetworkSpec 			RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   32		; offset: $4 (4)		; always fixed at the max size 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct NetworkSpec  NetworkSpec
+; typedef NetworkSpec 		*NetworkSpecPtr
+;*** PackedPathName ***
+; struct PackedPathName is a maximum-sized structure.  Allocate one of
+;these and it will hold any valid packed pathname. 
+PackedPathName 			RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+data					 ds.b   1022	; offset: $2 (2)
+sizeof					 EQU *			; size:   $400 (1024)
+						ENDR
+
+; typedef struct PackedPathName  PackedPathName
+; struct ProtoPackedPathName is a minimum-sized structure.  Use this
+;for a variable-length packed PathName. 
+ProtoPackedPathName 	RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ProtoPackedPathName  ProtoPackedPathName
+; typedef PackedPathName 	*PackedPathNamePtr
+; typedef ProtoPackedPathName  *ProtoPackedPathNamePtr
+;
+;Copy the contents of path1 to path2.  path2Length is the size of path2, and must
+;be large enough to hold a copy of path1.  A memFull error will be returned if that
+;is not the case.
+;
+;
+; pascal OSErr OCECopyPackedPathName(const PackedPathName *path1, PackedPathName *path2, unsigned short path2Length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyPackedPathName
+			move.w	#772,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyPackedPathName
+	ENDIF
+
+;
+;Returns true if packed path pointer is nil, or is of zero length, or is of
+;length 2 and nParts of zero.
+;
+;
+; pascal Boolean OCEIsNullPackedPathName(const PackedPathName *path)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEIsNullPackedPathName
+			move.w	#797,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEIsNullPackedPathName
+	ENDIF
+
+;
+;OCEUnpackPathName breaks apart the path into its component RStrings, writing string
+;pointers into the array 'parts', which the client asserts can hold as many as
+;'nParts' elements. The number of parts actually found is returned.  Strings are
+;placed in the array in order from lowest to highest.  The first pathName element
+;beneath the root appears last.  NOTE THAT THE UNPACKED STRUCT CONTAINS POINTERS INTO
+;THE PACKED STRUCT - DON'T DELETE OR REUSE THE PACKED STRUCT UNTIL YOU ARE FINISHED
+;WITH THE UNPACKED STRUCT AS WELL
+;
+;
+; pascal unsigned short OCEUnpackPathName(const PackedPathName *path, RStringPtr *parts, unsigned short nParts)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEUnpackPathName
+			move.w	#816,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEUnpackPathName
+	ENDIF
+
+;
+; pascal unsigned short OCEPackedPathNameSize(const RStringPtr *parts, unsigned short nParts)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackedPathNameSize
+			move.w	#808,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackedPathNameSize
+	ENDIF
+
+; OCEDNodeNameCount returns the number of RStrings contained within the path. 
+;
+; pascal unsigned short OCEDNodeNameCount(const PackedPathName *path)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEDNodeNameCount
+			move.w	#812,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEDNodeNameCount
+	ENDIF
+
+;
+;OCEPackPathName packs the parts into the storage provided as 'path'.  path must be
+;large enough to hold the packed pathname.  A memFull error will be returned if
+;pathLength is too small.  parts[0] should contain the deepest pathName element,
+;and parts[nParts - 1] should contain the name of the first pathName element beneath
+;the root. 
+;
+;
+; pascal OSErr OCEPackPathName(RStringPtr *parts, unsigned short nParts, PackedPathName *path, unsigned short pathLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackPathName
+			move.w	#803,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackPathName
+	ENDIF
+
+;
+;Check the equality of two packed paths.
+;
+;
+; pascal Boolean OCEEqualPackedPathName(const PackedPathName *path1, const PackedPathName *path2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualPackedPathName
+			move.w	#785,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualPackedPathName
+	ENDIF
+
+;
+;OCEValidPackedPathName checks that the packed PathName is internally consistent.
+;Returns true if it's ok.
+;
+;
+; pascal Boolean OCEValidPackedPathName(const PackedPathName *path)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidPackedPathName
+			move.w	#820,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidPackedPathName
+	ENDIF
+
+;*** DirDiscriminator ***
+DirDiscriminator 		RECORD	0
+signature				 ds.l   1		; offset: $0 (0)
+misc					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct DirDiscriminator  DirDiscriminator
+; Copies the value of disc1 to disc2. 
+;
+; pascal void OCECopyDirDiscriminator(const DirDiscriminator *disc1, DirDiscriminator *disc2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyDirDiscriminator
+			move.w	#769,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyDirDiscriminator
+	ENDIF
+
+; Check the equality of two DirDiscriminators. 
+;
+; pascal Boolean OCEEqualDirDiscriminator(const DirDiscriminator *disc1, const DirDiscriminator *disc2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualDirDiscriminator
+			move.w	#781,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualDirDiscriminator
+	ENDIF
+
+;
+;This structure is called RLI because it really contains all the info you
+;need to locate a record within the entire name space.  It contains four fields.
+;The first two are the name of the catalog and a catalog discriminator.  These
+;two fields are used to indicate to which catalog a given record belongs.  The
+;discriminator is used to distinguish between two different catalogs that have
+;the same name.
+;
+;The other two fields in the RLI structure are used to indicate a particular
+;catalog node within the catalog specified by the directoryName and
+;discriminator fields.  These fields are exactly analagous to the dirID and
+;pathname used in HFS.  It is possible to specify a dNode just by dNodeNumber
+;(pathname is nil), or just by pathname (dNodeNumber is set to kNULLDNodeNumber),
+;or by a combination of the two.  The latter is called a 'partial pathname', and
+;while it is valid in the Catalog Manager API, it is not supported by ADAP
+;catalogs in Release 1.
+;
+;Note that the path parameter does not include the catalog name, but holds
+;the names of all the nodes on the path to the desired catalog node, starting
+;with the catalog node and working its way up the tree.
+;
+;*** RLI ***
+DirectoryName 			RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   32		; offset: $4 (4)		; space for catalog name 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct DirectoryName  DirectoryName
+; typedef DirectoryName 	*DirectoryNamePtr
+; Catalog node number 
+; typedef unsigned long 	DNodeNum
+RLI 					RECORD	0
+directoryName			 ds.l   1		; offset: $0 (0)		; pointer to the name of the catalog root 
+discriminator			 ds.l   2		; offset: $4 (4)		; used to discriminate between dup catalog names 
+dNodeNumber				 ds.l   1		; offset: $C (12)		; number of the node 
+path					 ds.l   1		; offset: $10 (16)		; old-style RLI 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct RLI 		RLI
+; typedef RLI 				*RLIPtr
+;
+;Create a new RLI from the catalog name, discriminator, DNode number, and
+;PackedPathName.  You must allocate the storage for the RLI and pass in a pointer
+;to it.
+;
+;
+; pascal void OCENewRLI(RLI *newRLI, const DirectoryName *dirName, DirDiscriminator *discriminator, DNodeNum dNodeNumber, const PackedPathName *path)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCENewRLI
+			move.w	#799,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCENewRLI
+	ENDIF
+
+;
+;Duplicate the contents of rli1 to rli2.  No errors are returned. This
+;simply copies the pointers to the catalog name and path, wiping out any pointer
+;that you might have had in there.
+;
+;
+; pascal void OCEDuplicateRLI(const RLI *rli1, RLI *rli2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEDuplicateRLI
+			move.w	#779,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEDuplicateRLI
+	ENDIF
+
+;
+;Copy the contents of rli1 to rli2.  rli2 must already contain
+;pointers to structures large enough to hold copies of the corresponding
+;fields from rli1.  A memFull error will be returned if that is not the case.
+;So if you allocate a brand new empty destination, you must at least set up
+;its length fields.
+;
+;
+; pascal OSErr OCECopyRLI(const RLI *rli1, RLI *rli2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyRLI
+			move.w	#775,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyRLI
+	ENDIF
+
+;
+;Check the equality of two RLIs.  This will take into account differences
+;in the case and diacriticals of the directoryName and the PathName.
+;NOTE THAT THIS WILL FAIL IF rli1 CONTAINS A DNODENUMBER AND A NIL PATHNAME,
+;AND rli2 CONTAINS kNULLDNodeNumber AND A NON-NIL PATHNAME.  IN OTHER WORDS,
+;THE TWO rlis MUST BE OF THE SAME FORM TO CHECK FOR EQUALITY.
+;The one exception is that if the pathname is nil, a dNodeNumber of zero and
+;kRootDNodeNumber will be treated as equal.
+;
+;
+; pascal Boolean OCEEqualRLI(const RLI *rli1, const RLI *rli2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualRLI
+			move.w	#789,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualRLI
+	ENDIF
+
+;
+;Check the validity of an RLI.  This checks that the catalog name length
+;is within bounds, and the packed pathname (if specified) is valid.
+;
+;
+; pascal Boolean OCEValidRLI(const RLI *theRLI)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidRLI
+			move.w	#823,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidRLI
+	ENDIF
+
+;*** PackedRLI ***
+;
+;struct PackedRLI is a maximum-sized structure.  Allocate one of
+;these and it will hold any valid packed pathname.
+;
+
+kRLIMaxBytes					EQU		1296
+
+PackedRLI 				RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+data					 ds.b   1296	; offset: $2 (2)
+sizeof					 EQU *			; size:   $512 (1298)
+						ENDR
+
+; typedef struct PackedRLI 	PackedRLI
+;
+;struct ProtoPackedRLI is a minimum-sized structure.  Use this
+;for a variable-length packed RLI.
+;
+ProtoPackedRLI 			RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ProtoPackedRLI  ProtoPackedRLI
+; typedef PackedRLI 		*PackedRLIPtr
+; typedef ProtoPackedRLI 	*ProtoPackedRLIPtr
+;
+;Copy the contents of prli1 to prli2.  prli2Length is the size of prli2, and must
+;be large enough to hold a copy of prli1.  A memFull error will be returned if that
+;is not the case.
+;
+;
+; pascal OSErr OCECopyPackedRLI(const PackedRLI *prli1, PackedRLI *prli2, unsigned short prli2Length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyPackedRLI
+			move.w	#773,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyPackedRLI
+	ENDIF
+
+;
+;OCEUnpackRLI breaks apart the prli into its components, writing pointers into
+;the rli structure.  NOTE THAT THE UNPACKED STRUCT CONTAINS POINTERS INTO THE
+;PACKED STRUCT - DON'T DELETE OR REUSE THE PACKED STRUCT UNTIL YOU ARE FINISHED
+;WITH THE UNPACKED STRUCT AS WELL
+;
+;
+; pascal void OCEUnpackRLI(const PackedRLI *prli, RLI *theRLI)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEUnpackRLI
+			move.w	#817,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEUnpackRLI
+	ENDIF
+
+;
+;OCEPackedRLISize computes the number of bytes of memory needed to hold a
+;PackedRLI manufactured from an RLI.  This length
+;includes the length of the length field of PackedRLI, so it
+;is safe to do a NewPtr (OCEPackedRLISize(...)).
+;
+;
+; pascal unsigned short OCEPackedRLISize(const RLI *theRLI)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackedRLISize
+			move.w	#810,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackedRLISize
+	ENDIF
+
+;
+;OCEPackRLI packs the RLI into the storage provided as 'prli'.  prli must be
+;large enough to hold the packed RLI.  A memFull error will be returned if
+;prliLength is too small.
+;
+;
+; pascal OSErr OCEPackRLI(const RLI *theRLI, PackedRLI *prli, unsigned short prliLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackRLI
+			move.w	#804,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackRLI
+	ENDIF
+
+;
+;OCEPackedRLIPartsSize computes the number of bytes of memory needed to hold a
+;PackedRLI manufactured from the parts of an RLI.  This length
+;includes the length of the length field of PackedRLI, so it
+;is safe to do a NewPtr (OCEPackedRLIPartsSize(...)).
+;
+;
+; pascal unsigned short OCEPackedRLIPartsSize(const DirectoryName *dirName, RStringPtr *parts, unsigned short nParts)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackedRLIPartsSize
+			move.w	#809,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackedRLIPartsSize
+	ENDIF
+
+;
+;OCEPackRLIParts packs the parts of an RLI into the storage provided as 'prli'.
+;prli must be large enough to hold the packed RLI.  A memFull error will be returned
+;if prliLength is too small.
+;
+;
+; pascal OSErr OCEPackRLIParts(const DirectoryName *dirName, const DirDiscriminator *discriminator, DNodeNum dNodeNumber, RStringPtr *parts, unsigned short nParts, PackedRLI *prli, unsigned short prliLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackRLIParts
+			move.w	#805,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackRLIParts
+	ENDIF
+
+;
+;Check the equality of two packed prlis.
+;
+;
+; pascal Boolean OCEEqualPackedRLI(const PackedRLI *prli1, const PackedRLI *prli2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualPackedRLI
+			move.w	#787,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualPackedRLI
+	ENDIF
+
+;
+;Check the validity of a packed RLI.  This checks that the catalog name length
+;is within bounds, and the packed pathname (if specified) is valid.
+;
+;
+; pascal Boolean OCEValidPackedRLI(const PackedRLI *prli)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidPackedRLI
+			move.w	#822,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidPackedRLI
+	ENDIF
+
+;
+;If this packed RLI describes a Personal Catalog, this call will return a pointer
+;to an alias record that can be used to find the actual file.  Otherwise, it returns nil.
+;
+;
+; pascal AliasPtr OCEExtractAlias(const PackedRLI *prli)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEExtractAlias
+			move.w	#792,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEExtractAlias
+	ENDIF
+
+;
+;This call returns a pointer to a packed RLI that represents the "Catalogs" icon, or
+;the root of all catalogs.  It is used in the CollabPack.
+;
+;
+; pascal const PackedRLI *OCEGetDirectoryRootPackedRLI(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetDirectoryRootPackedRLI
+			move.w	#838,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetDirectoryRootPackedRLI
+	ENDIF
+
+;*** LocalRecordID ***
+LocalRecordID 			RECORD	0
+cid						 ds.l   2		; offset: $0 (0)
+recordName				 ds.l   1		; offset: $8 (8)
+recordType				 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct LocalRecordID  LocalRecordID
+; typedef LocalRecordID 	*LocalRecordIDPtr
+; Create a LocalRecordID from a name, type, and CreationID 
+;
+; pascal void OCENewLocalRecordID(const RString *recordName, const RString *recordType, const CreationID *cid, LocalRecordID *lRID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCENewLocalRecordID
+			move.w	#798,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCENewLocalRecordID
+	ENDIF
+
+;
+;Copy LocalRecordID lRID1 to LocalRecordID lRID2.  lRID2 must already contain
+;pointers to RString structures large enough to hold copies of the corresponding
+;fields from lRID1.  A memFull error will be returned if that is not the case.
+;So if you allocate a brand new empty destination, you must at least set up
+;its length field.
+;
+;
+; pascal OSErr OCECopyLocalRecordID(const LocalRecordID *lRID1, LocalRecordID *lRID2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyLocalRecordID
+			move.w	#770,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyLocalRecordID
+	ENDIF
+
+;
+;Check the equality of two local RIDs.
+;
+;
+; pascal Boolean OCEEqualLocalRecordID(const LocalRecordID *lRID1, const LocalRecordID *lRID2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualLocalRecordID
+			move.w	#783,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualLocalRecordID
+	ENDIF
+
+;*** ShortRecordID ***
+ShortRecordID 			RECORD	0
+rli						 ds.l   1		; offset: $0 (0)
+cid						 ds.l   2		; offset: $4 (4)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct ShortRecordID  ShortRecordID
+; typedef ShortRecordID 	*ShortRecordIDPtr
+; Create a ShortRecordID from an RLI struct and a CreationID 
+;
+; pascal void OCENewShortRecordID(const PackedRLI *theRLI, const CreationID *cid, ShortRecordIDPtr sRID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCENewShortRecordID
+			move.w	#801,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCENewShortRecordID
+	ENDIF
+
+;
+;Copy ShortRecordID sRID1 to ShortRecordID sRID2.  sRID2 must already contain
+;pointers to structures large enough to hold copies of the corresponding
+;fields from sRID1.  A memFull error will be returned if that is not the case.
+;So if you allocate a brand new empty destination, you must at least set up
+;its length fields.
+;
+;
+; pascal OSErr OCECopyShortRecordID(const ShortRecordID *sRID1, ShortRecordID *sRID2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyShortRecordID
+			move.w	#778,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyShortRecordID
+	ENDIF
+
+;
+;Check the equality of two short RIDs.
+;
+;
+; pascal Boolean OCEEqualShortRecordID(const ShortRecordID *sRID1, const ShortRecordID *sRID2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualShortRecordID
+			move.w	#791,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualShortRecordID
+	ENDIF
+
+;*** RecordID ***
+RecordID 				RECORD	0
+rli						 ds.l   1		; offset: $0 (0)		; pointer to a packed rli structure 
+local					 ds.l   4		; offset: $4 (4)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct RecordID 	RecordID
+; typedef RecordID 			*RecordIDPtr
+;	Create a RecordID from a packed RLI struct and a LocalRecordID.
+;This doesn't allocate any new space; the RecordID points to the same
+;packed RLI struct and the same name and type RStrings. 
+;
+; pascal void OCENewRecordID(const PackedRLI *theRLI, const LocalRecordID *lRID, RecordID *rid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCENewRecordID
+			move.w	#800,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCENewRecordID
+	ENDIF
+
+;
+;Copy RecordID RID1 to RecordID RID2.  RID2 must already contain
+;pointers to structures large enough to hold copies of the corresponding
+;fields from lRID1.  A memFull error will be returned if that is not the case.
+;So if you allocate a brand new empty destination, you must at least set up
+;its length fields.
+;
+;
+; pascal OSErr OCECopyRecordID(const RecordID *rid1, const RecordID *rid2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyRecordID
+			move.w	#777,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyRecordID
+	ENDIF
+
+;	Check the equality of two RIDs. 
+;
+; pascal Boolean OCEEqualRecordID(const RecordID *rid1, const RecordID *rid2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualRecordID
+			move.w	#788,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualRecordID
+	ENDIF
+
+;*** PackedRecordID ***
+;
+;struct PackedRecordID is a maximum-sized structure.  Allocate one of
+;these and it will hold any valid packed RecordID.
+;
+
+kPackedRecordIDMaxBytes			EQU		1824
+
+PackedRecordID 			RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+data					 ds.b   1824	; offset: $2 (2)
+sizeof					 EQU *			; size:   $722 (1826)
+						ENDR
+
+; typedef struct PackedRecordID  PackedRecordID
+;
+;struct ProtoPackedRecordID is a minimum-sized structure.  Use this
+;for a variable-length packed RecordID.
+;
+ProtoPackedRecordID 	RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ProtoPackedRecordID  ProtoPackedRecordID
+; typedef PackedRecordID 	*PackedRecordIDPtr
+; typedef ProtoPackedRecordID  *ProtoPackedRecordIDPtr
+;
+;Copy PackedRecordID pRID1 to PackedRecordID pRID2.  pRID2 must already contain
+;pointers to structures large enough to hold copies of the corresponding
+;fields from pRID1.  A memFull error will be returned if that is not the case.
+;pRID2Length is the number of bytes that can be put into pRID2, not counting the
+;packed RecordID header.
+;
+;
+; pascal OSErr OCECopyPackedRecordID(const PackedRecordID *pRID1, const PackedRecordID *pRID2, unsigned short pRID2Length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyPackedRecordID
+			move.w	#774,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyPackedRecordID
+	ENDIF
+
+;
+;Create a RecordID from a PackedRecordID.
+;NOTE THAT THE UNPACKED STRUCT CONTAINS POINTERS INTO THE PACKED STRUCT - DON'T DELETE
+;OR REUSE THE PACKED STRUCT UNTIL YOU ARE FINISHED WITH THE UNPACKED STRUCT AS WELL
+;
+;
+; pascal void OCEUnpackRecordID(const PackedRecordID *pRID, RecordID *rid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEUnpackRecordID
+			move.w	#818,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEUnpackRecordID
+	ENDIF
+
+;
+;Create a PackedRecordID from a RecordID.  pRID must be large enough to contain
+;the packed RecordID.  A memFull error will be returned if that is not the case.
+;packedRecordIDLength is the number of bytes that can be put into pRID, not
+;counting the header.
+;
+;
+; pascal OSErr OCEPackRecordID(const RecordID *rid, PackedRecordID *pRID, unsigned short packedRecordIDLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackRecordID
+			move.w	#806,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackRecordID
+	ENDIF
+
+;
+;Compute the number of bytes of memory needed to hold a RecordID when packed. This
+;length includes the length of the length field of PackedRecordID, so it
+;is safe to do a NewPtr (OCEPackedRecordIDSize(...)).
+;
+;
+; pascal unsigned short OCEPackedRecordIDSize(const RecordID *rid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackedRecordIDSize
+			move.w	#811,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackedRecordIDSize
+	ENDIF
+
+;
+;Check the equality of two packed RIDs.
+;
+;
+; pascal Boolean OCEEqualPackedRecordID(const PackedRecordID *pRID1, const PackedRecordID *pRID2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualPackedRecordID
+			move.w	#786,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualPackedRecordID
+	ENDIF
+
+; OCEValidPackedRecordID checks the validity of a packed record ID. 
+;
+; pascal Boolean OCEValidPackedRecordID(const PackedRecordID *pRID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidPackedRecordID
+			move.w	#821,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidPackedRecordID
+	ENDIF
+
+;*** DSSpec ***
+DSSpec 					RECORD	0
+entitySpecifier			 ds.l   1		; offset: $0 (0)
+extensionType			 ds.l   1		; offset: $4 (4)
+extensionSize			 ds.w   1		; offset: $8 (8)
+extensionValue			 ds.l   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct DSSpec 	DSSpec
+; typedef DSSpec 			*DSSpecPtr
+;
+;struct PackedDSSpec is NOT a maximum-sized structure.  Allocate one of
+;these and it will hold any valid packed RecordID, but not necessarily any additional
+;data.
+;
+
+kPackedDSSpecMaxBytes			EQU		1832
+
+PackedDSSpec 			RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+data					 ds.b   1832	; offset: $2 (2)
+sizeof					 EQU *			; size:   $72A (1834)
+						ENDR
+
+; typedef struct PackedDSSpec  PackedDSSpec
+;
+;struct ProtoPackedDSSpec is a minimum-sized structure.  Use this
+;for a variable-length packed DSSpec.
+;
+ProtoPackedDSSpec 		RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ProtoPackedDSSpec  ProtoPackedDSSpec
+; typedef PackedDSSpec 		*PackedDSSpecPtr
+; typedef ProtoPackedDSSpec  *ProtoPackedDSSpecPtr
+;
+;Copy PackedDSSpec pdss1 to PackedDSSpec pdss2.  pdss2 must already contain
+;pointers to structures large enough to hold copies of the corresponding
+;fields from pdss1.  A memFull error will be returned if that is not the case.
+;pdss2Length is the number of bytes that can be put into pdss2, not counting the
+;packed DSSpec header.
+;
+;
+; pascal OSErr OCECopyPackedDSSpec(const PackedDSSpec *pdss1, const PackedDSSpec *pdss2, unsigned short pdss2Length)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCECopyPackedDSSpec
+			move.w	#771,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCECopyPackedDSSpec
+	ENDIF
+
+;
+;Create a DSSpec from a PackedDSSpec.
+;NOTE THAT THE UNPACKED STRUCT CONTAINS POINTERS INTO THE PACKED STRUCT - DON'T DELETE
+;OR REUSE THE PACKED STRUCT UNTIL YOU ARE FINISHED WITH THE UNPACKED STRUCT AS WELL.
+;A pointer to the extension is returned in dss->extensionValue, and the length of that
+;extension is returned in dss->extensionSize.  If there is no extension, dss->extensionValue will
+;be set to nil.  This routine will unpack the RecordID (if any) into rid, unpack the rest
+;into dss, and set dss->entitySpecifier to rid.
+;
+;
+; pascal void OCEUnpackDSSpec(const PackedDSSpec *pdss, DSSpec *dss, RecordID *rid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEUnpackDSSpec
+			move.w	#815,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEUnpackDSSpec
+	ENDIF
+
+;
+;Create a PackedDSSpec from a DSSpec.  pdss must be large enough to
+;contain the packed RecordID and any extension.  A memFull error will be returned if that
+;is not the case.  pdssLength is the number of bytes that can be put into pdss,
+;not counting the header.
+;
+;
+; pascal OSErr OCEPackDSSpec(const DSSpec *dss, PackedDSSpec *pdss, unsigned short pdssLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackDSSpec
+			move.w	#802,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackDSSpec
+	ENDIF
+
+;
+;Compute the number of bytes of memory needed to hold a DSSpec when packed. This
+;length includes the length of the length field of PackedDSSpec, so it
+;is safe to do a NewPtr (OCEPackedDSSpecSize(...)).
+;
+;
+; pascal unsigned short OCEPackedDSSpecSize(const DSSpec *dss)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackedDSSpecSize
+			move.w	#807,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackedDSSpecSize
+	ENDIF
+
+;	Check the equality of two DSSpecs.  This compares all fields, even the
+;extension (unless extensionSize == 0).  The extensions are compared in a case-insensitive and
+;diacrit-insensitive manner. 
+;
+; pascal Boolean OCEEqualDSSpec(const DSSpec *pdss1, const DSSpec *pdss2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualDSSpec
+			move.w	#782,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualDSSpec
+	ENDIF
+
+;	Check the equality of two PackedDSSpecs.  This compares all fields, even the
+;extension (unless extensionSize == 0).  The extensions are compared in a case-insensitive and
+;diacrit-insensitive manner. 
+;
+; pascal Boolean OCEEqualPackedDSSpec(const PackedDSSpec *pdss1, const PackedDSSpec *pdss2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEEqualPackedDSSpec
+			move.w	#784,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEEqualPackedDSSpec
+	ENDIF
+
+;
+;Check the validity of a PackedDSSpec.  If extensionType is
+;'entn', pdss must contain a valid entitySpecifier.  For all other extensionTypes, a nil
+;entitySpecifier is valid, but if non-nil, it will be checked for validity.  No check
+;is made on the extension.
+;
+;
+; pascal Boolean OCEValidPackedDSSpec(const PackedDSSpec *pdss)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEValidPackedDSSpec
+			move.w	#819,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEValidPackedDSSpec
+	ENDIF
+
+;
+;Return info about a DSSpec.  This routine does not check validity.  If the
+;DSSpec has no extension, we determine whether it represents the root of all
+;catalogs, a single catalog, a DNode, or a Record.  Else it is invalid.
+;If the DSSpec has an extension, we simply return the extension type.
+;
+;
+; pascal OSType OCEGetDSSpecInfo(const DSSpec *spec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetDSSpecInfo
+			move.w	#793,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetDSSpecInfo
+	ENDIF
+
+; OCEGetExtensionType returns the extensionType imbedded in the PackedDSSpec. 
+;
+; pascal OSType OCEGetExtensionType(const PackedDSSpec *pdss)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetExtensionType
+			move.w	#796,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetExtensionType
+	ENDIF
+
+;
+;OCEStreamPackedDSSpec streams (flattens) a catalog object a little at a time by
+;calling the DSSpecStreamer routine that you provide.
+;
+; typedef DSSpecStreamerUPP  DSSpecStreamer
+;
+; pascal OSErr OCEStreamPackedDSSpec(const DSSpec *dss, DSSpecStreamer stream, long userData, unsigned long *actualCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEStreamPackedDSSpec
+			move.w	#829,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEStreamPackedDSSpec
+	ENDIF
+
+;*** AttributeType ***
+;
+;For the record, an AttributeType is an RString with a smaller maximum size.
+;I don't just typedef it to an RString, because I want the definition of the AttributeType
+;struct to contain the max length, because I need to include it in the Attribute struct
+;below.  But it should be possible to typecast any AttributeType to an RString and use
+;all the RString utilities on it.
+;
+AttributeType 			RECORD	0
+charSet					 ds.w   1		; offset: $0 (0)
+dataLength				 ds.w   1		; offset: $2 (2)
+body					 ds.b   32		; offset: $4 (4)		; always fixed at the max size 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct AttributeType  AttributeType
+; typedef AttributeType 	*AttributeTypePtr
+; Miscellaneous defines:  (these cannot be made into enums) 
+
+kMinPackedRStringLength			EQU		4
+
+kMinPackedRLISize				EQU		20
+
+;*** AttributeValue ***
+; same class as is used in AppleEvents 
+; typedef DescType 			AttributeTag
+AttributeValue 			RECORD	0
+tag						 ds.l   1		; offset: $0 (0)
+dataLength				 ds.l   1		; offset: $4 (4)
+bytes					 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct AttributeValue  AttributeValue
+; typedef AttributeValue 	*AttributeValuePtr
+;*** Attribute ***
+Attribute 				RECORD	0
+attributeType			 ds.l   9		; offset: $0 (0)
+cid						 ds.l   2		; offset: $24 (36)
+value					 ds.l   3		; offset: $2C (44)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct Attribute 	Attribute
+; typedef Attribute 		*AttributePtr
+;
+; pascal RString *OCEGetIndRecordType(OCERecordTypeIndex stringIndex)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetIndRecordType
+			move.w	#795,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetIndRecordType
+	ENDIF
+
+;
+; pascal AttributeType *OCEGetIndAttributeType(OCEAttributeTypeIndex stringIndex)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetIndAttributeType
+			move.w	#794,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetIndAttributeType
+	ENDIF
+
+
+_oceTBDispatch					EQU		$AA5E
+
+;***************************************************************************************
+;   PLEASE NOTE! ROUTINES HAVE MOVED TO THIS HEADER!
+; 
+;   OCESizePackedRecipient, OCEPackRecipient, OCEUnpackRecipient, OCEStreamRecipient,
+;   OCEGetRecipientType, and OCESetRecipientType have moved to the OCE header file.
+;   The OCEMessaging header includes the OCE header, so no changes to your code are
+;   required.
+;
+;***************************************************************************************
+; typedef DSSpec 			OCERecipient
+
+kOCESizePackedRecipient			EQU		830
+kOCEPackRecipient				EQU		831
+kOCEUnpackRecipient				EQU		832
+kOCEStreamRecipient				EQU		833
+kOCEGetRecipientType			EQU		834
+kOCESetRecipientType			EQU		835
+
+;
+;Compute the space that a OCERecipient would take if it were in packed
+;form.  [Note: does NOT even pad extensionSize, so you may get an odd #back out]
+;Safe to pass dereferenced handle(s).
+;
+;
+; pascal unsigned short OCESizePackedRecipient(const OCERecipient *rcpt)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCESizePackedRecipient
+			move.w	#830,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCESizePackedRecipient
+	ENDIF
+
+;
+;Take an OCERecipient (scatter) and (gather) stream into the specified
+;buffer.  It is assumed that there is sufficient space in the buffer (that is
+;OCESizePackedRecipient).  Safe to pass dereferenced handle(s).
+;
+;
+; pascal unsigned short OCEPackRecipient(const OCERecipient *rcpt, void *buffer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEPackRecipient
+			move.w	#831,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEPackRecipient
+	ENDIF
+
+;
+;Take a packed OCERecipient and cast a the OCERecipient frame over it. Returns
+;amBadDestId if it doesn't look like an OCERecipient. Safe to pass dereferenced
+;handle(s).
+;
+;
+; pascal OSErr OCEUnpackRecipient(const void *buffer, OCERecipient *rcpt, RecordID *entitySpecifier)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEUnpackRecipient
+			move.w	#832,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEUnpackRecipient
+	ENDIF
+
+;
+;Take an OCERecipient (scatter) and (gather) stream using the specified
+;function.  Safe to pass dereferenced handle(s).  If streamer function returns
+;OCEError OCEStreamRecipient stops execution and passes the error back to the caller
+;
+; typedef OCERecipientStreamerUPP  OCERecipientStreamer
+;
+; pascal OSErr OCEStreamRecipient(const OCERecipient *rcpt, OCERecipientStreamer stream, long userData, unsigned long *actualCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEStreamRecipient
+			move.w	#833,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEStreamRecipient
+	ENDIF
+
+; Get the OCERecipient's extensionType. Safe to pass dereferenced handle(s).
+;
+; pascal OSType OCEGetRecipientType(const CreationID *cid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetRecipientType
+			move.w	#834,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetRecipientType
+	ENDIF
+
+;
+;Set the OCERecipient's extensionType in the specified cid.  (Note: we do NOT
+;check for a nil pointer).  If the extensionType is 'entn', the cid is assumed
+;to be "valid" and is not touched.  Note: to properly handle non 'entn''s this
+;routine must and will zero the high long (source) of the cid! Safe to pass
+;dereferenced handle(s).
+;
+;
+; pascal void OCESetRecipientType(OSType extensionType, CreationID *cid)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCESetRecipientType
+			move.w	#835,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCESetRecipientType
+	ENDIF
+
+;***************************************************************************************
+;   PLEASE NOTE! ROUTINES HAVE MOVED TO THIS HEADER!
+; 
+;   OCEGetAccessControlDSSpec and its corresponding data type and constants have
+;   moved to the OCE header from OCEAuthDir. The OCEAuthDir header includes the OCE
+;   header, so no changes to your code are required.
+;   
+;***************************************************************************************
+; access categories bit numbers 
+
+kThisRecordOwnerBit				EQU		0
+kFriendsBit						EQU		1
+kAuthenticatedInDNodeBit		EQU		2
+kAuthenticatedInDirectoryBit	EQU		3
+kGuestBit						EQU		4
+kMeBit							EQU		5
+
+; Values of CategoryMask 
+kThisRecordOwnerMask			EQU		1
+kFriendsMask					EQU		2
+kAuthenticatedInDNodeMask		EQU		4
+kAuthenticatedInDirectoryMask	EQU		8
+kGuestMask						EQU		16
+kMeMask							EQU		32
+
+; typedef unsigned long 	CategoryMask
+;
+;pass kThisRecordOwnerMask, kFriendsMask, kAuthenticatedInDNodeMask, kAuthenticatedInDirectoryMask,
+;kGuestMask, or kMeMask to this routine, and it will return a pointer to a
+;DSSpec that can be used in the Get or Set Access Controls calls.
+;
+;
+; pascal DSSpecPtr OCEGetAccessControlDSSpec(CategoryMask categoryBitMask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OCEGetAccessControlDSSpec
+			move.w	#837,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OCEGetAccessControlDSSpec
+	ENDIF
+
+	ENDIF ; __OCE__

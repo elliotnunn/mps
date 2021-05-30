@@ -1,0 +1,433 @@
+;
+;	File:		DatabaseAccess.a
+;
+;	Contains:	Database Access Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__DATABASEACCESS__') = 'UNDEFINED' THEN
+__DATABASEACCESS__ SET 1
+
+
+	IF &TYPE('__RESOURCES__') = 'UNDEFINED' THEN
+	include 'Resources.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'Files.a'											;
+;			include 'OSUtils.a'									;
+;				include 'Memory.a'									;
+;			include 'Finder.a'										;
+
+typeNone						EQU		'none'
+typeDate						EQU		'date'
+typeTime						EQU		'time'
+typeTimeStamp					EQU		'tims'
+typeDecimal						EQU		'deci'
+typeMoney						EQU		'mone'
+typeVChar						EQU		'vcha'
+typeVBin						EQU		'vbin'
+typeLChar						EQU		'lcha'
+typeLBin						EQU		'lbin'
+typeDiscard						EQU		'disc'
+; "dummy" types for DBResultsToText 
+typeUnknown						EQU		'unkn'
+typeColBreak					EQU		'colb'
+typeRowBreak					EQU		'rowb'
+; pass this in to DBGetItem for any data type 
+typeAnyType						EQU		0
+
+; infinite timeout value for DBGetItem 
+; messages for status functions for DBStartQuery 
+kDBUpdateWind					EQU		0
+kDBAboutToInit					EQU		1
+kDBInitComplete					EQU		2
+kDBSendComplete					EQU		3
+kDBExecComplete					EQU		4
+kDBStartQueryComplete			EQU		5
+
+; messages for status functions for DBGetQueryResults 
+kDBGetItemComplete				EQU		6
+kDBGetQueryResultsComplete		EQU		7
+kDBWaitForever					EQU		-1
+;  flags for DBGetItem  
+kDBLastColFlag					EQU		$0001
+kDBNullFlag						EQU		$0004
+
+; typedef OSType 			DBType
+; typedef struct DBAsyncParamBlockRec  DBAsyncParamBlockRec, *DBAsyncParmBlkPtr
+DBAsyncParamBlockRec 	RECORD	0
+completionProc			 ds.l   1		; offset: $0 (0)		; pointer to completion routine 
+result					 ds.w   1		; offset: $4 (4)		; result of call 
+userRef					 ds.l   1		; offset: $6 (6)		; for application's use 
+ddevRef					 ds.l   1		; offset: $A (10)		; for ddev's use 
+reserved				 ds.l   1		; offset: $E (14)		; for internal use 
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+ResListElem 			RECORD	0
+theType					 ds.l   1		; offset: $0 (0)		; resource type 
+id						 ds.w   1		; offset: $4 (4)		; resource id 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct ResListElem  ResListElem
+; typedef ResListElem 		*ResListPtr, **ResListHandle
+; structure for query list in QueryRecord 
+; typedef Handle 			QueryArray[256]
+QueryRecord 			RECORD	0
+version					 ds.w   1		; offset: $0 (0)		; version 
+id						 ds.w   1		; offset: $2 (2)		; id of 'qrsc' this came from 
+queryProc				 ds.l   1		; offset: $4 (4)		; handle to query def proc 
+ddevName				 ds.l   16		; offset: $8 (8)		; ddev name 
+host					 ds.l   64		; offset: $48 (72)		; host name 
+user					 ds.l   64		; offset: $148 (328)	; user name 
+password				 ds.l   64		; offset: $248 (584)	; password 
+connStr					 ds.l   64		; offset: $348 (840)	; connection string 
+currQuery				 ds.w   1		; offset: $448 (1096)	; index of current query 
+numQueries				 ds.w   1		; offset: $44A (1098)	; number of queries in list 
+queryList				 ds.l   1		; offset: $44C (1100)	; handle to array of handles to text 
+numRes					 ds.w   1		; offset: $450 (1104)	; number of resources in list 
+resList					 ds.l   1		; offset: $452 (1106)	; handle to array of resource list elements 
+dataHandle				 ds.l   1		; offset: $456 (1110)	; for use by query def proc 
+refCon					 ds.l   1		; offset: $45A (1114)	; for use by application 
+sizeof					 EQU *			; size:   $45E (1118)
+						ENDR
+
+; typedef struct QueryRecord  QueryRecord
+; typedef QueryRecord 		*QueryPtr, **QueryHandle
+; structure of column types array in ResultsRecord 
+; typedef DBType 			ColTypesArray[256]
+DBColInfoRecord 		RECORD	0
+len						 ds.w   1		; offset: $0 (0)
+places					 ds.w   1		; offset: $2 (2)
+flags					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct DBColInfoRecord  DBColInfoRecord
+; typedef DBColInfoRecord 	ColInfoArray[256]
+ResultsRecord 			RECORD	0
+numRows					 ds.w   1		; offset: $0 (0)		; number of rows in result 
+numCols					 ds.w   1		; offset: $2 (2)		; number of columns per row 
+colTypes				 ds.l   1		; offset: $4 (4)		; data type array 
+colData					 ds.l   1		; offset: $8 (8)		; actual results 
+colInfo					 ds.l   1		; offset: $C (12)		; DBColInfoRecord array 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct ResultsRecord  ResultsRecord
+;
+; pascal OSErr InitDBPack(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InitDBPack
+			move.w	#$0004,-(sp)
+			move.w	#$0100,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InitDBPack
+	ENDIF
+
+;
+; pascal OSErr DBInit(long *sessID, ConstStr63Param ddevName, ConstStr255Param host, ConstStr255Param user, ConstStr255Param passwd, ConstStr255Param connStr, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBInit
+			move.w	#$0E02,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBInit
+	ENDIF
+
+;
+; pascal OSErr DBEnd(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBEnd
+			move.w	#$0403,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBEnd
+	ENDIF
+
+;
+; pascal OSErr DBGetConnInfo(long sessID, short sessNum, long *returnedID, long *version, Str63 ddevName, Str255 host, Str255 user, Str255 network, Str255 connStr, long *start, OSErr *state, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetConnInfo
+			move.w	#$1704,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetConnInfo
+	ENDIF
+
+;
+; pascal OSErr DBGetSessionNum(long sessID, short *sessNum, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetSessionNum
+			move.w	#$0605,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetSessionNum
+	ENDIF
+
+;
+; pascal OSErr DBSend(long sessID, Ptr text, short len, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBSend
+			move.w	#$0706,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBSend
+	ENDIF
+
+;
+; pascal OSErr DBSendItem(long sessID, DBType dataType, short len, short places, short flags, void *buffer, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBSendItem
+			move.w	#$0B07,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBSendItem
+	ENDIF
+
+;
+; pascal OSErr DBExec(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBExec
+			move.w	#$0408,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBExec
+	ENDIF
+
+;
+; pascal OSErr DBState(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBState
+			move.w	#$0409,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBState
+	ENDIF
+
+;
+; pascal OSErr DBGetErr(long sessID, long *err1, long *err2, Str255 item1, Str255 item2, Str255 errorMsg, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetErr
+			move.w	#$0E0A,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetErr
+	ENDIF
+
+;
+; pascal OSErr DBBreak(long sessID, Boolean abort, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBBreak
+			move.w	#$050B,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBBreak
+	ENDIF
+
+;
+; pascal OSErr DBGetItem(long sessID, long timeout, DBType *dataType, short *len, short *places, short *flags, void *buffer, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetItem
+			move.w	#$100C,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetItem
+	ENDIF
+
+;
+; pascal OSErr DBUnGetItem(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBUnGetItem
+			move.w	#$040D,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBUnGetItem
+	ENDIF
+
+;
+; pascal OSErr DBKill(DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBKill
+			move.w	#$020E,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBKill
+	ENDIF
+
+;
+; pascal OSErr DBGetNewQuery(short queryID, QueryHandle *query)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetNewQuery
+			move.w	#$030F,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetNewQuery
+	ENDIF
+
+;
+; pascal OSErr DBDisposeQuery(QueryHandle query)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBDisposeQuery
+			move.w	#$0210,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBDisposeQuery
+	ENDIF
+
+;
+; pascal OSErr DBStartQuery(long *sessID, QueryHandle query, DBStatusUPP statusProc, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBStartQuery
+			move.w	#$0811,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBStartQuery
+	ENDIF
+
+;
+; pascal OSErr DBGetQueryResults(long sessID, ResultsRecord *results, long timeout, DBStatusUPP statusProc, DBAsyncParmBlkPtr asyncPB)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetQueryResults
+			move.w	#$0A12,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetQueryResults
+	ENDIF
+
+;
+; pascal OSErr DBResultsToText(ResultsRecord *results, Handle *theText)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBResultsToText
+			move.w	#$0413,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBResultsToText
+	ENDIF
+
+;
+; pascal OSErr DBInstallResultHandler(DBType dataType, DBResultHandlerUPP theHandler, Boolean isSysHandler)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBInstallResultHandler
+			move.w	#$0514,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBInstallResultHandler
+	ENDIF
+
+;
+; pascal OSErr DBRemoveResultHandler(DBType dataType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBRemoveResultHandler
+			move.w	#$0215,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBRemoveResultHandler
+	ENDIF
+
+;
+; pascal OSErr DBGetResultHandler(DBType dataType, DBResultHandlerUPP *theHandler, Boolean getSysHandler)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBGetResultHandler
+			move.w	#$0516,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBGetResultHandler
+	ENDIF
+
+;
+; pascal OSErr DBIdle(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DBIdle
+			move.w	#$00FF,d0
+			dc.w 	$A82F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DBIdle
+	ENDIF
+
+	ENDIF ; __DATABASEACCESS__

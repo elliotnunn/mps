@@ -1,0 +1,493 @@
+;
+;	File:		Video.a
+;
+;	Contains:	Video Driver Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__VIDEO__') = 'UNDEFINED' THEN
+__VIDEO__ SET 1
+
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+mBaseOffset						EQU		1					;Id of mBaseOffset.
+mRowBytes						EQU		2					;Video sResource parameter Id's 
+mBounds							EQU		3					;Video sResource parameter Id's 
+mVersion						EQU		4					;Video sResource parameter Id's 
+mHRes							EQU		5					;Video sResource parameter Id's 
+mVRes							EQU		6					;Video sResource parameter Id's 
+mPixelType						EQU		7					;Video sResource parameter Id's 
+mPixelSize						EQU		8					;Video sResource parameter Id's 
+mCmpCount						EQU		9					;Video sResource parameter Id's 
+mCmpSize						EQU		10					;Video sResource parameter Id's 
+mPlaneBytes						EQU		11					;Video sResource parameter Id's 
+mVertRefRate					EQU		14					;Video sResource parameter Id's 
+mVidParams						EQU		1					;Video parameter block id.
+mTable							EQU		2					;Offset to the table.
+mPageCnt						EQU		3					;Number of pages
+mDevType						EQU		4					;Device Type
+oneBitMode						EQU		128					;Id of OneBitMode Parameter list.
+twoBitMode						EQU		129					;Id of TwoBitMode Parameter list.
+fourBitMode						EQU		130					;Id of FourBitMode Parameter list.
+eightBitMode					EQU		131					;Id of EightBitMode Parameter list.
+
+sixteenBitMode					EQU		132					;Id of SixteenBitMode Parameter list.
+thirtyTwoBitMode				EQU		133					;Id of ThirtyTwoBitMode Parameter list.
+firstVidMode					EQU		128					;The new, better way to do the above. 
+secondVidMode					EQU		129					; QuickDraw only supports six video 
+thirdVidMode					EQU		130					; at this time.      
+fourthVidMode					EQU		131
+fifthVidMode					EQU		132
+sixthVidMode					EQU		133
+spGammaDir						EQU		64
+spVidNamesDir					EQU		65
+
+; csTimingFormat values in VDTimingInfo 
+; look in the declaration rom for timing info 
+kDeclROMtables					EQU		'decl'
+
+; Timing mode constants for Display Manager MultiMode support
+;	Corresponding	.h equates are in Video.h
+;					.a equates are in Video.a
+;					.r equates are in DepVideoEqu.r
+;	
+;	The first enum is the old names (for compatibility).
+;	The second enum is the new names.
+;
+timingApple12					EQU		130					;  512x384 (60 Hz) Rubik timing.
+timingApple12x					EQU		135					;  560x384 (60 Hz) Rubik-560 timing.
+timingApple13					EQU		140					;  640x480 (67 Hz) HR timing.
+timingApple13x					EQU		145					;  640x400 (67 Hz) HR-400 timing.
+timingAppleVGA					EQU		150					;  640x480  (60 Hz) VGA timing.
+timingApple15					EQU		160					;  640x870 (75 Hz) FPD timing.
+timingApple15x					EQU		165					;  640x818 (75 Hz) FPD-818 timing.
+timingApple16					EQU		170					;  832x624 (75 Hz) GoldFish timing.
+timingAppleSVGA					EQU		180					;  800x600  (56 Hz) SVGA timing.
+timingApple1Ka					EQU		190					; 1024x768 (60 Hz) VESA 1K-60Hz timing.
+timingApple1Kb					EQU		200					; 1024x768 (70 Hz) VESA 1K-70Hz timing.
+timingApple19					EQU		210					; 1024x768  (75 Hz) Apple 19" RGB.
+timingApple21					EQU		220					; 1152x870  (75 Hz) Apple 21" RGB.
+
+timingInvalid					EQU		0					; Unknown timing… force user to confirm.
+timingApple_512x384_60hz		EQU		130					;  512x384  (60 Hz) Rubik timing.
+timingApple_560x384_60hz		EQU		135					;  560x384  (60 Hz) Rubik-560 timing.
+timingApple_640x480_67hz		EQU		140					;  640x480  (67 Hz) HR timing.
+timingApple_640x400_67hz		EQU		145					;  640x400  (67 Hz) HR-400 timing.
+timingVESA_640x480_60hz			EQU		150					;  640x480  (60 Hz) VGA timing.
+timingApple_640x870_75hz		EQU		160					;  640x870  (75 Hz) FPD timing.
+timingApple_640x818_75hz		EQU		165					;  640x818  (75 Hz) FPD-818 timing.
+timingApple_832x624_75hz		EQU		170					;  832x624  (75 Hz) GoldFish timing.
+timingVESA_800x600_56hz			EQU		180					;  800x600  (56 Hz) SVGA timing.
+timingVESA_800x600_60hz			EQU		182					;  800x600  (60 Hz) SVGA timing.
+timingVESA_800x600_72hz			EQU		184					;  800x600  (72 Hz) SVGA timing.
+timingVESA_800x600_75hz			EQU		186					;  800x600  (75 Hz) SVGA timing.
+timingVESA_1024x768_60hz		EQU		190					; 1024x768  (60 Hz) VESA 1K-60Hz timing.
+timingVESA_1024x768_70hz		EQU		200					; 1024x768  (70 Hz) VESA 1K-70Hz timing.
+timingVESA_1024x768_75hz		EQU		204					; 1024x768  (75 Hz) VESA 1K-70Hz timing (very similar to timingApple_1024x768_75hz).
+timingApple_1024x768_75hz		EQU		210					; 1024x768  (75 Hz) Apple 19" RGB.
+timingApple_1152x870_75hz		EQU		220					; 1152x870  (75 Hz) Apple 21" RGB.
+timingAppleNTSC_ST				EQU		230					;  512x384  (60 Hz, interlaced, non-convolved).
+timingAppleNTSC_FF				EQU		232					;  640x480  (60 Hz, interlaced, non-convolved).
+timingAppleNTSC_STconv			EQU		234					;  512x384  (60 Hz, interlaced, convolved).
+timingAppleNTSC_FFconv			EQU		236					;  640x480  (60 Hz, interlaced, convolved).
+timingApplePAL_ST				EQU		238					;  640x480  (50 Hz, interlaced, non-convolved).
+timingApplePAL_FF				EQU		240					;  768x576  (50 Hz, interlaced, non-convolved).
+timingApplePAL_STconv			EQU		242					;  640x480  (50 Hz, interlaced, convolved).
+timingApplePAL_FFconv			EQU		244					;  768x576  (50 Hz, interlaced, convolved).
+timingVESA_1280x960_75hz		EQU		250					; 1280x960  (75 Hz)
+timingVESA_1280x1024_60hz		EQU		260					; 1280x1024 (60 Hz)
+timingVESA_1280x1024_75hz		EQU		262					; 1280x1024 (75 Hz)
+timingVESA_1600x1200_60hz		EQU		280					; 1600x1200 (60 Hz) VESA proposed timing.
+timingVESA_1600x1200_65hz		EQU		282					; 1600x1200 (65 Hz) VESA proposed timing.
+timingVESA_1600x1200_70hz		EQU		284					; 1600x1200 (70 Hz) VESA proposed timing.
+timingVESA_1600x1200_75hz		EQU		286					; 1600x1200 (75 Hz) VESA proposed timing.
+timingVESA_1600x1200_80hz		EQU		288					; 1600x1200 (80 Hz) VESA proposed timing (pixel clock is 216 Mhz dot clock).
+
+; csConnectFlags values in VDDisplayConnectInfo 
+kAllModesValid					EQU		0					; All modes not trimmed by primary init are good close enough to try 
+kAllModesSafe					EQU		1					; All modes not trimmed by primary init are know to be safe 
+kReportsTagging					EQU		2					; Can detect tagged displays (to identify smart monitors) 
+kHasDirectConnection			EQU		3					; True implies that driver can talk directly to device (e.g. serial data link via sense lines) 
+kIsMonoDev						EQU		4					; Says whether there’s an RGB (0) or Monochrome (1) connection. 
+kUncertainConnection			EQU		5					; There may not be a display (no sense lines?). 
+kTaggingInfoNonStandard			EQU		6					; Set when csConnectTaggedType/csConnectTaggedData are non-standard (i.e., not the Apple CRT sense codes). 
+kReportsDDCConnection			EQU		7					; Card can do ddc (set kHasDirectConnect && kHasDDCConnect if you actually found a ddc display). 
+kHasDDCConnection				EQU		8					; Card has ddc connect now. 
+
+; csDisplayType values in VDDisplayConnectInfo 
+kUnknownConnect					EQU		1					; Not sure how we’ll use this, but seems like a good idea. 
+kPanelConnect					EQU		2					; For use with fixed-in-place LCD panels. 
+kPanelTFTConnect				EQU		2					; Alias for kPanelConnect 
+kFixedModeCRTConnect			EQU		3					;  For use with fixed-mode (i.e., very limited range) displays. 
+kMultiModeCRT1Connect			EQU		4					; 320x200 maybe, 12" maybe, 13" (default), 16" certain, 19" maybe, 21" maybe 
+kMultiModeCRT2Connect			EQU		5					; 320x200 maybe, 12" maybe, 13" certain, 16" (default), 19" certain, 21" maybe 
+kMultiModeCRT3Connect			EQU		6					; 320x200 maybe, 12" maybe, 13" certain, 16" certain, 19" default, 21" certain 
+kMultiModeCRT4Connect			EQU		7					; Expansion to large multi mode (not yet used) 
+kModelessConnect				EQU		8					; Expansion to modeless model (not yet used) 
+kFullPageConnect				EQU		9					; 640x818 (to get 8bpp in 512K case) and 640x870 (these two only) 
+kVGAConnect						EQU		10					; 640x480 VGA default -- question everything else 
+kNTSCConnect					EQU		11					; NTSC ST (default), FF, STconv, FFconv 
+kPALConnect						EQU		12					; PAL ST (default), FF, STconv, FFconv 
+kHRConnect						EQU		13					; Straight-6 connect -- 640x480 and 640x400 (to get 8bpp in 256K case) (these two only) 
+kPanelFSTNConnect				EQU		14					; For use with fixed-in-place LCD FSTN (aka “Supertwist”) panels 
+kMonoTwoPageConnect				EQU		15					; 1152x870 Apple color two-page display 
+kColorTwoPageConnect			EQU		16					; 1152x870 Apple B&W two-page display 
+kColor16Connect					EQU		17					; 832x624 Apple B&W two-page display 
+kColor19Connect					EQU		18					; 1024x768 Apple B&W two-page display 
+
+; csTimingFlags values in VDTimingInfoRec 
+kModeValid						EQU		0					; Says that this mode should NOT be trimmed. 
+kModeSafe						EQU		1					; This mode does not need confirmation 
+kModeDefault					EQU		2					; This is the default mode for this type of connection 
+kModeShowNow					EQU		3					; This mode should always be shown (even though it may require a confirm) 
+kModeNotResize					EQU		4					; This mode should not be used to resize the display (eg. mode selects a different connector on card) 
+kModeRequiresPan				EQU		5					; This mode has more pixels than are actually displayed 
+
+; csResolutionFlags bit flags for VDResolutionInfoRec 
+kResolutionHasMultipleDepthSizes EQU		0					; Says that this mode has different csHorizontalPixels, csVerticalLines at different depths (usually slightly larger at lower depths) 
+
+;	Power Mode constants for VDPowerStateRec.powerState.	
+kAVPowerOff						EQU		0
+kAVPowerStandby					EQU		1
+kAVPowerSuspend					EQU		2
+kAVPowerOn						EQU		3
+
+;	Power Mode masks and bits for VDPowerStateRec.powerFlags.	
+kPowerStateNeedsRefresh			EQU		0
+kPowerStateNeedsRefreshMask		EQU		(1 << 0)
+
+; Control Codes 
+cscReset						EQU		0
+cscKillIO						EQU		1
+cscSetMode						EQU		2
+cscSetEntries					EQU		3
+cscSetGamma						EQU		4
+cscGrayPage						EQU		5
+cscGrayScreen					EQU		5
+cscSetGray						EQU		6
+cscSetInterrupt					EQU		7
+cscDirectSetEntries				EQU		8
+cscSetDefaultMode				EQU		9
+cscSwitchMode					EQU		10
+cscSetSync						EQU		11
+cscUnusedCall					EQU		127					; This call used to expend the scrn resource.  Its imbedded data contains more control info 
+
+; Status Codes 
+cscGetMode						EQU		2
+cscGetEntries					EQU		3
+cscGetPageCnt					EQU		4
+cscGetPages						EQU		4					; This is what C&D 2 calls it. 
+cscGetPageBase					EQU		5
+cscGetBaseAddr					EQU		5					; This is what C&D 2 calls it. 
+cscGetGray						EQU		6
+cscGetInterrupt					EQU		7
+cscGetGamma						EQU		8
+cscGetDefaultMode				EQU		9
+cscGetCurMode					EQU		10
+cscGetSync						EQU		11
+cscGetConnection				EQU		12					; Return information about the connection to the display 
+cscGetModeTiming				EQU		13					; Return timing info for a mode 
+cscGetModeBaseAddress			EQU		14					; Return base address information about a particular mode 
+cscGetScanProc					EQU		15					; QuickTime scan chasing routine 
+
+; Bit definitions for the Get/Set Sync call
+kDisableHorizontalSyncBit		EQU		0
+kDisableVerticalSyncBit			EQU		1
+kDisableCompositeSyncBit		EQU		2
+kEnableSyncOnBlue				EQU		3
+kEnableSyncOnGreen				EQU		4
+kEnableSyncOnRed				EQU		5
+kNoSeparateSyncControlBit		EQU		6
+kHorizontalSyncMask				EQU		$01
+kVerticalSyncMask				EQU		$02
+kCompositeSyncMask				EQU		$04
+kDPMSSyncMask					EQU		$7
+kSyncOnBlueMask					EQU		$08
+kSyncOnGreenMask				EQU		$10
+kSyncOnRedMask					EQU		$20
+kSyncOnMask						EQU		$38
+
+;	Power Mode constants for translating DPMS modes to Get/SetSync calls.	
+kDPMSSyncOn						EQU		0
+kDPMSSyncStandby				EQU		1
+kDPMSSyncSuspend				EQU		2
+kDPMSSyncOff					EQU		7
+
+VPBlock 				RECORD	0
+vpBaseOffset			 ds.l   1		; offset: $0 (0)		;Offset to page zero of video RAM (From minorBaseOS).
+vpRowBytes				 ds.w   1		; offset: $4 (4)		;Width of each row of video memory.
+vpBounds				 ds     Rect	; offset: $6 (6)		;BoundsRect for the video display (gives dimensions).
+vpVersion				 ds.w   1		; offset: $E (14)		;PixelMap version number.
+vpPackType				 ds.w   1		; offset: $10 (16)
+vpPackSize				 ds.l   1		; offset: $12 (18)
+vpHRes					 ds.l   1		; offset: $16 (22)		;Horizontal resolution of the device (pixels per inch).
+vpVRes					 ds.l   1		; offset: $1A (26)		;Vertical resolution of the device (pixels per inch).
+vpPixelType				 ds.w   1		; offset: $1E (30)		;Defines the pixel type.
+vpPixelSize				 ds.w   1		; offset: $20 (32)		;Number of bits in pixel.
+vpCmpCount				 ds.w   1		; offset: $22 (34)		;Number of components in pixel.
+vpCmpSize				 ds.w   1		; offset: $24 (36)		;Number of bits per component
+vpPlaneBytes			 ds.l   1		; offset: $26 (38)		;Offset from one plane to the next.
+sizeof					 EQU *			; size:   $2A (42)
+						ENDR
+
+; typedef struct VPBlock 	VPBlock
+; typedef VPBlock 			*VPBlockPtr
+VDEntryRecord 			RECORD	0
+csTable					 ds.l   1		; offset: $0 (0)		;(long) pointer to color table entry=value, r,g,b:INTEGER
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct VDEntryRecord  VDEntryRecord
+; typedef VDEntryRecord 	*VDEntRecPtr
+; Parm block for SetGray control call 
+VDGrayRecord 			RECORD	0
+csMode					 ds.b   1		; offset: $0 (0)		;Same as GDDevType value (0=color, 1=mono)
+filler					 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct VDGrayRecord  VDGrayRecord
+; typedef VDGrayRecord 		*VDGrayPtr
+; Parm block for SetInterrupt call 
+VDFlagRecord 			RECORD	0
+csMode					 ds.b   1		; offset: $0 (0)
+filler					 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct VDFlagRecord  VDFlagRecord
+; typedef VDFlagRecord 		*VDFlagRecPtr
+; Parm block for SetEntries control call 
+VDSetEntryRecord 		RECORD	0
+csTable					 ds.l   1		; offset: $0 (0)		;Pointer to an array of color specs
+csStart					 ds.w   1		; offset: $4 (4)		;Which spec in array to start with, or -1
+csCount					 ds.w   1		; offset: $6 (6)		;Number of color spec entries to set
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct VDSetEntryRecord  VDSetEntryRecord
+; typedef VDSetEntryRecord 	*VDSetEntryPtr
+; Parm block for SetGamma control call 
+VDGammaRecord 			RECORD	0
+csGTable				 ds.l   1		; offset: $0 (0)		;pointer to gamma table
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct VDGammaRecord  VDGammaRecord
+; typedef VDGammaRecord 	*VDGamRecPtr
+VDBaseAddressInfoRec 	RECORD	0
+csDevData				 ds.l   1		; offset: $0 (0)		; LONGINT - (long) timing mode 
+csDevBase				 ds.l   1		; offset: $4 (4)		; LONGINT - (long) base address of the mode 
+csModeReserved			 ds.w   1		; offset: $8 (8)		; INTEGER - (short) will some day be the depth 
+csModeBase				 ds.l   1		; offset: $A (10)		; LONGINT - (long) reserved 
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct VDBaseAddressInfoRec  VDBaseAddressInfoRec, *VDBaseAddressInfoPtr
+VDSwitchInfoRec 		RECORD	0
+csMode					 ds.w   1		; offset: $0 (0)		;(word) mode depth
+csData					 ds.l   1		; offset: $2 (2)		;(long) functional sResource of mode
+csPage					 ds.w   1		; offset: $6 (6)		;(word) page to switch in
+csBaseAddr				 ds.l   1		; offset: $8 (8)		;(long) base address of page (return value)
+csReserved				 ds.l   1		; offset: $C (12)		;(long) Reserved (set to 0) 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct VDSwitchInfoRec  VDSwitchInfoRec
+; typedef VDSwitchInfoRec 	*VDSwitchInfoPtr
+VDTimingInfoRec 		RECORD	0
+csTimingMode			 ds.l   1		; offset: $0 (0)		; LONGINT - (long) timing mode (a la InitGDevice) 
+csTimingReserved		 ds.l   1		; offset: $4 (4)		; LONGINT - (long) reserved 
+csTimingFormat			 ds.l   1		; offset: $8 (8)		; LONGINT - (long) what format is the timing info 
+csTimingData			 ds.l   1		; offset: $C (12)		; LONGINT - (long) data supplied by driver 
+csTimingFlags			 ds.l   1		; offset: $10 (16)		; LONGINT - (long) mode within device 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct VDTimingInfoRec  VDTimingInfoRec
+; typedef VDTimingInfoRec 	*VDTimingInfoPtr
+VDDisplayConnectInfoRec RECORD	0
+csDisplayType			 ds.w   1		; offset: $0 (0)		; INTEGER - (word) Type of display connected 
+csConnectTaggedType		 ds.b   1		; offset: $2 (2)		; BYTE - type of tagging 
+csConnectTaggedData		 ds.b   1		; offset: $3 (3)		; BYTE - tagging data 
+csConnectFlags			 ds.l   1		; offset: $4 (4)		; LONGINT - (long) tell us about the connection 
+csDisplayComponent		 ds.l   1		; offset: $8 (8)		; LONGINT - (long) if the card has a direct connection to the display, it returns the display component here (FUTURE) 
+csConnectReserved		 ds.l   1		; offset: $C (12)		; LONGINT - (long) reserved 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct VDDisplayConnectInfoRec  VDDisplayConnectInfoRec
+; typedef VDDisplayConnectInfoRec  *VDDisplayConnectInfoPtr
+; RawSenseCode
+;	This abstract data type is not exactly abstract.  Rather, it is merely enumerated constants
+;	for the possible raw sense code values when 'standard' sense code hardware is implemented.
+;
+;	For 'standard' sense code hardware, the raw sense is obtained as follows:
+;		• Instruct the frame buffer controller NOT to actively drive any of the monitor sense lines
+;		• Read the state of the monitor sense lines 2, 1, and 0.  (2 is the MSB, 0 the LSB)
+;
+;	IMPORTANT Note: 
+;	When the 'kTaggingInfoNonStandard' bit of 'csConnectFlags' is FALSE, then these constants 
+;	are valid 'csConnectTaggedType' values in 'VDDisplayConnectInfo' 
+;
+;
+; typedef unsigned char 	RawSenseCode
+
+kRSCZero						EQU		0
+kRSCOne							EQU		1
+kRSCTwo							EQU		2
+kRSCThree						EQU		3
+kRSCFour						EQU		4
+kRSCFive						EQU		5
+kRSCSix							EQU		6
+kRSCSeven						EQU		7
+
+; ExtendedSenseCode
+;	This abstract data type is not exactly abstract.  Rather, it is merely enumerated constants
+;	for the values which are possible when the extended sense algorithm is applied to hardware
+;	which implements 'standard' sense code hardware.
+;
+; 	For 'standard' sense code hardware, the extended sense code algorithm is as follows:
+;	(Note:  as described here, sense line 'A' corresponds to '2', 'B' to '1', and 'C' to '0')
+;		• Drive sense line 'A' low and read the values of 'B' and 'C'.  
+;		• Drive sense line 'B' low and read the values of 'A' and 'C'.
+;		• Drive sense line 'C' low and read the values of 'A' and 'B'.
+;
+;	In this way, a six-bit number of the form BC/AC/AB is generated. 
+;
+;	IMPORTANT Note: 
+;	When the 'kTaggingInfoNonStandard' bit of 'csConnectFlags' is FALSE, then these constants 
+;	are valid 'csConnectTaggedData' values in 'VDDisplayConnectInfo' 
+;
+;
+; typedef unsigned char 	ExtendedSenseCode
+
+kESCZero21Inch					EQU		$00					; 21" RGB 								
+kESCOnePortraitMono				EQU		$14					; Portrait Monochrome 					
+kESCTwo12Inch					EQU		$21					; 12" RGB								
+kESCThree21InchRadius			EQU		$31					; 21" RGB (Radius)						
+kESCThree21InchMonoRadius		EQU		$34					; 21" Monochrome (Radius) 				
+kESCThree21InchMono				EQU		$35					; 21" Monochrome						
+kESCFourNTSC					EQU		$0A					; NTSC 								
+kESCFivePortrait				EQU		$1E					; Portrait RGB 						
+kESCSixMSB1						EQU		$03					; MultiScan Band-1 (12" thru 1Six")	
+kESCSixMSB2						EQU		$0B					; MultiScan Band-2 (13" thru 19")		
+kESCSixMSB3						EQU		$23					; MultiScan Band-3 (13" thru 21")		
+kESCSixStandard					EQU		$2B					; 13"/14" RGB or 12" Monochrome		
+kESCSevenPAL					EQU		$00					; PAL									
+kESCSevenNTSC					EQU		$14					; NTSC 								
+kESCSevenVGA					EQU		$17					; VGA 									
+kESCSeven16Inch					EQU		$2D					; 16" RGB (GoldFish) 				 	
+kESCSevenPALAlternate			EQU		$30					; PAL (Alternate) 						
+kESCSeven19Inch					EQU		$3A					; Third-Party 19”						
+kESCSevenNoDisplay				EQU		$3F					; No display connected 				
+
+; DepthMode
+;	This abstract data type is used to to reference RELATIVE pixel depths.
+;	Its definition is largely derived from its past usage, analogous to 'xxxVidMode'
+;
+;	Bits per pixel DOES NOT directly map to 'DepthMode'  For example, on some
+;	graphics hardware, 'kDepthMode1' may represent 1 BPP, whereas on other
+;	hardware, 'kDepthMode1' may represent 8BPP.
+;
+;	DepthMode IS considered to be ordinal, i.e., operations such as <, >, ==, etc.
+;	behave as expected.  The values of the constants which comprise the set are such
+;	that 'kDepthMode4 < kDepthMode6' behaves as expected.
+;
+; typedef unsigned short 	DepthMode
+
+kDepthMode1						EQU		128
+kDepthMode2						EQU		129
+kDepthMode3						EQU		130
+kDepthMode4						EQU		131
+kDepthMode5						EQU		132
+kDepthMode6						EQU		133
+
+kFirstDepthMode					EQU		128					; These constants are obsolete, and just included	
+kSecondDepthMode				EQU		129					; for clients that have converted to the above		
+kThirdDepthMode					EQU		130					; kDepthModeXXX constants.							
+kFourthDepthMode				EQU		131
+kFifthDepthMode					EQU		132
+kSixthDepthMode					EQU		133
+
+VDPageInfo 				RECORD	0
+csMode					 ds.w   1		; offset: $0 (0)		;(word) mode within device
+csData					 ds.l   1		; offset: $2 (2)		;(long) data supplied by driver
+csPage					 ds.w   1		; offset: $6 (6)		;(word) page to switch in
+csBaseAddr				 ds.l   1		; offset: $8 (8)		;(long) base address of page
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct VDPageInfo  VDPageInfo
+; typedef VDPageInfo 		*VDPgInfoPtr
+VDSizeInfo 				RECORD	0
+csHSize					 ds.w   1		; offset: $0 (0)		;(word) desired/returned h size
+csHPos					 ds.w   1		; offset: $2 (2)		;(word) desired/returned h position
+csVSize					 ds.w   1		; offset: $4 (4)		;(word) desired/returned v size
+csVPos					 ds.w   1		; offset: $6 (6)		;(word) desired/returned v position
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct VDSizeInfo  VDSizeInfo
+; typedef VDSizeInfo 		*VDSzInfoPtr
+VDSettings 				RECORD	0
+csParamCnt				 ds.w   1		; offset: $0 (0)		;(word) number of params
+csBrightMax				 ds.w   1		; offset: $2 (2)		;(word) max brightness
+csBrightDef				 ds.w   1		; offset: $4 (4)		;(word) default brightness
+csBrightVal				 ds.w   1		; offset: $6 (6)		;(word) current brightness
+csCntrstMax				 ds.w   1		; offset: $8 (8)		;(word) max contrast
+csCntrstDef				 ds.w   1		; offset: $A (10)		;(word) default contrast
+csCntrstVal				 ds.w   1		; offset: $C (12)		;(word) current contrast
+csTintMax				 ds.w   1		; offset: $E (14)		;(word) max tint
+csTintDef				 ds.w   1		; offset: $10 (16)		;(word) default tint
+csTintVal				 ds.w   1		; offset: $12 (18)		;(word) current tint
+csHueMax				 ds.w   1		; offset: $14 (20)		;(word) max hue
+csHueDef				 ds.w   1		; offset: $16 (22)		;(word) default hue
+csHueVal				 ds.w   1		; offset: $18 (24)		;(word) current hue
+csHorizDef				 ds.w   1		; offset: $1A (26)		;(word) default horizontal
+csHorizVal				 ds.w   1		; offset: $1C (28)		;(word) current horizontal
+csHorizMax				 ds.w   1		; offset: $1E (30)		;(word) max horizontal
+csVertDef				 ds.w   1		; offset: $20 (32)		;(word) default vertical
+csVertVal				 ds.w   1		; offset: $22 (34)		;(word) current vertical
+csVertMax				 ds.w   1		; offset: $24 (36)		;(word) max vertical
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct VDSettings  VDSettings
+; typedef VDSettings 		*VDSettingsPtr
+VDDefMode 				RECORD	0
+csID					 ds.b   1		; offset: $0 (0)
+filler					 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct VDDefMode 	VDDefMode
+; typedef VDDefMode 		*VDDefModePtr
+VDSyncInfoRec 			RECORD	0
+csMode					 ds.b   1		; offset: $0 (0)
+csFlags					 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct VDSyncInfoRec  VDSyncInfoRec
+; typedef VDSyncInfoRec 	*VDSyncInfoPtr
+	ENDIF ; __VIDEO__

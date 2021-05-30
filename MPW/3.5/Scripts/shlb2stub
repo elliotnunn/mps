@@ -1,0 +1,158 @@
+# shlb2stub - Create a stub library from the export list supplied by a shared library
+#
+# Copyright © 1998-1999, Apple Computer, Inc., All Rights Reserved
+# Written by Greg Branche
+#
+#	History:
+#
+#		04/21/98	GAB		Initial version
+#		04/22/98	GAB		1.0d2
+#								Corrected expression used to extract fragment name. Names have no
+#									restrictions on which characters can be used.
+#								Added check for existenced of proper version of DumpPEF.
+#		04/23/98	GAB		1.0d3
+#								Add check to ensure that input file is an actual PEF file.
+#								Add Commando dialog.
+#		11/24/98	cae		1.0d4
+#								Added "Set Echo 0" at start of script.
+#								Updated version number.
+#		06/07/99	gab		1.0d5
+#								Require DumpPef 2.3d3 or later, so that version numbers are
+#								 formatted as hex numbers.
+#								Change StreamEdit expressions to properly parse said hex version numbers.
+#								Added logic to retrieve version number dynamically from script's resource fork.
+#
+#	Usage:
+#		shlb2stub [option…] inputFile
+#
+#			-p				# show progress
+#			-o filename		# specify name of output file, default = input filename with ".stub" appended
+#
+
+Set Echo 0
+
+unset progress
+Alias Usage 'Echo >dev:stderr "# Usage: {0} [-p] [-o filename] libraryName∂n"; Exit 1'
+
+# process command line
+Loop
+	break if {#} == 0
+	if "{1}" =~ /-≈/
+		if "{1}" =~ /-[oO]/
+			shift 1
+			set outputFile "{{1}}"
+		else if "{1}" =~ /-[pP]/
+			set progress 1
+		else
+			echo >dev:stderr "# {0} - unsupported option: ∂"{1}∂""
+			Usage
+		end
+	else
+		if "{{inputFile}}" == ""
+			set inputFile "{{1}}"
+		else
+			echo >dev:stderr "# {0} - more than one input file not allowed, ∂"{1}∂" ignored."
+		end
+	end
+	shift 1
+End
+
+if "{inputFile}" == ""
+	Echo >dev:stderr "# {0} - An input library must be supplied."
+	Usage
+End
+
+if {progress}
+	Unset ®1 ®2 ®3
+	(evaluate "`which "{0}"`" =~ /(≈:)®1([¬:]+)®2/) ∑dev:null
+	(evaluate "`VersionList -u "{®1}" "{®2}" -t TEXT -raw`" =~ /{®2}∂t(≈)®3/) ∑dev:null
+	
+	echo "# {0} - Version {®3}. Create a stub library from a shared library."
+	echo "# Copyright © 1998-1999, Apple Computer, Inc, All Rights Reserved."
+	Echo "#"
+end >dev:stderr
+
+if "{{outputFile}}" == ""
+	set outputFile "{{inputFile}}".stub
+end
+
+# must have version 2.3d3 or later of DumpPEF (for the -container option support)
+Unset ®1 ®2 ®3 ®4 ®5
+(evaluate "`VersionList DumpPEF -h -raw | StreamEdit -d -e '/DumpPEF[ ∂t]+(≈)®1/ Print ®1'`" =~ /([0-9]+)®1.([0-9]+)®2(.([0-9]+)®3)*((([AaBbDd]«1»)®4([0-9]+)*)®5)*/) ∑dev:null
+if {®1} < 2 || ({®1} == 2 && {®2} < 3) || ({®1} == 2 && {®2} == 3 && {®4} == "d" && {®5} < 3)
+	echo >dev:stderr "# {0} - Must have DumpPEF version 2.3d3 or later available."
+	Exit 2
+end
+
+set exit 0
+dumppef "{{inputFile}}" ∑dev:null
+if {status} != 0
+	echo "# {0} - “{inputFile}” doesn't appear to be a valid shared library file."
+	exit 2
+end >dev:stderr
+set exit 1
+
+#########################################################################################################
+# OK, all preflighting is done now. It's time to get to work.
+
+# extract container headers and count number of containers in input file
+set containerCount `dumppef "{{inputFile}}" -do e | StreamEdit -d -e '/Container ∂[[0-9]+∂]/ Print' | count -l`
+
+if {progress}
+	echo "# -> Discovered {containerCount} PEF containers in “{inputFile}”."
+end >dev:stderr
+
+set counter 1
+loop
+	if {progress}
+		echo "# ->   Processing container #{counter}."
+	end >dev:stderr
+	
+	# extract important info from header, and format as options to MakeStub
+	set fragName "`DumpPEF -container {counter} "{{inputFile}}" -do e | StreamEdit -d ∂
+		-e '/Container ∂[[0-9]+∂] ∂((≈)®1∂) ∂[≈∂]/ Print ®1' ∂
+		#`"
+	set makeStubOpts "`DumpPEF -container {counter} "{{inputFile}}" -do h | StreamEdit -d ∂
+		-e '/oldDefVersion[ ∂t]+=[ ∂t]+(0x[0-9a-fA-F]+)®1/ Print " -verDef "®1' ∂
+		-e '/oldImpVersion[ ∂t]+=[ ∂t]+(0x[0-9a-fA-F]+)®1/ Print " -verImp "®1' ∂
+		-e '/currentVersion[ ∂t]+=[ ∂t]+(0x[0-9a-fA-F]+)®1/ Print " -verCur "®1' ∂
+		-e '/architectureID[ ∂t]+=[ ∂t]+0x6D36386B/ Print " -arch m68k"' ∂
+		-e '/architectureID[ ∂t]+=[ ∂t]+0x70777063/ Print " -arch pwpc"' ∂
+		#`"
+
+	# extract list of exported symbols
+	DumpPEF "{{inputFile}}" -container {counter} -ldr x | StreamEdit -d ∂
+		-e '/≈TVector≈[ ∂t]+∂[[0-9A-F]+∂][ ∂t]+([¬ ]+)®1∞/ Print "#{code}∂n"®1' ∂
+		-e '/≈Data≈[ ∂t]+∂[[0-9A-F]+∂][ ∂t]+([¬ ]+)®1∞/ Print "#{data}∂n"®1' ∂
+		>"{TempFolder}"__lib_exports_{counter}__
+	
+	# Now we can build the stub library
+	if {progress}
+		echo "# ->   Building stub library for container “{fragName}”."
+	end >dev:stderr
+	
+	MakeStub {MakeStubOpts} -fragName "{fragName}" "{TempFolder}"__lib_exports_{counter}__ -o "{TempFolder}"StubLib{counter}
+	Delete -i -y "{TempFolder}"__lib_exports_{counter}__
+
+	# Neeeeeexxxxtttttt!
+	evaluate counter += 1
+	break if {counter} > {containerCount}
+end
+
+# Now combine the separate stubs into a single stub library file
+if "`files "{TempFolder}"StubLib[0-9]+`"
+	if {progress}
+		echo "# -> Combining separate stubs into single “{outputFile}” stub library file."
+	end >dev:stderr
+	
+	Delete -i "{{outputFile}}"	# delete old library first
+	MergeFragment `files -f "{TempFolder}"StubLib[0-9]+` "{{outputFile}}"
+	SetFile -c 'MPS ' -t stub "{{outputFile}}"
+end
+Delete -i -y "{TempFolder}"StubLib[0-9]+
+
+if {progress}
+	echo	# leave a blank line after all the spewing
+end >dev:stderr
+
+Exit 0

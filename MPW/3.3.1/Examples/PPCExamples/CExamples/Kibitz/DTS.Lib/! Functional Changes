@@ -1,0 +1,258 @@
+Changed the framework and the AppsToGo editor to use the min/max fields for TextEdit
+controls.  The min field is used for selStart, and the max field is used for selEnd.
+This allows you to determine if a TextEdit control should initially have its text
+selected or not, without having to write code to do it.
+
+__________
+
+Fixed double-dispose of a handle problem when saving 'WIND' size to a non-existant
+'WIND' resource.  This only occured when using the AppsToGo editor.
+
+__________
+
+Added feature in File2.c where if the first character of the enumerated window title
+is a space, then it uses the 'WIND' window title instead.  This allows commenting
+of document definitions when using the AppsToGo editor.
+
+__________
+
+Extensively changes ListControl.c to support variable-size cells.  If you want a List
+control with variable-size cells, then you need to call CLVInitialize() at some point
+prior to creating a variable-size cell list.  You can convert an existing list control
+to a variable-size cell list control by calling CLVVariableSizeCells(), which calls
+CLVInitialize().
+
+Various improvements have been made in the operation of the regular list control.
+
+Changed Window2.c to pay attention to bit 14 of the List control mode field.  If this
+is set, then it creates the control, and then converts it to a variable-size cell list.
+
+__________
+
+Where and when DoOpenApplication() is called has changed.  It is now called by the
+application in Start.c, and also when AppsToGo tells it to apply changes and restart
+the application.  It no longer calls it on an 'oapp' event.
+
+__________
+
+The Kibitz feature of a document remembering what remote application is was connected to
+and launching that remote application when the document is opened has been added to
+DTS.Lib.  The calls to manage this that have been added are:
+
+void			GetFullPathAndAppName(StringPtr path, StringPtr app);
+void			AllowAutoReconnect(FileRecHndl frHndl);
+pascal Boolean	AEPortFilter(LocationNamePtr locationName, PortInfoPtr thePortInfo);
+OSErr			LaunchRemoteApp(FileRecHndl frHndl);
+
+Descriptions of the functions can be found in the header file DTS.Lib.protos.h.
+
+The sample application DTS.StyleChat uses this functionality.  Refer to it for how to
+use the new calls.
+
+__________
+
+BAD BUG FIXED!!
+
+TreeObj.c could try to fetch a long from an odd address, which causes address errors
+on 68000-based machines.  This has been fixed.
+
+The odds of this happening weren't too good, and therefore it wasn't caught.  Sorry.
+
+DTS.Draw, which is the sample that uses TreeObj the most, has objects whose dataSize
+is always even, since it is based on sizeof(theStruct).  Structs are padded to be
+even in size.  If the data size is even, then all is well.  If it is odd, then the
+child handle table immediately following the data area of the objects is aligned
+to odd addresses.  When the handle (long) was fetched, an address error occured.
+BlockMove is now used to get the long values, so no address errors occur anymore.
+
+__________
+
+UnmapMenuItem() has been changed to return an invalid menu item number (32767) if there is
+a remapping table, but the remapping table has no entry for the given menu item number.
+This prevents accidental overlaping of menu item values.
+
+If you either have no table for a particular menu, or if all entries are in the table,
+then there is no functional difference.  The only possible difference is if you call it
+for a menu item that doesn't exist.  It used to simply return the value that was passed
+in, and that value could be used as a valid value.
+
+__________
+
+The TextEdit control has been revised to support the TSMTE init.  If the TSMTE init
+is available, then the TextEdit control can support inline-input of double-byte text.
+
+HOWEVER:  You must make a call to the TextEdit control to inform it that you want it
+		  to use TSMTE, or else you will not get this benefit.  Also, you must register
+		  and unregister your application with the TextServoces Manager if you want
+		  to use TSMTE, or else you will crash.
+
+Start.c now calls InitTSMAwareApplication() and CloseTSMAwareApplication().  This is done
+conditionally -- only if the TSMTE init is available.  As part of the startup code, you
+need the following to initialize TSM:
+
+	if(CTEUseTSMTE())
+		InitTSMAwareApplication();
+
+And as part of the shutdown code, you need the following:
+
+	if(CTEUseTSMTE())
+		CloseTSMAwareApplication();
+
+CTEUseTSMTE checks to see if TSMTE is available.  If it is, it returns true.
+(It is only available if TSM is available.)  If TSMTE is available, then you
+need to register and unregister your application with the TextServices Manager.
+
+This is all you need to do to your application to support double-byte inline-input.
+
+__________
+
+The popup CDEF can't handle negative coordinates.  This meant that popups couldn't be
+put in sidebars, as AppsToGo distinguishes location of controls by their coordinates.
+(Sidebar controls are offset -16384 horizontally.)
+
+CtlHandler.c, Utilities.c, and Window2.c were modified to handle popup controls specially.
+The control must first be created to be a problem, and therefore Window2.c keeps track
+of the ctlDefProc of popup controls for comparison purposes.  The ctlDefProc is stored
+in the global gPopupProc.  CtlHandler.c and Utilities.c look at this golbal and compare
+it to the ctlDefProc of the control to be drawn or tracked.  If it matches, the port's
+origin is set to 0,0, and the control is offset to that location.  When the drawing or
+tracking is completed, everything is restored.
+
+This allows the popup control to be positioned in negative coordinate space, but still
+operate.
+
+__________
+
+Two procs (plus 4 fields) have been added to the control style (extension) record.
+These procs are for the purpose of custom tracking of the control.  The prototypes are:
+
+typedef Boolean (*TrackControlProcPtr)(ControlHandle ctl, short part, EventRecord *event);
+typedef Boolean (*ScrollProcPtr)(ControlHandle ctl, short part, short oldVal, short newVal);
+
+The TrackControlProcPtr is set to nil, except if the control is a scrollbar.  If it is a
+scrollbar, then it is set to the static function (in Window2.c) DefaultScroll().  This
+function handles the scrolling in a generic way.  The page and line areas of the scrollbar
+scroll by 10 pixels and 1 pixel, respectively.  If you wish, you can set the values to
+something else.  The values are stored in the ControlStyleInfo record of the styled control.
+
+typedef struct ControlStyleInfo {
+	short				ctlID;
+	TrackControlProcPtr	trackProc;
+	ScrollProcPtr		scrollProc;
+	short				hArrowVal;
+	short				vArrowVal;
+	short				hPageVal;
+	short				vPageVal;
+	short				fontSize;
+	Style				fontStyle;
+	Str32				font;
+	Str63				keyEquivs;
+	Str255				balloonHelp;
+} ControlStyleInfo;
+
+The initial values are set to 0, and if they are 0, the defaults of 10 and 1 are used.
+For scrollbars, the trackProc field is initialized to DefaultScroll().  The scrollProc
+field is set to nil.  If you want an opportunity to do something while the scrollbar
+is tracking, set the scrollProc field to non-nil.  Your function will be called with
+the control, part # (thumb, or whatever), the old control value, and the new control
+value.  This should be enough information to determine what you want to do.
+
+To set the trackProc, scrollProc, hArrowVal, vArrowVal, hPageVal, or vPageVal fields, you
+would add some code to the InitContent() proc for the document.  It would be something like:
+
+OSErr	InitContent(FileRecHndl frHndl, WindowPtr window)
+{
+	OSErr				err;
+	ControlHandle		ctl;
+	ControlStyleInfo	cinfo;
+
+	err = AddControlSet(window, (*frHndl)->fileState.sfType, kwStandardVis, 0, 0, nil);
+		/* First, add the controls for this document as defined with AppsToGo. */
+
+	if (!err) {										/* If all is well... */
+		CNum2Ctl(window, kScrollbarID, &ctl);		/* Get the scrollbar handle. */
+		if (ctl) {
+			if (GetControlStyle(ctl, &cinfo)) {		/* Get the scrollbar info record. */
+				cinfo.scrollProc = YourScrollProc;	/* Set the fields you want. */
+				cinfo.hArrowVal = 2;
+				cinfo.hPageVal  = 20;
+				err = SetControlStyle(ctl, &cinfo);	/* Save the modified record in the control. */
+			}
+		}
+	}
+	return(err);
+}
+
+__________
+
+The maxTextLen field of the CTENewInfo structure has an additional meaning.  If the
+value is less than 1, then the negative of the value is used, and the destRct, viewRct,
+and brdrRct fields are deltas from the control rect, instead of absolute rects.  This
+edits better in the AppsToGo editor.  Before, if a TextEdit control's size was changed,
+the destRct, viewRct, and brdrRct fields had to be adjusted accordingly.  However, this
+was done only if the object was resized with the mouse.  If values were typed in for
+the control rect, then it was assumed that these were to be edited individually.  Also,
+the rect could be sized with the mouse such that when the other rects were adjusted, they
+could end up being empty rects.  This caused incorrect rect values from then on.
+
+AppsToGo has been modified to handle both positive and negative values for the maxTextLen
+field.  Also, the new method of delta rects is the primary method, and therefore the sign
+of the maxTextLen field is actually displayed and interpreted backwards.  For the most part,
+this can be ignored.  Here are the rules:
+
+If the maxTextLen value in the AppsToGo application editor is greater than 0, then the
+destRct, viewRct, and brdrRct values are added to the control rect, and the result is
+then used.
+
+If the maxTextLen value in the AppsToGo application editor is less than 1, then the
+control's destRct, viewRct, and brdrRct fields are absolute rects, and will be used as
+they are displayed.  Note that when the framework creates a TextEdit control based on
+this definition, it will use the absolute value of the maxTextLen field.
+
+__________
+
+GetNextWindow (and therefore GetNextDocument) have been modified to return
+invisible windows (or documents with invisible windows).  This change was made
+to allow kHideOnClose windows to not have to be saved in a global.  You can
+access the window or document by calling one of the above functions now, even
+if the window is curently hidden.
+
+__________
+
+The document procs for reading and writing the default document header are no
+longer initialized in File2.c.  They are left nil.  This means that you will no
+longer get reading and writing the default document header information as a
+default behavior.
+
+
+HOWEVER:
+
+If you call DefaultInitDocument, they are set as they were before.  This means that
+if you still want this behavior and you use the hierarchical document package, then
+you will still get the benefit of reading and writing the default document header.
+
+If you want to use the default document header facilities without the hierarchical
+document package, simply initialize the procs for reading and writing the header
+yourself in your own document initialization code.  You would add the following
+two lines (assuming that the document variable is called frHndl):
+
+	(*frHndl)->fileState.readDocumentHeaderProc  = DefaultReadDocumentHeader;
+	(*frHndl)->fileState.writeDocumentHeaderProc = DefaultWriteDocumentHeader;
+
+
+This will give you the behavior you want.
+
+The reason for the change is that some documents want the standard header and some don't.
+By explicitly setting them within the framework meant that the code got linked in, even
+if you then later set the procs to nil (because you didn't want the header).  This caused
+dead code to get linked in.  By assuming that the header isn't going to be used, and by
+having the application stating that they will indeed be used, we can prevent this dead
+code from getting linked in.
+
+Again, if you call DefaultInitDocument, you do indeed get the header information.  This is
+done because it isn't a bad assumption to make.  If you are calling DefaultInitDocument,
+you want things handled for you, and this would include the header information.  If you are
+doing something custom, then you want more control.
+
+__________
+

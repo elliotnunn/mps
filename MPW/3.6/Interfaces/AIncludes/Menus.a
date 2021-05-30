@@ -1,0 +1,5251 @@
+;
+;    File:       Menus.a
+;
+;    Contains:   Menu Manager Interfaces.
+;
+;    Version:    Technology: Carbon
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+__MENUS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__FONTS__') = 'UNDEFINED' THEN
+	include 'Fonts.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__COLLECTIONS__') = 'UNDEFINED' THEN
+	include 'Collections.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+	include 'CFString.a'
+	ENDIF
+
+
+
+
+; *  Menu Manager
+; 
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Constants                                                                    
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+noMark							EQU		0					; mark symbol for SetItemMark; other mark symbols are defined in Fonts.h 
+; 
+;    A Short Course on Menu Definition Functions
+;    
+;    A menu definition function is used to implement a custom visual appearance for a menu.
+;    Menu definition functions are still supported in Carbon, but the messages sent to a
+;    menu definition function in Carbon are different than for a non-Carbon application.
+;    
+;    In general, Apple recommends using the system menu definition whenever possible.
+;    Menu definition functions will continue to be supported, but it is not easy to write
+;    a correct menu definition, especially one that attempts to imitate the standard system
+;    menu appearance. If you require special features in your menu that the system menu
+;    definition does not support, please mail <toolbox@apple.com> and describe your requirements;
+;    we would much rather enhance the system menu definition than have you write a custom one.
+;    
+;    Menu definition functions before Carbon used the following messages:
+;    
+;        kMenuDrawMsg
+;        kMenuChooseMsg
+;        kMenuSizeMsg
+;        kMenuPopUpMsg
+;        kMenuDrawItemMsg
+;        kMenuCalcItemMsg
+;        kMenuThemeSavvyMsg
+;        
+;    kMenuChooseMsg and kMenuDrawItemMsg are not supported in Carbon and are not sent to
+;    Carbon menu definitions. In Carbon, kMenuChooseMsg is replaced by kMenuFindItemMsg and
+;    kMenuHiliteItemMsg. Menu definition functions in Carbon use the following messages:
+;    
+;        kMenuInitMsg
+;        kMenuDisposeMsg
+;        kMenuFindItemMsg
+;        kMenuHiliteItemMsg
+;        kMenuDrawItemsMsg
+;        kMenuDrawMsg
+;        kMenuSizeMsg
+;        kMenuPopUpMsg
+;        kMenuCalcItemMsg
+;        kMenuThemeSavvyMsg
+;        
+;    The rest of this documentation will focus on Carbon menu definitions only.
+;    
+;    Menu Definition Messages
+;    
+;        Carbon menu definition functions should support the following messages:
+;        
+;        kMenuInitMsg
+;            
+;            menuRect        unused
+;            hitPt           unused
+;            whichItem       OSErr*
+;        
+;            Sent when a menu is created. This message gives the menu definition an opportunity
+;            to initialize its own state. If the menu definition encounters an error while
+;            initializing, it should set *whichItem to a non-zero error code; this will cause the
+;            Menu Manager to destroy the menu and return an error back from the API that was used
+;            to create the menu.
+;        
+;        kMenuDisposeMsg
+;            
+;            menuRect        unused
+;            hitPt           unused
+;            whichItem       unused
+;            
+;            Sent when a menu is destroyed. This message gives the menu definition an opportunity
+;            to destroy its own data.
+;            
+;        kMenuFindItemMsg
+;            
+;            menuRect        menu bounds
+;            hitPt           point to hit-test
+;            whichItem       MenuTrackingData*
+;            
+;            Sent when the Menu Manager is displaying a menu and needs to know what item is under
+;            the mouse. The whichItem parameter is actually a pointer to a MenuTrackingData structure.
+;            On entry, the menu, virtualMenuTop, and virtualMenuBottom fields of this structure are
+;            valid. The menu definition should determine which item containst the given point, if any,
+;            and fill in the itemUnderMouse, itemSelected, and itemRect fields. If an item is found,
+;            the menu definition should always fill in the itemUnderMouse and itemRect fields. The
+;            menu definition should only fill in the itemSelected field if the item is available for
+;            selection; if it is unavailable (because it is disabled, or for some other reason), the
+;            menu definition should set the itemSelected field to zero.
+;            
+;            The values placed in the itemUnderMouse and itemSelected fields should be less than or
+;            equal to the number of items returned by CountMenuItems on this menu.
+;            
+;            The menu definition should not hilite the found item during this message. The Menu 
+;            Manager will send a separate kMenuHiliteItemMsg to request hiliting of the item.
+;            
+;            If the menu definition supports scrolling, it should scroll the menu during this message,
+;            and update the virtualMenuTop and virtualMenuBottom fields of the MenuTrackingData to
+;            indicate the menu's new scrolled position.
+;            
+;            The menu definition should not modify the menu field of the MenuTrackingData.
+;            
+;        kMenuHiliteItemMsg
+;        
+;            menuRect        menu bounds
+;            hitPt           unused
+;            whichItem       MDEFHiliteItemData*
+;            
+;            Sent when the Menu Manager is displaying a menu and needs to hilite a newly selected
+;            item. The whichItem parameter is actually a pointer to a MDEFHiliteItemData structure.
+;            The menu definition should unhilite the item in the previousItem field, if non-zero,
+;            and hilite the item in the newItem field.
+;            
+;            If the menu definition uses QuickDraw to draw, it should draw into the current port.
+;    
+;            If the menu definition uses CoreGraphics to draw, it should create a CGContextRef based
+;            on the current port and draw into that context.
+;            
+;        kMenuDrawItemsMsg
+;        
+;            menuRect        menu bounds
+;            hitPt           unused
+;            whichItem       MDEFDrawItemsData*
+;            
+;            Sent when the Menu Manager is displaying a menu and needs to redraw a portion of the
+;            menu. This message is used by the dynamic menu item support code in the Menu Manager;
+;            for example, if items five and six in a menu are a dynamic group, the Menu Manager will
+;            send a DrawItems message when the group's modifier key is pressed or released to redraw
+;            the appropriate item, but no other items in the menu.
+;            
+;            The whichItem parameter for this message is actually a pointer to a MDEFDrawItemsData
+;            structure. The menu definition should redraw the items starting with firstItem and
+;            ending with lastItem, inclusive.
+;            
+;            If the menu definition uses QuickDraw to draw, it should draw into the current port.
+;    
+;            If the menu definition uses CoreGraphics to draw, it should use the CGContextRef passed
+;            in the context field of the MDEFDrawItemsData structure.
+;            
+;        kMenuDrawMsg
+;            
+;            menuRect        menu bounds
+;            hitPt           unused
+;            whichItem       MenuTrackingData*
+;            
+;            Sent when the Menu Manager is displaying a menu and needs to redraw the entire menu.
+;            The whichItem parameter is actually a pointer to a MenuTrackingData structure. On entry,
+;            the menu field of this structure is valid. The menu definition should draw the menu and,
+;            if it supports scrolling, should also fill in the virtualMenuTop and virtualMenuBottom
+;            fields of the structure to indicate the menu's initial unscrolled position; typically, 
+;            virtualMenuTop would be set to the same value as the top coordinate of the menu rect,
+;            and virtualMenuBottom would be set to virtualMenuTop plus the virtual height of the menu.
+;            
+;            If the menu definition uses QuickDraw to draw, it should draw into the current port.
+;    
+;            If the menu definition uses CoreGraphics to draw, it should create a CGContextRef based
+;            on the current port and draw into that context.
+;            
+;        kMenuSizeMsg
+;        
+;            menuRect        unused
+;            hitPt           maximum width and height of the menu
+;            whichItem       unused
+;            
+;            Sent when the Menu Manager needs to determine the size of a menu. The menu definition
+;            should calculate the width and height of the menu and store the sizes into the menu with
+;            SetMenuWidth and SetMenuHeight.
+;            
+;            If the gestaltMenuMgrSendsMenuBoundsToDefProc bit is set in the Menu Manager's Gestalt
+;            value, then the hitPt parameter to this message is the maximum width (hitPt.h) and height
+;            (hitPt.v) of the menu. The menu defintion should ensure that the width and height that it
+;            places in the menu do not exceed these values. If the gestalt bit is not set, the menu
+;            definition should just use the main GDevice's width and height as constraints on the menu's
+;            width and height.
+;            
+;        kMenuPopUpMsg
+;        
+;            menuRect        on entry, constraints on the menu's position; on exit, menu bounds
+;            hitPt           requested menu location, with swapped coordinates
+;            whichItem       on entry, requested initial selection; on exit, virtual menu top
+;            
+;            Sent when the Menu Manager is about to display a popup menu. The menu definition should
+;            calculate the appropriate menu bounds to contain the menu based on the requested menu
+;            location and selected item. It should write the menuBounds into the rect given by the
+;            menuRect parameter.
+;            
+;            If the gestaltMenuMgrSendsMenuBoundsToDefProc bit is set in the Menu Manager's Gestalt
+;            value, then the menuRect parameter on entry to this message contains a constraint rect,
+;            in global coordinates, outside of which the popup menu should not be positioned. The menu
+;            definition should take this constraint rect into account as it calculates the menu bounds.
+;            If the gestalt bit is not set, the menu definition should use the bounds of the GDevice
+;            containing the menu's top left corner as a constraint on the menu's position.
+;            
+;            The hitPt parameter is a requested location for the top left corner of the menu. The
+;            coordinates of this parameter are swapped from their normal order; the h field of the
+;            hitPt parameter contains the vertical coordinate, and the v field of hitPt contains
+;            the horizontal coordinate.
+;            
+;            On entry, the whichItem parameter points at a menu item index which is requested to be
+;            the initial selection when the menu is displayed. After calculating the menu's bounds,
+;            the menu definition should write the menu's virtual top coordinate into the location
+;            pointed at by the whichItem parameter. If displaying the menu at the requested location
+;            does not require scrolling, the virtual top will be the same as the menu bounds top;
+;            if the menu must scroll to fit in the requested location, the virtual top may be different.
+;            
+;        kMenuCalcItemMsg
+;        
+;            menuRect        on exit, item bounds
+;            hitPt           unused
+;            whichItem       the item whose rect to calculate
+;            
+;            Sent when the Menu Manager needs to know the bounds of a menu item. The menu definition
+;            should calculate the size of the item specified by the whichItem parameter, and store 
+;            the bounds in the rect specified by the menuRect parameter.
+;            
+;        kMenuThemeSavvyMsg
+;        
+;            menuRect        unused
+;            hitPt           unused
+;            whichItem       on exit, indicates theme-savvyness of the menu definition
+;            
+;            Sent by the Menu Manager to determine whether the MDEF uses the Appearance Manager 
+;            menu-drawing functions to draw its menu. If it does, the menu definition should return
+;            kThemeSavvyMenuResponse in the location pointed to by whichItem. If the menu definition
+;            draws its own custom content without using the Appearance Manager menu-drawing functions,
+;            it should ignore this message.
+;    
+;    Low-memory Global Replacements
+;    
+;        Pre-Carbon menu definitions needed to use several low-memory globals to communicate with the
+;        Menu Manager. These globals have all been replaced or made obsolete in Carbon, as follows:
+;        
+;        MenuDisable
+;            
+;            MenuDisable is now set automatically by the Menu Manager using the value returned in the
+;            itemUnderMouse field of the MenuTrackingData structure passed to kMenuFindItemMsg.
+;            
+;        TopMenuItem
+;        AtMenuBottom
+;        
+;            TopMenuItem and AtMenuBottom are now set automatically by the Menu Manager using the
+;            values returned in the virtualMenuTop and virtualMenuBottom fields of the MenuTrackingData
+;            structure passed to kMenuDrawMsg and kMenuFindItemMsg.
+;            
+;        mbSaveLoc
+;    
+;            This undocumented low-memory global was used by pre-Carbon menu definitions to store
+;            the bounding rect of the currently selected item and to avoid drawing glitches while
+;            the menu definition was scrolling the contents of a menu that had submenus. The Menu
+;            Manager now automatically sets the selected item bounds using the value returned in
+;            the itemRect field of the MenuTrackingData structure passed to kMenuFindItemMsg. In
+;            order to correctly support scrolling of menus with submenus, a menu definition should
+;            verify, before scrolling the menu contents, that no submenus of the scrolling menu are
+;            currently visible. A menu definition can use GetMenuTrackingData to verify this condition,
+;            as follows:
+;            
+;                Boolean SafeToScroll( MenuRef menuBeingScrolled )
+;                {
+;                    MenuTrackingData lastMenuData;
+;                    return GetMenuTrackingData( NULL, &lastMenuData ) == noErr
+;                           && lastMenuData.menu == menuBeingScrolled;
+;                }
+;            
+;            If SafeToScroll returns false, the menu definition should not scroll the menu.
+;
+
+
+															; menu defProc messages 
+kMenuDrawMsg					EQU		0
+kMenuSizeMsg					EQU		2
+kMenuPopUpMsg					EQU		3
+kMenuCalcItemMsg				EQU		5
+kMenuThemeSavvyMsg				EQU		7					; is your MDEF theme-savvy?  If so, return kThemeSavvyMenuResponse in the whichItem parameter
+mDrawMsg						EQU		0
+mSizeMsg						EQU		2
+mPopUpMsg						EQU		3					; position the popup menu rect appropriately 
+mCalcItemMsg					EQU		5
+	IF CALL_NOT_IN_CARBON THEN
+
+;   Carbon MDEFs must replace mChooseMsg with the new messages kMenuFindItemMsg and kMenuHiliteItemMsg. 
+;   mDrawItemMsg was used by the popup menu control before 8.5, but is no longer used. 
+
+
+
+mChooseMsg						EQU		1
+mDrawItemMsg					EQU		4
+kMenuChooseMsg					EQU		1
+kMenuDrawItemMsg				EQU		4
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kThemeSavvyMenuResponse			EQU		$7473				; should be returned in *whichItem when handling kMenuThemeSavvyMsg
+;  these MDEF messages are only supported in Carbon
+
+kMenuInitMsg					EQU		8
+kMenuDisposeMsg					EQU		9
+kMenuFindItemMsg				EQU		10
+kMenuHiliteItemMsg				EQU		11
+kMenuDrawItemsMsg				EQU		12
+
+textMenuProc					EQU		0
+hMenuCmd						EQU		27					;itemCmd == 0x001B ==> hierarchical menu
+hierMenu						EQU		-1					;a hierarchical menu - for InsertMenu call
+kInsertHierarchicalMenu			EQU		-1					;a better name for hierMenu 
+mctAllItems						EQU		-98					;search for all Items for the given ID
+mctLastIDIndic					EQU		-99					;last color table entry has this in ID field
+;  Constants for use with MacOS 8.0 (Appearance 1.0) and later
+
+kMenuStdMenuProc				EQU		63
+kMenuStdMenuBarProc				EQU		63
+;  For use with Get/SetMenuItemModifiers
+
+kMenuNoModifiers				EQU		0					; Mask for no modifiers
+kMenuShiftModifier				EQU		$01					; Mask for shift key modifier
+kMenuOptionModifier				EQU		$02					; Mask for option key modifier
+kMenuControlModifier			EQU		$04					; Mask for control key modifier
+kMenuNoCommandModifier			EQU		$08					; Mask for no command key modifier
+;  For use with Get/SetMenuItemIconHandle
+
+kMenuNoIcon						EQU		0					; No icon
+kMenuIconType					EQU		1					; Type for ICON
+kMenuShrinkIconType				EQU		2					; Type for ICON plotted 16 x 16
+kMenuSmallIconType				EQU		3					; Type for SICN
+kMenuColorIconType				EQU		4					; Type for cicn
+kMenuIconSuiteType				EQU		5					; Type for Icon Suite
+kMenuIconRefType				EQU		6					; Type for Icon Ref
+kMenuCGImageRefType				EQU		7					; Type for a CGImageRef (Mac OS X only)
+;  For use with Get/SetMenuItemKeyGlyph
+
+kMenuNullGlyph					EQU		$00					; Null (always glyph 1)
+kMenuTabRightGlyph				EQU		$02					; Tab to the right key (for left-to-right script systems)
+kMenuTabLeftGlyph				EQU		$03					; Tab to the left key (for right-to-left script systems)
+kMenuEnterGlyph					EQU		$04					; Enter key
+kMenuShiftGlyph					EQU		$05					; Shift key
+kMenuControlGlyph				EQU		$06					; Control key
+kMenuOptionGlyph				EQU		$07					; Option key
+kMenuSpaceGlyph					EQU		$09					; Space (always glyph 3) key
+kMenuDeleteRightGlyph			EQU		$0A					; Delete to the right key (for right-to-left script systems)
+kMenuReturnGlyph				EQU		$0B					; Return key (for left-to-right script systems)
+kMenuReturnR2LGlyph				EQU		$0C					; Return key (for right-to-left script systems)
+kMenuNonmarkingReturnGlyph		EQU		$0D					; Nonmarking return key
+kMenuPencilGlyph				EQU		$0F					; Pencil key
+kMenuDownwardArrowDashedGlyph	EQU		$10					; Downward dashed arrow key
+kMenuCommandGlyph				EQU		$11					; Command key
+kMenuCheckmarkGlyph				EQU		$12					; Checkmark key
+kMenuDiamondGlyph				EQU		$13					; Diamond key
+kMenuAppleLogoFilledGlyph		EQU		$14					; Apple logo key (filled)
+kMenuParagraphKoreanGlyph		EQU		$15					; Unassigned (paragraph in Korean)
+kMenuDeleteLeftGlyph			EQU		$17					; Delete to the left key (for left-to-right script systems)
+kMenuLeftArrowDashedGlyph		EQU		$18					; Leftward dashed arrow key
+kMenuUpArrowDashedGlyph			EQU		$19					; Upward dashed arrow key
+kMenuRightArrowDashedGlyph		EQU		$1A					; Rightward dashed arrow key
+kMenuEscapeGlyph				EQU		$1B					; Escape key
+kMenuClearGlyph					EQU		$1C					; Clear key
+kMenuLeftDoubleQuotesJapaneseGlyph EQU	$1D					; Unassigned (left double quotes in Japanese)
+kMenuRightDoubleQuotesJapaneseGlyph EQU	$1E					; Unassigned (right double quotes in Japanese)
+kMenuTrademarkJapaneseGlyph		EQU		$1F					; Unassigned (trademark in Japanese)
+kMenuBlankGlyph					EQU		$61					; Blank key
+kMenuPageUpGlyph				EQU		$62					; Page up key
+kMenuCapsLockGlyph				EQU		$63					; Caps lock key
+kMenuLeftArrowGlyph				EQU		$64					; Left arrow key
+kMenuRightArrowGlyph			EQU		$65					; Right arrow key
+kMenuNorthwestArrowGlyph		EQU		$66					; Northwest arrow key
+kMenuHelpGlyph					EQU		$67					; Help key
+kMenuUpArrowGlyph				EQU		$68					; Up arrow key
+kMenuSoutheastArrowGlyph		EQU		$69					; Southeast arrow key
+kMenuDownArrowGlyph				EQU		$6A					; Down arrow key
+kMenuPageDownGlyph				EQU		$6B					; Page down key
+kMenuAppleLogoOutlineGlyph		EQU		$6C					; Apple logo key (outline)
+kMenuContextualMenuGlyph		EQU		$6D					; Contextual menu key
+kMenuPowerGlyph					EQU		$6E					; Power key
+kMenuF1Glyph					EQU		$6F					; F1 key
+kMenuF2Glyph					EQU		$70					; F2 key
+kMenuF3Glyph					EQU		$71					; F3 key
+kMenuF4Glyph					EQU		$72					; F4 key
+kMenuF5Glyph					EQU		$73					; F5 key
+kMenuF6Glyph					EQU		$74					; F6 key
+kMenuF7Glyph					EQU		$75					; F7 key
+kMenuF8Glyph					EQU		$76					; F8 key
+kMenuF9Glyph					EQU		$77					; F9 key
+kMenuF10Glyph					EQU		$78					; F10 key
+kMenuF11Glyph					EQU		$79					; F11 key
+kMenuF12Glyph					EQU		$7A					; F12 key
+kMenuF13Glyph					EQU		$87					; F13 key
+kMenuF14Glyph					EQU		$88					; F14 key
+kMenuF15Glyph					EQU		$89					; F15 key
+kMenuControlISOGlyph			EQU		$8A					; Control key (ISO standard)
+
+
+; *  MenuAttributes
+; *  
+; *  Summary:
+; *    Menu attributes control behavior of the entire menu. They are
+; *    used with the Get/ChangeMenuAttributes APIs.
+; 
+
+
+; typedef UInt32						MenuAttributes
+kMenuAttrExcludesMarkColumn		EQU		$01
+kMenuAttrAutoDisable			EQU		$04
+kMenuAttrUsePencilGlyph			EQU		$08
+
+
+; *  MenuItemAttributes
+; *  
+; *  Summary:
+; *    Menu item attributes control behavior of individual menu items.
+; *    They are used with the Get/ChangeMenuItemAttributes APIs.
+; 
+
+
+; typedef UInt32						MenuItemAttributes
+kMenuItemAttrDisabled			EQU		$01
+kMenuItemAttrIconDisabled		EQU		$02
+kMenuItemAttrSubmenuParentChoosable EQU	$04
+kMenuItemAttrDynamic			EQU		$08
+kMenuItemAttrNotPreviousAlternate EQU	$10
+kMenuItemAttrHidden				EQU		$20
+kMenuItemAttrSeparator			EQU		$40
+kMenuItemAttrSectionHeader		EQU		$80
+kMenuItemAttrIgnoreMeta			EQU		$0100
+kMenuItemAttrAutoRepeat			EQU		$0200
+kMenuItemAttrUseVirtualKey		EQU		$0400
+
+
+; *  MenuTrackingMode
+; *  
+; *  Summary:
+; *    A menu tracking mode constant is part of the
+; *    kEventMenuBeginTracking and kEventMenuChangeTrackingMode Carbon
+; *    events. It indicates whether menus are being tracked using the
+; *    mouse or keyboard.
+; 
+
+
+; typedef UInt32						MenuTrackingMode
+kMenuTrackingModeMouse			EQU		1
+kMenuTrackingModeKeyboard		EQU		2
+
+
+; *  MenuEventOptions
+; *  
+; *  Summary:
+; *    Menu event options control how the menus are searched for an item
+; *    matching a particular keyboard event. They are used with the
+; *    IsMenuKeyEvent API.
+; 
+
+
+; typedef UInt32						MenuEventOptions
+kMenuEventIncludeDisabledItems	EQU		$0001
+kMenuEventQueryOnly				EQU		$0002
+kMenuEventDontCheckSubmenus		EQU		$0004
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Types                                                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+; typedef SInt16 						MenuID
+
+; typedef UInt16 						MenuItemIndex
+
+; typedef UInt32 						MenuCommand
+
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+MenuInfo				RECORD 0
+menuID					 ds.w	1				; offset: $0 (0)		;  in Carbon use Get/SetMenuID
+menuWidth				 ds.w	1				; offset: $2 (2)		;  in Carbon use Get/SetMenuWidth
+menuHeight				 ds.w	1				; offset: $4 (4)		;  in Carbon use Get/SetMenuHeight
+menuProc				 ds.l	1				; offset: $6 (6)		;  not supported in Carbon
+enableFlags				 ds.l	1				; offset: $A (10)		;  in Carbon use Enable/DisableMenuItem, IsMenuItemEnable
+menuData				 ds		Str255			; offset: $E (14)		;  in Carbon use Get/SetMenuTitle
+sizeof					 EQU *					; size:   $10E (270)
+						ENDR
+; typedef struct MenuInfo *				MenuPtr
+
+; typedef MenuPtr *						MenuHandle
+
+	ELSE
+
+
+	ENDIF
+;  MenuRef and MenuHandle are equivalent. Use either. We don't care.
+; typedef MenuHandle 					MenuRef
+
+; typedef Handle 						MenuBarHandle
+
+MCEntry					RECORD 0
+mctID					 ds.w	1				; offset: $0 (0)		; menu ID.  ID = 0 is the menu bar
+mctItem					 ds.w	1				; offset: $2 (2)		; menu Item. Item = 0 is a title
+mctRGB1					 ds		RGBColor		; offset: $4 (4)		; usage depends on ID and Item
+mctRGB2					 ds		RGBColor		; offset: $A (10)		; usage depends on ID and Item
+mctRGB3					 ds		RGBColor		; offset: $10 (16)		; usage depends on ID and Item
+mctRGB4					 ds		RGBColor		; offset: $16 (22)		; usage depends on ID and Item
+mctReserved				 ds.w	1				; offset: $1C (28)		; reserved for internal use
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+; typedef struct MCEntry *				MCEntryPtr
+
+MCTable					RECORD 0
+elements				 ds.b	1 * MCEntry.sizeof
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+
+
+; typedef struct MCEntry *				MCTablePtr
+
+; typedef MCTablePtr *					MCTableHandle
+
+MenuCRsrc				RECORD 0
+numEntries				 ds.w	1				; offset: $0 (0)		; number of entries
+mcEntryRecs				 ds		MCTable			; offset: $2 (2)		; ARRAY [1..numEntries] of MCEntry
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct MenuCRsrc *			MenuCRsrcPtr
+
+; typedef MenuCRsrcPtr *				MenuCRsrcHandle
+
+	IF TARGET_OS_WIN32 THEN
+;  QuickTime 3.0 
+MenuAccessKeyRec		RECORD 0
+count					 ds.w	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $2 (2)
+keys					 ds.b	1				; offset: $6 (6) <-- really an array of length one
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct MenuAccessKeyRec *		MenuAccessKeyPtr
+
+; typedef MenuAccessKeyPtr *			MenuAccessKeyHandle
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetMenuItemHotKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void SetMenuItemHotKey(MenuRef menu, short itemID, char hotKey, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemHotKey
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_OS_WIN32
+
+
+; *  MenuTrackingData
+; *  
+; *  Summary:
+; *    The MenuTrackingData structure contains information about a menu
+; *    currently being displayed. It is used with the
+; *    GetMenuTrackingData API.
+; 
+
+MenuTrackingData		RECORD 0
+menu					 ds.l	1				; offset: $0 (0)
+itemSelected			 ds.w	1				; offset: $4 (4)
+itemUnderMouse			 ds.w	1				; offset: $6 (6)
+itemRect				 ds		Rect			; offset: $8 (8)
+virtualMenuTop			 ds.l	1				; offset: $10 (16)
+virtualMenuBottom		 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct MenuTrackingData *		MenuTrackingDataPtr
+
+
+
+; *  MDEFHiliteItemData
+; *  
+; *  Summary:
+; *    The MDEFHiliteItemData structure contains information about which
+; *    menu items should be hilited and unhilited as the user moves
+; *    through the menus. It is used by menu definition functions, which
+; *    receive a pointer to an MDEFHiliteItemData structure as the
+; *    whichItem parameter during kMenuHiliteItemMsg.
+; 
+
+MDEFHiliteItemData		RECORD 0
+previousItem			 ds.w	1				; offset: $0 (0)
+newItem					 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct MDEFHiliteItemData *	MDEFHiliteItemDataPtr
+
+HiliteMenuItemData		RECORD 0
+f						 ds		MDEFHiliteItemData
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+
+; typedef MDEFHiliteItemDataPtr 		HiliteMenuItemDataPtr
+
+
+
+; *  MDEFDrawItemsData
+; *  
+; *  Summary:
+; *    The MDEFDrawItemsData structure contains information about which
+; *    menu items to redraw. It is used by menu definition functions,
+; *    which receive a pointer to an MDEFDrawItemsData structure as the
+; *    whichItem parameter during kMenuDrawItemsMsg.
+; 
+
+MDEFDrawItemsData		RECORD 0
+firstItem				 ds.w	1				; offset: $0 (0)
+lastItem				 ds.w	1				; offset: $2 (2)
+trackingData			 ds.l	1				; offset: $4 (4)
+context					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct MDEFDrawItemsData *	MDEFDrawItemsDataPtr
+
+
+
+; *  Summary:
+; *    A MenuItemDataFlags value indicates which fields of a
+; *    MenuItemDataRec structure should be used by the
+; *    Copy/SetMenuItemData APIs. All MenuItemDataFlags may be used when
+; *    getting or setting the contents of a menu item; some may also be
+; *    used when getting or setting information about the menu itself,
+; *    if the item index given to Copy/SetMenuItemData is 0.
+; 
+
+
+kMenuItemDataText				EQU		$01
+kMenuItemDataMark				EQU		$02
+kMenuItemDataCmdKey				EQU		$04
+kMenuItemDataCmdKeyGlyph		EQU		$08
+kMenuItemDataCmdKeyModifiers	EQU		$10
+kMenuItemDataStyle				EQU		$20
+kMenuItemDataEnabled			EQU		$40
+kMenuItemDataIconEnabled		EQU		$80
+kMenuItemDataIconID				EQU		$0100
+kMenuItemDataIconHandle			EQU		$0200
+kMenuItemDataCommandID			EQU		$0400
+kMenuItemDataTextEncoding		EQU		$0800
+kMenuItemDataSubmenuID			EQU		$1000
+kMenuItemDataSubmenuHandle		EQU		$2000
+kMenuItemDataFontID				EQU		$4000
+kMenuItemDataRefcon				EQU		$8000
+kMenuItemDataAttributes			EQU		$00010000
+kMenuItemDataCFString			EQU		$00020000
+kMenuItemDataProperties			EQU		$00040000
+kMenuItemDataIndent				EQU		$00080000
+kMenuItemDataCmdVirtualKey		EQU		$00100000
+kMenuItemDataAllDataVersionOne	EQU		$000FFFFF
+kMenuItemDataAllDataVersionTwo	EQU		$001FFFFF
+MenuItemDataFlags		RECORD 0
+f						 ds		UInt64
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+
+
+; *  MenuItemDataRec
+; *  
+; *  Summary:
+; *    The MenuItemDataRec structure is used to get and change aspects
+; *    of a menu item. It is used with the Copy/SetMenuItemData APIs.
+; *  
+; *  Discussion:
+; *    When using this structure with Copy/SetMenuItemData, the caller
+; *    must first set the whichData field to a combination of
+; *    MenuItemDataFlags indicating which specific data should be
+; *    retrieved or set. Some fields also require initialization before
+; *    calling CopyMenuItemData; see the individual MenuItemDataFlags
+; *    documentation for details.
+; 
+
+MenuItemDataRec			RECORD 0
+whichData				 ds		MenuItemDataFlags ; offset: $0 (0)
+text					 ds.l	1				; offset: $8 (8)
+mark					 ds.w	1				; offset: $C (12)
+cmdKey					 ds.w	1				; offset: $E (14)
+cmdKeyGlyph				 ds.l	1				; offset: $10 (16)
+cmdKeyModifiers			 ds.l	1				; offset: $14 (20)
+style					 ds.b	1				; offset: $18 (24)
+enabled					 ds.b	1				; offset: $19 (25)
+iconEnabled				 ds.b	1				; offset: $1A (26)
+filler1					 ds.b	1				; offset: $1B (27)
+iconID					 ds.l	1				; offset: $1C (28)
+iconType				 ds.l	1				; offset: $20 (32)
+iconHandle				 ds.l	1				; offset: $24 (36)
+cmdID					 ds.l	1				; offset: $28 (40)
+encoding				 ds.l	1				; offset: $2C (44)
+submenuID				 ds.w	1				; offset: $30 (48)
+submenuHandle			 ds.l	1				; offset: $32 (50)
+fontID					 ds.l	1				; offset: $36 (54)
+refcon					 ds.l	1				; offset: $3A (58)
+attr					 ds.l	1				; offset: $3E (62)
+cfText					 ds.l	1				; offset: $42 (66)
+properties				 ds.l	1				; offset: $46 (70)
+indent					 ds.l	1				; offset: $4A (74)
+cmdVirtualKey			 ds.w	1				; offset: $4E (78)
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+; typedef struct MenuItemDataRec *		MenuItemDataPtr
+
+; typedef UInt32 						MenuItemID
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu ProcPtrs                                                                     
+;                                                                                       
+;   All of these procs are considered deprecated.  Developers interested in portability 
+;   to Carbon should avoid them entirely, if at all possible.                           
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  NewMenuDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeMenuDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeMenuDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewMenuBarDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMenuHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewMBarHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMenuBarDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMenuHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeMBarHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMenuBarDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMenuHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeMBarHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kMenuDefProcPtr					EQU		0					; raw proc-ptr access based on old MDEF 
+; typedef UInt32 						MenuDefType
+
+MenuDefSpec				RECORD 0
+defType					 ds.l	1				; offset: $0 (0)
+defProc					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct MenuDefSpec *			MenuDefSpecPtr
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Manager Initialization                                                       
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitProcMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InitProcMenu(short resID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InitProcMenu:	OPWORD	$A808
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitProcMenu
+	ENDIF
+
+
+; *  InitMenus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InitMenus(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InitMenus:	OPWORD	$A930
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitMenus
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Manipulation                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuRef NewMenu(MenuID menuID, ConstStr255Param menuTitle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewMenu:	OPWORD	$A931
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewMenu
+	ENDIF
+
+
+; *  [Mac]GetMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuRef GetMenu(short resourceID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMenu:	OPWORD	$A9BF
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenu
+	ENDIF
+
+
+; *  DisposeMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisposeMenu(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DisposeMenu:	OPWORD	$A932
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeMenu
+	ENDIF
+
+
+; *  CalcMenuSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CalcMenuSize(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CalcMenuSize:	OPWORD	$A948
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CalcMenuSize
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CountMItems()
+; *  
+; *  Summary:
+; *    Renamed to CountMenuItems in Carbon
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CountMItems(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CountMItems:	OPWORD	$A950
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountMItems
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  CountMenuItems()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.3 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short CountMenuItems(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CountMenuItems:	OPWORD	$A950
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountMenuItems
+	ENDIF
+
+
+
+;  Routines available in Mac OS 8.5 and later, and on Mac OS 8.1 and later using CarbonLib 1.1 and later
+
+
+; *  GetMenuFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuFont(MenuRef menu, SInt16 *outFontID, UInt16 *outFontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuFont
+	ENDIF
+
+
+; *  SetMenuFont()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuFont(MenuRef menu, SInt16 inFontID, UInt16 inFontSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuFont
+	ENDIF
+
+
+; *  GetMenuExcludesMarkColumn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean GetMenuExcludesMarkColumn(MenuRef menu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuExcludesMarkColumn
+	ENDIF
+
+
+; *  SetMenuExcludesMarkColumn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuExcludesMarkColumn(MenuRef menu, Boolean excludesMark)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuExcludesMarkColumn
+	ENDIF
+
+
+; *  RegisterMenuDefinition()
+; *  
+; *  Summary:
+; *    Registers or unregisters a binding between a resource ID and a
+; *    menu definition function.
+; *  
+; *  Discussion:
+; *    In the Mac OS 8.x Menu Manager, a 'MENU' resource can contain an
+; *    embedded MDEF procID that is used by the Menu Manager as the
+; *    resource ID of an 'MDEF' resource to measure and draw the menu.
+; *    The 'MDEF' resource is loaded by the Menu Manager when you load
+; *    the menu with GetMenu. Since MDEFs can no longer be packaged as
+; *    code resources on Carbon, the procID can no longer refer directly
+; *    to an MDEF resource. However, using RegisterMenuDefinition you
+; *    can instead specify a UniversalProcPtr pointing to code in your
+; *    application code fragment.
+; *  
+; *  Parameters:
+; *    
+; *    inResID:
+; *      An MDEF proc ID, as used in a 'MENU' resource.
+; *    
+; *    inDefSpec:
+; *      Specifies the MenuDefUPP that should be used for menus with the
+; *      given MDEF proc ID. Passing NULL allows you to unregister the
+; *      menu definition that had been associated with the given MDEF
+; *      proc ID.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RegisterMenuDefinition(SInt16 inResID, MenuDefSpecPtr inDefSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterMenuDefinition
+	ENDIF
+
+
+; *  CreateNewMenu()
+; *  
+; *  Summary:
+; *    Creates a new, untitled, empty menu.
+; *  
+; *  Discussion:
+; *    CreateNewMenu is preferred over NewMenu because it allows you to
+; *    specify the menu's attributes and it does not require you to
+; *    specify a Str255-based menu title. To set the menu title, you can
+; *    use either SetMenuTitle or SetMenuTitleWithCFString.
+; *  
+; *  Parameters:
+; *    
+; *    inMenuID:
+; *      The menu ID to use for the new menu.
+; *    
+; *    inMenuAttributes:
+; *      The menu attributes to use for the new menu.
+; *    
+; *    outMenuRef:
+; *      On exit, contains the new menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateNewMenu(MenuID inMenuID, MenuAttributes inMenuAttributes, MenuRef *outMenuRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateNewMenu
+	ENDIF
+
+
+; *  CreateCustomMenu()
+; *  
+; *  Summary:
+; *    Creates a new, untitled, empty menu using a custom menu
+; *    definition function.
+; *  
+; *  Discussion:
+; *    Similar to CreateNewMenu, but also allows you to specify a custom
+; *    menu definition function.
+; *  
+; *  Parameters:
+; *    
+; *    inDefSpec:
+; *      Specifies a custom menu definition function. defSpec->defType
+; *      must be kMenuDefProcPtr.
+; *    
+; *    inMenuID:
+; *      The menu ID to use for the new menu.
+; *    
+; *    inMenuAttributes:
+; *      The menu attributes to use for the new menu.
+; *    
+; *    outMenuRef:
+; *      On exit, contains the new menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateCustomMenu(const MenuDefSpec *inDefSpec, MenuID inMenuID, MenuAttributes inMenuAttributes, MenuRef *outMenuRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateCustomMenu
+	ENDIF
+
+
+; *  IsValidMenu()
+; *  
+; *  Summary:
+; *    Determines if a menu is valid.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu to check for validity.
+; *  
+; *  Result:
+; *    Indicates whether the menu is valid.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsValidMenu(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsValidMenu
+	ENDIF
+
+
+; *  GetMenuRetainCount()
+; *  
+; *  Summary:
+; *    Returns the retain count of this menu.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose retain count to increment.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ItemCount GetMenuRetainCount(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuRetainCount
+	ENDIF
+
+
+; *  RetainMenu()
+; *  
+; *  Summary:
+; *    Increments the retain count of a menu.
+; *  
+; *  Discussion:
+; *    RetainMenu does not create a new menu. It simply adds one to the
+; *    retain count. If called on a menu that was not created by
+; *    CarbonLib, it will not affect the menu's retain count.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose retain count to increment.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RetainMenu(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RetainMenu
+	ENDIF
+
+
+; *  ReleaseMenu()
+; *  
+; *  Summary:
+; *    Decrements the retain count of a menu.
+; *  
+; *  Discussion:
+; *    If called on a menu that was not created by CarbonLib, it will
+; *    not affect the menu's retain count.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose retain count to decrement. If the retain count
+; *      falls to zero, the menu is destroyed.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ReleaseMenu(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReleaseMenu
+	ENDIF
+
+
+; *  DuplicateMenu()
+; *  
+; *  Summary:
+; *    Creates a new menu that is a copy of another menu.
+; *  
+; *  Discussion:
+; *    Unlike CloneMenu, DuplicateMenu creates an entirely new menu that
+; *    is an exact copy of the original menu. The MDEF for the new menu
+; *    will receive an init message after the menu has been fully
+; *    created.
+; *  
+; *  Parameters:
+; *    
+; *    inSourceMenu:
+; *      The menu to duplicate.
+; *    
+; *    outMenu:
+; *      On exit, a copy of the source menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DuplicateMenu(MenuRef inSourceMenu, MenuRef *outMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DuplicateMenu
+	ENDIF
+
+
+; *  CopyMenuTitleAsCFString()
+; *  
+; *  Summary:
+; *    Returns a CFString containing the title of a menu.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose title to return.
+; *    
+; *    outString:
+; *      On exit, a CFString containing the menu's title. This string
+; *      must be released by the caller.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyMenuTitleAsCFString(MenuRef inMenu, CFStringRef *outString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyMenuTitleAsCFString
+	ENDIF
+
+
+; *  SetMenuTitleWithCFString()
+; *  
+; *  Summary:
+; *    Sets the title of a menu to the text contained in a CFString.
+; *  
+; *  Discussion:
+; *    The Menu Manager will make its own copy of the CFString before
+; *    returning from SetMenuTitleWithCFString. Modifying the string
+; *    after calling SetMenuTitleWithCFString will have no effect on the
+; *    menu's actual title. The caller may release the string after
+; *    calling SetMenuTitleWithCFString.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose title to set.
+; *    
+; *    inString:
+; *      The string containing the new menu title text.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuTitleWithCFString(MenuRef inMenu, CFStringRef inString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuTitleWithCFString
+	ENDIF
+
+
+; *  SetMenuTitleIcon()
+; *  
+; *  Summary:
+; *    Sets the title of a menu to be an icon.
+; *  
+; *  Discussion:
+; *    The Menu Manager takes ownership of the supplied icon after this
+; *    call. When a menu with an title icon is disposed, the Menu
+; *    Manager will dispose the icon also; the Menu Manager will also
+; *    dispose of the current title icon when a new text or icon title
+; *    is supplied for a menu. If an IconRef is specified, the Menu
+; *    Manager will increment its refcount, so you may freely release
+; *    your reference to the IconRef without invalidating the Menu
+; *    Manager's copy. The menubar will be invalidated by this call, and
+; *    redrawn at the next opportunity.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose title to set.
+; *    
+; *    inType:
+; *      The type of icon being used to specify the icon title; use
+; *      kMenuNoIcon to remove the icon from the menu title. The
+; *      supported types are kMenuIconSuiteType and kMenuIconRefType.
+; *    
+; *    inIcon:
+; *      The icon; must be NULL if inType is kMenuNoIcon. The supported
+; *      icon formats are IconSuiteRef and IconRef.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuTitleIcon(MenuRef inMenu, UInt32 inType, void *inIcon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuTitleIcon
+	ENDIF
+
+
+; *  GetMenuTitleIcon()
+; *  
+; *  Summary:
+; *    Retrieves the icon, if any, being used as the title of a menu.
+; *  
+; *  Discussion:
+; *    This API does not increment a refcount on the returned icon. The
+; *    caller should not release the icon.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose icon title to retrieve.
+; *    
+; *    outType:
+; *      On exit, contains the type of icon being used as the title of
+; *      the menu. Contains kMenuNoIcon if the menu does not have an
+; *      icon title.
+; *    
+; *    outIcon:
+; *      On exit, contains the IconSuiteRef or IconRef being used as the
+; *      title of the menu, or NULL if the menu does not have an icon
+; *      title. May be NULL.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuTitleIcon(MenuRef inMenu, UInt32 *outType, void **outIcon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuTitleIcon
+	ENDIF
+
+
+; *  InvalidateMenuSize()
+; *  
+; *  Summary:
+; *    Invalidates the menu size so that it will be recalculated when
+; *    next displayed.
+; *  
+; *  Discussion:
+; *    The pre-Carbon technique for invalidating the menu size was to
+; *    set the width and height to -1. Although this technique still
+; *    works, for best compatibility it's preferable to use the
+; *    InvalidateMenuSize API so that the Menu Manager has explicit
+; *    notification that the menu is invalid.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose size to invalidate.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InvalidateMenuSize(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalidateMenuSize
+	ENDIF
+
+
+; *  IsMenuSizeInvalid()
+; *  
+; *  Summary:
+; *    Determines if a menu's size is invalid and should be recalculated.
+; *  
+; *  Discussion:
+; *    The pre-Carbon technique for determining if a menu's size is
+; *    invalid was to check if the width or height was -1. This
+; *    technique is not always reliable on Carbon due to implementation
+; *    changes in the Menu Manager. You should now use IsMenuSizeInvalid
+; *    instead.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu whose size to examine.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuSizeInvalid(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuSizeInvalid
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Item Insertion                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  [Mac]AppendMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AppendMenu(MenuRef menu, ConstStr255Param data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_AppendMenu:	OPWORD	$A933
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendMenu
+	ENDIF
+
+
+; *  InsertResMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InsertResMenu(MenuRef theMenu, ResType theType, short afterItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InsertResMenu:	OPWORD	$A951
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertResMenu
+	ENDIF
+
+
+; *  AppendResMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AppendResMenu(MenuRef theMenu, ResType theType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_AppendResMenu:	OPWORD	$A94D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendResMenu
+	ENDIF
+
+
+; *  [Mac]InsertMenuItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InsertMenuItem(MenuRef theMenu, ConstStr255Param itemString, short afterItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InsertMenuItem:	OPWORD	$A826
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertMenuItem
+	ENDIF
+
+
+; *  DeleteMenuItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DeleteMenuItem(MenuRef theMenu, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DeleteMenuItem:	OPWORD	$A952
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteMenuItem
+	ENDIF
+
+
+; *  InsertFontResMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InsertFontResMenu(MenuRef theMenu, short afterItem, short scriptFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InsertFontResMenu
+			move.w              #$0400,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertFontResMenu
+	ENDIF
+
+
+; *  InsertIntlResMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InsertIntlResMenu(MenuRef theMenu, ResType theType, short afterItem, short scriptFilter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InsertIntlResMenu
+			move.w              #$0601,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertIntlResMenu
+	ENDIF
+
+
+; *  AppendMenuItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus AppendMenuItemText(MenuRef menu, ConstStr255Param inString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendMenuItemText
+	ENDIF
+
+
+; *  InsertMenuItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InsertMenuItemText(MenuRef menu, ConstStr255Param inString, MenuItemIndex afterItem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertMenuItemText
+	ENDIF
+
+
+; *  CopyMenuItems()
+; *  
+; *  Summary:
+; *    Copies menu items from one menu to another.
+; *  
+; *  Parameters:
+; *    
+; *    inSourceMenu:
+; *      The menu from which to copy items.
+; *    
+; *    inFirstItem:
+; *      The first item to copy.
+; *    
+; *    inNumItems:
+; *      The number of items to copy.
+; *    
+; *    inDestMenu:
+; *      The menu to which to copy items.
+; *    
+; *    inInsertAfter:
+; *      The menu item in the destination menu after which to insert the
+; *      copied items.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyMenuItems(MenuRef inSourceMenu, MenuItemIndex inFirstItem, ItemCount inNumItems, MenuRef inDestMenu, MenuItemIndex inInsertAfter)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyMenuItems
+	ENDIF
+
+
+; *  DeleteMenuItems()
+; *  
+; *  Summary:
+; *    Deletes multiple menu items.
+; *  
+; *  Discussion:
+; *    This API is more efficient than calling DeleteMenuItem multiple
+; *    times.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu from which to delete items.
+; *    
+; *    inFirstItem:
+; *      The first item to delete.
+; *    
+; *    inNumItems:
+; *      The number of items to delete.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DeleteMenuItems(MenuRef inMenu, MenuItemIndex inFirstItem, ItemCount inNumItems)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteMenuItems
+	ENDIF
+
+
+; *  AppendMenuItemTextWithCFString()
+; *  
+; *  Summary:
+; *    Appends a new menu item with text from a CFString.
+; *  
+; *  Discussion:
+; *    The Menu Manager will make its own copy of the CFString before
+; *    returning from AppendMenuItemWithTextCFString. Modifying the
+; *    string after calling AppendMenuItemTextWithCFString will have no
+; *    effect on the menu item's actual text. The caller may release the
+; *    string after calling AppendMenuItemTextWithCFString.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu to which to append the new item.
+; *    
+; *    inString:
+; *      The text of the new item.
+; *    
+; *    inAttributes:
+; *      The attributes of the new item.
+; *    
+; *    inCommandID:
+; *      The command ID of the new item.
+; *    
+; *    outNewItem:
+; *      On exit, the index of the new item. May be NULL if the caller
+; *      does not need this information.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus AppendMenuItemTextWithCFString(MenuRef inMenu, CFStringRef inString, MenuItemAttributes inAttributes, MenuCommand inCommandID, MenuItemIndex *outNewItem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AppendMenuItemTextWithCFString
+	ENDIF
+
+
+; *  InsertMenuItemTextWithCFString()
+; *  
+; *  Summary:
+; *    Inserts a new menu item with text from a CFString.
+; *  
+; *  Discussion:
+; *    The Menu Manager will make its own copy of the CFString before
+; *    returning from InsertMenuItemWithCFString. Modifying the string
+; *    after calling InsertMenuItemTextWithCFString will have no effect
+; *    on the menu item's actual text. The caller may release the string
+; *    after calling InsertMenuItemTextWithCFString.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to insert the new item.
+; *    
+; *    inString:
+; *      The text of the new item.
+; *    
+; *    inAfterItem:
+; *      The item after which to insert the new item.
+; *    
+; *    inAttributes:
+; *      The attributes of the new item.
+; *    
+; *    inCommandID:
+; *      The command ID of the new item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InsertMenuItemTextWithCFString(MenuRef inMenu, CFStringRef inString, MenuItemIndex inAfterItem, MenuItemAttributes inAttributes, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertMenuItemTextWithCFString
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Events                                                                       
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  MenuKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long MenuKey(CharParameter ch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_MenuKey:	OPWORD	$A93E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MenuKey
+	ENDIF
+
+
+; *  MenuSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long MenuSelect(Point startPt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_MenuSelect:	OPWORD	$A93D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MenuSelect
+	ENDIF
+
+
+; *  PopUpMenuSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long PopUpMenuSelect(MenuRef menu, short top, short left, short popUpItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_PopUpMenuSelect:	OPWORD	$A80B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PopUpMenuSelect
+	ENDIF
+
+
+; *  MenuChoice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long MenuChoice(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_MenuChoice:	OPWORD	$AA66
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MenuChoice
+	ENDIF
+
+
+; *  MenuEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 MenuEvent(const EventRecord *inEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MenuEvent
+			move.w              #$020C,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MenuEvent
+	ENDIF
+
+
+; *  IsMenuKeyEvent()
+; *  
+; *  Summary:
+; *    Determines if an event corresponds to a menu command key.
+; *  
+; *  Discussion:
+; *    By default, IsMenuKeyEvent searches the menus in the current menu
+; *    bar and hilites the menu title of the menu containing the
+; *    selected item.
+; *  
+; *  Parameters:
+; *    
+; *    inStartMenu:
+; *      IsMenuKeyEvent searches for matching menu items in this menu
+; *      and all of its submenus. May be NULL to search the current menu
+; *      bar contents.
+; *    
+; *    inEvent:
+; *      The event to match against. Non-keyboard events are ignored.
+; *    
+; *    inOptions:
+; *      Options controlling how to search. Pass kNilOptions for the
+; *      default behavior.
+; *    
+; *    outMenu:
+; *      On exit, the menu containing the matching item. May be NULL.
+; *    
+; *    outMenuItem:
+; *      On exit, the menu item that matched. May be NULL.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuKeyEvent(MenuRef inStartMenu, EventRef inEvent, MenuEventOptions inOptions, MenuRef *outMenu, MenuItemIndex *outMenuItem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuKeyEvent
+	ENDIF
+
+
+; *  InvalidateMenuEnabling()
+; *  
+; *  Summary:
+; *    Causes the menu enable state to be recalculated at the next
+; *    convenient opportunity.
+; *  
+; *  Discussion:
+; *    It is common for state changes in an application (for example,
+; *    selection of text) to cause a change in the enabling of items in
+; *    the application's menu (for example, the Copy menu item might
+; *    become enabled). In a Carbon-event-savvy application, menu items
+; *    are enabled or disabled in response to an
+; *    kEventCommandUpdateStatus event; however, this event is normally
+; *    only sent before a command key press or a click in the menubar.
+; *    You can request an explicit recalculation of a menu's enable
+; *    state with the InvalidateMenuEnabling API. The Carbon Event
+; *    Manager will automatically invalidate the enable state of all
+; *    top-level menus when a user event is dispatched, the user focus
+; *    changes, or the active window changes, so in many cases you will
+; *    not need to explicitly invalidate the menu enabling state.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      A menu to re-enable, or NULL if all menus in the root menu
+; *      should be re-enabled.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InvalidateMenuEnabling(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalidateMenuEnabling
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Bar                                                                          
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  GetMBarHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short GetMBarHeight(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMBarHeight        &dest=(sp)
+			move.w            $0BAA,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMBarHeight
+	ENDIF
+
+
+; *  [Mac]DrawMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawMenuBar:	OPWORD	$A937
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawMenuBar
+	ENDIF
+
+
+; *  InvalMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InvalMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InvalMenuBar:	OPWORD	$A81D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalMenuBar
+	ENDIF
+
+
+; *  IsMenuBarInvalid()
+; *  
+; *  Summary:
+; *    Determines if the menubar is invalid and should be redrawn.
+; *  
+; *  Parameters:
+; *    
+; *    rootMenu:
+; *      The root menu for the menubar to be examined. Pass NULL to
+; *      check the state of the current menubar.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuBarInvalid(MenuRef rootMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuBarInvalid
+	ENDIF
+
+
+; *  HiliteMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HiliteMenu(MenuID menuID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_HiliteMenu:	OPWORD	$A938
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HiliteMenu
+	ENDIF
+
+
+; *  GetNewMBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuBarHandle GetNewMBar(short menuBarID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetNewMBar:	OPWORD	$A9C0
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNewMBar
+	ENDIF
+
+
+; *  GetMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuBarHandle GetMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMenuBar:	OPWORD	$A93B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuBar
+	ENDIF
+
+
+; *  SetMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuBar(MenuBarHandle mbar)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMenuBar:	OPWORD	$A93C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuBar
+	ENDIF
+
+
+; *  DuplicateMenuBar()
+; *  
+; *  Summary:
+; *    Duplicates a menubar handle.
+; *  
+; *  Discussion:
+; *    This API should be used in Carbon applications when duplicating a
+; *    handle returned from GetMenuBar or GetNewMBar. You should not use
+; *    Memory Manager APIs (HandToHand, NewHandle, etc) to duplicate
+; *    such a handle. This is necessary in Carbon so that the refcounts
+; *    of the menus in the menubar handle can be incremented when the
+; *    handle is duplicated.
+; *  
+; *  Parameters:
+; *    
+; *    inMbar:
+; *      The menubar handle to duplicate.
+; *    
+; *    outMbar:
+; *      On exit, contains the new menubar handle.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DuplicateMenuBar(MenuBarHandle inMbar, MenuBarHandle *outMbar)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DuplicateMenuBar
+	ENDIF
+
+
+; *  DisposeMenuBar()
+; *  
+; *  Summary:
+; *    Releases a menubar handle.
+; *  
+; *  Discussion:
+; *    This API should be used in Carbon applications when releasing a
+; *    handle returned from GetMenuBar or GetNewMBar. You should not use
+; *    DisposeHandle to release such a handle. This is necessary in
+; *    Carbon so that the refcounts of the menus in the menubar handle
+; *    can be decremented when the handle is released.
+; *  
+; *  Parameters:
+; *    
+; *    inMbar:
+; *      The menubar handle to release.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DisposeMenuBar(MenuBarHandle inMbar)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeMenuBar
+	ENDIF
+
+
+; *  GetMenuHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuRef GetMenuHandle(MenuID menuID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMenuHandle:	OPWORD	$A949
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuHandle
+	ENDIF
+
+
+; *  [Mac]InsertMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void InsertMenu(MenuRef theMenu, MenuID beforeID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InsertMenu:	OPWORD	$A935
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InsertMenu
+	ENDIF
+
+
+; *  [Mac]DeleteMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DeleteMenu(MenuID menuID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DeleteMenu:	OPWORD	$A936
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteMenu
+	ENDIF
+
+
+; *  ClearMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ClearMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ClearMenuBar:	OPWORD	$A934
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ClearMenuBar
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetMenuFlash()
+; *  
+; *  Summary:
+; *    Renamed to SetMenuFlashCount in Carbon
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetMenuFlash(short count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMenuFlash:	OPWORD	$A94A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuFlash
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SetMenuFlashCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.3 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuFlashCount(short count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMenuFlashCount:	OPWORD	$A94A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuFlashCount
+	ENDIF
+
+
+
+; *  FlashMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void FlashMenuBar(MenuID menuID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FlashMenuBar:	OPWORD	$A94C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FlashMenuBar
+	ENDIF
+
+;  These are obsolete because Carbon does not support desk accessories.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SystemEdit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean SystemEdit(short editCmd)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SystemEdit:	OPWORD	$A9C2
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SystemEdit
+	ENDIF
+
+
+; *  SystemMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SystemMenu(long menuResult)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SystemMenu:	OPWORD	$A9B5
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SystemMenu
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  IsMenuBarVisible()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuBarVisible(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuBarVisible
+	ENDIF
+
+
+; *  ShowMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ShowMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowMenuBar
+	ENDIF
+
+
+; *  HideMenuBar()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HideMenuBar(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideMenuBar
+	ENDIF
+
+
+; *  AcquireRootMenu()
+; *  
+; *  Summary:
+; *    Get the menu whose contents are displayed in the menubar.
+; *  
+; *  Discussion:
+; *    The refcount of the root menu is incremented by this API. The
+; *    caller should release a refcount with ReleaseMenu when it’s done
+; *    with the menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuRef AcquireRootMenu(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AcquireRootMenu
+	ENDIF
+
+
+; *  SetRootMenu()
+; *  
+; *  Summary:
+; *    Sets the menu whose contents are displayed in the menubar.
+; *  
+; *  Discussion:
+; *    The refcount of the root menu is incremented by this API. The
+; *    caller may release the menu after calling SetRootMenu.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The new root menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetRootMenu(MenuRef inMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetRootMenu
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Item Accessors                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CheckItem()
+; *  
+; *  Summary:
+; *    Renamed to CheckMenuItem in Carbon
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CheckItem(MenuRef theMenu, short item, Boolean checked)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CheckItem:	OPWORD	$A945
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CheckItem
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  [Mac]CheckMenuItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.3 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CheckMenuItem(MenuRef theMenu, short item, Boolean checked)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CheckMenuItem:	OPWORD	$A945
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CheckMenuItem
+	ENDIF
+
+
+
+; *  SetMenuItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuItemText(MenuRef theMenu, short item, ConstStr255Param itemString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMenuItemText:	OPWORD	$A947
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemText
+	ENDIF
+
+
+; *  GetMenuItemText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetMenuItemText(MenuRef theMenu, short item, Str255 itemString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMenuItemText:	OPWORD	$A946
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemText
+	ENDIF
+
+
+; *  SetItemMark()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetItemMark(MenuRef theMenu, short item, CharParameter markChar)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetItemMark:	OPWORD	$A944
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetItemMark
+	ENDIF
+
+
+; *  GetItemMark()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetItemMark(MenuRef theMenu, short item, CharParameter *markChar)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetItemMark:	OPWORD	$A943
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetItemMark
+	ENDIF
+
+
+; *  SetItemCmd()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetItemCmd(MenuRef theMenu, short item, CharParameter cmdChar)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetItemCmd:	OPWORD	$A84F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetItemCmd
+	ENDIF
+
+
+; *  GetItemCmd()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetItemCmd(MenuRef theMenu, short item, CharParameter *cmdChar)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetItemCmd:	OPWORD	$A84E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetItemCmd
+	ENDIF
+
+
+; *  SetItemIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetItemIcon(MenuRef theMenu, short item, short iconIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetItemIcon:	OPWORD	$A940
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetItemIcon
+	ENDIF
+
+;  icon is returned in high byte of 16-bit iconIndex 
+
+; *  GetItemIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetItemIcon(MenuRef theMenu, short item, short *iconIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetItemIcon:	OPWORD	$A93F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetItemIcon
+	ENDIF
+
+
+; *  SetItemStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetItemStyle(MenuRef theMenu, short item, StyleParameter chStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetItemStyle:	OPWORD	$A942
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetItemStyle
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetItemStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void GetItemStyle(MenuRef theMenu, short item, Style *chStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetItemStyle:	OPWORD	$A941
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetItemStyle
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  These APIs are not supported in Carbon. Please use EnableMenuItem and 
+;  DisableMenuItem (available back through Mac OS 8.5) instead.          
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DisableItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void DisableItem(MenuRef theMenu, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DisableItem:	OPWORD	$A93A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableItem
+	ENDIF
+
+
+; *  EnableItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void EnableItem(MenuRef theMenu, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_EnableItem:	OPWORD	$A939
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableItem
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SetMenuItemCommandID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemCommandID
+			move.w              #$0502,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemCommandID
+	ENDIF
+
+
+; *  GetMenuItemCommandID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, MenuCommand *outCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemCommandID
+			move.w              #$0503,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemCommandID
+	ENDIF
+
+
+; *  SetMenuItemModifiers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemModifiers
+			move.w              #$0404,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemModifiers
+	ENDIF
+
+
+; *  GetMenuItemModifiers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemModifiers
+			move.w              #$0505,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemModifiers
+	ENDIF
+
+
+; *  SetMenuItemIconHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 inIconType, Handle inIconHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemIconHandle
+			move.w              #$0606,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemIconHandle
+	ENDIF
+
+
+; *  GetMenuItemIconHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 *outIconType, Handle *outIconHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemIconHandle
+			move.w              #$0707,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemIconHandle
+	ENDIF
+
+
+; *  SetMenuItemTextEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemTextEncoding
+			move.w              #$0408,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemTextEncoding
+	ENDIF
+
+
+; *  GetMenuItemTextEncoding()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding *outScriptID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemTextEncoding
+			move.w              #$0509,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemTextEncoding
+	ENDIF
+
+
+; *  SetMenuItemHierarchicalID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, MenuID inHierID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemHierarchicalID
+			move.w              #$040D,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemHierarchicalID
+	ENDIF
+
+
+; *  GetMenuItemHierarchicalID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, MenuID *outHierID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemHierarchicalID
+			move.w              #$050E,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemHierarchicalID
+	ENDIF
+
+
+; *  SetMenuItemFontID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 inFontID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemFontID
+			move.w              #$040F,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemFontID
+	ENDIF
+
+
+; *  GetMenuItemFontID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 *outFontID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemFontID
+			move.w              #$0510,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemFontID
+	ENDIF
+
+
+; *  SetMenuItemRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemRefCon
+			move.w              #$050A,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemRefCon
+	ENDIF
+
+
+; *  GetMenuItemRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, UInt32 *outRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemRefCon
+			move.w              #$050B,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemRefCon
+	ENDIF
+
+;  Please use the menu item property APIs in Carbon.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetMenuItemRefCon2()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemRefCon2
+			move.w              #$0511,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemRefCon2
+	ENDIF
+
+
+; *  GetMenuItemRefCon2()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr GetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, UInt32 *outRefCon2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemRefCon2
+			move.w              #$0512,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemRefCon2
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SetMenuItemKeyGlyph()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetMenuItemKeyGlyph
+			move.w              #$0513,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemKeyGlyph
+	ENDIF
+
+
+; *  GetMenuItemKeyGlyph()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 *outGlyph)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetMenuItemKeyGlyph
+			move.w              #$0514,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemKeyGlyph
+	ENDIF
+
+;  Routines available in Mac OS 8.5 and later (supporting enabling/disabling of > 31 items)
+
+
+; *  [Mac]EnableMenuItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableMenuItem(MenuRef theMenu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableMenuItem
+	ENDIF
+
+
+; *  DisableMenuItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisableMenuItem(MenuRef theMenu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableMenuItem
+	ENDIF
+
+
+; *  IsMenuItemEnabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuItemEnabled(MenuRef menu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuItemEnabled
+	ENDIF
+
+
+; *  EnableMenuItemIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableMenuItemIcon(MenuRef theMenu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_EnableMenuItemIcon
+			move.w              #$0019,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableMenuItemIcon
+	ENDIF
+
+
+; *  DisableMenuItemIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisableMenuItemIcon(MenuRef theMenu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisableMenuItemIcon
+			move.w              #$0020,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableMenuItemIcon
+	ENDIF
+
+
+; *  IsMenuItemIconEnabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuItemIconEnabled(MenuRef menu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IsMenuItemIconEnabled
+			move.w              #$0018,D0
+			dc.w            	$A825
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuItemIconEnabled
+	ENDIF
+
+
+; *  SetMenuItemHierarchicalMenu()
+; *  
+; *  Summary:
+; *    Attaches a submenu to a menu item.
+; *  
+; *  Discussion:
+; *    Using SetMenuItemHierarchicalMenu, it is possible to directly
+; *    specify the submenu for a menu item without specifying its menu
+; *    ID. It is not necessary to insert the submenu into the
+; *    hierarchical portion of the menubar, and it is not necessary for
+; *    the submenu to have a unique menu ID; it is recommended that you
+; *    use 0 as the menu ID for the submenu, and identify selections
+; *    from the menu by command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The parent menu.
+; *    
+; *    inItem:
+; *      The parent item.
+; *    
+; *    inHierMenu:
+; *      The submenu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemHierarchicalMenu(MenuRef inMenu, MenuItemIndex inItem, MenuRef inHierMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemHierarchicalMenu
+	ENDIF
+
+
+; *  GetMenuItemHierarchicalMenu()
+; *  
+; *  Summary:
+; *    Returns the submenu attached to a menu item.
+; *  
+; *  Discussion:
+; *    GetMenuItemHierarchicalMenu will return the submenu attached to a
+; *    menu item regardless of how the submenu was specified. If the
+; *    submenu was specified by menu ID (using SetItemCmd or
+; *    SetMenuItemHierarchicalID), GetMenuItemHierarchicalMenu will
+; *    return the currently installed menu with that ID, if any. The
+; *    only case where GetMenuItemHierarchicalMenu will fail to return
+; *    the item's submenu is when the submenu is specified by menu ID,
+; *    but the submenu is not currently inserted in the menu bar.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The parent menu.
+; *    
+; *    inItem:
+; *      The parent item.
+; *    
+; *    outHierMenu:
+; *      On exit, the item's submenu, or NULL if it does not have one.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemHierarchicalMenu(MenuRef inMenu, MenuItemIndex inItem, MenuRef *outHierMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemHierarchicalMenu
+	ENDIF
+
+
+; *  CopyMenuItemTextAsCFString()
+; *  
+; *  Summary:
+; *    Returns a CFString containing the text of a menu item.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose text to return.
+; *    
+; *    outString:
+; *      On exit, a CFString containing the item's text. This string
+; *      must be released by the caller.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyMenuItemTextAsCFString(MenuRef inMenu, MenuItemIndex inItem, CFStringRef *outString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyMenuItemTextAsCFString
+	ENDIF
+
+
+; *  SetMenuItemTextWithCFString()
+; *  
+; *  Summary:
+; *    Sets the text of a menu item to the text contained in a CFString.
+; *  
+; *  Discussion:
+; *    The Menu Manager will make its own copy of the CFString before
+; *    returning from SetMenuItemTextWithCFString. Modifying the string
+; *    after calling SetMenuItemTextWithCFString will have no effect on
+; *    the item's actual text. The caller may release the string after
+; *    calling SetMenuItemTextWithCFString.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose text to return.
+; *    
+; *    inString:
+; *      The string containing the new menu item text.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemTextWithCFString(MenuRef inMenu, MenuItemIndex inItem, CFStringRef inString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemTextWithCFString
+	ENDIF
+
+
+; *  GetMenuItemIndent()
+; *  
+; *  Summary:
+; *    Gets the indent level of a menu item.
+; *  
+; *  Discussion:
+; *    The indent level of an item is an amount of extra space added to
+; *    the left of the item's icon or checkmark. The level is simply a
+; *    number, starting at zero, which the Menu Manager multiplies by a
+; *    constant to get the indent in pixels. The default indent level is
+; *    zero.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose indent to retrieve.
+; *    
+; *    outIndent:
+; *      On exit, the indent level of the item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemIndent(MenuRef inMenu, MenuItemIndex inItem, UInt32 *outIndent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemIndent
+	ENDIF
+
+
+; *  SetMenuItemIndent()
+; *  
+; *  Summary:
+; *    Sets the indent level of a menu item.
+; *  
+; *  Discussion:
+; *    The indent level of an item is an amount of extra space added to
+; *    the left of the item's icon or checkmark. The level is simply a
+; *    number, starting at zero, which the Menu Manager multiplies by a
+; *    constant to get the indent in pixels. The default indent level is
+; *    zero.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose indent to set.
+; *    
+; *    inIndent:
+; *      The new indent level of the item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemIndent(MenuRef inMenu, MenuItemIndex inItem, UInt32 inIndent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemIndent
+	ENDIF
+
+
+; *  GetMenuItemCommandKey()
+; *  
+; *  Summary:
+; *    Gets the keyboard equivalent of a menu item.
+; *  
+; *  Discussion:
+; *    A menu item's keyboard equivalent may be either a character code
+; *    or a virtual keycode. An item's character code and virtual
+; *    keycode are stored separately and may contain different values,
+; *    but only one is used by the Menu Manager at any given time. When
+; *    requesting a menu item's virtual keycode equivalent, you should
+; *    first check that the item is using a virtual keycode by testing
+; *    the kMenuItemAttrUseVirtualKey attribute for that item. If this
+; *    attribute is not set, the item's virtual keycode is ignored by
+; *    the Menu Manager. Note that zero is a valid virtual keycode, so
+; *    you cannot test the returned keycode against zero to determine if
+; *    the item is using a virtual keycode equivalent. You must test the
+; *    kMenuItemAttrUseVirtualKey attribute.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose keyboard equivalent to retrieve.
+; *    
+; *    inGetVirtualKey:
+; *      Indicates whether to retrieve the item's character code or
+; *      virtual keycode equivalent.
+; *    
+; *    outKey:
+; *      On exit, the keyboard equivalent of the item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemCommandKey(MenuRef inMenu, MenuItemIndex inItem, Boolean inGetVirtualKey, UInt16 *outKey)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemCommandKey
+	ENDIF
+
+
+; *  SetMenuItemCommandKey()
+; *  
+; *  Summary:
+; *    Sets the keyboard equivalent of a menu item.
+; *  
+; *  Discussion:
+; *    A menu item's keyboard equivalent may be either a character code
+; *    or a virtual keycode. The character code is always used to draw
+; *    the item's keyboard equivalent in the menu, but either may be
+; *    used for keyboard equivalent matching by MenuEvent and
+; *    IsMenuKeyEvent, depending on whether the
+; *    kMenuItemAttrUseVirtualKey item attribute is set. If
+; *    SetMenuItemCommandKey is used to set the virtual keycode
+; *    equivalent for a menu item, it also automatically sets the
+; *    kMenuItemAttrUseVirtualKey item attribute. To make the menu item
+; *    stop using the virtual keycode equivalent and use the character
+; *    code equivalent instead, use ChangeMenuItemAttributes to clear
+; *    the kMenuItemAttrUseVirtualKey item attribute.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu containing the item.
+; *    
+; *    inItem:
+; *      The item whose keyboard equivalent to set.
+; *    
+; *    inSetVirtualKey:
+; *      Indicates whether to set the item's character code or virtual
+; *      keycode equivalent.
+; *    
+; *    inKey:
+; *      The item's new character code or virtual keycode equivalent.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemCommandKey(MenuRef inMenu, MenuItemIndex inItem, Boolean inSetVirtualKey, UInt16 inKey)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemCommandKey
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu Item Color Tables                                                            
+;                                                                                       
+;   Menu color manipulation is considered deprecated with the advent of the Appearance  
+;   Manager.  Avoid using these routines if possible                                    
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  DeleteMCEntries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DeleteMCEntries(MenuID menuID, short menuItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DeleteMCEntries:	OPWORD	$AA60
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteMCEntries
+	ENDIF
+
+
+; *  GetMCInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MCTableHandle GetMCInfo(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMCInfo:	OPWORD	$AA61
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMCInfo
+	ENDIF
+
+
+; *  SetMCInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMCInfo(MCTableHandle menuCTbl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMCInfo:	OPWORD	$AA62
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMCInfo
+	ENDIF
+
+
+; *  DisposeMCInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisposeMCInfo(MCTableHandle menuCTbl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DisposeMCInfo:	OPWORD	$AA63
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeMCInfo
+	ENDIF
+
+
+; *  GetMCEntry()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MCEntryPtr GetMCEntry(MenuID menuID, short menuItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetMCEntry:	OPWORD	$AA64
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMCEntry
+	ENDIF
+
+
+; *  SetMCEntries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMCEntries(short numEntries, MCTablePtr menuCEntries)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetMCEntries:	OPWORD	$AA65
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMCEntries
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Properties  (Mac OS 8.5 and later)                                                 
+;                                                                                       
+;  With the following property APIs, you can attach any piece of data you'd like to a   
+;  menu or menu item. Passing zero for the item number parameter indicates you'd like   
+;  to attach the data to the menu itself, and not to any specific menu item.            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kMenuPropertyPersistent			EQU		$00000001			; whether this property gets saved when flattening the menu
+
+; *  GetMenuItemProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemProperty(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag, UInt32 bufferSize, UInt32 *actualSize, void *propertyBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemProperty
+	ENDIF
+
+
+; *  GetMenuItemPropertySize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemPropertySize(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag, UInt32 *size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemPropertySize
+	ENDIF
+
+
+; *  SetMenuItemProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemProperty(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag, UInt32 propertySize, const void *propertyData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemProperty
+	ENDIF
+
+
+; *  RemoveMenuItemProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in MenusLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RemoveMenuItemProperty(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveMenuItemProperty
+	ENDIF
+
+
+; *  GetMenuItemPropertyAttributes()
+; *  
+; *  Summary:
+; *    Gets the attributes of a menu item property.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    item:
+; *      The menu item.
+; *    
+; *    propertyCreator:
+; *      The creator code of the property.
+; *    
+; *    propertyTag:
+; *      The property tag.
+; *    
+; *    attributes:
+; *      On exit, contains the attributes of the property.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemPropertyAttributes(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag, UInt32 *attributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemPropertyAttributes
+	ENDIF
+
+
+; *  ChangeMenuItemPropertyAttributes()
+; *  
+; *  Summary:
+; *    Changes the attributes of a menu item property.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    item:
+; *      The menu item.
+; *    
+; *    propertyCreator:
+; *      The creator code of the property.
+; *    
+; *    propertyTag:
+; *      The property tag.
+; *    
+; *    attributesToSet:
+; *      The attributes to add to the menu item property.
+; *    
+; *    attributesToClear:
+; *      The attributes to remove from the menu item property.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeMenuItemPropertyAttributes(MenuRef menu, MenuItemIndex item, OSType propertyCreator, OSType propertyTag, UInt32 attributesToSet, UInt32 attributesToClear)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeMenuItemPropertyAttributes
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Attributes (Carbon and later)                                                     
+;                                                                                       
+;   Each menu and menu item has attribute flags.                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  GetMenuAttributes()
+; *  
+; *  Summary:
+; *    Gets the attributes of a menu.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    outAttributes:
+; *      On exit, contains the attributes of the menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuAttributes(MenuRef menu, MenuAttributes *outAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuAttributes
+	ENDIF
+
+
+; *  ChangeMenuAttributes()
+; *  
+; *  Summary:
+; *    Changes the attributes of a menu.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    setTheseAttributes:
+; *      The attributes to add to the menu.
+; *    
+; *    clearTheseAttributes:
+; *      The attributes to remove from the menu.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeMenuAttributes(MenuRef menu, MenuAttributes setTheseAttributes, MenuAttributes clearTheseAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeMenuAttributes
+	ENDIF
+
+
+; *  GetMenuItemAttributes()
+; *  
+; *  Summary:
+; *    Gets the attributes of a menu item.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    item:
+; *      The menu item.
+; *    
+; *    outAttributes:
+; *      On exit, contains the attributes of the menu item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuItemAttributes(MenuRef menu, MenuItemIndex item, MenuItemAttributes *outAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuItemAttributes
+	ENDIF
+
+
+; *  ChangeMenuItemAttributes()
+; *  
+; *  Summary:
+; *    Changes the attributes of a menu item.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu.
+; *    
+; *    item:
+; *      The menu item.
+; *    
+; *    setTheseAttributes:
+; *      The attributes to add to the menu item.
+; *    
+; *    clearTheseAttributes:
+; *      The attributes to remove from the menu item.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeMenuItemAttributes(MenuRef menu, MenuItemIndex item, MenuItemAttributes setTheseAttributes, MenuItemAttributes clearTheseAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeMenuItemAttributes
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Mass menu item enabling and disabling (Carbon and later)                          
+;                                                                                       
+;   Useful when rewriting code that modifies the enableFlags field directly.            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  DisableAllMenuItems()
+; *  
+; *  Summary:
+; *    Disables all items in a menu.
+; *  
+; *  Discussion:
+; *    This API is equivalent to pre-Carbon code that masked the
+; *    enableFlags field of the MenuInfo with 0x01. It disables all
+; *    items (including items past item 31) but does not affect the
+; *    state of the menu title.
+; *  
+; *  Parameters:
+; *    
+; *    theMenu:
+; *      The menu whose items to disable.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisableAllMenuItems(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableAllMenuItems
+	ENDIF
+
+
+; *  EnableAllMenuItems()
+; *  
+; *  Summary:
+; *    Enables all items in a menu.
+; *  
+; *  Discussion:
+; *    This API is equivalent to pre-Carbon code that or'd the
+; *    enableFlags field of the MenuInfo with 0xFFFFFFFE. It enables all
+; *    items (including items past item 31) but does not affect the
+; *    state of the menu title.
+; *  
+; *  Parameters:
+; *    
+; *    theMenu:
+; *      The menu whose items to enable.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableAllMenuItems(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableAllMenuItems
+	ENDIF
+
+
+; *  MenuHasEnabledItems()
+; *  
+; *  Summary:
+; *    Determines if any items in a menu are enabled.
+; *  
+; *  Discussion:
+; *    This API is equivalent to pre-Carbon code that compared the
+; *    enableFlags field of the MenuInfo with 0. It checks the enable
+; *    state of all items to see if any are enabled, but ignores the
+; *    state of the menu title. It will return true even if the menu
+; *    title is disabled.
+; *  
+; *  Parameters:
+; *    
+; *    theMenu:
+; *      The menu whose items to examine.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean MenuHasEnabledItems(MenuRef theMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MenuHasEnabledItems
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Menu tracking status (Carbon and later)                                           
+;                                                                                       
+;   Get info about the selected menu item during menu tracking. Replaces direct access  
+;   to low-mem globals that previously held this info.                                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  GetMenuTrackingData()
+; *  
+; *  Summary:
+; *    Gets information about the menu currently selected by the user.
+; *  
+; *  Discussion:
+; *    This API replaces direct access to the low-memory globals
+; *    TopMenuItem, AtMenuBottom, MenuDisable, and mbSaveLoc. It is only
+; *    valid to call this API while menu tracking is occurring. This API
+; *    will most commonly be used by custom MDEFs.
+; *  
+; *  Parameters:
+; *    
+; *    theMenu:
+; *      The menu about which to get tracking information. May be NULL
+; *      to get information about the menu that the user is currently
+; *      selecting. If the menu is not currently open, menuNotFoundErr
+; *      is returned.
+; *    
+; *    outData:
+; *      On exit, contains tracking data about the menu. On CarbonLib,
+; *      the itemRect field is not supported and is always set to an
+; *      empty rect.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuTrackingData(MenuRef theMenu, MenuTrackingData *outData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuTrackingData
+	ENDIF
+
+
+; *  GetMenuType()
+; *  
+; *  Summary:
+; *    Gets the display type (pulldown, hierarchical, or popup) of a
+; *    menu.
+; *  
+; *  Discussion:
+; *    This API may only be called when the menu is displayed. If the
+; *    menu is not currently open, an error is returned. The display
+; *    type of a menu may vary from one menu tracking session to
+; *    another; for example, the same menu might be displayed as a
+; *    pulldown menu and as a popup menu.
+; *  
+; *  Parameters:
+; *    
+; *    theMenu:
+; *      The menu whose type to get.
+; *    
+; *    outType:
+; *      On exit, the type of the menu. The returned value will be one
+; *      of the ThemeMenuType constants: kThemeMenuTypePullDown, PopUp,
+; *      or Hierarchical. The kThemeMenuTypeInactive bit will never be
+; *      set.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuType(MenuRef theMenu, UInt16 *outType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuType
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Universal command ID access (Carbon and later)                                    
+;                                                                                       
+;   These APIs allow you to operate on menu items strictly by command ID, with no       
+;   knowledge of a menu item's index.                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  CountMenuItemsWithCommandID()
+; *  
+; *  Summary:
+; *    Counts the menu items with a specified command ID.
+; *  
+; *  Discussion:
+; *    In CarbonLib 1.0.x and 1.1, this API will always return zero or
+; *    one; it stops after finding the first menu item with the
+; *    specified command ID. In CarbonLib 1.2 and Mac OS X 1.0, it will
+; *    count all menu items with the specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for items with the
+; *      specified command ID. Pass NULL to hegin searching with the
+; *      root menu. The search will descend into all submenus of this
+; *      menu.
+; *    
+; *    inCommandID:
+; *      The command ID for which to search.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ItemCount CountMenuItemsWithCommandID(MenuRef inMenu, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountMenuItemsWithCommandID
+	ENDIF
+
+
+; *  GetIndMenuItemWithCommandID()
+; *  
+; *  Summary:
+; *    Finds a menu item with a specified command ID.
+; *  
+; *  Discussion:
+; *    This API searches the specified menu and its submenus for the
+; *    n'th menu item with the specified command ID. In CarbonLib 1.0.x
+; *    and 1.1, only the first menu item will be returned. In CarbonLib
+; *    1.2 and Mac OS X 1.0, this API will iterate over all menu items
+; *    with the specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for items with the
+; *      specified command ID. Pass NULL to hegin searching with the
+; *      root menu. The search will descend into all submenus of this
+; *      menu.
+; *    
+; *    inCommandID:
+; *      The command ID for which to search.
+; *    
+; *    inItemIndex:
+; *      The 1-based index of the menu item to retrieve. In CarbonLib
+; *      1.0.x and 1.1, this parameter must be 1. In CarbonLib 1.2 and
+; *      Mac OS X 1.0, this parameter may vary from 1 to the number of
+; *      menu items with the specified command ID.
+; *    
+; *    outMenu:
+; *      On exit, the menu containing the menu item with the specified
+; *      command ID.
+; *    
+; *    outIndex:
+; *      On exit, the item index of the menu item with the specified
+; *      command ID.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetIndMenuItemWithCommandID(MenuRef inMenu, MenuCommand inCommandID, UInt32 inItemIndex, MenuRef *outMenu, MenuItemIndex *outIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIndMenuItemWithCommandID
+	ENDIF
+
+
+; *  EnableMenuCommand()
+; *  
+; *  Summary:
+; *    Enables the menu item with a specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item to be enabled. If more than one
+; *      item has this command ID, only the first will be enabled.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableMenuCommand(MenuRef inMenu, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableMenuCommand
+	ENDIF
+
+
+; *  DisableMenuCommand()
+; *  
+; *  Summary:
+; *    Disables the menu item with a specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item to be disabled. If more than
+; *      one item has this command ID, only the first will be disabled.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisableMenuCommand(MenuRef inMenu, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableMenuCommand
+	ENDIF
+
+
+; *  IsMenuCommandEnabled()
+; *  
+; *  Summary:
+; *    Determines if the menu item with a specified command ID is
+; *    enabled.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item to examine. If more than one
+; *      item has this command ID, only the first will be examined.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuCommandEnabled(MenuRef inMenu, MenuCommand inCommandID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuCommandEnabled
+	ENDIF
+
+
+; *  SetMenuCommandMark()
+; *  
+; *  Summary:
+; *    Locates the menu item with a specified command ID and sets its
+; *    mark character.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item to be modified. If more than
+; *      one item has this command ID, only the first will be modified.
+; *    
+; *    inMark:
+; *      The new mark character. This is a Unicode character. On Mac OS
+; *      8.x, the low byte of this character will be used as the mark
+; *      character. On Mac OS X, the entire UniChar will be used and
+; *      drawn.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuCommandMark(MenuRef inMenu, MenuCommand inCommandID, UniChar inMark)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuCommandMark
+	ENDIF
+
+
+; *  GetMenuCommandMark()
+; *  
+; *  Summary:
+; *    Locates the menu item with a specified command ID and returns its
+; *    mark character.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item to be examined. If more than
+; *      one item has this command ID, only the first will be examined.
+; *    
+; *    outMark:
+; *      On exit, the menu item's mark character.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuCommandMark(MenuRef inMenu, MenuCommand inCommandID, UniChar *outMark)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuCommandMark
+	ENDIF
+
+
+; *  GetMenuCommandProperty()
+; *  
+; *  Summary:
+; *    Retrives property data for a menu item with a specified command
+; *    ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item containing the property. If
+; *      more than one item has this command ID, only the first will be
+; *      used.
+; *    
+; *    inPropertyCreator:
+; *      The property creator.
+; *    
+; *    inPropertyTag:
+; *      The property tag.
+; *    
+; *    inBufferSize:
+; *      The size of the output buffer, in bytes.
+; *    
+; *    outActualSize:
+; *      On exit, contains the actual size of the property data. May be
+; *      NULL if you do not need this information.
+; *    
+; *    inPropertyBuffer:
+; *      The address of a buffer in which to place the property data.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuCommandProperty(MenuRef inMenu, MenuCommand inCommandID, OSType inPropertyCreator, OSType inPropertyTag, ByteCount inBufferSize, ByteCount *outActualSize, void *inPropertyBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuCommandProperty
+	ENDIF
+
+
+; *  GetMenuCommandPropertySize()
+; *  
+; *  Summary:
+; *    Retrives the size of property data for a menu item with a
+; *    specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item containing the property. If
+; *      more than one item has this command ID, only the first will be
+; *      used.
+; *    
+; *    inPropertyCreator:
+; *      The property creator.
+; *    
+; *    inPropertyTag:
+; *      The property tag.
+; *    
+; *    outSize:
+; *      On exit, contains the size of the property data.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuCommandPropertySize(MenuRef inMenu, MenuCommand inCommandID, OSType inPropertyCreator, OSType inPropertyTag, ByteCount *outSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuCommandPropertySize
+	ENDIF
+
+
+; *  SetMenuCommandProperty()
+; *  
+; *  Summary:
+; *    Sets property data for a menu item with a specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item that will receive the property.
+; *      If more than one item has this command ID, only the first will
+; *      be modified.
+; *    
+; *    inPropertyCreator:
+; *      The property creator.
+; *    
+; *    inPropertyTag:
+; *      The property tag.
+; *    
+; *    inPropertySize:
+; *      The size of the property data, in bytes.
+; *    
+; *    inPropertyData:
+; *      The address of the property data.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuCommandProperty(MenuRef inMenu, MenuCommand inCommandID, OSType inPropertyCreator, OSType inPropertyTag, ByteCount inPropertySize, const void *inPropertyData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuCommandProperty
+	ENDIF
+
+
+; *  RemoveMenuCommandProperty()
+; *  
+; *  Summary:
+; *    Removes a property from a menu item with a specified command ID.
+; *  
+; *  Parameters:
+; *    
+; *    inMenu:
+; *      The menu in which to begin searching for the item. Pass NULL to
+; *      begin searching with the root menu. The search will descend
+; *      into all submenus of this menu.
+; *    
+; *    inCommandID:
+; *      The command ID of the menu item from which the property will be
+; *      removed. If more than one item has this command ID, only the
+; *      first will be modified.
+; *    
+; *    inPropertyCreator:
+; *      The property creator.
+; *    
+; *    inPropertyTag:
+; *      The property tag.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RemoveMenuCommandProperty(MenuRef inMenu, MenuCommand inCommandID, OSType inPropertyCreator, OSType inPropertyTag)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveMenuCommandProperty
+	ENDIF
+
+
+
+; *  CopyMenuItemData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyMenuItemData(MenuRef menu, MenuItemID item, Boolean isCommandID, MenuItemDataPtr outData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyMenuItemData
+	ENDIF
+
+
+; *  SetMenuItemData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuItemData(MenuRef menu, MenuItemID item, Boolean isCommandID, const MenuItemDataRec *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuItemData
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Dynamic menu item support (CarbonLib 1.1 and Carbon for Mac OS X, and later)      
+;                                                                                       
+;   Dynamic menu item support allows a menu item to be redrawn while the menu is open   
+;   and visible to the user. Carbon contains automatic support for dynamic items based  
+;   on keyboard modifier state. If you need to implement your own variable item state   
+;   based on other system state, you can use these APIs to implement it.                
+;                                                                                       
+;   To use the built-in support for dynamic items, you should create a menu containing  
+;   several contiguous items with the same command key but different text and modifier  
+;   keys. For example, you might have:                                                  
+;                                                                                       
+;       Close       cmd-W                                                               
+;       Close All   cmd-option-W                                                        
+;                                                                                       
+;   In your MENU resource, you would create the Close and Close All items and give      
+;   them each the letter 'W' as the command key; using an associated xmnu resource,     
+;   you would specify kMenuOptionModifier as the modifier for the Close All item.       
+;                                                                                       
+;   After loading your menu from the resource, you must set the kMenuItemAttrDynamic    
+;   flag for each dynamic item. In this example, you would use:                         
+;                                                                                       
+;       ChangeMenuItemAttributes( menu, kCloseItem, kMenuItemAttrDynamic, 0 );          
+;       ChangeMenuItemAttributes( menu, kCloseAllItem, kMenuItemAttrDynamic, 0 );       
+;                                                                                       
+;   The Menu Manager will now automatically display the correct item depending on       
+;   whether the Option key is pressed. The result from MenuSelect will be the item      
+;   number of the item that was visible when the menu closed.                           
+;                                                                                       
+;   If the Menu Manager's built-in support is not sufficient, you can also change the   
+;   attributes of an item yourself and use the UpdateInvalidMenuItems API to cause      
+;   the menu to redraw. Changes to a menu item (changing text, command key, style,      
+;   etc.) that occur while the menu is open will cause the menu item to be invalidated, 
+;   but not redrawn. If you need to invalidate the item explicitly yourself, perhaps    
+;   because you have a custom MDEF that depends on state not accessed using Menu        
+;   Manager APIs, you can use the InvalidateMenuItems API. UpdateInvalidMenuItems will  
+;   scan the menu for invalid items and redraw each, clearing its invalid flag          
+;   afterwards.                                                                         
+;                                                                                       
+;   If you need to change menu contents based on modifier key state without using the   
+;   built-in support in the Menu Manager, we recommend that you install a Carbon event  
+;   handler on your menu for the [kEventClassKeyboard, kEventRawKeyModifiersChanged]    
+;   event. Modifier key events are passed to the currently open menu before being sent  
+;   to the user focus target.                                                           
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  IsMenuItemInvalid()
+; *  
+; *  Summary:
+; *    Determines if a menu item is invalid and should be redrawn.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu whose item to examine.
+; *    
+; *    item:
+; *      The item to examine.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsMenuItemInvalid(MenuRef menu, MenuItemIndex item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsMenuItemInvalid
+	ENDIF
+
+
+; *  InvalidateMenuItems()
+; *  
+; *  Summary:
+; *    Invalidates a group of menu items so that they will be redrawn
+; *    when UpdateInvalidMenuItems is next called.
+; *  
+; *  Discussion:
+; *    Menu items are automatically invalidated when their contents are
+; *    changed using Menu Manager APIs while the menu is open. However,
+; *    you might need to use this API if you have a custom MDEF that
+; *    draws using state not contained in the menu.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu whose items to invalidate.
+; *    
+; *    firstItem:
+; *      The first item to invalidate.
+; *    
+; *    numItems:
+; *      The number of items to invalidate.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InvalidateMenuItems(MenuRef menu, MenuItemIndex firstItem, ItemCount numItems)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalidateMenuItems
+	ENDIF
+
+
+; *  UpdateInvalidMenuItems()
+; *  
+; *  Summary:
+; *    Redraws the invalid items of an open menu.
+; *  
+; *  Discussion:
+; *    It is not necessary to use UpdateInvalidMenuItems if you are
+; *    using Carbon's built-in support for dynamic items based on
+; *    modifier key state. However, if you are modifying items
+; *    dynamically using your own implementation, you should call
+; *    UpdateInvalidMenuItems after completing your modifications for a
+; *    single menu. It will redraw any items that have been marked as
+; *    invalid, and clear the invalid flag for those items.
+; *  
+; *  Parameters:
+; *    
+; *    menu:
+; *      The menu to update.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus UpdateInvalidMenuItems(MenuRef menu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateInvalidMenuItems
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Standard font menu (Carbon and later)                                             
+;                                                                                       
+;   These APIs allow you to create and use the standard font menu.                      
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kHierarchicalFontMenuOption		EQU		$00000001
+
+; *  CreateStandardFontMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateStandardFontMenu(MenuRef menu, MenuItemIndex afterItem, MenuID firstHierMenuID, OptionBits options, ItemCount *outHierMenuCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateStandardFontMenu
+	ENDIF
+
+
+; *  UpdateStandardFontMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus UpdateStandardFontMenu(MenuRef menu, ItemCount *outHierMenuCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateStandardFontMenu
+	ENDIF
+
+
+; *  GetFontFamilyFromMenuSelection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetFontFamilyFromMenuSelection(MenuRef menu, MenuItemIndex item, FMFontFamily *outFontFamily, FMFontStyle *outStyle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFontFamilyFromMenuSelection
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Contextual Menu routines and constants                                            
+;   available with Conxtextual Menu extension 1.0 and later                             
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  Gestalt Selector for classic 68K apps only. 
+;  CFM apps should weak link and check the symbols. 
+
+gestaltContextualMenuAttr		EQU		'cmnu'
+gestaltContextualMenuUnusedBit	EQU		0
+gestaltContextualMenuTrapAvailable EQU	1
+;  Values indicating what kind of help the application supports 
+
+kCMHelpItemNoHelp				EQU		0
+kCMHelpItemAppleGuide			EQU		1
+kCMHelpItemOtherHelp			EQU		2
+;  Values indicating what was chosen from the menu 
+
+kCMNothingSelected				EQU		0
+kCMMenuItemSelected				EQU		1
+kCMShowHelpSelected				EQU		3
+
+; *  InitContextualMenus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ContextualMenu 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InitContextualMenus(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitContextualMenus
+			moveq           	#1,D0
+			dc.w            	$AA72
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitContextualMenus
+	ENDIF
+
+
+; *  IsShowContextualMenuClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ContextualMenu 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsShowContextualMenuClick(const EventRecord *inEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IsShowContextualMenuClick
+			moveq           	#2,D0
+			dc.w            	$AA72
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsShowContextualMenuClick
+	ENDIF
+
+
+; *  IsShowContextualMenuEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsShowContextualMenuEvent(EventRef inEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsShowContextualMenuEvent
+	ENDIF
+
+
+; *  ContextualMenuSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ContextualMenu 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ContextualMenuSelect(MenuRef inMenu, Point inGlobalLocation, Boolean inReserved, UInt32 inHelpType, ConstStr255Param inHelpItemString, const AEDesc *inSelection, UInt32 *outUserSelectionType, SInt16 *outMenuID, MenuItemIndex *outMenuItem)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ContextualMenuSelect
+			moveq           	#3,D0
+			dc.w            	$AA72
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ContextualMenuSelect
+	ENDIF
+
+
+; *  ProcessIsContextualMenuClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ContextualMenu 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean ProcessIsContextualMenuClient(ProcessSerialNumber *inPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ProcessIsContextualMenuClient
+			moveq           	#4,D0
+			dc.w            	$AA72
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ProcessIsContextualMenuClient
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Contextual Menu Plugin Notes                                                      
+;                                                                                       
+;   For Mac OS X, we will support a new type of Contextual Menu Plugin: the CFM-based   
+;   plugin. Each plugin must be a separate file in the Contextual Menu Items subfolder  
+;   of the system folder. It must export two functions and has the option of exporting  
+;   a third; these three functions are virtually identical to the methods that must be  
+;   supported by a SOM-based plugin.                                                        
+;                                                                                       
+;   The required symbols must be named "ExamineContext" and "HandleSelection".          
+;   The optional symbol must be named "PostMenuCleanup".                                
+;                                                                                       
+;   The ExamineContext routine must have the following prototype:                       
+;       pascal OSStatus ExamineContext( const AEDesc* inContext,                        
+;                                       AEDescList* outCommandPairs );                  
+;                                                                                       
+;   The HandleSelection routine must have the following prototype:                      
+;       pascal OSStatus HandleSelection(    const AEDesc* inContext,                    
+;                                           SInt32 inCommandID );                       
+;                                                                                       
+;   The PostMenuCleanup routine must have the following prototype:                      
+;       pascal void PostMenuCleanup(     void );                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;  previously in LowMem.h.  This functions return the menu ID of the hilited menu 
+
+; *  LMGetTheMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 LMGetTheMenu(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetTheMenu         &dest=(sp)
+			move.w            $0A26,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetTheMenu
+	ENDIF
+
+
+
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+	IF ACCESSOR_CALLS_ARE_FUNCTIONS THEN
+;  Getters 
+
+; *  GetMenuID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MenuID GetMenuID(MenuRef menu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuID
+	ENDIF
+
+
+; *  GetMenuWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetMenuWidth(MenuRef menu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuWidth
+	ENDIF
+
+
+; *  GetMenuHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt16 GetMenuHeight(MenuRef menu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuHeight
+	ENDIF
+
+
+; *  GetMenuTitle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StringPtr GetMenuTitle(MenuRef menu, Str255 title)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuTitle
+	ENDIF
+
+
+; *  GetMenuDefinition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetMenuDefinition(MenuRef menu, MenuDefSpecPtr outDefSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetMenuDefinition
+	ENDIF
+
+;  Setters 
+
+; *  SetMenuID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuID(MenuRef menu, MenuID menuID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuID
+	ENDIF
+
+
+; *  SetMenuWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuWidth(MenuRef menu, SInt16 width)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuWidth
+	ENDIF
+
+
+; *  SetMenuHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetMenuHeight(MenuRef menu, SInt16 height)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuHeight
+	ENDIF
+
+
+; *  SetMenuTitle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuTitle(MenuRef menu, ConstStr255Param title)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuTitle
+	ENDIF
+
+
+; *  SetMenuDefinition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetMenuDefinition(MenuRef menu, const MenuDefSpec *defSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetMenuDefinition
+	ENDIF
+
+	ENDIF	; ACCESSOR_CALLS_ARE_FUNCTIONS
+
+
+
+	IF TARGET_OS_WIN32 THEN
+	ENDIF	; TARGET_OS_WIN32
+	ENDIF ; __MENUS__ 
+

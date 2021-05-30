@@ -1,0 +1,2586 @@
+;
+;	File:		Quickdraw.a
+;
+;	Contains:	QuickDraw Graphics Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+__QUICKDRAW__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF &TYPE('__QUICKDRAWTEXT__') = 'UNDEFINED' THEN
+	include 'QuickdrawText.a'
+	ENDIF
+
+invalColReq						EQU		-1					;invalid color table request
+; transfer modes 
+srcCopy							EQU		0					;the 16 transfer modes
+srcOr							EQU		1
+srcXor							EQU		2
+srcBic							EQU		3
+notSrcCopy						EQU		4
+notSrcOr						EQU		5
+notSrcXor						EQU		6
+notSrcBic						EQU		7
+patCopy							EQU		8
+patOr							EQU		9
+patXor							EQU		10
+patBic							EQU		11
+notPatCopy						EQU		12
+notPatOr						EQU		13
+notPatXor						EQU		14
+notPatBic						EQU		15
+; Special Text Transfer Mode 
+grayishTextOr					EQU		49
+hilitetransfermode				EQU		50
+; Arithmetic transfer modes 
+blend							EQU		32
+addPin							EQU		33
+
+addOver							EQU		34
+subPin							EQU		35
+addMax							EQU		37
+adMax							EQU		37
+subOver							EQU		38
+adMin							EQU		39
+ditherCopy						EQU		64
+; Transparent mode constant 
+transparent						EQU		36
+italicBit						EQU		1
+ulineBit						EQU		2
+outlineBit						EQU		3
+shadowBit						EQU		4
+condenseBit						EQU		5
+extendBit						EQU		6
+; QuickDraw color separation constants 
+normalBit						EQU		0					;normal screen mapping
+inverseBit						EQU		1					;inverse screen mapping
+redBit							EQU		4					;RGB additive mapping
+greenBit						EQU		3
+blueBit							EQU		2
+cyanBit							EQU		8					;CMYBk subtractive mapping
+magentaBit						EQU		7
+yellowBit						EQU		6
+blackBit						EQU		5
+blackColor						EQU		33					;colors expressed in these mappings
+whiteColor						EQU		30
+redColor						EQU		205
+
+greenColor						EQU		341
+blueColor						EQU		409
+cyanColor						EQU		273
+magentaColor					EQU		137
+yellowColor						EQU		69
+picLParen						EQU		0					;standard picture comments
+picRParen						EQU		1
+clutType						EQU		0					;0 if lookup table
+fixedType						EQU		1					;1 if fixed table
+directType						EQU		2					;2 if direct values
+gdDevType						EQU		0					;0 = monochrome 1 = color
+
+interlacedDevice				EQU		2					; 1 if single pixel lines look bad 
+roundedDevice					EQU		5					; 1 if device has been “rounded” into the GrayRgn 
+hasAuxMenuBar					EQU		6					; 1 if device has an aux menu bar on it 
+burstDevice						EQU		7
+ext32Device						EQU		8
+ramInit							EQU		10					;1 if initialized from 'scrn' resource
+mainScreen						EQU		11					; 1 if main screen 
+allInit							EQU		12					; 1 if all devices initialized 
+screenDevice					EQU		13					;1 if screen device [not used]
+noDriver						EQU		14					; 1 if no driver for this GDevice 
+screenActive					EQU		15					;1 if in use
+hiliteBit						EQU		7					;flag bit in HiliteMode (lowMem flag)
+pHiliteBit						EQU		0					;flag bit in HiliteMode used with BitClr procedure
+defQDColors						EQU		127					;resource ID of clut for default QDColors
+; pixel type 
+RGBDirect						EQU		16					; 16 & 32 bits/pixel pixelType value 
+; pmVersion values 
+baseAddr32						EQU		4					;pixmap base address is 32-bit address
+
+sysPatListID					EQU		0
+iBeamCursor						EQU		1
+crossCursor						EQU		2
+plusCursor						EQU		3
+watchCursor						EQU		4
+
+kQDGrafVerbFrame				EQU		0
+kQDGrafVerbPaint				EQU		1
+kQDGrafVerbErase				EQU		2
+kQDGrafVerbInvert				EQU		3
+kQDGrafVerbFill					EQU		4
+
+	IF OLDROUTINENAMES THEN
+frame							EQU		kQDGrafVerbFrame
+paint							EQU		kQDGrafVerbPaint
+erase							EQU		kQDGrafVerbErase
+invert							EQU		kQDGrafVerbInvert
+fill							EQU		kQDGrafVerbFill
+	ENDIF
+
+; typedef SInt8 			GrafVerb
+
+chunky							EQU		0
+chunkyPlanar					EQU		1
+planar							EQU		2
+
+; typedef SInt8 			PixelType
+; typedef short 			Bits16[16]
+;**************   IMPORTANT NOTE REGARDING Pattern  **************************************
+;   Patterns were originally defined as:
+;   
+;		C: 			typedef unsigned char Pattern[8];
+;		Pascal:		Pattern = PACKED ARRAY [0..7] OF 0..255;
+;		
+;   The old array defintion of Pattern would cause 68000 based CPU's to crash in certain circum-
+;   stances. The new struct definition is safe, but may require source code changes to compile.
+;   Read the details in TechNote "Platforms & Tools" #PT 38.
+;	
+;********************************************************************************************
+Pattern 				RECORD	0
+pat						 ds.b   8		; offset: $0 (0)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct Pattern 	Pattern
+;
+; ConstPatternParam is now longer needed.  It was first created when Pattern was an array.
+; Now that Pattern is a struct, it is more straight forward just add the "const" qualifier
+; on the parameter type (e.g. "const Pattern * pat" instead of "ConstPatternParam pat").
+;
+; typedef Pattern 			*PatPtr
+; typedef PatPtr 			*PatHandle
+; typedef short 			QDErr
+
+singleDevicesBit				EQU		0
+dontMatchSeedsBit				EQU		1
+allDevicesBit					EQU		2
+
+singleDevices					EQU		1 << singleDevicesBit
+dontMatchSeeds					EQU		1 << dontMatchSeedsBit
+allDevices						EQU		1 << allDevicesBit
+
+; typedef unsigned long 	DeviceLoopFlags
+BitMap 					RECORD	0
+baseAddr				 ds.l   1		; offset: $0 (0)
+rowBytes				 ds.w   1		; offset: $4 (4)
+bounds					 ds     Rect	; offset: $6 (6)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct BitMap 	BitMap
+; typedef BitMap 			*BitMapPtr, **BitMapHandle
+Cursor 					RECORD	0
+data					 ds.l   8		; offset: $0 (0)
+mask					 ds.l   8		; offset: $20 (32)
+hotSpot					 ds     Point	; offset: $40 (64)
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct Cursor 	Cursor
+; typedef Cursor 			*CursPtr, **CursHandle
+PenState 				RECORD	0
+pnLoc					 ds     Point	; offset: $0 (0)
+pnSize					 ds     Point	; offset: $4 (4)
+pnMode					 ds.w   1		; offset: $8 (8)
+pnPat					 ds     Pattern	; offset: $A (10)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct PenState 	PenState
+Region 					RECORD	0
+rgnSize					 ds.w   1		; offset: $0 (0)		;size in bytes
+rgnBBox					 ds     Rect	; offset: $2 (2)		;enclosing rectangle
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct Region 	Region
+; typedef Region 			*RgnPtr, **RgnHandle
+Picture 				RECORD	0
+picSize					 ds.w   1		; offset: $0 (0)
+picFrame				 ds     Rect	; offset: $2 (2)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct Picture 	Picture
+; typedef Picture 			*PicPtr, **PicHandle
+Polygon 				RECORD	0
+polySize				 ds.w   1		; offset: $0 (0)
+polyBBox				 ds     Rect	; offset: $2 (2)
+polyPoints				 ds     Point	; offset: $A (10)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct Polygon 	Polygon
+; typedef Polygon 			*PolyPtr, **PolyHandle
+QDProcs 				RECORD	0
+textProc				 ds.l   1		; offset: $0 (0)
+lineProc				 ds.l   1		; offset: $4 (4)
+rectProc				 ds.l   1		; offset: $8 (8)
+rRectProc				 ds.l   1		; offset: $C (12)
+ovalProc				 ds.l   1		; offset: $10 (16)
+arcProc					 ds.l   1		; offset: $14 (20)
+polyProc				 ds.l   1		; offset: $18 (24)
+rgnProc					 ds.l   1		; offset: $1C (28)
+bitsProc				 ds.l   1		; offset: $20 (32)
+commentProc				 ds.l   1		; offset: $24 (36)
+txMeasProc				 ds.l   1		; offset: $28 (40)
+getPicProc				 ds.l   1		; offset: $2C (44)
+putPicProc				 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct QDProcs 	QDProcs
+; typedef QDProcs 			*QDProcsPtr
+GrafPort 				RECORD	0
+device					 ds.w   1		; offset: $0 (0)
+portBits				 ds     BitMap	; offset: $2 (2)
+portRect				 ds     Rect	; offset: $10 (16)
+visRgn					 ds.l   1		; offset: $18 (24)
+clipRgn					 ds.l   1		; offset: $1C (28)
+bkPat					 ds     Pattern	; offset: $20 (32)
+fillPat					 ds     Pattern	; offset: $28 (40)
+pnLoc					 ds     Point	; offset: $30 (48)
+pnSize					 ds     Point	; offset: $34 (52)
+pnMode					 ds.w   1		; offset: $38 (56)
+pnPat					 ds     Pattern	; offset: $3A (58)
+pnVis					 ds.w   1		; offset: $42 (66)
+txFont					 ds.w   1		; offset: $44 (68)
+txFace					 ds.b   1		; offset: $46 (70)		;txFace is unpacked byte but push as short
+filler					 ds.b   1		; offset: $47 (71)
+txMode					 ds.w   1		; offset: $48 (72)
+txSize					 ds.w   1		; offset: $4A (74)
+spExtra					 ds.l   1		; offset: $4C (76)
+fgColor					 ds.l   1		; offset: $50 (80)
+bkColor					 ds.l   1		; offset: $54 (84)
+colrBit					 ds.w   1		; offset: $58 (88)
+patStretch				 ds.w   1		; offset: $5A (90)
+picSave					 ds.l   1		; offset: $5C (92)
+rgnSave					 ds.l   1		; offset: $60 (96)
+polySave				 ds.l   1		; offset: $64 (100)
+grafProcs				 ds.l   1		; offset: $68 (104)
+sizeof					 EQU *			; size:   $6C (108)
+						ENDR
+
+; typedef struct GrafPort 	GrafPort
+; typedef GrafPort 			*GrafPtr
+;
+; *	This set of definitions "belongs" in Windows.
+; *	But, there is a circularity in the headers where Windows includes Controls and
+; *	Controls includes Windows. To break the circle, the information
+; *	needed by Controls is moved from Windows to Quickdraw.
+; 
+; typedef GrafPtr 			WindowPtr
+;
+;	Set STRICT_WINDOWS to 1 to make sure your code 
+;	doesn't access the window record directly
+;
+	IF &TYPE('STRICT_WINDOWS') = 'UNDEFINED' THEN
+	STRICT_WINDOWS: SET 0
+	ENDIF
+	IF STRICT_WINDOWS  THEN
+	ELSE
+; typedef WindowPtr 		WindowRef
+	ENDIF
+; typedef UInt16 			DragConstraint
+
+kNoConstraint					EQU		0
+kVerticalConstraint				EQU		1
+kHorizontalConstraint			EQU		2
+
+;
+; *	Here ends the list of things that "belong" in Windows.
+; 
+RGBColor 				RECORD	0
+red						 ds.w   1		; offset: $0 (0)		;magnitude of red component
+green					 ds.w   1		; offset: $2 (2)		;magnitude of green component
+blue					 ds.w   1		; offset: $4 (4)		;magnitude of blue component
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct RGBColor 	RGBColor, *RGBColorPtr, **RGBColorHdl
+ColorSpec 				RECORD	0
+value					 ds.w   1		; offset: $0 (0)		;index or other value
+rgb						 ds     RGBColor ; offset: $2 (2)		;true color
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ColorSpec 	ColorSpec
+; typedef ColorSpec 		*ColorSpecPtr
+; typedef ColorSpec 		CSpecArray[1]
+xColorSpec 				RECORD	0
+value					 ds.w   1		; offset: $0 (0)		;index or other value
+rgb						 ds     RGBColor ; offset: $2 (2)		;true color
+xalpha					 ds.w   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct xColorSpec  xColorSpec
+; typedef xColorSpec 		*xColorSpecPtr
+; typedef xColorSpec 		xCSpecArray[1]
+ColorTable 				RECORD	0
+ctSeed					 ds.l   1		; offset: $0 (0)		;unique identifier for table
+ctFlags					 ds.w   1		; offset: $4 (4)		;high bit: 0 = PixMap; 1 = device
+ctSize					 ds.w   1		; offset: $6 (6)		;number of entries in CTTable
+ctTable					 ds.l   2		; offset: $8 (8)		;array [0..0] of ColorSpec
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct ColorTable  ColorTable, *CTabPtr, **CTabHandle
+MatchRec 				RECORD	0
+red						 ds.w   1		; offset: $0 (0)
+green					 ds.w   1		; offset: $2 (2)
+blue					 ds.w   1		; offset: $4 (4)
+matchData				 ds.l   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct MatchRec 	MatchRec
+PixMap 					RECORD	0
+baseAddr				 ds.l   1		; offset: $0 (0)		;pointer to pixels
+rowBytes				 ds.w   1		; offset: $4 (4)		;offset to next line
+bounds					 ds     Rect	; offset: $6 (6)		;encloses bitmap
+pmVersion				 ds.w   1		; offset: $E (14)		;pixMap version number
+packType				 ds.w   1		; offset: $10 (16)		;defines packing format
+packSize				 ds.l   1		; offset: $12 (18)		;length of pixel data
+hRes					 ds.l   1		; offset: $16 (22)		;horiz. resolution (ppi)
+vRes					 ds.l   1		; offset: $1A (26)		;vert. resolution (ppi)
+pixelType				 ds.w   1		; offset: $1E (30)		;defines pixel type
+pixelSize				 ds.w   1		; offset: $20 (32)		;# bits in pixel
+cmpCount				 ds.w   1		; offset: $22 (34)		;# components in pixel
+cmpSize					 ds.w   1		; offset: $24 (36)		;# bits per component
+planeBytes				 ds.l   1		; offset: $26 (38)		;offset to next plane
+pmTable					 ds.l   1		; offset: $2A (42)		;color map for this pixMap
+pmReserved				 ds.l   1		; offset: $2E (46)		;for future use. MUST BE 0
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct PixMap 	PixMap, *PixMapPtr, **PixMapHandle
+PixPat 					RECORD	0
+patType					 ds.w   1		; offset: $0 (0)		;type of pattern
+patMap					 ds.l   1		; offset: $2 (2)		;the pattern's pixMap
+patData					 ds.l   1		; offset: $6 (6)		;pixmap's data
+patXData				 ds.l   1		; offset: $A (10)		;expanded Pattern data
+patXValid				 ds.w   1		; offset: $E (14)		;flags whether expanded Pattern valid
+patXMap					 ds.l   1		; offset: $10 (16)		;Handle to expanded Pattern data
+pat1Data				 ds     Pattern	; offset: $14 (20)		;old-Style pattern/RGB color
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct PixPat 	PixPat, *PixPatPtr, **PixPatHandle
+CCrsr 					RECORD	0
+crsrType				 ds.w   1		; offset: $0 (0)		;type of cursor
+crsrMap					 ds.l   1		; offset: $2 (2)		;the cursor's pixmap
+crsrData				 ds.l   1		; offset: $6 (6)		;cursor's data
+crsrXData				 ds.l   1		; offset: $A (10)		;expanded cursor data
+crsrXValid				 ds.w   1		; offset: $E (14)		;depth of expanded data (0 if none)
+crsrXHandle				 ds.l   1		; offset: $10 (16)		;future use
+crsr1Data				 ds.l   8		; offset: $14 (20)		;one-bit cursor
+crsrMask				 ds.l   8		; offset: $34 (52)		;cursor's mask
+crsrHotSpot				 ds     Point	; offset: $54 (84)		;cursor's hotspot
+crsrXTable				 ds.l   1		; offset: $58 (88)		;private
+crsrID					 ds.l   1		; offset: $5C (92)		;private
+sizeof					 EQU *			; size:   $60 (96)
+						ENDR
+
+; typedef struct CCrsr 		CCrsr, *CCrsrPtr, **CCrsrHandle
+	IF OLDROUTINELOCATIONS  THEN
+CIcon 					RECORD	0
+iconPMap				 ds     PixMap	; offset: $0 (0)		;the icon's pixMap
+iconMask				 ds     BitMap	; offset: $32 (50)		;the icon's mask
+iconBMap				 ds     BitMap	; offset: $40 (64)		;the icon's bitMap
+iconData				 ds.l   1		; offset: $4E (78)		;the icon's data
+iconMaskData			 ds.w   1		; offset: $52 (82)		;icon's mask and BitMap data
+sizeof					 EQU *			; size:   $54 (84)
+						ENDR
+
+; typedef struct CIcon 		CIcon, *CIconPtr, **CIconHandle
+	ENDIF
+GammaTbl 				RECORD	0
+gVersion				 ds.w   1		; offset: $0 (0)		;gamma version number
+gType					 ds.w   1		; offset: $2 (2)		;gamma data type
+gFormulaSize			 ds.w   1		; offset: $4 (4)		;Formula data size
+gChanCnt				 ds.w   1		; offset: $6 (6)		;number of channels of data
+gDataCnt				 ds.w   1		; offset: $8 (8)		;number of values/channel
+gDataWidth				 ds.w   1		; offset: $A (10)		;bits/corrected value (data packed to next larger byte size)
+gFormulaData			 ds.w   1		; offset: $C (12)		;data for formulas followed by gamma values
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct GammaTbl 	GammaTbl, *GammaTblPtr, **GammaTblHandle
+ITab 					RECORD	0
+iTabSeed				 ds.l   1		; offset: $0 (0)		;copy of CTSeed from source CTable
+iTabRes					 ds.w   1		; offset: $4 (4)		;bits/channel resolution of iTable
+iTTable					 ds.b   1		; offset: $6 (6)		;byte colortable index values
+						 ORG 8
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ITab 		ITab, *ITabPtr, **ITabHandle
+SProcRec 				RECORD	0
+nxtSrch					 ds.l   1		; offset: $0 (0)		;SProcHndl Handle to next SProcRec
+srchProc				 ds.l   1		; offset: $4 (4)		;search procedure proc ptr
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct SProcRec 	SProcRec, *SProcPtr, **SProcHndl
+CProcRec 				RECORD	0
+nxtComp					 ds.l   1		; offset: $0 (0)		;CProcHndl Handle to next CProcRec
+compProc				 ds.l   1		; offset: $4 (4)		;complement procedure proc ptr
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct CProcRec 	CProcRec, *CProcPtr, **CProcHndl
+GDevice 				RECORD	0
+gdRefNum				 ds.w   1		; offset: $0 (0)		;driver's unit number
+gdID					 ds.w   1		; offset: $2 (2)		;client ID for search procs
+gdType					 ds.w   1		; offset: $4 (4)		;fixed/CLUT/direct
+gdITable				 ds.l   1		; offset: $6 (6)		;Handle to inverse lookup table
+gdResPref				 ds.w   1		; offset: $A (10)		;preferred resolution of GDITable
+gdSearchProc			 ds.l   1		; offset: $C (12)		;search proc list head
+gdCompProc				 ds.l   1		; offset: $10 (16)		;complement proc list
+gdFlags					 ds.w   1		; offset: $14 (20)		;grafDevice flags word
+gdPMap					 ds.l   1		; offset: $16 (22)		;describing pixMap
+gdRefCon				 ds.l   1		; offset: $1A (26)		;reference value
+gdNextGD				 ds.l   1		; offset: $1E (30)		;GDHandle Handle of next gDevice
+gdRect					 ds     Rect	; offset: $22 (34)		; device's bounds in global coordinates
+gdMode					 ds.l   1		; offset: $2A (42)		;device's current mode
+gdCCBytes				 ds.w   1		; offset: $2E (46)		;depth of expanded cursor data
+gdCCDepth				 ds.w   1		; offset: $30 (48)		;depth of expanded cursor data
+gdCCXData				 ds.l   1		; offset: $32 (50)		;Handle to cursor's expanded data
+gdCCXMask				 ds.l   1		; offset: $36 (54)		;Handle to cursor's expanded mask
+gdReserved				 ds.l   1		; offset: $3A (58)		;future use. MUST BE 0
+sizeof					 EQU *			; size:   $3E (62)
+						ENDR
+
+; typedef struct GDevice 	GDevice, *GDPtr, **GDHandle
+GrafVars 				RECORD	0
+rgbOpColor				 ds     RGBColor ; offset: $0 (0)		;color for addPin  subPin and average
+rgbHiliteColor			 ds     RGBColor ; offset: $6 (6)		;color for hiliting
+pmFgColor				 ds.l   1		; offset: $C (12)		;palette Handle for foreground color
+pmFgIndex				 ds.w   1		; offset: $10 (16)		;index value for foreground
+pmBkColor				 ds.l   1		; offset: $12 (18)		;palette Handle for background color
+pmBkIndex				 ds.w   1		; offset: $16 (22)		;index value for background
+pmFlags					 ds.w   1		; offset: $18 (24)		;flags for Palette Manager
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct GrafVars 	GrafVars, *GVarPtr, **GVarHandle
+CQDProcs 				RECORD	0
+textProc				 ds.l   1		; offset: $0 (0)
+lineProc				 ds.l   1		; offset: $4 (4)
+rectProc				 ds.l   1		; offset: $8 (8)
+rRectProc				 ds.l   1		; offset: $C (12)
+ovalProc				 ds.l   1		; offset: $10 (16)
+arcProc					 ds.l   1		; offset: $14 (20)
+polyProc				 ds.l   1		; offset: $18 (24)
+rgnProc					 ds.l   1		; offset: $1C (28)
+bitsProc				 ds.l   1		; offset: $20 (32)
+commentProc				 ds.l   1		; offset: $24 (36)
+txMeasProc				 ds.l   1		; offset: $28 (40)
+getPicProc				 ds.l   1		; offset: $2C (44)
+putPicProc				 ds.l   1		; offset: $30 (48)
+opcodeProc				 ds.l   1		; offset: $34 (52)		;fields added to QDProcs
+newProc1				 ds.l   1		; offset: $38 (56)
+newProc2				 ds.l   1		; offset: $3C (60)
+newProc3				 ds.l   1		; offset: $40 (64)
+newProc4				 ds.l   1		; offset: $44 (68)
+newProc5				 ds.l   1		; offset: $48 (72)
+newProc6				 ds.l   1		; offset: $4C (76)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct CQDProcs 	CQDProcs, *CQDProcsPtr
+CGrafPort 				RECORD	0
+device					 ds.w   1		; offset: $0 (0)
+portPixMap				 ds.l   1		; offset: $2 (2)		;port's pixel map
+portVersion				 ds.w   1		; offset: $6 (6)		;high 2 bits always set
+grafVars				 ds.l   1		; offset: $8 (8)		;Handle to more fields
+chExtra					 ds.w   1		; offset: $C (12)		;character extra
+pnLocHFrac				 ds.w   1		; offset: $E (14)		;pen fraction
+portRect				 ds     Rect	; offset: $10 (16)
+visRgn					 ds.l   1		; offset: $18 (24)
+clipRgn					 ds.l   1		; offset: $1C (28)
+bkPixPat				 ds.l   1		; offset: $20 (32)		;background pattern
+rgbFgColor				 ds     RGBColor ; offset: $24 (36)		;RGB components of fg
+rgbBkColor				 ds     RGBColor ; offset: $2A (42)		;RGB components of bk
+pnLoc					 ds     Point	; offset: $30 (48)
+pnSize					 ds     Point	; offset: $34 (52)
+pnMode					 ds.w   1		; offset: $38 (56)
+pnPixPat				 ds.l   1		; offset: $3A (58)		;pen's pattern
+fillPixPat				 ds.l   1		; offset: $3E (62)		;fill pattern
+pnVis					 ds.w   1		; offset: $42 (66)
+txFont					 ds.w   1		; offset: $44 (68)
+txFace					 ds.b   1		; offset: $46 (70)		;txFace is unpacked byte  push as short
+filler					 ds.b   1		; offset: $47 (71)
+txMode					 ds.w   1		; offset: $48 (72)
+txSize					 ds.w   1		; offset: $4A (74)
+spExtra					 ds.l   1		; offset: $4C (76)
+fgColor					 ds.l   1		; offset: $50 (80)
+bkColor					 ds.l   1		; offset: $54 (84)
+colrBit					 ds.w   1		; offset: $58 (88)
+patStretch				 ds.w   1		; offset: $5A (90)
+picSave					 ds.l   1		; offset: $5C (92)
+rgnSave					 ds.l   1		; offset: $60 (96)
+polySave				 ds.l   1		; offset: $64 (100)
+grafProcs				 ds.l   1		; offset: $68 (104)
+sizeof					 EQU *			; size:   $6C (108)
+						ENDR
+
+; typedef struct CGrafPort 	CGrafPort, *CGrafPtr
+; typedef CGrafPtr 			CWindowPtr
+ReqListRec 				RECORD	0
+reqLSize				 ds.w   1		; offset: $0 (0)		;request list size
+reqLData				 ds.w   1		; offset: $2 (2)		;request list data
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ReqListRec  ReqListRec
+OpenCPicParams 			RECORD	0
+srcRect					 ds     Rect	; offset: $0 (0)
+hRes					 ds.l   1		; offset: $8 (8)
+vRes					 ds.l   1		; offset: $C (12)
+version					 ds.w   1		; offset: $10 (16)
+reserved1				 ds.w   1		; offset: $12 (18)
+reserved2				 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct OpenCPicParams  OpenCPicParams
+
+kCursorImageMajorVersion		EQU		$0001
+kCursorImageMinorVersion		EQU		$0000
+
+CursorImageRec 			RECORD	0
+majorVersion			 ds.w   1		; offset: $0 (0)
+minorVersion			 ds.w   1		; offset: $2 (2)
+cursorPixMap			 ds.l   1		; offset: $4 (4)
+cursorBitMask			 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct CursorImageRec  CursorImageRec, *CursorImagePtr
+QDGlobals 				RECORD	0
+privates				 ds.b   76		; offset: $0 (0)
+randSeed				 ds.l   1		; offset: $4C (76)
+screenBits				 ds     BitMap	; offset: $50 (80)
+arrow					 ds     Cursor	; offset: $5E (94)
+dkGray					 ds     Pattern	; offset: $A2 (162)
+ltGray					 ds     Pattern	; offset: $AA (170)
+gray					 ds     Pattern	; offset: $B2 (178)
+black					 ds     Pattern	; offset: $BA (186)
+white					 ds     Pattern	; offset: $C2 (194)
+thePort					 ds.l   1		; offset: $CA (202)
+sizeof					 EQU *			; size:   $CE (206)
+						ENDR
+
+; typedef struct QDGlobals 	QDGlobals, *QDGlobalsPtr, **QDGlobalsHdl
+
+;	Often code written in assembly language is compiled outside of an
+;	application environment.  In such cases, the Quickdraw globals
+;	cannot be access normally (e.g. qd.black).  This kind of code (e.g.
+;	INIT's) usually leaches off the currently install Quickdraw globals
+;	by knowing that 0(a5) points to qd.thePort, as set by InitGraf().
+;	
+;	The record CurrentQDGlobals is defined for use in such circumstances.
+;	It is biased so that thePort is at offset 0.  Below is an example
+;	of using CurrentQDGlobals vs. the old assembly style:
+;	
+;	; Get address of Quickdraw global's black into A0
+;	
+;		Old non-app way:
+;				MOVE.L	0(A5),A0
+;				LEA		black(A0),A0	; black was EQU'ed to -16 in QuickEqu.a 
+;	
+;		New non-app way:
+;				MOVE.L	0(A5),A0
+;				LEA		CurrentQDGlobals.black(A0),A0
+;	
+;		New app way:
+;				LEA		qd.black,A0		; elsewhere: qd  DS	QDGlobals
+
+CurrentQDGlobals 		RECORD	-202
+privates				 ds.b   76		; offset: $FF36 (-202)
+randSeed				 ds.l   1		; offset: $FF82 (-126)
+screenBits				 ds     BitMap	; offset: $FF86 (-124)
+arrow					 ds     Cursor	; offset: $FF94 (-108)
+dkGray					 ds     Pattern	; offset: $FFD8 (-40)
+ltGray					 ds     Pattern	; offset: $FFE0 (-32)
+gray					 ds     Pattern	; offset: $FFE8 (-24)
+black					 ds     Pattern	; offset: $FFF0 (-16)
+white					 ds     Pattern	; offset: $FFF8 (-8)
+thePort 				 ds.l   1		; offset: $0000 (0)
+sizeof					 EQU    206		; size:   $CE   (206)
+						ENDR
+
+;
+; pascal void InitGraf(void *globalPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InitGraf:	OPWORD	$A86E
+	ELSE
+		IMPORT_CFM_FUNCTION	InitGraf
+	ENDIF
+
+;
+; pascal void OpenPort(GrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenPort:	OPWORD	$A86F
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenPort
+	ENDIF
+
+;
+; pascal void InitPort(GrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InitPort:	OPWORD	$A86D
+	ELSE
+		IMPORT_CFM_FUNCTION	InitPort
+	ENDIF
+
+;
+; pascal void ClosePort(GrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ClosePort:	OPWORD	$A87D
+	ELSE
+		IMPORT_CFM_FUNCTION	ClosePort
+	ENDIF
+
+;
+; pascal void SetPort(GrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetPort:	OPWORD	$A873
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPort
+	ENDIF
+
+;
+; pascal void GetPort(GrafPtr *port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPort:	OPWORD	$A874
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPort
+	ENDIF
+
+;
+; pascal void GrafDevice(short device)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GrafDevice:	OPWORD	$A872
+	ELSE
+		IMPORT_CFM_FUNCTION	GrafDevice
+	ENDIF
+
+;
+; pascal void SetPortBits(const BitMap *bm)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetPortBits:	OPWORD	$A875
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPortBits
+	ENDIF
+
+;
+; pascal void PortSize(short width, short height)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PortSize:	OPWORD	$A876
+	ELSE
+		IMPORT_CFM_FUNCTION	PortSize
+	ENDIF
+
+;
+; pascal void MovePortTo(short leftGlobal, short topGlobal)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MovePortTo:	OPWORD	$A877
+	ELSE
+		IMPORT_CFM_FUNCTION	MovePortTo
+	ENDIF
+
+;
+; pascal void SetOrigin(short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetOrigin:	OPWORD	$A878
+	ELSE
+		IMPORT_CFM_FUNCTION	SetOrigin
+	ENDIF
+
+;
+; pascal void SetClip(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetClip:	OPWORD	$A879
+	ELSE
+		IMPORT_CFM_FUNCTION	SetClip
+	ENDIF
+
+;
+; pascal void GetClip(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetClip:	OPWORD	$A87A
+	ELSE
+		IMPORT_CFM_FUNCTION	GetClip
+	ENDIF
+
+;
+; pascal void ClipRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ClipRect:	OPWORD	$A87B
+	ELSE
+		IMPORT_CFM_FUNCTION	ClipRect
+	ENDIF
+
+;
+; pascal void BackPat(const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_BackPat:	OPWORD	$A87C
+	ELSE
+		IMPORT_CFM_FUNCTION	BackPat
+	ENDIF
+
+;
+; pascal void InitCursor(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InitCursor:	OPWORD	$A850
+	ELSE
+		IMPORT_CFM_FUNCTION	InitCursor
+	ENDIF
+
+;
+; pascal void SetCursor(const Cursor *crsr)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetCursor:	OPWORD	$A851
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCursor
+	ENDIF
+
+;
+; pascal void HideCursor(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_HideCursor:	OPWORD	$A852
+	ELSE
+		IMPORT_CFM_FUNCTION	HideCursor
+	ENDIF
+
+;
+; pascal void ShowCursor(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ShowCursor:	OPWORD	$A853
+	ELSE
+		IMPORT_CFM_FUNCTION	ShowCursor
+	ENDIF
+
+;
+; pascal void ObscureCursor(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ObscureCursor:	OPWORD	$A856
+	ELSE
+		IMPORT_CFM_FUNCTION	ObscureCursor
+	ENDIF
+
+;
+; pascal void HidePen(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_HidePen:	OPWORD	$A896
+	ELSE
+		IMPORT_CFM_FUNCTION	HidePen
+	ENDIF
+
+;
+; pascal void ShowPen(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ShowPen:	OPWORD	$A897
+	ELSE
+		IMPORT_CFM_FUNCTION	ShowPen
+	ENDIF
+
+;
+; pascal void GetPen(Point *pt)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPen:	OPWORD	$A89A
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPen
+	ENDIF
+
+;
+; pascal void GetPenState(PenState *pnState)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPenState:	OPWORD	$A898
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPenState
+	ENDIF
+
+;
+; pascal void SetPenState(const PenState *pnState)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetPenState:	OPWORD	$A899
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPenState
+	ENDIF
+
+;
+; pascal void PenSize(short width, short height)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PenSize:	OPWORD	$A89B
+	ELSE
+		IMPORT_CFM_FUNCTION	PenSize
+	ENDIF
+
+;
+; pascal void PenMode(short mode)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PenMode:	OPWORD	$A89C
+	ELSE
+		IMPORT_CFM_FUNCTION	PenMode
+	ENDIF
+
+;
+; pascal void PenPat(const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PenPat:	OPWORD	$A89D
+	ELSE
+		IMPORT_CFM_FUNCTION	PenPat
+	ENDIF
+
+;
+; pascal void PenNormal(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PenNormal:	OPWORD	$A89E
+	ELSE
+		IMPORT_CFM_FUNCTION	PenNormal
+	ENDIF
+
+;
+; pascal void MoveTo(short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MoveTo:	OPWORD	$A893
+	ELSE
+		IMPORT_CFM_FUNCTION	MoveTo
+	ENDIF
+
+;
+; pascal void Move(short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Move:	OPWORD	$A894
+	ELSE
+		IMPORT_CFM_FUNCTION	Move
+	ENDIF
+
+;
+; pascal void LineTo(short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		_LineTo:	OPWORD	$A891
+	ELSE
+		IMPORT_CFM_FUNCTION	LineTo
+	ENDIF
+
+;
+; pascal void Line(short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Line:	OPWORD	$A892
+	ELSE
+		IMPORT_CFM_FUNCTION	Line
+	ENDIF
+
+;
+; pascal void ForeColor(long color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ForeColor:	OPWORD	$A862
+	ELSE
+		IMPORT_CFM_FUNCTION	ForeColor
+	ENDIF
+
+;
+; pascal void BackColor(long color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_BackColor:	OPWORD	$A863
+	ELSE
+		IMPORT_CFM_FUNCTION	BackColor
+	ENDIF
+
+;
+; pascal void ColorBit(short whichBit)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ColorBit:	OPWORD	$A864
+	ELSE
+		IMPORT_CFM_FUNCTION	ColorBit
+	ENDIF
+
+;
+; pascal void SetRect(Rect *r, short left, short top, short right, short bottom)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetRect:	OPWORD	$A8A7
+	ELSE
+		IMPORT_CFM_FUNCTION	SetRect
+	ENDIF
+
+;
+; pascal void OffsetRect(Rect *r, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OffsetRect:	OPWORD	$A8A8
+	ELSE
+		IMPORT_CFM_FUNCTION	OffsetRect
+	ENDIF
+
+;
+; pascal void InsetRect(Rect *r, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InsetRect:	OPWORD	$A8A9
+	ELSE
+		IMPORT_CFM_FUNCTION	InsetRect
+	ENDIF
+
+;
+; pascal Boolean SectRect(const Rect *src1, const Rect *src2, Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SectRect:	OPWORD	$A8AA
+	ELSE
+		IMPORT_CFM_FUNCTION	SectRect
+	ENDIF
+
+;
+; pascal void UnionRect(const Rect *src1, const Rect *src2, Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_UnionRect:	OPWORD	$A8AB
+	ELSE
+		IMPORT_CFM_FUNCTION	UnionRect
+	ENDIF
+
+;
+; pascal Boolean EqualRect(const Rect *rect1, const Rect *rect2)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EqualRect:	OPWORD	$A8A6
+	ELSE
+		IMPORT_CFM_FUNCTION	EqualRect
+	ENDIF
+
+;
+; pascal Boolean EmptyRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EmptyRect:	OPWORD	$A8AE
+	ELSE
+		IMPORT_CFM_FUNCTION	EmptyRect
+	ENDIF
+
+;
+; pascal void FrameRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FrameRect:	OPWORD	$A8A1
+	ELSE
+		IMPORT_CFM_FUNCTION	FrameRect
+	ENDIF
+
+;
+; pascal void PaintRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintRect:	OPWORD	$A8A2
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintRect
+	ENDIF
+
+;
+; pascal void EraseRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EraseRect:	OPWORD	$A8A3
+	ELSE
+		IMPORT_CFM_FUNCTION	EraseRect
+	ENDIF
+
+;
+; pascal void InvertRect(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertRect:	OPWORD	$A8A4
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertRect
+	ENDIF
+
+;
+; pascal void FillRect(const Rect *r, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillRect:	OPWORD	$A8A5
+	ELSE
+		IMPORT_CFM_FUNCTION	FillRect
+	ENDIF
+
+;
+; pascal void FrameOval(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FrameOval:	OPWORD	$A8B7
+	ELSE
+		IMPORT_CFM_FUNCTION	FrameOval
+	ENDIF
+
+;
+; pascal void PaintOval(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintOval:	OPWORD	$A8B8
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintOval
+	ENDIF
+
+;
+; pascal void EraseOval(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EraseOval:	OPWORD	$A8B9
+	ELSE
+		IMPORT_CFM_FUNCTION	EraseOval
+	ENDIF
+
+;
+; pascal void InvertOval(const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertOval:	OPWORD	$A8BA
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertOval
+	ENDIF
+
+;
+; pascal void FillOval(const Rect *r, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillOval:	OPWORD	$A8BB
+	ELSE
+		IMPORT_CFM_FUNCTION	FillOval
+	ENDIF
+
+;
+; pascal void FrameRoundRect(const Rect *r, short ovalWidth, short ovalHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FrameRoundRect:	OPWORD	$A8B0
+	ELSE
+		IMPORT_CFM_FUNCTION	FrameRoundRect
+	ENDIF
+
+;
+; pascal void PaintRoundRect(const Rect *r, short ovalWidth, short ovalHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintRoundRect:	OPWORD	$A8B1
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintRoundRect
+	ENDIF
+
+;
+; pascal void EraseRoundRect(const Rect *r, short ovalWidth, short ovalHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EraseRoundRect:	OPWORD	$A8B2
+	ELSE
+		IMPORT_CFM_FUNCTION	EraseRoundRect
+	ENDIF
+
+;
+; pascal void InvertRoundRect(const Rect *r, short ovalWidth, short ovalHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertRoundRect:	OPWORD	$A8B3
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertRoundRect
+	ENDIF
+
+;
+; pascal void FillRoundRect(const Rect *r, short ovalWidth, short ovalHeight, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillRoundRect:	OPWORD	$A8B4
+	ELSE
+		IMPORT_CFM_FUNCTION	FillRoundRect
+	ENDIF
+
+;
+; pascal void FrameArc(const Rect *r, short startAngle, short arcAngle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FrameArc:	OPWORD	$A8BE
+	ELSE
+		IMPORT_CFM_FUNCTION	FrameArc
+	ENDIF
+
+;
+; pascal void PaintArc(const Rect *r, short startAngle, short arcAngle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintArc:	OPWORD	$A8BF
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintArc
+	ENDIF
+
+;
+; pascal void EraseArc(const Rect *r, short startAngle, short arcAngle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EraseArc:	OPWORD	$A8C0
+	ELSE
+		IMPORT_CFM_FUNCTION	EraseArc
+	ENDIF
+
+;
+; pascal void InvertArc(const Rect *r, short startAngle, short arcAngle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertArc:	OPWORD	$A8C1
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertArc
+	ENDIF
+
+;
+; pascal void FillArc(const Rect *r, short startAngle, short arcAngle, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillArc:	OPWORD	$A8C2
+	ELSE
+		IMPORT_CFM_FUNCTION	FillArc
+	ENDIF
+
+;
+; pascal RgnHandle NewRgn(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_NewRgn:	OPWORD	$A8D8
+	ELSE
+		IMPORT_CFM_FUNCTION	NewRgn
+	ENDIF
+
+;
+; pascal void OpenRgn(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenRgn:	OPWORD	$A8DA
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenRgn
+	ENDIF
+
+;
+; pascal void CloseRgn(RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CloseRgn:	OPWORD	$A8DB
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseRgn
+	ENDIF
+
+	IF ¬ SystemSevenOrLater  THEN
+;
+; pascal OSErr BitMapToRegionGlue(RgnHandle region, const BitMap *bMap)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	BitMapToRegionGlue
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr BitMapToRegion(RgnHandle region, const BitMap *bMap)
+;
+	IF ¬ GENERATINGCFM THEN
+		_BitMapToRegion:	OPWORD	$A8D7
+	ELSE
+		IMPORT_CFM_FUNCTION	BitMapToRegion
+	ENDIF
+
+;
+; pascal void DisposeRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposeRgn:	OPWORD	$A8D9
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeRgn
+	ENDIF
+
+;
+; pascal void CopyRgn(RgnHandle srcRgn, RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyRgn:	OPWORD	$A8DC
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyRgn
+	ENDIF
+
+;
+; pascal void SetEmptyRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetEmptyRgn:	OPWORD	$A8DD
+	ELSE
+		IMPORT_CFM_FUNCTION	SetEmptyRgn
+	ENDIF
+
+;
+; pascal void SetRectRgn(RgnHandle rgn, short left, short top, short right, short bottom)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetRectRgn:	OPWORD	$A8DE
+	ELSE
+		IMPORT_CFM_FUNCTION	SetRectRgn
+	ENDIF
+
+;
+; pascal void RectRgn(RgnHandle rgn, const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RectRgn:	OPWORD	$A8DF
+	ELSE
+		IMPORT_CFM_FUNCTION	RectRgn
+	ENDIF
+
+;
+; pascal void OffsetRgn(RgnHandle rgn, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OffsetRgn:	OPWORD	$A8E0
+	ELSE
+		IMPORT_CFM_FUNCTION	OffsetRgn
+	ENDIF
+
+;
+; pascal void InsetRgn(RgnHandle rgn, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InsetRgn:	OPWORD	$A8E1
+	ELSE
+		IMPORT_CFM_FUNCTION	InsetRgn
+	ENDIF
+
+;
+; pascal void SectRgn(RgnHandle srcRgnA, RgnHandle srcRgnB, RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SectRgn:	OPWORD	$A8E4
+	ELSE
+		IMPORT_CFM_FUNCTION	SectRgn
+	ENDIF
+
+;
+; pascal void UnionRgn(RgnHandle srcRgnA, RgnHandle srcRgnB, RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_UnionRgn:	OPWORD	$A8E5
+	ELSE
+		IMPORT_CFM_FUNCTION	UnionRgn
+	ENDIF
+
+;
+; pascal void DiffRgn(RgnHandle srcRgnA, RgnHandle srcRgnB, RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DiffRgn:	OPWORD	$A8E6
+	ELSE
+		IMPORT_CFM_FUNCTION	DiffRgn
+	ENDIF
+
+;
+; pascal void XorRgn(RgnHandle srcRgnA, RgnHandle srcRgnB, RgnHandle dstRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_XorRgn:	OPWORD	$A8E7
+	ELSE
+		IMPORT_CFM_FUNCTION	XorRgn
+	ENDIF
+
+;
+; pascal Boolean RectInRgn(const Rect *r, RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RectInRgn:	OPWORD	$A8E9
+	ELSE
+		IMPORT_CFM_FUNCTION	RectInRgn
+	ENDIF
+
+;
+; pascal Boolean EqualRgn(RgnHandle rgnA, RgnHandle rgnB)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EqualRgn:	OPWORD	$A8E3
+	ELSE
+		IMPORT_CFM_FUNCTION	EqualRgn
+	ENDIF
+
+;
+; pascal Boolean EmptyRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EmptyRgn:	OPWORD	$A8E2
+	ELSE
+		IMPORT_CFM_FUNCTION	EmptyRgn
+	ENDIF
+
+;
+; pascal void FrameRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FrameRgn:	OPWORD	$A8D2
+	ELSE
+		IMPORT_CFM_FUNCTION	FrameRgn
+	ENDIF
+
+;
+; pascal void PaintRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintRgn:	OPWORD	$A8D3
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintRgn
+	ENDIF
+
+;
+; pascal void EraseRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EraseRgn:	OPWORD	$A8D4
+	ELSE
+		IMPORT_CFM_FUNCTION	EraseRgn
+	ENDIF
+
+;
+; pascal void InvertRgn(RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertRgn:	OPWORD	$A8D5
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertRgn
+	ENDIF
+
+;
+; pascal void FillRgn(RgnHandle rgn, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillRgn:	OPWORD	$A8D6
+	ELSE
+		IMPORT_CFM_FUNCTION	FillRgn
+	ENDIF
+
+;
+; pascal void ScrollRect(const Rect *r, short dh, short dv, RgnHandle updateRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ScrollRect:	OPWORD	$A8EF
+	ELSE
+		IMPORT_CFM_FUNCTION	ScrollRect
+	ENDIF
+
+;
+; pascal void CopyBits(const BitMap *srcBits, const BitMap *dstBits, const Rect *srcRect, const Rect *dstRect, short mode, RgnHandle maskRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyBits:	OPWORD	$A8EC
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyBits
+	ENDIF
+
+;
+; pascal void SeedFill(const void *srcPtr, void *dstPtr, short srcRow, short dstRow, short height, short words, short seedH, short seedV)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SeedFill:	OPWORD	$A839
+	ELSE
+		IMPORT_CFM_FUNCTION	SeedFill
+	ENDIF
+
+;
+; pascal void CalcMask(const void *srcPtr, void *dstPtr, short srcRow, short dstRow, short height, short words)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CalcMask:	OPWORD	$A838
+	ELSE
+		IMPORT_CFM_FUNCTION	CalcMask
+	ENDIF
+
+;
+; pascal void CopyMask(const BitMap *srcBits, const BitMap *maskBits, const BitMap *dstBits, const Rect *srcRect, const Rect *maskRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyMask:	OPWORD	$A817
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyMask
+	ENDIF
+
+;
+; pascal PicHandle OpenPicture(const Rect *picFrame)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenPicture:	OPWORD	$A8F3
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenPicture
+	ENDIF
+
+;
+; pascal void PicComment(short kind, short dataSize, Handle dataHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PicComment:	OPWORD	$A8F2
+	ELSE
+		IMPORT_CFM_FUNCTION	PicComment
+	ENDIF
+
+;
+; pascal void ClosePicture(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ClosePicture:	OPWORD	$A8F4
+	ELSE
+		IMPORT_CFM_FUNCTION	ClosePicture
+	ENDIF
+
+;
+; pascal void DrawPicture(PicHandle myPicture, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DrawPicture:	OPWORD	$A8F6
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawPicture
+	ENDIF
+
+;
+; pascal void KillPicture(PicHandle myPicture)
+;
+	IF ¬ GENERATINGCFM THEN
+		_KillPicture:	OPWORD	$A8F5
+	ELSE
+		IMPORT_CFM_FUNCTION	KillPicture
+	ENDIF
+
+;
+; pascal PolyHandle OpenPoly(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenPoly:	OPWORD	$A8CB
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenPoly
+	ENDIF
+
+;
+; pascal void ClosePoly(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ClosePoly:	OPWORD	$A8CC
+	ELSE
+		IMPORT_CFM_FUNCTION	ClosePoly
+	ENDIF
+
+;
+; pascal void KillPoly(PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_KillPoly:	OPWORD	$A8CD
+	ELSE
+		IMPORT_CFM_FUNCTION	KillPoly
+	ENDIF
+
+;
+; pascal void OffsetPoly(PolyHandle poly, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OffsetPoly:	OPWORD	$A8CE
+	ELSE
+		IMPORT_CFM_FUNCTION	OffsetPoly
+	ENDIF
+
+;
+; pascal void FramePoly(PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FramePoly:	OPWORD	$A8C6
+	ELSE
+		IMPORT_CFM_FUNCTION	FramePoly
+	ENDIF
+
+;
+; pascal void PaintPoly(PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PaintPoly:	OPWORD	$A8C7
+	ELSE
+		IMPORT_CFM_FUNCTION	PaintPoly
+	ENDIF
+
+;
+; pascal void ErasePoly(PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ErasePoly:	OPWORD	$A8C8
+	ELSE
+		IMPORT_CFM_FUNCTION	ErasePoly
+	ENDIF
+
+;
+; pascal void InvertPoly(PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertPoly:	OPWORD	$A8C9
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertPoly
+	ENDIF
+
+;
+; pascal void FillPoly(PolyHandle poly, const Pattern *pat)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillPoly:	OPWORD	$A8CA
+	ELSE
+		IMPORT_CFM_FUNCTION	FillPoly
+	ENDIF
+
+;
+; pascal void SetPt(Point *pt, short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetPt:	OPWORD	$A880
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPt
+	ENDIF
+
+;
+; pascal void LocalToGlobal(Point *pt)
+;
+	IF ¬ GENERATINGCFM THEN
+		_LocalToGlobal:	OPWORD	$A870
+	ELSE
+		IMPORT_CFM_FUNCTION	LocalToGlobal
+	ENDIF
+
+;
+; pascal void GlobalToLocal(Point *pt)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GlobalToLocal:	OPWORD	$A871
+	ELSE
+		IMPORT_CFM_FUNCTION	GlobalToLocal
+	ENDIF
+
+;
+; pascal short Random(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Random:	OPWORD	$A861
+	ELSE
+		IMPORT_CFM_FUNCTION	Random
+	ENDIF
+
+;
+; pascal void StuffHex(void *thingPtr, ConstStr255Param s)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StuffHex:	OPWORD	$A866
+	ELSE
+		IMPORT_CFM_FUNCTION	StuffHex
+	ENDIF
+
+;
+; pascal Boolean GetPixel(short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPixel:	OPWORD	$A865
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPixel
+	ENDIF
+
+;
+; pascal void ScalePt(Point *pt, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ScalePt:	OPWORD	$A8F8
+	ELSE
+		IMPORT_CFM_FUNCTION	ScalePt
+	ENDIF
+
+;
+; pascal void MapPt(Point *pt, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MapPt:	OPWORD	$A8F9
+	ELSE
+		IMPORT_CFM_FUNCTION	MapPt
+	ENDIF
+
+;
+; pascal void MapRect(Rect *r, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MapRect:	OPWORD	$A8FA
+	ELSE
+		IMPORT_CFM_FUNCTION	MapRect
+	ENDIF
+
+;
+; pascal void MapRgn(RgnHandle rgn, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MapRgn:	OPWORD	$A8FB
+	ELSE
+		IMPORT_CFM_FUNCTION	MapRgn
+	ENDIF
+
+;
+; pascal void MapPoly(PolyHandle poly, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MapPoly:	OPWORD	$A8FC
+	ELSE
+		IMPORT_CFM_FUNCTION	MapPoly
+	ENDIF
+
+;
+; pascal void SetStdProcs(QDProcs *procs)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetStdProcs:	OPWORD	$A8EA
+	ELSE
+		IMPORT_CFM_FUNCTION	SetStdProcs
+	ENDIF
+
+;
+; pascal void StdRect(GrafVerb verb, const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdRect:	OPWORD	$A8A0
+	ELSE
+		IMPORT_CFM_FUNCTION	StdRect
+	ENDIF
+
+;
+; pascal void StdRRect(GrafVerb verb, const Rect *r, short ovalWidth, short ovalHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdRRect:	OPWORD	$A8AF
+	ELSE
+		IMPORT_CFM_FUNCTION	StdRRect
+	ENDIF
+
+;
+; pascal void StdOval(GrafVerb verb, const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdOval:	OPWORD	$A8B6
+	ELSE
+		IMPORT_CFM_FUNCTION	StdOval
+	ENDIF
+
+;
+; pascal void StdArc(GrafVerb verb, const Rect *r, short startAngle, short arcAngle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdArc:	OPWORD	$A8BD
+	ELSE
+		IMPORT_CFM_FUNCTION	StdArc
+	ENDIF
+
+;
+; pascal void StdPoly(GrafVerb verb, PolyHandle poly)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdPoly:	OPWORD	$A8C5
+	ELSE
+		IMPORT_CFM_FUNCTION	StdPoly
+	ENDIF
+
+;
+; pascal void StdRgn(GrafVerb verb, RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdRgn:	OPWORD	$A8D1
+	ELSE
+		IMPORT_CFM_FUNCTION	StdRgn
+	ENDIF
+
+;
+; pascal void StdBits(const BitMap *srcBits, const Rect *srcRect, const Rect *dstRect, short mode, RgnHandle maskRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdBits:	OPWORD	$A8EB
+	ELSE
+		IMPORT_CFM_FUNCTION	StdBits
+	ENDIF
+
+;
+; pascal void StdComment(short kind, short dataSize, Handle dataHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdComment:	OPWORD	$A8F1
+	ELSE
+		IMPORT_CFM_FUNCTION	StdComment
+	ENDIF
+
+;
+; pascal void StdGetPic(void *dataPtr, short byteCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdGetPic:	OPWORD	$A8EE
+	ELSE
+		IMPORT_CFM_FUNCTION	StdGetPic
+	ENDIF
+
+;
+; pascal void StdPutPic(const void *dataPtr, short byteCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdPutPic:	OPWORD	$A8F0
+	ELSE
+		IMPORT_CFM_FUNCTION	StdPutPic
+	ENDIF
+
+;
+; pascal void AddPt(Point src, Point *dst)
+;
+	IF ¬ GENERATINGCFM THEN
+		_AddPt:	OPWORD	$A87E
+	ELSE
+		IMPORT_CFM_FUNCTION	AddPt
+	ENDIF
+
+;
+; pascal Boolean EqualPt(Point pt1, Point pt2)
+;
+	IF ¬ GENERATINGCFM THEN
+		_EqualPt:	OPWORD	$A881
+	ELSE
+		IMPORT_CFM_FUNCTION	EqualPt
+	ENDIF
+
+;
+; pascal Boolean PtInRect(Point pt, const Rect *r)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PtInRect:	OPWORD	$A8AD
+	ELSE
+		IMPORT_CFM_FUNCTION	PtInRect
+	ENDIF
+
+;
+; pascal void Pt2Rect(Point pt1, Point pt2, Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Pt2Rect:	OPWORD	$A8AC
+	ELSE
+		IMPORT_CFM_FUNCTION	Pt2Rect
+	ENDIF
+
+;
+; pascal void PtToAngle(const Rect *r, Point pt, short *angle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PtToAngle:	OPWORD	$A8C3
+	ELSE
+		IMPORT_CFM_FUNCTION	PtToAngle
+	ENDIF
+
+;
+; pascal void SubPt(Point src, Point *dst)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SubPt:	OPWORD	$A87F
+	ELSE
+		IMPORT_CFM_FUNCTION	SubPt
+	ENDIF
+
+;
+; pascal Boolean PtInRgn(Point pt, RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PtInRgn:	OPWORD	$A8E8
+	ELSE
+		IMPORT_CFM_FUNCTION	PtInRgn
+	ENDIF
+
+;
+; pascal void StdLine(Point newPt)
+;
+	IF ¬ GENERATINGCFM THEN
+		_StdLine:	OPWORD	$A890
+	ELSE
+		IMPORT_CFM_FUNCTION	StdLine
+	ENDIF
+
+;
+; pascal void OpenCPort(CGrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenCPort:	OPWORD	$AA00
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenCPort
+	ENDIF
+
+;
+; pascal void InitCPort(CGrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InitCPort:	OPWORD	$AA01
+	ELSE
+		IMPORT_CFM_FUNCTION	InitCPort
+	ENDIF
+
+;
+; pascal void CloseCPort(CGrafPtr port)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CloseCPort:	OPWORD	$A87D
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseCPort
+	ENDIF
+
+;
+; pascal PixMapHandle NewPixMap(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_NewPixMap:	OPWORD	$AA03
+	ELSE
+		IMPORT_CFM_FUNCTION	NewPixMap
+	ENDIF
+
+;
+; pascal void DisposePixMap(PixMapHandle pm)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposePixMap:	OPWORD	$AA04
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposePixMap
+	ENDIF
+
+;
+; pascal void CopyPixMap(PixMapHandle srcPM, PixMapHandle dstPM)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyPixMap:	OPWORD	$AA05
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyPixMap
+	ENDIF
+
+;
+; pascal PixPatHandle NewPixPat(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_NewPixPat:	OPWORD	$AA07
+	ELSE
+		IMPORT_CFM_FUNCTION	NewPixPat
+	ENDIF
+
+;
+; pascal void DisposePixPat(PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposePixPat:	OPWORD	$AA08
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposePixPat
+	ENDIF
+
+;
+; pascal void CopyPixPat(PixPatHandle srcPP, PixPatHandle dstPP)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyPixPat:	OPWORD	$AA09
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyPixPat
+	ENDIF
+
+;
+; pascal void PenPixPat(PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PenPixPat:	OPWORD	$AA0A
+	ELSE
+		IMPORT_CFM_FUNCTION	PenPixPat
+	ENDIF
+
+;
+; pascal void BackPixPat(PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_BackPixPat:	OPWORD	$AA0B
+	ELSE
+		IMPORT_CFM_FUNCTION	BackPixPat
+	ENDIF
+
+;
+; pascal PixPatHandle GetPixPat(short patID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPixPat:	OPWORD	$AA0C
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPixPat
+	ENDIF
+
+;
+; pascal void MakeRGBPat(PixPatHandle pp, const RGBColor *myColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MakeRGBPat:	OPWORD	$AA0D
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeRGBPat
+	ENDIF
+
+;
+; pascal void FillCRect(const Rect *r, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCRect:	OPWORD	$AA0E
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCRect
+	ENDIF
+
+;
+; pascal void FillCOval(const Rect *r, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCOval:	OPWORD	$AA0F
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCOval
+	ENDIF
+
+;
+; pascal void FillCRoundRect(const Rect *r, short ovalWidth, short ovalHeight, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCRoundRect:	OPWORD	$AA10
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCRoundRect
+	ENDIF
+
+;
+; pascal void FillCArc(const Rect *r, short startAngle, short arcAngle, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCArc:	OPWORD	$AA11
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCArc
+	ENDIF
+
+;
+; pascal void FillCRgn(RgnHandle rgn, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCRgn:	OPWORD	$AA12
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCRgn
+	ENDIF
+
+;
+; pascal void FillCPoly(PolyHandle poly, PixPatHandle pp)
+;
+	IF ¬ GENERATINGCFM THEN
+		_FillCPoly:	OPWORD	$AA13
+	ELSE
+		IMPORT_CFM_FUNCTION	FillCPoly
+	ENDIF
+
+;
+; pascal void RGBForeColor(const RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RGBForeColor:	OPWORD	$AA14
+	ELSE
+		IMPORT_CFM_FUNCTION	RGBForeColor
+	ENDIF
+
+;
+; pascal void RGBBackColor(const RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RGBBackColor:	OPWORD	$AA15
+	ELSE
+		IMPORT_CFM_FUNCTION	RGBBackColor
+	ENDIF
+
+;
+; pascal void SetCPixel(short h, short v, const RGBColor *cPix)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetCPixel:	OPWORD	$AA16
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCPixel
+	ENDIF
+
+;
+; pascal void SetPortPix(PixMapHandle pm)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetPortPix:	OPWORD	$AA06
+	ELSE
+		IMPORT_CFM_FUNCTION	SetPortPix
+	ENDIF
+
+;
+; pascal void GetCPixel(short h, short v, RGBColor *cPix)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCPixel:	OPWORD	$AA17
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCPixel
+	ENDIF
+
+;
+; pascal void GetForeColor(RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetForeColor:	OPWORD	$AA19
+	ELSE
+		IMPORT_CFM_FUNCTION	GetForeColor
+	ENDIF
+
+;
+; pascal void GetBackColor(RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetBackColor:	OPWORD	$AA1A
+	ELSE
+		IMPORT_CFM_FUNCTION	GetBackColor
+	ENDIF
+
+;
+; pascal void SeedCFill(const BitMap *srcBits, const BitMap *dstBits, const Rect *srcRect, const Rect *dstRect, short seedH, short seedV, ColorSearchUPP matchProc, long matchData)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SeedCFill:	OPWORD	$AA50
+	ELSE
+		IMPORT_CFM_FUNCTION	SeedCFill
+	ENDIF
+
+;
+; pascal void CalcCMask(const BitMap *srcBits, const BitMap *dstBits, const Rect *srcRect, const Rect *dstRect, const RGBColor *seedRGB, ColorSearchUPP matchProc, long matchData)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CalcCMask:	OPWORD	$AA4F
+	ELSE
+		IMPORT_CFM_FUNCTION	CalcCMask
+	ENDIF
+
+;
+; pascal PicHandle OpenCPicture(const OpenCPicParams *newHeader)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenCPicture:	OPWORD	$AA20
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenCPicture
+	ENDIF
+
+;
+; pascal void OpColor(const RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpColor:	OPWORD	$AA21
+	ELSE
+		IMPORT_CFM_FUNCTION	OpColor
+	ENDIF
+
+;
+; pascal void HiliteColor(const RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_HiliteColor:	OPWORD	$AA22
+	ELSE
+		IMPORT_CFM_FUNCTION	HiliteColor
+	ENDIF
+
+;
+; pascal void DisposeCTable(CTabHandle cTable)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposeCTable:	OPWORD	$AA24
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeCTable
+	ENDIF
+
+;
+; pascal CTabHandle GetCTable(short ctID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCTable:	OPWORD	$AA18
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCTable
+	ENDIF
+
+;
+; pascal CCrsrHandle GetCCursor(short crsrID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCCursor:	OPWORD	$AA1B
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCCursor
+	ENDIF
+
+;
+; pascal void SetCCursor(CCrsrHandle cCrsr)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetCCursor:	OPWORD	$AA1C
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCCursor
+	ENDIF
+
+;
+; pascal void AllocCursor(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_AllocCursor:	OPWORD	$AA1D
+	ELSE
+		IMPORT_CFM_FUNCTION	AllocCursor
+	ENDIF
+
+;
+; pascal void DisposeCCursor(CCrsrHandle cCrsr)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposeCCursor:	OPWORD	$AA26
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeCCursor
+	ENDIF
+
+	IF OLDROUTINELOCATIONS  THEN
+;
+; pascal CIconHandle GetCIcon(short iconID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCIcon:	OPWORD	$AA1E
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCIcon
+	ENDIF
+
+;
+; pascal void PlotCIcon(const Rect *theRect, CIconHandle theIcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		_PlotCIcon:	OPWORD	$AA1F
+	ELSE
+		IMPORT_CFM_FUNCTION	PlotCIcon
+	ENDIF
+
+;
+; pascal void DisposeCIcon(CIconHandle theIcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposeCIcon:	OPWORD	$AA25
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeCIcon
+	ENDIF
+
+	ENDIF
+;
+; pascal void SetStdCProcs(CQDProcs *procs)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetStdCProcs:	OPWORD	$AA4E
+	ELSE
+		IMPORT_CFM_FUNCTION	SetStdCProcs
+	ENDIF
+
+;
+; pascal GDHandle GetMaxDevice(const Rect *globalRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetMaxDevice:	OPWORD	$AA27
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMaxDevice
+	ENDIF
+
+;
+; pascal long GetCTSeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCTSeed:	OPWORD	$AA28
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCTSeed
+	ENDIF
+
+;
+; pascal GDHandle GetDeviceList(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetDeviceList:	OPWORD	$AA29
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDeviceList
+	ENDIF
+
+;
+; pascal GDHandle GetMainDevice(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetMainDevice:	OPWORD	$AA2A
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMainDevice
+	ENDIF
+
+;
+; pascal GDHandle GetNextDevice(GDHandle curDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetNextDevice:	OPWORD	$AA2B
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextDevice
+	ENDIF
+
+;
+; pascal Boolean TestDeviceAttribute(GDHandle gdh, short attribute)
+;
+	IF ¬ GENERATINGCFM THEN
+		_TestDeviceAttribute:	OPWORD	$AA2C
+	ELSE
+		IMPORT_CFM_FUNCTION	TestDeviceAttribute
+	ENDIF
+
+;
+; pascal void SetDeviceAttribute(GDHandle gdh, short attribute, Boolean value)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetDeviceAttribute:	OPWORD	$AA2D
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDeviceAttribute
+	ENDIF
+
+;
+; pascal void InitGDevice(short qdRefNum, long mode, GDHandle gdh)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InitGDevice:	OPWORD	$AA2E
+	ELSE
+		IMPORT_CFM_FUNCTION	InitGDevice
+	ENDIF
+
+;
+; pascal GDHandle NewGDevice(short refNum, long mode)
+;
+	IF ¬ GENERATINGCFM THEN
+		_NewGDevice:	OPWORD	$AA2F
+	ELSE
+		IMPORT_CFM_FUNCTION	NewGDevice
+	ENDIF
+
+;
+; pascal void DisposeGDevice(GDHandle gdh)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DisposeGDevice:	OPWORD	$AA30
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeGDevice
+	ENDIF
+
+;
+; pascal void SetGDevice(GDHandle gd)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetGDevice:	OPWORD	$AA31
+	ELSE
+		IMPORT_CFM_FUNCTION	SetGDevice
+	ENDIF
+
+;
+; pascal GDHandle GetGDevice(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetGDevice:	OPWORD	$AA32
+	ELSE
+		IMPORT_CFM_FUNCTION	GetGDevice
+	ENDIF
+
+;
+; pascal long Color2Index(const RGBColor *myColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Color2Index:	OPWORD	$AA33
+	ELSE
+		IMPORT_CFM_FUNCTION	Color2Index
+	ENDIF
+
+;
+; pascal void Index2Color(long index, RGBColor *aColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Index2Color:	OPWORD	$AA34
+	ELSE
+		IMPORT_CFM_FUNCTION	Index2Color
+	ENDIF
+
+;
+; pascal void InvertColor(RGBColor *myColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		_InvertColor:	OPWORD	$AA35
+	ELSE
+		IMPORT_CFM_FUNCTION	InvertColor
+	ENDIF
+
+;
+; pascal Boolean RealColor(const RGBColor *color)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RealColor:	OPWORD	$AA36
+	ELSE
+		IMPORT_CFM_FUNCTION	RealColor
+	ENDIF
+
+;
+; pascal void GetSubTable(CTabHandle myColors, short iTabRes, CTabHandle targetTbl)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetSubTable:	OPWORD	$AA37
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSubTable
+	ENDIF
+
+;
+; pascal void MakeITable(CTabHandle cTabH, ITabHandle iTabH, short res)
+;
+	IF ¬ GENERATINGCFM THEN
+		_MakeITable:	OPWORD	$AA39
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeITable
+	ENDIF
+
+;
+; pascal void AddSearch(ColorSearchUPP searchProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		_AddSearch:	OPWORD	$AA3A
+	ELSE
+		IMPORT_CFM_FUNCTION	AddSearch
+	ENDIF
+
+;
+; pascal void AddComp(ColorComplementUPP compProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		_AddComp:	OPWORD	$AA3B
+	ELSE
+		IMPORT_CFM_FUNCTION	AddComp
+	ENDIF
+
+;
+; pascal void DelSearch(ColorSearchUPP searchProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DelSearch:	OPWORD	$AA4C
+	ELSE
+		IMPORT_CFM_FUNCTION	DelSearch
+	ENDIF
+
+;
+; pascal void DelComp(ColorComplementUPP compProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DelComp:	OPWORD	$AA4D
+	ELSE
+		IMPORT_CFM_FUNCTION	DelComp
+	ENDIF
+
+;
+; pascal void SetClientID(short id)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetClientID:	OPWORD	$AA3C
+	ELSE
+		IMPORT_CFM_FUNCTION	SetClientID
+	ENDIF
+
+;
+; pascal void ProtectEntry(short index, Boolean protect)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ProtectEntry:	OPWORD	$AA3D
+	ELSE
+		IMPORT_CFM_FUNCTION	ProtectEntry
+	ENDIF
+
+;
+; pascal void ReserveEntry(short index, Boolean reserve)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ReserveEntry:	OPWORD	$AA3E
+	ELSE
+		IMPORT_CFM_FUNCTION	ReserveEntry
+	ENDIF
+
+;
+; pascal void SetEntries(short start, short count, CSpecArray aTable)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetEntries:	OPWORD	$AA3F
+	ELSE
+		IMPORT_CFM_FUNCTION	SetEntries
+	ENDIF
+
+;
+; pascal void SaveEntries(CTabHandle srcTable, CTabHandle resultTable, ReqListRec *selection)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SaveEntries:	OPWORD	$AA49
+	ELSE
+		IMPORT_CFM_FUNCTION	SaveEntries
+	ENDIF
+
+;
+; pascal void RestoreEntries(CTabHandle srcTable, CTabHandle dstTable, ReqListRec *selection)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RestoreEntries:	OPWORD	$AA4A
+	ELSE
+		IMPORT_CFM_FUNCTION	RestoreEntries
+	ENDIF
+
+;
+; pascal short QDError(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_QDError:	OPWORD	$AA40
+	ELSE
+		IMPORT_CFM_FUNCTION	QDError
+	ENDIF
+
+;
+; pascal void CopyDeepMask(const BitMap *srcBits, const BitMap *maskBits, const BitMap *dstBits, const Rect *srcRect, const Rect *maskRect, const Rect *dstRect, short mode, RgnHandle maskRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CopyDeepMask:	OPWORD	$AA51
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyDeepMask
+	ENDIF
+
+;
+; pascal void DeviceLoop(RgnHandle drawingRgn, DeviceLoopDrawingUPP drawingProc, long userData, DeviceLoopFlags flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DeviceLoop:	OPWORD	$ABCA
+	ELSE
+		IMPORT_CFM_FUNCTION	DeviceLoop
+	ENDIF
+
+;
+; pascal Ptr GetMaskTable(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Ptr           	<= A0
+		_GetMaskTable:	OPWORD	$A836
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMaskTable
+	ENDIF
+
+;
+; pascal PatHandle GetPattern(short patternID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPattern:	OPWORD	$A9B8
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPattern
+	ENDIF
+
+;
+; pascal CursHandle GetCursor(short cursorID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetCursor:	OPWORD	$A9B9
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCursor
+	ENDIF
+
+;
+; pascal PicHandle GetPicture(short pictureID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetPicture:	OPWORD	$A9BC
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPicture
+	ENDIF
+
+;
+; pascal long DeltaPoint(Point ptA, Point ptB)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DeltaPoint:	OPWORD	$A94F
+	ELSE
+		IMPORT_CFM_FUNCTION	DeltaPoint
+	ENDIF
+
+;
+; pascal void ShieldCursor(const Rect *shieldRect, Point offsetPt)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ShieldCursor:	OPWORD	$A855
+	ELSE
+		IMPORT_CFM_FUNCTION	ShieldCursor
+	ENDIF
+
+;
+; pascal void ScreenRes(short *scrnHRes, short *scrnVRes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ScreenRes
+			dc.w 	$225F
+			dc.w 	$32B8
+			dc.w 	$0102
+			dc.w 	$225F
+			dc.w 	$32B8
+			dc.w 	$0104
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ScreenRes
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+	ENDIF
+	ENDIF ; __QUICKDRAW__

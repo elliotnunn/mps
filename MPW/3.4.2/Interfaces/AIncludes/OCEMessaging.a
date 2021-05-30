@@ -1,0 +1,1363 @@
+;
+;	File:		OCEMessaging.a
+;
+;	Contains:	Apple Open Collaboration Environment Messaging Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OCEMESSAGING__') = 'UNDEFINED' THEN
+__OCEMESSAGING__ SET 1
+
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Types.a'											;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'OSUtils.a'										;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__DIGITALSIGNATURE__') = 'UNDEFINED' THEN
+	include 'DigitalSignature.a'
+	ENDIF
+
+	IF &TYPE('__OCE__') = 'UNDEFINED' THEN
+	include 'OCE.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;		include 'Script.a'											;
+;			include 'IntlResources.a'								;
+
+	IF &TYPE('__OCEAUTHDIR__') = 'UNDEFINED' THEN
+	include 'OCEAuthDir.a'
+	ENDIF
+;****************************************************************************
+; Definitions common to OCEMessaging and to OCEMail. These relate to addressing,
+;message ids and priorities, etc. 
+; Values of IPMPriority 
+
+kIPMAnyPriority					EQU		0					; FOR FILTER ONLY 
+kIPMNormalPriority				EQU		1
+kIPMLowPriority					EQU		2
+kIPMHighPriority				EQU		3
+
+; typedef Byte 				IPMPriority
+; Values of IPMAccessMode 
+
+kIPMAtMark						EQU		0
+kIPMFromStart					EQU		1
+kIPMFromLEOM					EQU		2
+kIPMFromMark					EQU		3
+
+; typedef unsigned short 	IPMAccessMode
+
+kIPMUpdateMsgBit				EQU		4
+kIPMNewMsgBit					EQU		5
+kIPMDeleteMsgBit				EQU		6
+
+; Values of IPMNotificationType 
+kIPMUpdateMsgMask				EQU		16
+kIPMNewMsgMask					EQU		32
+kIPMDeleteMsgMask				EQU		64
+
+; typedef Byte 				IPMNotificationType
+; Values of IPMSenderTag 
+
+kIPMSenderRStringTag			EQU		0
+kIPMSenderRecordIDTag			EQU		1
+
+; typedef unsigned short 	IPMSenderTag
+
+kIPMFromDistListBit				EQU		0
+kIPMDummyRecBit					EQU		1
+kIPMFeedbackRecBit				EQU		2					; should be redirected to feedback queue 
+kIPMReporterRecBit				EQU		3					; should be redirected to reporter original queue 
+kIPMBCCRecBit					EQU		4					; this recipient is blind to all recipients of message 
+
+; Values of OCERecipientOffsetFlags 
+kIPMFromDistListMask			EQU		1
+kIPMDummyRecMask				EQU		2
+kIPMFeedbackRecMask				EQU		4
+kIPMReporterRecMask				EQU		8
+kIPMBCCRecMask					EQU		16
+
+; typedef Byte 				OCERecipientOffsetFlags
+OCECreatorType 			RECORD	0
+msgCreator				 ds.l   1		; offset: $0 (0)
+msgType					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct OCECreatorType  OCECreatorType
+
+kIPMTypeWildCard				EQU		'ipmw'
+kIPMFamilyUnspecified			EQU		0
+kIPMFamilyWildCard				EQU		$3F3F3F3F			; '??^ 
+;
+;	* well known signature 
+kIPMSignature					EQU		'ipms'				; base type 
+;
+;	* well known message types 
+kIPMReportNotify				EQU		'rptn'				; routing feedback
+;
+;    * well known message block types 
+kIPMEnclosedMsgType				EQU		'emsg'				; enclosed (nested) message 
+kIPMReportInfo					EQU		'rpti'				; recipient information 
+kIPMDigitalSignature			EQU		'dsig'
+
+; Values of IPMMsgFormat 
+kIPMOSFormatType				EQU		1
+kIPMStringFormatType			EQU		2
+
+; typedef unsigned short 	IPMMsgFormat
+; typedef Str32 			IPMStringMsgType
+TheType 				RECORD	0
+msgOSType				 ds     OCECreatorType ; offset: $0 (0)
+						 ORG 0
+msgStrType				 ds.b   33		; offset: $0 (0)
+						 ORG 34
+sizeof					 EQU *			; size:   $22 (34)
+						ENDR
+
+; typedef union TheType 	TheType
+IPMMsgType 				RECORD	0
+format					 ds.w   1		; offset: $0 (0)		; IPMMsgFormat
+theType					 ds.w   17		; offset: $2 (2)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct IPMMsgType  IPMMsgType
+;
+;Following are the known extension values for IPM addresses handled by Apple.
+;We define the definition of the entn extension below.
+;
+
+kOCEalanXtn						EQU		'alan'
+kOCEentnXtn						EQU		'entn'				; entn = entity name (aka DSSpec) 
+kOCEaphnXtn						EQU		'aphn'
+
+;
+;Following are the specific definitions for the extension for the standard
+;OCEMail 'entn' addresses.  [Note, the actual extension is formatted as in
+;IPMEntityNameExtension.]
+;
+; entn extension forms 
+kOCEAddrXtn						EQU		'addr'
+kOCEQnamXtn						EQU		'qnam'
+kOCEAttrXtn						EQU		'attr'				; an attribute specification 
+kOCESpAtXtn						EQU		'spat'
+
+;
+;Following are the specific definitions for standard
+;OCEMail 'aphn' extension value.  
+;
+;All RStrings here are packed (e.g. truncated to length) and even padded (e.g.
+;if length odd, then a pad byte (zero) should be introduced before the next field).
+;
+;The extension value is in the packed form of the following structure:
+;	RString		phoneNumber;
+;	RString		modemType;
+;	Str32		queueuName;
+;
+;The body of phoneNumber compound RString is in the packed form of the following structure:
+;	short 		subType;
+;	RString 	countryCode;				// used when subType == kOCEUseHandyDial
+;	RString		areaCode;					// used when subType == kOCEUseHandyDial
+;	RString		phone;						// used when subType == kOCEUseHandyDial
+;	RString		postFix;					// used when subType == kOCEUseHandyDial
+;	RString		nonHandyDialString;			// used when subType == kOCEDontUseHandyDial
+;
+; phoneNumber sub type constants 
+kOCEUseHandyDial				EQU		1
+kOCEDontUseHandyDial			EQU		2
+
+; FORMAT OF A PACKED FORM RECIPIENT 
+ProtoOCEPackedRecipient RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ProtoOCEPackedRecipient  ProtoOCEPackedRecipient
+
+kOCEPackedRecipientMaxBytes		EQU		4094
+
+OCEPackedRecipient 		RECORD	0
+dataLength				 ds.w   1		; offset: $0 (0)
+data					 ds.b   4094	; offset: $2 (2)
+sizeof					 EQU *			; size:   $1000 (4096)
+						ENDR
+
+; typedef struct OCEPackedRecipient  OCEPackedRecipient
+IPMEntnQueueExtension 	RECORD	0
+queueName				 ds.b   33		; offset: $0 (0)
+						 ORG 34
+sizeof					 EQU *			; size:   $22 (34)
+						ENDR
+
+; typedef struct IPMEntnQueueExtension  IPMEntnQueueExtension
+; kOCEAttrXtn 
+IPMEntnAttributeExtension RECORD	0
+attributeName			 ds.l   9		; offset: $0 (0)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct IPMEntnAttributeExtension  IPMEntnAttributeExtension
+; kOCESpAtXtn 
+IPMEntnSpecificAttributeExtension RECORD	0
+attributeCreationID		 ds.l   2		; offset: $0 (0)
+attributeName			 ds.l   9		; offset: $8 (8)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct IPMEntnSpecificAttributeExtension  IPMEntnSpecificAttributeExtension
+; All IPM entn extensions fit within the following 
+IPMEntityNameExtension 	RECORD	0
+subExtensionType		 ds.l   1		; offset: $0 (0)
+specificAttribute		 ds     IPMEntnSpecificAttributeExtension ; offset: $4 (4)
+						 ORG 4
+attribute				 ds     IPMEntnAttributeExtension ; offset: $4 (4)
+						 ORG 4
+queue					 ds     IPMEntnQueueExtension ; offset: $4 (4)
+						 ORG 48
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct IPMEntityNameExtension  IPMEntityNameExtension
+; addresses with kIPMNBPXtn should specify this nbp type 
+IPMMsgID 				RECORD	0
+id						 ds.l   4		; offset: $0 (0)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct IPMMsgID 	IPMMsgID
+; Values of IPMHeaderSelector 
+
+kIPMTOC							EQU		0
+kIPMSender						EQU		1
+kIPMProcessHint					EQU		2
+kIPMMessageTitle				EQU		3
+kIPMMessageType					EQU		4
+kIPMFixedInfo					EQU		7
+
+; typedef Byte 				IPMHeaderSelector
+TheSender 				RECORD	0
+rString					 ds.l   65		; offset: $0 (0)
+						 ORG 0
+rid						 ds.w   913		; offset: $0 (0)
+						 ORG 1826
+sizeof					 EQU *			; size:   $722 (1826)
+						ENDR
+
+; typedef union TheSender 	TheSender
+IPMSender 				RECORD	0
+sendTag					 ds.w   1		; offset: $0 (0)
+theSender				 ds.w   913		; offset: $2 (2)
+sizeof					 EQU *			; size:   $724 (1828)
+						ENDR
+
+; typedef struct IPMSender 	IPMSender
+;****************************************************************************
+; Definitions specific to OCEMessaging 
+; typedef unsigned long 	IPMContextRef
+; typedef unsigned long 	IPMQueueRef
+; typedef unsigned long 	IPMMsgRef
+; typedef unsigned long 	IPMSeqNum
+; typedef Str32 			IPMProcHint
+; typedef Str32 			IPMQueueName
+IPMFixedHdrInfo 		RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+authenticated			 ds.b   1		; offset: $2 (2)
+signatureEnclosed		 ds.b   1		; offset: $3 (3)		;  digital signature enclosed 
+msgSize					 ds.l   1		; offset: $4 (4)
+notification			 ds.b   1		; offset: $8 (8)
+priority				 ds.b   1		; offset: $9 (9)
+blockCount				 ds.w   1		; offset: $A (10)
+originalRcptCount		 ds.w   1		; offset: $C (12)		;		original number of recipients 
+refCon					 ds.l   1		; offset: $E (14)		;		Client defined data 
+reserved				 ds.w   1		; offset: $12 (18)
+creationTime			 ds.l   1		; offset: $14 (20)		;		Time when it was created 
+msgID					 ds     IPMMsgID ; offset: $18 (24)
+family					 ds.l   1		; offset: $28 (40)		; family this msg belongs (e.g. mail) 
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct IPMFixedHdrInfo  IPMFixedHdrInfo
+
+kIPMDeliveryNotificationBit		EQU		0
+kIPMNonDeliveryNotificationBit	EQU		1
+kIPMEncloseOriginalBit			EQU		2
+kIPMSummaryReportBit			EQU		3
+; modify enclose original to only on error 
+kIPMOriginalOnlyOnErrorBit		EQU		4
+
+kIPMNoNotificationMask			EQU		$00
+kIPMDeliveryNotificationMask	EQU		1
+kIPMNonDeliveryNotificationMask	EQU		2
+kIPMDontEncloseOriginalMask		EQU		$00
+kIPMEncloseOriginalMask			EQU		4
+kIPMImmediateReportMask			EQU		$00
+kIPMSummaryReportMask			EQU		8
+kIPMOriginalOnlyOnErrorMask		EQU		16
+kIPMEncloseOriginalOnErrorMask	EQU		20
+
+; standard Non delivery codes 
+kIPMNoSuchRecipient				EQU		$0001
+kIPMRecipientMalformed			EQU		$0002
+kIPMRecipientAmbiguous			EQU		$0003
+kIPMRecipientAccessDenied		EQU		$0004
+kIPMGroupExpansionProblem		EQU		$0005
+kIPMMsgUnreadable				EQU		$0006
+kIPMMsgExpired					EQU		$0007
+kIPMMsgNoTranslatableContent	EQU		$0008
+kIPMRecipientReqStdCont			EQU		$0009
+kIPMRecipientReqSnapShot		EQU		$000A
+kIPMNoTransferDiskFull			EQU		$000B
+kIPMNoTransferMsgRejectedbyDest	EQU		$000C
+kIPMNoTransferMsgTooLarge		EQU		$000D
+
+;***********************************************************************
+;
+;This is the structure that will be returned by enumerate and getmsginfo
+;This definition is just to give you a template, the position of msgType
+;is variable since this is a packed structure.  procHint and msgType are
+;packed and even length padded.
+;
+;* master message info 
+IPMMsgInfo 				RECORD	0
+sequenceNum				 ds.l   1		; offset: $0 (0)
+userData				 ds.l   1		; offset: $4 (4)
+respIndex				 ds.w   1		; offset: $8 (8)
+padByte					 ds.b   1		; offset: $A (10)
+priority				 ds.b   1		; offset: $B (11)
+msgSize					 ds.l   1		; offset: $C (12)
+originalRcptCount		 ds.w   1		; offset: $10 (16)
+reserved				 ds.w   1		; offset: $12 (18)
+creationTime			 ds.l   1		; offset: $14 (20)
+msgID					 ds     IPMMsgID ; offset: $18 (24)
+family					 ds.l   1		; offset: $28 (40)		; family this msg belongs (e.g. mail) 
+procHint				 ds.b   33		; offset: $2C (44)
+filler2					 ds.b   1		; offset: $4D (77)
+msgType					 ds     IPMMsgType ; offset: $4E (78)
+sizeof					 EQU *			; size:   $72 (114)
+						ENDR
+
+; typedef struct IPMMsgInfo  IPMMsgInfo
+; typedef OCECreatorType 	IPMBlockType
+IPMTOC 					RECORD	0
+blockType				 ds.l   2		; offset: $0 (0)
+blockOffset				 ds.l   1		; offset: $8 (8)
+blockSize				 ds.l   1		; offset: $C (12)
+blockRefCon				 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct IPMTOC 	IPMTOC
+;
+;The following structure is just to describe the layout of the SingleFilter.
+;Each field should be packed and word aligned when passed to the IPM ToolBox.
+;
+IPMSingleFilter 		RECORD	0
+priority				 ds.b   1		; offset: $0 (0)
+padByte					 ds.b   1		; offset: $1 (1)
+family					 ds.l   1		; offset: $2 (2)		; family this msg belongs (e.g. mail), '??^ for all 
+script					 ds.w   1		; offset: $6 (6)		; Language Identifier 
+hint					 ds.b   33		; offset: $8 (8)
+filler2					 ds.b   1		; offset: $29 (41)
+msgType					 ds     IPMMsgType ; offset: $2A (42)
+sizeof					 EQU *			; size:   $4E (78)
+						ENDR
+
+; typedef struct IPMSingleFilter  IPMSingleFilter
+IPMFilter 				RECORD	0
+count					 ds.w   1		; offset: $0 (0)
+sFilters				 ds     IPMSingleFilter ; offset: $2 (2)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct IPMFilter 	IPMFilter
+;************************************************************************
+;Following structures define the “start” of a recipient report block and the
+;elements of the array respectively.
+;
+IPMReportBlockHeader 	RECORD	0
+msgID					 ds     IPMMsgID ; offset: $0 (0)		; message id of the original 
+creationTime			 ds.l   1		; offset: $10 (16)		; creation time of the report 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct IPMReportBlockHeader  IPMReportBlockHeader
+OCERecipientReport 		RECORD	0
+rcptIndex				 ds.w   1		; offset: $0 (0)		; index of recipient in original message 
+result					 ds.w   1		; offset: $2 (2)		; result of sending letter to this recipient
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct OCERecipientReport  OCERecipientReport
+;***********************************************************************
+; typedef union IPMParamBlock  IPMParamBlock
+; typedef IPMParamBlock 	*IPMParamBlockPtr
+IPMOpenContextPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+contextRef				 ds.l   1		; offset: $18 (24)		; <--  Context reference to be used in further calls
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct IPMOpenContextPB  IPMOpenContextPB
+; typedef IPMOpenContextPB 	IPMCloseContextPB
+IPMCreateQueuePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+filler1					 ds.l   1		; offset: $18 (24)
+queue					 ds.l   1		; offset: $1C (28)
+identity				 ds.l   1		; offset: $20 (32)		; used only if queue is remote 
+owner					 ds.l   1		; offset: $24 (36)		; used only if queue is remote 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct IPMCreateQueuePB  IPMCreateQueuePB
+; For createqueue and deletequeue only queue and identity are used 
+; typedef IPMCreateQueuePB 	IPMDeleteQueuePB
+IPMOpenQueuePB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+contextRef				 ds.l   1		; offset: $18 (24)
+queue					 ds.l   1		; offset: $1C (28)
+identity				 ds.l   1		; offset: $20 (32)
+filter					 ds.l   1		; offset: $24 (36)
+newQueueRef				 ds.l   1		; offset: $28 (40)
+notificationProc		 ds.l   1		; offset: $2C (44)
+userData				 ds.l   1		; offset: $30 (48)
+noteType				 ds.b   1		; offset: $34 (52)
+padByte					 ds.b   1		; offset: $35 (53)
+reserved				 ds.l   1		; offset: $36 (54)
+reserved2				 ds.l   1		; offset: $3A (58)
+sizeof					 EQU *			; size:   $3E (62)
+						ENDR
+
+; typedef struct IPMOpenQueuePB  IPMOpenQueuePB
+IPMCloseQueuePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct IPMCloseQueuePB  IPMCloseQueuePB
+IPMEnumerateQueuePB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+startSeqNum				 ds.l   1		; offset: $1C (28)
+getProcHint				 ds.b   1		; offset: $20 (32)
+getMsgType				 ds.b   1		; offset: $21 (33)
+filler					 ds.w   1		; offset: $22 (34)
+filter					 ds.l   1		; offset: $24 (36)
+numToGet				 ds.w   1		; offset: $28 (40)
+numGotten				 ds.w   1		; offset: $2A (42)
+enumCount				 ds.l   1		; offset: $2C (44)
+enumBuffer				 ds.l   1		; offset: $30 (48)		; will be packed array of IPMMsgInfo 
+actEnumCount			 ds.l   1		; offset: $34 (52)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct IPMEnumerateQueuePB  IPMEnumerateQueuePB
+; typedef IPMEnumerateQueuePB  IPMChangeQueueFilterPB
+IPMDeleteMsgRangePB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+startSeqNum				 ds.l   1		; offset: $1C (28)
+endSeqNum				 ds.l   1		; offset: $20 (32)
+lastSeqNum				 ds.l   1		; offset: $24 (36)
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct IPMDeleteMsgRangePB  IPMDeleteMsgRangePB
+IPMOpenMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+queueRef				 ds.l   1		; offset: $18 (24)
+sequenceNum				 ds.l   1		; offset: $1C (28)
+newMsgRef				 ds.l   1		; offset: $20 (32)
+actualSeqNum			 ds.l   1		; offset: $24 (36)
+exactMatch				 ds.b   1		; offset: $28 (40)
+padByte					 ds.b   1		; offset: $29 (41)
+reserved				 ds.l   1		; offset: $2A (42)
+sizeof					 EQU *			; size:   $2E (46)
+						ENDR
+
+; typedef struct IPMOpenMsgPB  IPMOpenMsgPB
+IPMOpenHFSMsgPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+hfsPath					 ds.l   1		; offset: $18 (24)
+filler					 ds.l   1		; offset: $1C (28)
+newMsgRef				 ds.l   1		; offset: $20 (32)
+filler2					 ds.l   1		; offset: $24 (36)
+filler3					 ds.b   1		; offset: $28 (40)
+filler4					 ds.b   1		; offset: $29 (41)
+reserved				 ds.l   1		; offset: $2A (42)
+sizeof					 EQU *			; size:   $2E (46)
+						ENDR
+
+; typedef struct IPMOpenHFSMsgPB  IPMOpenHFSMsgPB
+IPMOpenBlockAsMsgPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+filler					 ds.l   1		; offset: $1C (28)
+newMsgRef				 ds.l   1		; offset: $20 (32)
+filler2					 ds.w   7		; offset: $24 (36)
+blockIndex				 ds.w   1		; offset: $32 (50)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct IPMOpenBlockAsMsgPB  IPMOpenBlockAsMsgPB
+IPMCloseMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+deleteMsg				 ds.b   1		; offset: $1C (28)
+filler1					 ds.b   1		; offset: $1D (29)
+sizeof					 EQU *			; size:   $1E (30)
+						ENDR
+
+; typedef struct IPMCloseMsgPB  IPMCloseMsgPB
+IPMGetMsgInfoPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+info					 ds.l   1		; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct IPMGetMsgInfoPB  IPMGetMsgInfoPB
+IPMReadHeaderPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+fieldSelector			 ds.w   1		; offset: $1C (28)
+offset					 ds.l   1		; offset: $1E (30)
+count					 ds.l   1		; offset: $22 (34)
+buffer					 ds.l   1		; offset: $26 (38)
+actualCount				 ds.l   1		; offset: $2A (42)
+filler					 ds.w   1		; offset: $2E (46)
+remaining				 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct IPMReadHeaderPB  IPMReadHeaderPB
+IPMReadRecipientPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+rcptIndex				 ds.w   1		; offset: $1C (28)
+offset					 ds.l   1		; offset: $1E (30)
+count					 ds.l   1		; offset: $22 (34)
+buffer					 ds.l   1		; offset: $26 (38)
+actualCount				 ds.l   1		; offset: $2A (42)
+reserved				 ds.w   1		; offset: $2E (46)		; must be zero 
+remaining				 ds.l   1		; offset: $30 (48)
+originalIndex			 ds.w   1		; offset: $34 (52)
+recipientOffsetFlags	 ds.b   1		; offset: $36 (54)
+filler1					 ds.b   1		; offset: $37 (55)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct IPMReadRecipientPB  IPMReadRecipientPB
+;
+;replyQueue works like recipient. [can no longer read it via ReadHeader]
+;OriginalIndex is meaningless, rcptFlags are used seperately and there are
+;currently none defined.
+;
+; typedef IPMReadRecipientPB  IPMReadReplyQueuePB
+IPMGetBlkIndexPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+blockType				 ds.l   2		; offset: $1C (28)
+index					 ds.w   1		; offset: $24 (36)
+startingFrom			 ds.w   1		; offset: $26 (38)
+actualBlockType			 ds.l   2		; offset: $28 (40)
+actualBlockIndex		 ds.w   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $32 (50)
+						ENDR
+
+; typedef struct IPMGetBlkIndexPB  IPMGetBlkIndexPB
+IPMReadMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+mode					 ds.w   1		; offset: $1C (28)
+offset					 ds.l   1		; offset: $1E (30)
+count					 ds.l   1		; offset: $22 (34)
+buffer					 ds.l   1		; offset: $26 (38)
+actualCount				 ds.l   1		; offset: $2A (42)
+blockIndex				 ds.w   1		; offset: $2E (46)
+remaining				 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct IPMReadMsgPB  IPMReadMsgPB
+IPMVerifySignaturePB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+signatureContext		 ds.l   1		; offset: $1C (28)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct IPMVerifySignaturePB  IPMVerifySignaturePB
+IPMNewMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+filler					 ds.l   1		; offset: $18 (24)
+recipient				 ds.l   1		; offset: $1C (28)
+replyQueue				 ds.l   1		; offset: $20 (32)
+procHint				 ds.l   1		; offset: $24 (36)
+filler2					 ds.w   1		; offset: $28 (40)
+msgType					 ds.l   1		; offset: $2A (42)
+refCon					 ds.l   1		; offset: $2E (46)
+newMsgRef				 ds.l   1		; offset: $32 (50)
+filler3					 ds.w   1		; offset: $36 (54)
+filler4					 ds.l   1		; offset: $38 (56)
+identity				 ds.l   1		; offset: $3C (60)
+sender					 ds.l   1		; offset: $40 (64)
+internalUse				 ds.l   1		; offset: $44 (68)
+internalUse2			 ds.l   1		; offset: $48 (72)
+sizeof					 EQU *			; size:   $4C (76)
+						ENDR
+
+; typedef struct IPMNewMsgPB  IPMNewMsgPB
+IPMNewHFSMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+hfsPath					 ds.l   1		; offset: $18 (24)
+recipient				 ds.l   1		; offset: $1C (28)
+replyQueue				 ds.l   1		; offset: $20 (32)
+procHint				 ds.l   1		; offset: $24 (36)
+filler2					 ds.w   1		; offset: $28 (40)
+msgType					 ds.l   1		; offset: $2A (42)
+refCon					 ds.l   1		; offset: $2E (46)
+newMsgRef				 ds.l   1		; offset: $32 (50)
+filler3					 ds.w   1		; offset: $36 (54)
+filler4					 ds.l   1		; offset: $38 (56)
+identity				 ds.l   1		; offset: $3C (60)
+sender					 ds.l   1		; offset: $40 (64)
+internalUse				 ds.l   1		; offset: $44 (68)
+internalUse2			 ds.l   1		; offset: $48 (72)
+sizeof					 EQU *			; size:   $4C (76)
+						ENDR
+
+; typedef struct IPMNewHFSMsgPB  IPMNewHFSMsgPB
+IPMNestMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+filler					 ds.w   9		; offset: $1C (28)
+refCon					 ds.l   1		; offset: $2E (46)
+msgToNest				 ds.l   1		; offset: $32 (50)
+filler2					 ds.w   1		; offset: $36 (54)
+startingOffset			 ds.l   1		; offset: $38 (56)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct IPMNestMsgPB  IPMNestMsgPB
+IPMNewNestedMsgBlockPB 	RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+recipient				 ds.l   1		; offset: $1C (28)
+replyQueue				 ds.l   1		; offset: $20 (32)
+procHint				 ds.l   1		; offset: $24 (36)
+filler1					 ds.w   1		; offset: $28 (40)
+msgType					 ds.l   1		; offset: $2A (42)
+refCon					 ds.l   1		; offset: $2E (46)
+newMsgRef				 ds.l   1		; offset: $32 (50)
+filler2					 ds.w   1		; offset: $36 (54)
+startingOffset			 ds.l   1		; offset: $38 (56)
+identity				 ds.l   1		; offset: $3C (60)
+sender					 ds.l   1		; offset: $40 (64)
+internalUse				 ds.l   1		; offset: $44 (68)
+internalUse2			 ds.l   1		; offset: $48 (72)
+sizeof					 EQU *			; size:   $4C (76)
+						ENDR
+
+; typedef struct IPMNewNestedMsgBlockPB  IPMNewNestedMsgBlockPB
+IPMEndMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+msgID					 ds     IPMMsgID ; offset: $1C (28)
+msgTitle				 ds.l   1		; offset: $2C (44)
+deliveryNotification	 ds.b   1		; offset: $30 (48)
+priority				 ds.b   1		; offset: $31 (49)
+cancel					 ds.b   1		; offset: $32 (50)
+padByte					 ds.b   1		; offset: $33 (51)
+reserved				 ds.l   1		; offset: $34 (52)
+signature				 ds.l   1		; offset: $38 (56)
+signatureSize			 ds.l   1		; offset: $3C (60)
+signatureContext		 ds.l   1		; offset: $40 (64)
+; family this msg belongs (e.g. mail) use kIPMFamilyUnspecified by default 
+family					 ds.l   1		; offset: $44 (68)
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct IPMEndMsgPB  IPMEndMsgPB
+IPMAddRecipientPB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+recipient				 ds.l   1		; offset: $1C (28)
+reserved				 ds.l   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct IPMAddRecipientPB  IPMAddRecipientPB
+IPMAddReplyQueuePB 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+filler					 ds.l   1		; offset: $1C (28)
+replyQueue				 ds.l   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct IPMAddReplyQueuePB  IPMAddReplyQueuePB
+IPMNewBlockPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+blockType				 ds.l   2		; offset: $1C (28)
+filler					 ds.w   5		; offset: $24 (36)
+refCon					 ds.l   1		; offset: $2E (46)
+filler2					 ds.w   3		; offset: $32 (50)
+startingOffset			 ds.l   1		; offset: $38 (56)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct IPMNewBlockPB  IPMNewBlockPB
+IPMWriteMsgPB 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+msgRef					 ds.l   1		; offset: $18 (24)
+mode					 ds.w   1		; offset: $1C (28)
+offset					 ds.l   1		; offset: $1E (30)
+count					 ds.l   1		; offset: $22 (34)
+buffer					 ds.l   1		; offset: $26 (38)
+actualCount				 ds.l   1		; offset: $2A (42)
+currentBlock			 ds.b   1		; offset: $2E (46)
+filler1					 ds.b   1		; offset: $2F (47)
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct IPMWriteMsgPB  IPMWriteMsgPB
+IPMParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+reservedH1				 ds.l   1		; offset: $4 (4)
+reservedH2				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+saveA5					 ds.l   1		; offset: $12 (18)
+reqCode					 ds.w   1		; offset: $16 (22)
+						 ORG 0
+openContextPB			 ds     IPMOpenContextPB ; offset: $0 (0)
+						 ORG 0
+closeContextPB			 ds.l   7		; offset: $0 (0)
+						 ORG 0
+createQueuePB			 ds     IPMCreateQueuePB ; offset: $0 (0)
+						 ORG 0
+deleteQueuePB			 ds.l   10		; offset: $0 (0)
+						 ORG 0
+openQueuePB				 ds     IPMOpenQueuePB ; offset: $0 (0)
+						 ORG 0
+closeQueuePB			 ds     IPMCloseQueuePB ; offset: $0 (0)
+						 ORG 0
+enumerateQueuePB		 ds     IPMEnumerateQueuePB ; offset: $0 (0)
+						 ORG 0
+changeQueueFilterPB		 ds.l   14		; offset: $0 (0)
+						 ORG 0
+deleteMsgRangePB		 ds     IPMDeleteMsgRangePB ; offset: $0 (0)
+						 ORG 0
+openMsgPB				 ds     IPMOpenMsgPB ; offset: $0 (0)
+						 ORG 0
+openHFSMsgPB			 ds     IPMOpenHFSMsgPB ; offset: $0 (0)
+						 ORG 0
+openBlockAsMsgPB		 ds     IPMOpenBlockAsMsgPB ; offset: $0 (0)
+						 ORG 0
+closeMsgPB				 ds     IPMCloseMsgPB ; offset: $0 (0)
+						 ORG 0
+getMsgInfoPB			 ds     IPMGetMsgInfoPB ; offset: $0 (0)
+						 ORG 0
+readHeaderPB			 ds     IPMReadHeaderPB ; offset: $0 (0)
+						 ORG 0
+readRecipientPB			 ds     IPMReadRecipientPB ; offset: $0 (0)
+						 ORG 0
+readReplyQueuePB		 ds.l   14		; offset: $0 (0)
+						 ORG 0
+getBlkIndexPB			 ds     IPMGetBlkIndexPB ; offset: $0 (0)
+						 ORG 0
+readMsgPB				 ds     IPMReadMsgPB ; offset: $0 (0)
+						 ORG 0
+verifySignaturePB		 ds     IPMVerifySignaturePB ; offset: $0 (0)
+						 ORG 0
+newMsgPB				 ds     IPMNewMsgPB ; offset: $0 (0)
+						 ORG 0
+newHFSMsgPB				 ds     IPMNewHFSMsgPB ; offset: $0 (0)
+						 ORG 0
+nestMsgPB				 ds     IPMNestMsgPB ; offset: $0 (0)
+						 ORG 0
+newNestedMsgBlockPB		 ds     IPMNewNestedMsgBlockPB ; offset: $0 (0)
+						 ORG 0
+endMsgPB				 ds     IPMEndMsgPB ; offset: $0 (0)
+						 ORG 0
+addRecipientPB			 ds     IPMAddRecipientPB ; offset: $0 (0)
+						 ORG 0
+addReplyQueuePB			 ds     IPMAddReplyQueuePB ; offset: $0 (0)
+						 ORG 0
+newBlockPB				 ds     IPMNewBlockPB ; offset: $0 (0)
+						 ORG 0
+writeMsgPB				 ds     IPMWriteMsgPB ; offset: $0 (0)
+						 ORG 76
+sizeof					 EQU *			; size:   $4C (76)
+						ENDR
+
+;
+; pascal OSErr IPMOpenContext(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMOpenContext
+			move.w	#$400,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMOpenContext
+	ENDIF
+
+;
+; pascal OSErr IPMCloseContext(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMCloseContext
+			move.w	#$401,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMCloseContext
+	ENDIF
+
+;
+; pascal OSErr IPMNewMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMNewMsg
+			move.w	#$402,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMNewMsg
+	ENDIF
+
+;
+; pascal OSErr IPMNewBlock(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMNewBlock
+			move.w	#$404,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMNewBlock
+	ENDIF
+
+;
+; pascal OSErr IPMNewNestedMsgBlock(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMNewNestedMsgBlock
+			move.w	#$405,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMNewNestedMsgBlock
+	ENDIF
+
+;
+; pascal OSErr IPMNestMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMNestMsg
+			move.w	#$406,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMNestMsg
+	ENDIF
+
+;
+; pascal OSErr IPMWriteMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMWriteMsg
+			move.w	#$407,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMWriteMsg
+	ENDIF
+
+;
+; pascal OSErr IPMEndMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMEndMsg
+			move.w	#$408,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMEndMsg
+	ENDIF
+
+;
+; pascal OSErr IPMOpenQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMOpenQueue
+			move.w	#$409,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMOpenQueue
+	ENDIF
+
+;
+; pascal OSErr IPMCloseQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMCloseQueue
+			move.w	#$40A,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMCloseQueue
+	ENDIF
+
+; Always synchronous 
+;
+; pascal OSErr IPMVerifySignature(IPMParamBlockPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMVerifySignature
+			moveq	#0,d0
+			dc.w 	$1F00
+			move.w	#$422,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMVerifySignature
+	ENDIF
+
+;
+; pascal OSErr IPMOpenMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMOpenMsg
+			move.w	#$40B,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMOpenMsg
+	ENDIF
+
+;
+; pascal OSErr IPMCloseMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMCloseMsg
+			move.w	#$40C,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMCloseMsg
+	ENDIF
+
+;
+; pascal OSErr IPMReadMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMReadMsg
+			move.w	#$40D,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMReadMsg
+	ENDIF
+
+;
+; pascal OSErr IPMReadHeader(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMReadHeader
+			move.w	#$40E,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMReadHeader
+	ENDIF
+
+;
+; pascal OSErr IPMOpenBlockAsMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMOpenBlockAsMsg
+			move.w	#$40F,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMOpenBlockAsMsg
+	ENDIF
+
+;
+; pascal OSErr IPMNewHFSMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMNewHFSMsg
+			move.w	#$41E,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMNewHFSMsg
+	ENDIF
+
+;
+; pascal OSErr IPMReadRecipient(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMReadRecipient
+			move.w	#$410,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMReadRecipient
+	ENDIF
+
+;
+; pascal OSErr IPMReadReplyQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMReadReplyQueue
+			move.w	#$421,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMReadReplyQueue
+	ENDIF
+
+;
+; pascal OSErr IPMCreateQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMCreateQueue
+			move.w	#$411,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMCreateQueue
+	ENDIF
+
+;
+; pascal OSErr IPMDeleteQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMDeleteQueue
+			move.w	#$412,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMDeleteQueue
+	ENDIF
+
+;
+; pascal OSErr IPMEnumerateQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMEnumerateQueue
+			move.w	#$413,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMEnumerateQueue
+	ENDIF
+
+;
+; pascal OSErr IPMChangeQueueFilter(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMChangeQueueFilter
+			move.w	#$414,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMChangeQueueFilter
+	ENDIF
+
+;
+; pascal OSErr IPMDeleteMsgRange(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMDeleteMsgRange
+			move.w	#$415,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMDeleteMsgRange
+	ENDIF
+
+;
+; pascal OSErr IPMAddRecipient(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMAddRecipient
+			move.w	#$403,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMAddRecipient
+	ENDIF
+
+;
+; pascal OSErr IPMAddReplyQueue(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMAddReplyQueue
+			move.w	#$41D,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMAddReplyQueue
+	ENDIF
+
+;
+; pascal OSErr IPMOpenHFSMsg(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMOpenHFSMsg
+			move.w	#$417,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMOpenHFSMsg
+	ENDIF
+
+;
+; pascal OSErr IPMGetBlkIndex(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMGetBlkIndex
+			move.w	#$418,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMGetBlkIndex
+	ENDIF
+
+;
+; pascal OSErr IPMGetMsgInfo(IPMParamBlockPtr paramBlock, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IPMGetMsgInfo
+			move.w	#$419,-(sp)
+			dc.w 	$AA5E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IPMGetMsgInfo
+	ENDIF
+
+	ENDIF ; __OCEMESSAGING__

@@ -1,0 +1,1069 @@
+;
+;    File:       NameRegistry.a
+;
+;    Contains:   NameRegistry Interfaces
+;
+;    Version:    Technology: MacOS
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+__NAMEREGISTRY__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+; *******************************************************************************
+; * 
+; * Foundation Types
+; *
+; 
+
+;  Value of a property 
+; typedef void *						RegPropertyValue
+
+;  Length of property value 
+; typedef UInt32 						RegPropertyValueSize
+
+; *******************************************************************************
+; * 
+; * RegEntryID   :   The Global x-Namespace Entry Identifier
+; *
+; 
+
+RegEntryID				RECORD 0
+contents				 ds.l	4				; offset: $0 (0)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct RegEntryID *			RegEntryIDPtr
+
+; *******************************************************************************
+; *
+; * Root Entry Name Definitions  (Applies to all Names in the RootNameSpace)
+; *
+; *  • Names are a colon-separated list of name components.  Name components
+; *    may not themselves contain colons.  
+; *  • Names are presented as null-terminated ASCII character strings.
+; *  • Names follow similar parsing rules to Apple file system absolute
+; *    and relative paths.  However the '::' parent directory syntax is
+; *    not currently supported.
+; 
+
+;  Max length of Entry Name 
+
+kRegCStrMaxEntryNameLength		EQU		47
+;  Entry Names are single byte ASCII 
+; typedef char 							RegCStrEntryName
+
+; typedef char *						RegCStrEntryNamePtr
+
+;  length of RegCStrEntryNameBuf =  kRegCStrMaxEntryNameLength+1
+RegCStrEntryNameBuf		RECORD 0
+elements				 ds.b	48
+sizeof					 EQU *					; size:   $30 (48)
+						ENDR
+
+
+; typedef char 							RegCStrPathName
+
+; typedef UInt32 						RegPathNameSize
+
+
+kRegPathNameSeparator			EQU		58					; 0x3A 
+kRegEntryNameTerminator			EQU		$00					; '\0' 
+kRegPathNameTerminator			EQU		$00					; '\0' 
+; *******************************************************************************
+; *
+; * Property Name and ID Definitions
+; *  (Applies to all Properties Regardless of NameSpace)
+; 
+
+
+kRegMaximumPropertyNameLength	EQU		31					; Max length of Property Name 
+kRegPropertyNameTerminator		EQU		$00					; '\0' 
+RegPropertyNameBuf		RECORD 0
+elements				 ds.b	32
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+; typedef char 							RegPropertyName
+
+; typedef char *						RegPropertyNamePtr
+
+; *******************************************************************************
+; *
+; * Iteration Operations
+; *
+; *  These specify direction when traversing the name relationships
+; 
+
+; typedef UInt32 						RegIterationOp
+
+; typedef RegIterationOp 				RegEntryIterationOp
+
+
+															; Absolute locations
+kRegIterRoot					EQU		$00000002			; "Upward" Relationships 
+kRegIterParents					EQU		$00000003			; include all  parent(s) of entry 
+															; "Downward" Relationships
+kRegIterChildren				EQU		$00000004			; include all children 
+kRegIterSubTrees				EQU		$00000005			; include all sub trees of entry 
+kRegIterDescendants				EQU		$00000005			; include all descendants of entry 
+															; "Horizontal" Relationships 
+kRegIterSibling					EQU		$00000006			; include all siblings 
+															; Keep doing the same thing
+kRegIterContinue				EQU		$00000001
+; *******************************************************************************
+; *
+; * Name Entry and Property Modifiers
+; *
+; *
+; *
+; * Modifiers describe special characteristics of names
+; * and properties.  Modifiers might be supported for
+; * some names and not others.
+; * 
+; * Device Drivers should not rely on functionality
+; * specified as a modifier.
+; 
+
+; typedef UInt32 						RegModifiers
+
+; typedef RegModifiers 					RegEntryModifiers
+
+; typedef RegModifiers 					RegPropertyModifiers
+
+
+kRegNoModifiers					EQU		$00000000			; no entry modifiers in place 
+kRegUniversalModifierMask		EQU		$0000FFFF			; mods to all entries 
+kRegNameSpaceModifierMask		EQU		$00FF0000			; mods to all entries within namespace 
+kRegModifierMask				EQU		$FF000000			; mods to just this entry 
+;  Universal Property Modifiers 
+
+kRegPropertyValueIsSavedToNVRAM	EQU		$00000020			; property is non-volatile (saved in NVRAM) 
+kRegPropertyValueIsSavedToDisk	EQU		$00000040			; property is non-volatile (saved on disk) 
+;  NameRegistry version, Gestalt/PEF-style -- MUST BE KEPT IN SYNC WITH MAKEFILE !! 
+
+LatestNR_PEFVersion				EQU		$01030000			; latest NameRegistryLib version (Gestalt/PEF-style) 
+;  ///////////////////////
+;//
+;// The Registry API
+;//
+;/////////////////////// 
+
+;  NameRegistry dispatch indexes 
+
+kSelectRegistryEntryIDInit		EQU		0
+kSelectRegistryEntryIDCompare	EQU		1
+kSelectRegistryEntryIDCopy		EQU		2
+kSelectRegistryEntryIDDispose	EQU		3
+kSelectRegistryCStrEntryCreate	EQU		4
+kSelectRegistryEntryDelete		EQU		5
+kSelectRegistryEntryCopy		EQU		6
+kSelectRegistryEntryIterateCreate EQU	7
+kSelectRegistryEntryIterateDispose EQU	8
+kSelectRegistryEntryIterateSet	EQU		9
+kSelectRegistryEntryIterate		EQU		10
+kSelectRegistryEntrySearch		EQU		11
+kSelectRegistryCStrEntryLookup	EQU		12
+kSelectRegistryEntryToPathSize	EQU		13
+kSelectRegistryCStrEntryToPath	EQU		14
+kSelectRegistryCStrEntryToName	EQU		15
+kSelectRegistryPropertyCreate	EQU		16
+kSelectRegistryPropertyDelete	EQU		17
+kSelectRegistryPropertyRename	EQU		18
+kSelectRegistryPropertyIterateCreate EQU 19
+kSelectRegistryPropertyIterateDispose EQU 20
+kSelectRegistryPropertyIterate	EQU		21
+kSelectRegistryPropertyGetSize	EQU		22
+kSelectRegistryPropertyGet		EQU		23
+kSelectRegistryPropertySet		EQU		24
+kSelectRegistryEntryGetMod		EQU		25
+kSelectRegistryEntrySetMod		EQU		26
+kSelectRegistryPropertyGetMod	EQU		27
+kSelectRegistryPropertySetMod	EQU		28
+kSelectRegistryEntryMod			EQU		29
+kSelectRegistryEntryPropertyMod	EQU		30					; if you add more selectors here, remember to change 'kSelectRegistryHighestSelector' below
+kSelectRegistryHighestSelector	EQU		30
+
+;  ///////////////////////
+;//
+;// Entry Management
+;//
+;/////////////////////// 
+
+
+; -------------------------------
+; * EntryID handling
+; 
+
+; 
+; * Initialize an EntryID to a known invalid state
+; *   note: invalid != uninitialized
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  RegistryEntryIDInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIDInit(RegEntryID *id)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIDInit
+			moveq           	#0,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIDInit
+	ENDIF
+
+; 
+; * Compare EntryID's for equality or if invalid
+; *
+; * If a NULL value is given for either id1 or id2, the other id 
+; * is compared with an invalid ID.  If both are NULL, the id's 
+; * are consided equal (result = true). 
+; 
+
+
+; *  RegistryEntryIDCompare()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean RegistryEntryIDCompare(const RegEntryID *id1, const RegEntryID *id2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIDCompare
+			moveq           	#1,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIDCompare
+	ENDIF
+
+; 
+; * Copy an EntryID
+; 
+
+
+; *  RegistryEntryIDCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIDCopy(const RegEntryID *src, RegEntryID *dst)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIDCopy
+			moveq           	#2,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIDCopy
+	ENDIF
+
+; 
+; * Free an ID so it can be reused.
+; 
+
+
+; *  RegistryEntryIDDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIDDispose(RegEntryID *id)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIDDispose
+			moveq           	#3,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIDDispose
+	ENDIF
+
+; -------------------------------
+; * Adding and removing entries
+; *
+; * If (parentEntry) is NULL, the name is assumed
+; * to be a rooted path. It is rooted to an anonymous, unnamed root.
+; 
+
+
+; *  RegistryCStrEntryCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryCStrEntryCreate(const RegEntryID *parentEntry, const RegCStrPathName *name, RegEntryID *newEntry)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryCStrEntryCreate
+			moveq           	#4,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryCStrEntryCreate
+	ENDIF
+
+
+; *  RegistryEntryDelete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryDelete(const RegEntryID *id)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryDelete
+			moveq           	#5,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryDelete
+	ENDIF
+
+
+; *  RegistryEntryCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryCopy(RegEntryID *parentEntryID, RegEntryID *sourceDevice, RegEntryID *destDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryCopy
+			moveq           	#6,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryCopy
+	ENDIF
+
+; ---------------------------
+; * Traversing the namespace
+; *
+; * To support arbitrary namespace implementations in the future,
+; * I have hidden the form that the place pointer takes.  The previous
+; * interface exposed the place pointer by specifying it as a
+; * RegEntryID.
+; *
+; * I have also removed any notion of returning the entries
+; * in a particular order, because an implementation might
+; * return the names in semi-random order.  Many name service
+; * implementations will store the names in a hashed lookup
+; * table.
+; *
+; * Writing code to traverse some set of names consists of
+; * a call to begin the iteration, the iteration loop, and
+; * a call to end the iteration.  The begin call initializes
+; * the iteration cookie data structure.  The call to end the 
+; * iteration should be called even in the case of error so 
+; * that allocated data structures can be freed.
+; *
+; *  Create(...)
+; *  do {
+; *      Iterate(...);
+; *  } while (!done);
+; *  Dispose(...);
+; *
+; * This is the basic code structure for callers of the iteration
+; * interface.
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+
+;  
+; * create/dispose the iterator structure
+; *   defaults to root with relationship = kRegIterDescendants
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  RegistryEntryIterateCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIterateCreate(RegEntryIter *cookie)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIterateCreate
+			moveq           	#7,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIterateCreate
+	ENDIF
+
+
+; *  RegistryEntryIterateDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIterateDispose(RegEntryIter *cookie)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIterateDispose
+			moveq           	#8,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIterateDispose
+	ENDIF
+
+;  
+; * set Entry Iterator to specified entry
+; 
+
+
+; *  RegistryEntryIterateSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIterateSet(RegEntryIter *cookie, const RegEntryID *startEntryID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIterateSet
+			moveq           	#9,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIterateSet
+	ENDIF
+
+; 
+; * Return each value of the iteration
+; *
+; * return entries related to the current entry
+; * with the specified relationship
+; 
+
+
+; *  RegistryEntryIterate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryIterate(RegEntryIter *cookie, RegEntryIterationOp relationship, RegEntryID *foundEntry, Boolean *done)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryIterate
+			moveq           	#10,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryIterate
+	ENDIF
+
+; 
+; * return entries with the specified property
+; *
+; * A NULL RegPropertyValue pointer will return an
+; * entry with the property containing any value.
+; 
+
+
+; *  RegistryEntrySearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntrySearch(RegEntryIter *cookie, RegEntryIterationOp relationship, RegEntryID *foundEntry, Boolean *done, const RegPropertyName *propertyName, const void *propertyValue, RegPropertyValueSize propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntrySearch
+			moveq           	#11,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntrySearch
+	ENDIF
+
+; --------------------------------
+; * Find a name in the namespace
+; *
+; * This is the fast lookup mechanism.
+; * NOTE:  A reverse lookup mechanism
+; *    has not been provided because
+; *        some name services may not
+; *        provide a fast, general reverse
+; *        lookup.
+; 
+
+
+; *  RegistryCStrEntryLookup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryCStrEntryLookup(const RegEntryID *searchPointID, const RegCStrPathName *pathName, RegEntryID *foundEntry)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryCStrEntryLookup
+			moveq           	#12,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryCStrEntryLookup
+	ENDIF
+
+; ---------------------------------------------
+; * Convert an entry to a rooted name string
+; *
+; * A utility routine to turn an Entry ID
+; * back into a name string.
+; 
+
+
+; *  RegistryEntryToPathSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryToPathSize(const RegEntryID *entryID, RegPathNameSize *pathSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryToPathSize
+			moveq           	#13,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryToPathSize
+	ENDIF
+
+
+; *  RegistryCStrEntryToPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryCStrEntryToPath(const RegEntryID *entryID, RegCStrPathName *pathName, RegPathNameSize pathSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryCStrEntryToPath
+			moveq           	#14,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryCStrEntryToPath
+	ENDIF
+
+; 
+; * Parse a path name.
+; *
+; * Retrieve the last component of the path, and
+; * return a spec for the parent.
+; 
+
+
+; *  RegistryCStrEntryToName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryCStrEntryToName(const RegEntryID *entryID, RegEntryID *parentEntry, RegCStrEntryName *nameComponent, Boolean *done)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryCStrEntryToName
+			moveq           	#15,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryCStrEntryToName
+	ENDIF
+
+;  //////////////////////////////////////////////////////
+;//
+;// Property Management
+;//
+;////////////////////////////////////////////////////// 
+
+; -------------------------------
+; * Adding and removing properties
+; 
+
+
+; *  RegistryPropertyCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyCreate(const RegEntryID *entryID, const RegPropertyName *propertyName, const void *propertyValue, RegPropertyValueSize propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyCreate
+			moveq           	#16,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyCreate
+	ENDIF
+
+
+; *  RegistryPropertyDelete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyDelete(const RegEntryID *entryID, const RegPropertyName *propertyName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyDelete
+			moveq           	#17,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyDelete
+	ENDIF
+
+
+; *  RegistryPropertyRename()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyRename(const RegEntryID *entry, const RegPropertyName *oldName, const RegPropertyName *newName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyRename
+			moveq           	#18,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyRename
+	ENDIF
+
+; ---------------------------
+; * Traversing the Properties of a name
+; *
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  RegistryPropertyIterateCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyIterateCreate(const RegEntryID *entry, RegPropertyIter *cookie)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyIterateCreate
+			moveq           	#19,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyIterateCreate
+	ENDIF
+
+
+; *  RegistryPropertyIterateDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyIterateDispose(RegPropertyIter *cookie)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyIterateDispose
+			moveq           	#20,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyIterateDispose
+	ENDIF
+
+
+; *  RegistryPropertyIterate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyIterate(RegPropertyIter *cookie, RegPropertyName *foundProperty, Boolean *done)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyIterate
+			moveq           	#21,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyIterate
+	ENDIF
+
+; 
+; * Get the value of the specified property for the specified entry.
+; *
+; 
+
+
+; *  RegistryPropertyGetSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyGetSize(const RegEntryID *entryID, const RegPropertyName *propertyName, RegPropertyValueSize *propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyGetSize
+			moveq           	#22,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyGetSize
+	ENDIF
+
+; 
+; * (*propertySize) is the maximum size of the value returned in the buffer
+; * pointed to by (propertyValue).  Upon return, (*propertySize) is the size of the
+; * value returned.
+; 
+
+
+; *  RegistryPropertyGet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyGet(const RegEntryID *entryID, const RegPropertyName *propertyName, void *propertyValue, RegPropertyValueSize *propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyGet
+			moveq           	#23,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyGet
+	ENDIF
+
+
+; *  RegistryPropertySet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertySet(const RegEntryID *entryID, const RegPropertyName *propertyName, const void *propertyValue, RegPropertyValueSize propertySize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertySet
+			moveq           	#24,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertySet
+	ENDIF
+
+;  //////////////////////////////////////////////////////
+;//
+;// Modifier Management
+;//
+;////////////////////////////////////////////////////// 
+
+; 
+; * Modifiers describe special characteristics of names
+; * and properties.  Modifiers might be supported for
+; * some names and not others.
+; * 
+; * Device Drivers should not rely on functionality
+; * specified as a modifier.  These interfaces
+; * are for use in writing Experts.
+; 
+
+; 
+; * Get and Set operators for entry modifiers
+; 
+
+
+; *  RegistryEntryGetMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryGetMod(const RegEntryID *entry, RegEntryModifiers *modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryGetMod
+			moveq           	#25,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryGetMod
+	ENDIF
+
+
+; *  RegistryEntrySetMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntrySetMod(const RegEntryID *entry, RegEntryModifiers modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntrySetMod
+			moveq           	#26,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntrySetMod
+	ENDIF
+
+; 
+; * Get and Set operators for property modifiers
+; 
+
+
+; *  RegistryPropertyGetMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertyGetMod(const RegEntryID *entry, const RegPropertyName *name, RegPropertyModifiers *modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertyGetMod
+			moveq           	#27,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertyGetMod
+	ENDIF
+
+
+; *  RegistryPropertySetMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryPropertySetMod(const RegEntryID *entry, const RegPropertyName *name, RegPropertyModifiers modifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryPropertySetMod
+			moveq           	#28,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryPropertySetMod
+	ENDIF
+
+; 
+; * Iterator operator for entry modifier search
+; 
+
+
+; *  RegistryEntryMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryMod(RegEntryIter *cookie, RegEntryIterationOp relationship, RegEntryID *foundEntry, Boolean *done, RegEntryModifiers matchingModifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryMod
+			moveq           	#29,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryMod
+	ENDIF
+
+; 
+; * Iterator operator for entries with matching 
+; * property modifiers
+; 
+
+
+; *  RegistryEntryPropertyMod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NameRegistryLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RegistryEntryPropertyMod(RegEntryIter *cookie, RegEntryIterationOp relationship, RegEntryID *foundEntry, Boolean *done, RegPropertyModifiers matchingModifiers)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegistryEntryPropertyMod
+			moveq           	#30,D0
+			dc.w            	$ABE9
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegistryEntryPropertyMod
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __NAMEREGISTRY__ 
+

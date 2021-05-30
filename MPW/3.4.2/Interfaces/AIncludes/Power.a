@@ -1,0 +1,870 @@
+;
+;	File:		Power.a
+;
+;	Contains:	Power Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__POWER__') = 'UNDEFINED' THEN
+__POWER__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+; Bit positions for ModemByte 
+modemOnBit						EQU		0
+ringWakeUpBit					EQU		2
+modemInstalledBit				EQU		3
+ringDetectBit					EQU		4
+modemOnHookBit					EQU		5
+; masks for ModemByte 
+modemOnMask						EQU		$01
+ringWakeUpMask					EQU		$04
+modemInstalledMask				EQU		$08
+ringDetectMask					EQU		$10
+modemOnHookMask					EQU		$20
+; bit positions for BatteryByte 
+chargerConnBit					EQU		0
+hiChargeBit						EQU		1
+chargeOverFlowBit				EQU		2
+batteryDeadBit					EQU		3
+batteryLowBit					EQU		4
+connChangedBit					EQU		5
+; masks for BatteryByte 
+chargerConnMask					EQU		$01
+hiChargeMask					EQU		$02
+chargeOverFlowMask				EQU		$04
+batteryDeadMask					EQU		$08
+batteryLowMask					EQU		$10
+connChangedMask					EQU		$20
+
+; commands to SleepQRec sleepQProc 
+sleepRequest					EQU		1
+sleepDemand						EQU		2
+sleepWakeUp						EQU		3
+sleepRevoke						EQU		4
+sleepUnlock						EQU		4
+sleepDeny						EQU		5
+sleepNow						EQU		6
+dozeDemand						EQU		7
+dozeWakeUp						EQU		8
+dozeRequest						EQU		9
+; SleepQRec.sleepQFlags 
+noCalls							EQU		1
+noRequest						EQU		2
+slpQType						EQU		16
+sleepQType						EQU		16
+
+; bits in bitfield returned by PMFeatures 
+hasWakeupTimer					EQU		0					; 1=wakeup timer is supported						
+hasSharedModemPort				EQU		1					; 1=modem port shared by SCC and internal modem	
+hasProcessorCycling				EQU		2					; 1=processor cycling is supported					
+mustProcessorCycle				EQU		3					; 1=processor cycling should not be turned off		
+hasReducedSpeed					EQU		4					; 1=processor can be started up at reduced speed	
+dynamicSpeedChange				EQU		5					; 1=processor speed can be switched dynamically	
+hasSCSIDiskMode					EQU		6					; 1=SCSI Disk Mode is supported					
+canGetBatteryTime				EQU		7					; 1=battery time can be calculated					
+canWakeupOnRing					EQU		8					; 1=can wakeup when the modem detects a ring		
+hasDimmingSupport				EQU		9					; 1=has dimming support built in					
+hasStartupTimer					EQU		10					; 1=startup timer is supported						
+
+; bits in bitfield returned by GetIntModemInfo and set by SetIntModemState 
+hasInternalModem				EQU		0					; 1=internal modem installed						
+intModemRingDetect				EQU		1					; 1=internal modem has detected a ring				
+intModemOffHook					EQU		2					; 1=internal modem is off hook						
+intModemRingWakeEnb				EQU		3					; 1=wakeup on ring is enabled						
+extModemSelected				EQU		4					; 1=external modem selected						
+modemSetBit						EQU		15					; 1=set bit, 0=clear bit (SetIntModemState)		
+
+; bits in BatteryInfo.flags 									
+; ("chargerConnected" doesn't mean the charger is plugged in)	
+batteryInstalled				EQU		7					; 1=battery is currently connected					
+batteryCharging					EQU		6					; 1=battery is being charged						
+chargerConnected				EQU		5					; 1=charger is connected to the PowerBook			
+
+HDPwrQType						EQU		'HD'				; hard disk spindown queue element type			
+PMgrStateQType					EQU		'PM'
+
+; typedef struct BatteryInfo  BatteryInfo
+BatteryInfo 			RECORD	0
+flags					 ds.b   1		; offset: $0 (0)		; misc flags (see below)							
+warningLevel			 ds.b   1		; offset: $1 (1)		; scaled warning level (0-255)						
+reserved				 ds.b   1		; offset: $2 (2)		; reserved for internal use						
+batteryLevel			 ds.b   1		; offset: $3 (3)		; scaled battery level (0-255)						
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef SInt8 			ModemByte
+; typedef SInt8 			BatteryByte
+; typedef long 				PMResultCode
+; typedef struct SleepQRec 	SleepQRec, *SleepQRecPtr
+; typedef struct HDQueueElement  HDQueueElement
+SleepQRec 				RECORD	0
+sleepQLink				 ds.l   1		; offset: $0 (0)		; pointer to next queue element				
+sleepQType				 ds.w   1		; offset: $4 (4)		; queue element type (must be SleepQType)		
+sleepQProc				 ds.l   1		; offset: $6 (6)		; pointer to sleep universal proc ptr			
+sleepQFlags				 ds.w   1		; offset: $A (10)		; flags										
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+HDQueueElement 			RECORD	0
+hdQLink					 ds.l   1		; offset: $0 (0)		; pointer to next queue element				
+hdQType					 ds.w   1		; offset: $4 (4)		; queue element type (must be HDPwrQType)		
+hdFlags					 ds.w   1		; offset: $6 (6)		; miscellaneous flags							
+hdProc					 ds.l   1		; offset: $8 (8)		; pointer to routine to call					
+hdUser					 ds.l   1		; offset: $C (12)		; user-defined (variable storage, etc.)		
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct BatteryTimeRec  BatteryTimeRec
+BatteryTimeRec 			RECORD	0
+expectedBatteryTime		 ds.l   1		; offset: $0 (0)		; estimated battery time remaining (seconds)	
+minimumBatteryTime		 ds.l   1		; offset: $4 (4)		; minimum battery time remaining (seconds)		
+maximumBatteryTime		 ds.l   1		; offset: $8 (8)		; maximum battery time remaining (seconds)		
+timeUntilCharged		 ds.l   1		; offset: $C (12)		; time until battery is fully charged (seconds)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct WakeupTime  WakeupTime
+WakeupTime 				RECORD	0
+wakeTime				 ds.l   1		; offset: $0 (0)		; wakeup time (same format as current time)		
+wakeEnabled				 ds.b   1		; offset: $4 (4)		; 1=enable wakeup timer, 0=disable wakeup timer	
+filler					 ds.b   1		; offset: $5 (5)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct StartupTime  StartupTime
+StartupTime 			RECORD	0
+startTime				 ds.l   1		; offset: $0 (0)		; startup time (same format as current time)		
+startEnabled			 ds.b   1		; offset: $4 (4)		; 1=enable startup timer, 0=disable startup timer	
+filler					 ds.b   1		; offset: $5 (5)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+;
+; pascal OSErr DisableWUTime(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DisableWUTime
+	ENDIF
+
+;
+; pascal OSErr SetWUTime(long WUTime)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetWUTime
+	ENDIF
+
+;
+; pascal OSErr GetWUTime(long *WUTime, Byte *WUFlag)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetWUTime
+	ENDIF
+
+;
+; pascal OSErr BatteryStatus(Byte *Status, Byte *Power)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	BatteryStatus
+	ENDIF
+
+;
+; pascal OSErr ModemStatus(Byte *Status)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ModemStatus
+	ENDIF
+
+;
+; pascal long IdleUpdate(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 long          	<= D0
+		_IdleUpdate:	OPWORD	$A285
+	ELSE
+		IMPORT_CFM_FUNCTION	IdleUpdate
+	ENDIF
+
+;
+; pascal long GetCPUSpeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 long          	<= D0
+		Macro
+		_GetCPUSpeed
+			dc.w 	$70FF
+			dc.w 	$A485
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCPUSpeed
+	ENDIF
+
+;
+; pascal void EnableIdle(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EnableIdle
+			moveq	#0,d0
+			dc.w 	$A485
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EnableIdle
+	ENDIF
+
+;
+; pascal void DisableIdle(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisableIdle
+			moveq	#1,d0
+			dc.w 	$A485
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisableIdle
+	ENDIF
+
+;
+; pascal void SleepQInstall(SleepQRecPtr qRecPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 qRecPtr       	=> A0
+		_SleepQInstall:	OPWORD	$A28A
+	ELSE
+		IMPORT_CFM_FUNCTION	SleepQInstall
+	ENDIF
+
+;
+; pascal void SleepQRemove(SleepQRecPtr qRecPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 qRecPtr       	=> A0
+		_SleepQRemove:	OPWORD	$A48A
+	ELSE
+		IMPORT_CFM_FUNCTION	SleepQRemove
+	ENDIF
+
+;
+; pascal void AOn(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AOn
+			moveq	#4,d0
+			dc.w 	$A685
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AOn
+	ENDIF
+
+;
+; pascal void AOnIgnoreModem(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AOnIgnoreModem
+			moveq	#5,d0
+			dc.w 	$A685
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AOnIgnoreModem
+	ENDIF
+
+;
+; pascal void BOn(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_BOn
+			moveq	#0,d0
+			dc.w 	$A685
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	BOn
+	ENDIF
+
+;
+; pascal void AOff(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AOff
+			dc.w 	$7084
+			dc.w 	$A685
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AOff
+	ENDIF
+
+;
+; pascal void BOff(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_BOff
+			dc.w 	$7080
+			dc.w 	$A685
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	BOff
+	ENDIF
+
+; Public Power Management API (NEW!) 
+;
+; pascal short PMSelectorCount(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 short         	<= D0
+		Macro
+		_PMSelectorCount
+			moveq	#0,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMSelectorCount
+	ENDIF
+
+;
+; pascal unsigned long PMFeatures(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 unsigned long 	<= D0
+		Macro
+		_PMFeatures
+			moveq	#1,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PMFeatures
+	ENDIF
+
+;
+; pascal UInt8 GetSleepTimeout(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 UInt8         	<= D0
+		Macro
+		_GetSleepTimeout
+			moveq	#2,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSleepTimeout
+	ENDIF
+
+;
+; pascal void SetSleepTimeout(UInt8 timeout)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 timeout       	=> D0
+		Macro
+		_SetSleepTimeout
+			dc.w 	$4840
+			move.w	#$0003,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSleepTimeout
+	ENDIF
+
+;
+; pascal UInt8 GetHardDiskTimeout(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 UInt8         	<= D0
+		Macro
+		_GetHardDiskTimeout
+			moveq	#4,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetHardDiskTimeout
+	ENDIF
+
+;
+; pascal void SetHardDiskTimeout(UInt8 timeout)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 timeout       	=> D0
+		Macro
+		_SetHardDiskTimeout
+			dc.w 	$4840
+			move.w	#$0005,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetHardDiskTimeout
+	ENDIF
+
+;
+; pascal Boolean HardDiskPowered(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_HardDiskPowered
+			moveq	#6,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HardDiskPowered
+	ENDIF
+
+;
+; pascal void SpinDownHardDisk(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpinDownHardDisk
+			moveq	#7,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpinDownHardDisk
+	ENDIF
+
+;
+; pascal Boolean IsSpindownDisabled(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_IsSpindownDisabled
+			moveq	#8,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsSpindownDisabled
+	ENDIF
+
+;
+; pascal void SetSpindownDisable(Boolean setDisable)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 setDisable    	=> D0
+		Macro
+		_SetSpindownDisable
+			dc.w 	$4840
+			move.w	#$0009,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSpindownDisable
+	ENDIF
+
+;
+; pascal OSErr HardDiskQInstall(HDQueueElement *theElement)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 theElement    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_HardDiskQInstall
+			moveq	#10,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HardDiskQInstall
+	ENDIF
+
+;
+; pascal OSErr HardDiskQRemove(HDQueueElement *theElement)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 theElement    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		Macro
+		_HardDiskQRemove
+			moveq	#11,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	HardDiskQRemove
+	ENDIF
+
+;
+; pascal void GetScaledBatteryInfo(short whichBattery, BatteryInfo *theInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 whichBattery  	=> D0
+		;	 theInfo       	=> A0
+		Macro
+		_GetScaledBatteryInfo
+			dc.w 	$4840
+			move.w	#$000C,d0
+			dc.w 	$A09E
+			dc.w 	$2080
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetScaledBatteryInfo
+	ENDIF
+
+;
+; pascal void AutoSleepControl(Boolean enableSleep)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 enableSleep   	=> D0
+		Macro
+		_AutoSleepControl
+			dc.w 	$4840
+			move.w	#$000D,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AutoSleepControl
+	ENDIF
+
+;
+; pascal unsigned long GetIntModemInfo(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 unsigned long 	<= D0
+		Macro
+		_GetIntModemInfo
+			moveq	#14,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetIntModemInfo
+	ENDIF
+
+;
+; pascal void SetIntModemState(short theState)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 theState      	=> D0
+		Macro
+		_SetIntModemState
+			dc.w 	$4840
+			move.w	#$000F,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetIntModemState
+	ENDIF
+
+;
+; pascal short MaximumProcessorSpeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 short         	<= D0
+		Macro
+		_MaximumProcessorSpeed
+			moveq	#16,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MaximumProcessorSpeed
+	ENDIF
+
+;
+; pascal short CurrentProcessorSpeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 short         	<= D0
+		Macro
+		_CurrentProcessorSpeed
+			moveq	#17,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CurrentProcessorSpeed
+	ENDIF
+
+;
+; pascal Boolean FullProcessorSpeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_FullProcessorSpeed
+			moveq	#18,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FullProcessorSpeed
+	ENDIF
+
+;
+; pascal Boolean SetProcessorSpeed(Boolean fullSpeed)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 fullSpeed     	=> D0
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_SetProcessorSpeed
+			dc.w 	$4840
+			move.w	#$0013,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetProcessorSpeed
+	ENDIF
+
+;
+; pascal short GetSCSIDiskModeAddress(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 short         	<= D0
+		Macro
+		_GetSCSIDiskModeAddress
+			moveq	#20,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSCSIDiskModeAddress
+	ENDIF
+
+;
+; pascal void SetSCSIDiskModeAddress(short scsiAddress)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 scsiAddress   	=> D0
+		Macro
+		_SetSCSIDiskModeAddress
+			dc.w 	$4840
+			move.w	#$0015,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSCSIDiskModeAddress
+	ENDIF
+
+;
+; pascal void GetWakeupTimer(WakeupTime *theTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 theTime       	=> A0
+		Macro
+		_GetWakeupTimer
+			moveq	#22,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetWakeupTimer
+	ENDIF
+
+;
+; pascal void SetWakeupTimer(WakeupTime *theTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 theTime       	=> A0
+		Macro
+		_SetWakeupTimer
+			moveq	#23,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetWakeupTimer
+	ENDIF
+
+;
+; pascal Boolean IsProcessorCyclingEnabled(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_IsProcessorCyclingEnabled
+			moveq	#24,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsProcessorCyclingEnabled
+	ENDIF
+
+;
+; pascal void EnableProcessorCycling(Boolean enable)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 enable        	=> D0
+		Macro
+		_EnableProcessorCycling
+			dc.w 	$4840
+			move.w	#$0019,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EnableProcessorCycling
+	ENDIF
+
+;
+; pascal short BatteryCount(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 short         	<= D0
+		Macro
+		_BatteryCount
+			moveq	#26,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	BatteryCount
+	ENDIF
+
+;
+; pascal Fixed GetBatteryVoltage(short whichBattery)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 whichBattery  	=> D0
+		; returns: 
+		;	 Fixed         	<= D0
+		Macro
+		_GetBatteryVoltage
+			dc.w 	$4840
+			move.w	#$001B,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetBatteryVoltage
+	ENDIF
+
+;
+; pascal void GetBatteryTimes(short whichBattery, BatteryTimeRec *theTimes)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 whichBattery  	=> D0
+		;	 theTimes      	=> A0
+		Macro
+		_GetBatteryTimes
+			dc.w 	$4840
+			move.w	#$001C,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetBatteryTimes
+	ENDIF
+
+;
+; pascal UInt8 GetDimmingTimeout(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 UInt8         	<= D0
+		Macro
+		_GetDimmingTimeout
+			moveq	#29,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDimmingTimeout
+	ENDIF
+
+;
+; pascal void SetDimmingTimeout(UInt8 timeout)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 timeout       	=> D0
+		Macro
+		_SetDimmingTimeout
+			dc.w 	$4840
+			move.w	#$001E,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDimmingTimeout
+	ENDIF
+
+;
+; pascal void DimmingControl(Boolean enableSleep)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 enableSleep   	=> D0
+		Macro
+		_DimmingControl
+			dc.w 	$4840
+			move.w	#$001F,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DimmingControl
+	ENDIF
+
+;
+; pascal Boolean IsDimmingControlDisabled(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_IsDimmingControlDisabled
+			moveq	#32,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsDimmingControlDisabled
+	ENDIF
+
+;
+; pascal Boolean IsAutoSlpControlDisabled(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		; returns: 
+		;	 Boolean       	<= D0
+		Macro
+		_IsAutoSlpControlDisabled
+			moveq	#33,d0
+			dc.w 	$A09E
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IsAutoSlpControlDisabled
+	ENDIF
+
+	ENDIF ; __POWER__

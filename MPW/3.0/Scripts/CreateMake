@@ -1,0 +1,341 @@
+#	CreateMake - create a program makefile
+#
+#	Usage:
+#		CreateMake [ -Application [ -c creator ] | -Tool | -DA |
+#			-CR -m mainEntryPoint -rt resourceType 
+#			[ -t type ] [ -c creator ] ] [-sym on] program file…
+#
+#	Script CreateMake creates a simple MakeFile for building the specified
+#	program.  The program parameter is the name of the program.  Makefile
+#	<program>.make is created.  The default program type is Application.
+#	The program may be written in any combination of Assembly Language, C, C++
+#	Pascal, and/or Rez.	The list of files may include both source in
+#	these languages and library object files that don't appear below.
+#
+#	CreateMake links the program with the following set of MPW Libraries:
+#
+#		Inside Macintosh Interfaces
+#			{Libraries}Interface.o	
+#	
+#		Runtime support - one of the following:
+#			{Libraries}Stubs.o			# building a tool
+#			{Libraries}Runtime.o 		# no C object files
+#			{CLibraries}CRuntime.o		# any C or C++ object files
+#
+#		C Libraries - if any source is in C
+#			{CLibraries}StdCLib.o
+#			{CLibraries}CSANELib.o
+#			{CLibraries}Math.o
+#			{CLibraries}CInterface.o
+#
+#		C++ Libraries - if any source is in C++
+#			{Clibraries}Streams.o		# building a tool
+#			{Clibraries}CPlusStubs.o	# building a DA
+#			{Clibraries}CPlusLib.o
+#			{CLibraries}StdCLib.o
+#			{CLibraries}CSANELib.o
+#			{CLibraries}Math.o
+#			{CLibraries}CInterface.o
+#
+#		Pascal Libraries - if any source is in Pascal
+#			{PLibraries}PasLib.o
+#			{PLibraries}SANELib.o
+#
+#		For tools:
+#			{Libraries}ToolLibs.o
+#
+#		For desk accessories:
+#			{Libraries}DRVRRuntime.o
+#
+#
+#	Copyright Apple Computer, Inc. 1987-1988
+#	All rights reserved.
+
+
+Set Exit 0
+Set CaseSensitive 0
+Set type Application
+Set creator '????'
+Set runtime '{Libraries}Runtime.o'
+Set interface '{Libraries}Interface.o'
+Unset sources clibs plibs toollibs DRVRRuntime resource objects program suffix typ
+Unset cSeen tSeen rtSeen mSeen multipleType typeSpec CPls symarg symseen compileOptions
+
+#	Collect the script parameters.
+Loop
+	Break if {#} == 0
+	If "{1}" =~ /-Application/
+		Set type Application
+		Unset toollibs
+		If {typeSpec} == 0
+			Set typeSpec 1
+		Else
+			Set multipleType 1
+		End
+		shift 1
+		continue
+	Else If "{1}" =~ /-Tool/
+		Set type Tool
+		Set toollibs '{Libraries}ToolLibs.o'
+		If {typeSpec} == 0
+			Set typeSpec 1
+		Else
+			Set multipleType 1
+		End
+		shift 1
+		continue
+	Else If "{1}" =~ /-DA/
+		Set type DA
+		Unset toollibs
+		If {typeSpec} == 0
+			Set typeSpec 1
+		Else
+			Set multipleType 1
+		End
+		shift 1
+		continue
+	Else If "{1}" =~ /-CR/
+		Set type CR
+		Unset toollibs
+		If {typeSpec} == 0
+			Set typeSpec 1
+		Else
+			Set multipleType 1
+		End
+		shift 1 
+		continue
+	Else if "{1}" =~ /-c/
+		set creator "{2}"
+		set cseen 1
+		shift 2
+		continue
+	Else if "{1}" =~ /-t/
+		set typ "{2}"
+		set tseen 1
+		shift 2
+		continue
+	Else if "{1}" =~ /-rt/
+		set rtype "{2}"
+		set rtseen 1
+		shift 2
+		continue
+	Else if "{1}" =~ /-m/
+		set mentry "{2}"
+		set mseen 1
+		shift 2
+		continue
+	Else if "{1}" =~ /-sym/
+		set symarg {2}
+		set symseen 1
+		shift 2
+		continue
+	Else If ("{1}" =~ /≈.[acpr]/ || "{1}" =~ /≈.cp/)
+		Set sources "{sources}'{1}' "
+		shift 1
+		continue
+	Else If "{1}" =~ /≈.[o]/
+		Set objects "{objects}'{1}' "
+		shift 1
+		continue
+	Else If "{program}" == "" && "{1}" !~ /-≈/
+		Set program "{1}"
+		shift 1
+		continue
+	Else If "{1}" =~ /-≈/
+		Echo "### {0} - ∂"{1}∂" is not an option." > Dev:StdErr
+		Echo "# Usage - {0} [ -Application | -Tool | -DA | -CR -m mainEntryPoint ∂n ∂
+			-rt resourceType [ -c creator ] [ -f fileType ] ] program file…" > Dev:StdErr
+		Exit 1
+	Else
+		Echo "### {0} - Files must end in .a, .c, .p, .cp, .r, or .o." > Dev:StdErr
+		Echo "# Usage - {0} [ -Application | -Tool | -DA | -CR -m mainEntryPoint ∂n ∂
+			-rt resourceType [ -c creator ] [ -f fileType ] ] program file…" > Dev:StdErr
+		Exit 1
+	End
+End
+If {type} == CR && ("{rtype}" == "" || "{mentry}" == "")
+	Echo "### {0} - Options -rt and -m are required for code resource." > Dev:StdErr
+	Echo "# Usage - {0} [ -Application | -Tool | -DA | -CR -m mainEntryPoint ∂n ∂
+			-rt resourceType [ -c creator ] [ -f fileType ] ] program file…" > Dev:StdErr
+	Exit 1
+End
+If "{program}" == ""
+	Echo "### {0} - A program name is required." > Dev:StdErr
+	Echo "### {0} - Don't include the .a, .c, .cp, or .p suffix." > Dev:StdErr
+	Echo "# Usage - {0} [ -Application | -Tool | -DA | -CR -m mainEntryPoint ∂n ∂
+			-rt resourceType [ -c creator ] [ -f fileType ] ] program file…" > Dev:StdErr
+	Exit 1
+End
+If "{sources}" == ""
+	Echo "### {0} - A source file is required." > Dev:StdErr
+	Echo "# Usage - {0} [ -Application | -Tool | -DA | -CR -m mainEntryPoint ∂n ∂
+			-rt resourceType [ -c creator ] [ -f fileType ] ] program file…" > Dev:StdErr
+	Exit 1
+End
+If {multipleType} != 0
+	Echo "### {0} - Warning: More than one of Application, DA, Tool, or CR was specified. ∂n ∂
+	The last one on the command line will apply." > Dev:StdErr
+End
+If {cSeen} != 0 && ({type} == Tool || {type} == DA)
+		Echo "### {0} - Warning: Option -c ignored for {type}." > Dev:StdErr
+End
+If {tseen} != 0 && {type} != CR
+		Echo "### {0} - Warning: Option -t ignored for {type}." > Dev:StdErr
+End
+If {rtseen} != 0 && {type} != CR
+		Echo "### {0} - Warning: Option -rt ignored for {type}." > Dev:StdErr
+End
+If {mseen} != 0 && {type} != CR
+		Echo "### {0} - Warning: Option -m ignored for {type}." > Dev:StdErr
+End
+If {type} == Tool
+	Set options "-w -c 'MPS ' -t 'MPST'"
+Else If {type} == Application
+	Set options "-w -t 'APPL' -c '{creator}'"
+End
+
+#	Create the heading at the top of the makefile.
+
+Begin
+	Echo -n '#   File:       '; Quote "{program}".make
+	Echo -n '#   Target:     '; Quote "{program}"
+	If "{sources}" =~ /≈«1,80»/
+		Echo -n '#   Sources:    '; Quote  {sources}
+	Else
+		Set heading '#   Sources:    '
+		For i In {sources}
+			Echo -n "{heading}"
+			Quote "{i}"
+			Set heading '#               '
+		End
+	End
+	Echo -n '#   Created:    '; Date
+	Echo
+
+#	Generate Asm, C, C++, Pascal, and Rez rules.
+
+	If {symseen} == 1
+		Set compileOptions "-sym {symarg}"
+	End
+	For file in {sources}
+		If "{file}" =~ /≈.a/
+			Quote "{file}".o ƒ "{program}".make "{file}"
+			Echo -n ∂t Asm "{compileoptions} "; Quote "{file}"
+			Set objects "{objects}'{file}.o' "
+		Else If "{file}" =~ /≈.c/ 
+			Quote "{file}".o ƒ "{program}".make "{file}"
+			If {type} == CR
+				Echo -n ∂t C -b "{compileoptions} "; Quote "{file}"
+			Else
+				Echo -n ∂t C "{compileoptions} "; Quote "{file}"
+			End
+			Set objects "{objects}'{file}.o' "
+			Set runtime '{CLibraries}CRuntime.o'
+			Set clibs '{CLibraries}StdCLib.o {CLibraries}CSANELib.o ∂
+				{CLibraries}Math.o {CLibraries}CInterface.o'
+		Else If "{file}" =~ /≈.cp/
+			Quote "{file}".o ƒ "{program}".make "{file}"
+			Echo -n ∂t CPlus "{compileoptions} "; Quote "{file}"
+			Set objects "{objects}'{file}.o' "
+			Set runtime '{CLibraries}CRuntime.o'
+			If {type} == Tool
+				Set clibs '{CLibraries}CPlusStreams.o {CLibraries}StdCLib.o {CLibraries}CSANELib.o ∂
+					{CLibraries}Math.o {CLibraries}CInterface.o {CLibraries}CPlusLib.o'
+			Else If {type} == DA || {type} == CR
+				Set clibs '{CLibraries}CPlusStubs.o {CLibraries}StdCLib.o {CLibraries}CSANELib.o ∂
+					{CLibraries}Math.o {CLibraries}CInterface.o {CLibraries}CPlusLib.o'
+			Else
+				Set clibs '{CLibraries}StdCLib.o {CLibraries}CSANELib.o ∂
+					{CLibraries}Math.o {CLibraries}CInterface.o {CLibraries}CPlusLib.o'
+			End
+			Set CPls 1
+		Else If "{file}" =~ /≈.p/
+			Quote "{file}".o ƒ "{program}".make "{file}"
+			Echo -n ∂t Pascal "{compileoptions} "; Quote "{file}"
+			Set objects "{objects}'{file}.o' "
+			Set plibs '{PLibraries}PasLib.o {PLibraries}SANELib.o'   
+ 		Else If "{file}" =~ /≈.r/
+			Set resource "{file}"
+			If {type} == DA
+				Quote "{program}" ƒ "{program}".make "{program}".DRVW "{file}"
+				Echo -n ∂t; Quote Rez -rd "{file}" -o "{program}"
+				Set DRVRruntime '{Libraries}DRVRRuntime.o'
+			Else
+				Quote "{program}" ƒƒ "{program}".make "{file}"
+				Echo -n ∂t; Quote Rez "{file}" -append -o "{program}"
+			End
+		End
+	End
+	If {type} == Tool;
+		set runtime "∂{Libraries∂}stubs.o {runtime}"
+	End
+
+# generate SOURCES and OBJECTS definitions
+
+	echo
+	quote SOURCES = {sources}
+	quote -n OBJECTS =
+	If "{objects}" =~ /?«1,80»/
+		Echo -n " "; Quote {objects}
+	Else
+		For i In {objects}
+			Echo ' ∂'
+			Echo -n ∂t∂t; Quote -n "{i}"
+		End
+		Echo
+	End
+	echo	
+
+#	Generate Link rule.
+
+	If {type} == DA AND "{resource}" == ""
+		Quote -n "{program}" ƒ "{program}".make
+		Echo ∂ ∂{OBJECTS∂}
+		Set options "-w -da -t DFIL -c DMOV -rt DRVR=12 -sg '{program}'"
+	Else If {type} == DA
+		Quote -n "{program}".DRVW ƒ "{program}".make
+		Echo ∂ ∂{OBJECTS∂}
+		Set options "-w -t DFIL -c DMOV -rt DRVW=0 -sg '{program}'"
+		Set suffix '.DRVW'
+	Else If {type} == CR
+		Quote -n "{program}" ƒ "{program}".make
+		Echo ∂ ∂{OBJECTS∂}
+		If {typ} == 0
+			set typ '????'
+		End
+		Set options "-w -t '{typ}' -c '{creator}' -rt '{rtype}' -m '{mentry}' ∂
+		   -sg '{program}'"
+	Else
+		Quote -n "{program}" ƒƒ "{program}".make
+		Echo ∂ ∂{OBJECTS∂}
+	End
+	If {symseen} == 1
+		Set options "{options} -sym {symarg} -mf"
+	End
+	Echo -n ∂t; Quote -n Link {options}; Echo ' ∂'
+	If {CPls} ==1
+		For i in {runtime}
+			If "{i}" =~ /(≈)®1(∂{≈∂})®2(≈)®3/	# contains {}s ?
+				Echo -n ∂t∂t; Echo "{®1}∂"{®2}∂"{®3}" ∂∂
+			Else
+				Echo -n ∂t∂t; Quote -n "{i}"; Echo ' ∂'
+			End
+		End
+		unset runtime
+	End
+	Echo -n ∂t∂t; Echo -n ∂{OBJECTS∂}; Echo ' ∂'
+	For i In {DRVRRuntime} {runtime} {interface} {clibs} {plibs} {toollibs}
+		If "{i}" =~ /(≈)®1(∂{≈∂})®2(≈)®3/	# contains {}s ?
+			Echo -n ∂t∂t; Echo "{®1}∂"{®2}∂"{®3}" ∂∂
+		Else
+			Echo -n ∂t∂t; Quote -n "{i}"; Echo ' ∂'
+		End
+	End
+	Echo -n ∂t∂t; Quote -o "{program}{suffix}"
+End > "{program}".make
+Echo "{program}"
+
+
+
+
+

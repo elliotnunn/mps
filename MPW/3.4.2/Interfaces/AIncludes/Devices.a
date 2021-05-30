@@ -1,0 +1,592 @@
+;
+;	File:		Devices.a
+;
+;	Contains:	Device Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__DEVICES__') = 'UNDEFINED' THEN
+__DEVICES__ SET 1
+
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'Memory.a'											;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'Finder.a'											;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Menus.a'											;
+;		include 'Controls.a'										;
+;		include 'Windows.a'										;
+;		include 'TextEdit.a'										;
+
+chooserInitMsg					EQU		11					; the user selected this device package 
+newSelMsg						EQU		12					; the user made new device selections 
+fillListMsg						EQU		13					; fill the device list with choices 
+getSelMsg						EQU		14					; mark one or more choices as selected 
+selectMsg						EQU		15					; the user made a selection 
+deselectMsg						EQU		16					; the user canceled a selection 
+terminateMsg					EQU		17					; allows device package to clean up 
+buttonMsg						EQU		19					; the user selected a button 
+
+; Values of the 'caller' parameter to a Chooser device package 
+chooserID						EQU		1
+
+; Values of the 'message' parameter to a Control Panel 'cdev' 
+initDev							EQU		0					;Time for cdev to initialize itself
+hitDev							EQU		1					;Hit on one of my items
+closeDev						EQU		2					;Close yourself
+nulDev							EQU		3					;Null event
+updateDev						EQU		4					;Update event
+activDev						EQU		5					;Activate event
+deactivDev						EQU		6					;Deactivate event
+keyEvtDev						EQU		7					;Key down/auto key
+macDev							EQU		8					;Decide whether or not to show up
+undoDev							EQU		9
+cutDev							EQU		10
+copyDev							EQU		11
+pasteDev						EQU		12
+clearDev						EQU		13
+cursorDev						EQU		14
+
+; Special values a Control Panel 'cdev' can return 
+cdevGenErr						EQU		-1					;General error; gray cdev w/o alert
+cdevMemErr						EQU		0					;Memory shortfall; alert user please
+cdevResErr						EQU		1					;Couldn't get a needed resource; alert
+cdevUnset						EQU		3					; cdevValue is initialized to this
+
+; Values of the 'message' parameter to a Monitor 'mntr' 
+initMsg							EQU		1					;initialization
+okMsg							EQU		2					;user clicked OK button
+cancelMsg						EQU		3					;user clicked Cancel button
+hitMsg							EQU		4					;user clicked control in Options dialog
+nulMsg							EQU		5					;periodic event
+updateMsg						EQU		6					;update event
+activateMsg						EQU		7					;not used
+deactivateMsg					EQU		8					;not used
+keyEvtMsg						EQU		9					;keyboard event
+superMsg						EQU		10					;show superuser controls
+normalMsg						EQU		11					;show only normal controls
+startupMsg						EQU		12					;code has been loaded
+
+; control codes for DeskAccessories 
+goodbye							EQU		-1					; heap being reinitialized 
+killCode						EQU		1					; KillIO requested 
+accEvent						EQU		64					; handle an event 
+accRun							EQU		65					; time for periodic action 
+accCursor						EQU		66					; change cursor shape 
+accMenu							EQU		67					; handle menu item 
+accUndo							EQU		68					; handle undo command 
+accCut							EQU		70					; handle cut command 
+accCopy							EQU		71					; handle copy command 
+accPaste						EQU		72					; handle paste command 
+accClear						EQU		73					; handle clear command 
+
+; Control/Status Call Codes 
+drvStsCode						EQU		8					; status call code for drive status 
+ejectCode						EQU		7					; control call eject code 
+tgBuffCode						EQU		8					; set tag buffer code 
+
+; miscellaneous Device Manager constants 
+ioInProgress					EQU		1					; predefined value of ioResult while I/O is pending 
+aRdCmd							EQU		2					; low byte of ioTrap for Read calls 
+aWrCmd							EQU		3					; low byte of ioTrap for Write calls 
+asyncTrpBit						EQU		10					; trap word modifier 
+noQueueBit						EQU		9					; trap word modifier 
+
+; flags used in the driver header and device control entry 
+dReadEnable						EQU		0					; set if driver responds to read requests 
+dWritEnable						EQU		1					; set if driver responds to write requests 
+dCtlEnable						EQU		2					; set if driver responds to control requests 
+dStatEnable						EQU		3					; set if driver responds to status requests 
+dNeedGoodBye					EQU		4					; set if driver needs time for performing periodic tasks 
+dNeedTime						EQU		5					; set if driver needs time for performing periodic tasks 
+dNeedLock						EQU		6					; set if driver must be locked in memory as soon as it is opened 
+dNeedLockMask					EQU		$4000				; set if driver must be locked in memory as soon as it is opened 
+dNeedTimeMask					EQU		$2000				; set if driver needs time for performing periodic tasks 
+dNeedGoodByeMask				EQU		$1000				; set if driver needs to be called before the application heap is initialized 
+dStatEnableMask					EQU		$0800				; set if driver responds to status requests 
+dCtlEnableMask					EQU		$0400				; set if driver responds to control requests 
+dWritEnableMask					EQU		$0200				; set if driver responds to write requests 
+dReadEnableMask					EQU		$0100				; set if driver responds to read requests 
+
+; run-time flags used in the device control entry 
+dOpened							EQU		5					; driver is open 
+dRAMBased						EQU		6					; dCtlDriver is a handle (1) or pointer (0) 
+drvrActive						EQU		7					; driver is currently processing a request 
+drvrActiveMask					EQU		$0080				; driver is currently processing a request 
+dRAMBasedMask					EQU		$0040				; dCtlDriver is a handle (1) or pointer (0) 
+dOpenedMask						EQU		$0020				; driver is open 
+
+DRVRHeader 				RECORD	0
+drvrFlags				 ds.w   1		; offset: $0 (0)
+drvrDelay				 ds.w   1		; offset: $2 (2)
+drvrEMask				 ds.w   1		; offset: $4 (4)
+drvrMenu				 ds.w   1		; offset: $6 (6)
+drvrOpen				 ds.w   1		; offset: $8 (8)
+drvrPrime				 ds.w   1		; offset: $A (10)
+drvrCtl					 ds.w   1		; offset: $C (12)
+drvrStatus				 ds.w   1		; offset: $E (14)
+drvrClose				 ds.w   1		; offset: $10 (16)
+drvrName				 ds.b   1		; offset: $12 (18)
+						 ORG 20
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct DRVRHeader  DRVRHeader
+; typedef DRVRHeader 		*DRVRHeaderPtr, **DRVRHeaderHandle
+DCtlEntry 				RECORD	0
+dCtlDriver				 ds.l   1		; offset: $0 (0)
+dCtlFlags				 ds.w   1		; offset: $4 (4)
+dCtlQHdr				 ds     QHdr	; offset: $6 (6)
+dCtlPosition			 ds.l   1		; offset: $10 (16)
+dCtlStorage				 ds.l   1		; offset: $14 (20)
+dCtlRefNum				 ds.w   1		; offset: $18 (24)
+dCtlCurTicks			 ds.l   1		; offset: $1A (26)
+dCtlWindow				 ds.l   1		; offset: $1E (30)
+dCtlDelay				 ds.w   1		; offset: $22 (34)
+dCtlEMask				 ds.w   1		; offset: $24 (36)
+dCtlMenu				 ds.w   1		; offset: $26 (38)
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct DCtlEntry 	DCtlEntry
+; typedef DCtlEntry 		*DCtlPtr, **DCtlHandle
+AuxDCE 					RECORD	0
+dCtlDriver				 ds.l   1		; offset: $0 (0)
+dCtlFlags				 ds.w   1		; offset: $4 (4)
+dCtlQHdr				 ds     QHdr	; offset: $6 (6)
+dCtlPosition			 ds.l   1		; offset: $10 (16)
+dCtlStorage				 ds.l   1		; offset: $14 (20)
+dCtlRefNum				 ds.w   1		; offset: $18 (24)
+dCtlCurTicks			 ds.l   1		; offset: $1A (26)
+dCtlWindow				 ds.l   1		; offset: $1E (30)
+dCtlDelay				 ds.w   1		; offset: $22 (34)
+dCtlEMask				 ds.w   1		; offset: $24 (36)
+dCtlMenu				 ds.w   1		; offset: $26 (38)
+dCtlSlot				 ds.b   1		; offset: $28 (40)
+dCtlSlotId				 ds.b   1		; offset: $29 (41)
+dCtlDevBase				 ds.l   1		; offset: $2A (42)
+dCtlOwner				 ds.l   1		; offset: $2E (46)
+dCtlExtDev				 ds.b   1		; offset: $32 (50)
+fillByte				 ds.b   1		; offset: $33 (51)
+dCtlNodeID				 ds.l   1		; offset: $34 (52)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct AuxDCE 	AuxDCE
+; typedef AuxDCE 			*AuxDCEPtr, **AuxDCEHandle
+	IF ¬ OLDROUTINELOCATIONS  THEN
+;
+; pascal OSErr PBOpenSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenSync:	OPWORD	$A000
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenSync
+	ENDIF
+
+;
+; pascal OSErr PBOpenAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenAsync:	OPWORD	$A400
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenAsync
+	ENDIF
+
+;
+; pascal OSErr PBOpenImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBOpenImmed:	OPWORD	$A200
+	ELSE
+		IMPORT_CFM_FUNCTION	PBOpenImmed
+	ENDIF
+
+;
+; pascal OSErr PBCloseSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseSync:	OPWORD	$A001
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseSync
+	ENDIF
+
+;
+; pascal OSErr PBCloseAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseAsync:	OPWORD	$A401
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseAsync
+	ENDIF
+
+;
+; pascal OSErr PBCloseImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBCloseImmed:	OPWORD	$A201
+	ELSE
+		IMPORT_CFM_FUNCTION	PBCloseImmed
+	ENDIF
+
+;
+; pascal OSErr PBReadSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadSync:	OPWORD	$A002
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadSync
+	ENDIF
+
+;
+; pascal OSErr PBReadAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadAsync:	OPWORD	$A402
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadAsync
+	ENDIF
+
+;
+; pascal OSErr PBReadImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBReadImmed:	OPWORD	$A202
+	ELSE
+		IMPORT_CFM_FUNCTION	PBReadImmed
+	ENDIF
+
+;
+; pascal OSErr PBWriteSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteSync:	OPWORD	$A003
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteSync
+	ENDIF
+
+;
+; pascal OSErr PBWriteAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteAsync:	OPWORD	$A403
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteAsync
+	ENDIF
+
+;
+; pascal OSErr PBWriteImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBWriteImmed:	OPWORD	$A203
+	ELSE
+		IMPORT_CFM_FUNCTION	PBWriteImmed
+	ENDIF
+
+;
+; pascal void AddDrive(short drvrRefNum, short drvNum, DrvQElPtr qEl)
+;
+	IF ¬ GENERATINGCFM THEN
+		_AddDrive:	OPWORD	$A04E
+	ELSE
+		IMPORT_CFM_FUNCTION	AddDrive
+	ENDIF
+
+;
+; pascal QHdrPtr GetDrvQHdr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDrvQHdr
+			dc.w 	$2EBC
+			dc.w 	$0000
+			dc.w 	$0308
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDrvQHdr
+	ENDIF
+
+	ENDIF
+; Control Panel Default Proc 
+;
+; pascal DCtlHandle GetDCtlEntry(short refNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetDCtlEntry
+	ENDIF
+
+;
+;	SetChooserAlert used to simply set a bit in a low-mem global
+;	to tell the Chooser not to display its warning message when
+;	the printer is changed. However, under MultiFinder and System 7,
+;	this low-mem is swapped out when a layer change occurs, and the
+;	Chooser never sees the change. It is obsolete, and completely
+;	unsupported on the PowerPC. 68K apps can still call it if they
+;	wish.
+;
+	IF OLDROUTINENAMES  ** ¬ GENERATINGCFM  THEN
+;
+; pascal Boolean SetChooserAlert(Boolean f)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetChooserAlert
+	ENDIF
+
+	ENDIF
+;
+;  Note: DrvrInstall() is no longer supported, becuase it never really worked anyways.
+;  		There will soon be a DriverInstall() which does the right thing.
+;
+;		DrvrRemove has been renamed to DriverRemove.  But, InterfaceLib for PowerPC
+;		still exports DrvrRemove, so a macro is used to map the new name to old.
+;
+;
+;
+; pascal OSErr DrvrRemove(short refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 refNum        	=> D0
+		; returns: 
+		;	 OSErr         	<= D0
+		_DrvrRemove:	OPWORD	$A03E
+	ELSE
+		IMPORT_CFM_FUNCTION	DrvrRemove
+	ENDIF
+
+	IF ¬ GENERATINGCFM THEN
+		_Open: 			OPWORD  	$A000
+		_Close:			OPWORD  	$A001
+		_Read: 			OPWORD  	$A002
+		_Write:			OPWORD  	$A003
+		_Control:  		OPWORD  	$A004
+		_Status:   		OPWORD  	$A005
+		_KillIO:   		OPWORD  	$A006
+	ENDIF
+;
+; pascal OSErr PBControlSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBControlSync:	OPWORD	$A004
+	ELSE
+		IMPORT_CFM_FUNCTION	PBControlSync
+	ENDIF
+
+;
+; pascal OSErr PBControlAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBControlAsync:	OPWORD	$A404
+	ELSE
+		IMPORT_CFM_FUNCTION	PBControlAsync
+	ENDIF
+
+;
+; pascal OSErr PBControlImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBControlImmed:	OPWORD	$A204
+	ELSE
+		IMPORT_CFM_FUNCTION	PBControlImmed
+	ENDIF
+
+;
+; pascal OSErr PBStatusSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBStatusSync:	OPWORD	$A005
+	ELSE
+		IMPORT_CFM_FUNCTION	PBStatusSync
+	ENDIF
+
+;
+; pascal OSErr PBStatusAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBStatusAsync:	OPWORD	$A405
+	ELSE
+		IMPORT_CFM_FUNCTION	PBStatusAsync
+	ENDIF
+
+;
+; pascal OSErr PBStatusImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBStatusImmed:	OPWORD	$A205
+	ELSE
+		IMPORT_CFM_FUNCTION	PBStatusImmed
+	ENDIF
+
+;
+; pascal OSErr PBKillIOSync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBKillIOSync:	OPWORD	$A006
+	ELSE
+		IMPORT_CFM_FUNCTION	PBKillIOSync
+	ENDIF
+
+;
+; pascal OSErr PBKillIOAsync(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBKillIOAsync:	OPWORD	$A406
+	ELSE
+		IMPORT_CFM_FUNCTION	PBKillIOAsync
+	ENDIF
+
+;
+; pascal OSErr PBKillIOImmed(ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 paramBlock    	=> A0
+		; returns: 
+		;	 OSErr         	<= D0
+		_PBKillIOImmed:	OPWORD	$A206
+	ELSE
+		IMPORT_CFM_FUNCTION	PBKillIOImmed
+	ENDIF
+
+;
+; pascal short OpenDeskAcc(ConstStr255Param deskAccName)
+;
+	IF ¬ GENERATINGCFM THEN
+		_OpenDeskAcc:	OPWORD	$A9B6
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenDeskAcc
+	ENDIF
+
+;
+; pascal void CloseDeskAcc(short refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CloseDeskAcc:	OPWORD	$A9B7
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseDeskAcc
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+;
+;	The PBxxx() routines are obsolete.  
+;	
+;	Use the PBxxxSync(), PBxxxAsync(), or PBxxxImmed version instead.
+;
+	IF ¬ OLDROUTINELOCATIONS  THEN
+	ENDIF
+	ENDIF
+	ENDIF ; __DEVICES__

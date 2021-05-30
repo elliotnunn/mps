@@ -1,0 +1,983 @@
+;
+;	File:		TextUtils.a
+;
+;	Contains:	Text Utilities Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__TEXTUTILS__') = 'UNDEFINED' THEN
+__TEXTUTILS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__SCRIPT__') = 'UNDEFINED' THEN
+	include 'Script.a'
+	ENDIF
+;		include 'Quickdraw.a'										;
+;			include 'MixedMode.a'									;
+;			include 'QuickdrawText.a'								;
+;		include 'IntlResources.a'									;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;				include 'Memory.a'									;
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+;
+;
+;	Here are the current routine names and the translations to the older forms.
+;	Please use the newer forms in all new code and migrate the older names out of existing
+;	code as maintainance permits.
+;	
+;	New Name					Old Name(s)
+;	
+;	CompareString				IUCompPString IUMagString IUMagPString IUCompString 
+;	CompareText
+;	DateString					IUDatePString IUDateString 
+;	EqualString							
+;	ExtendedToString			FormatX2Str
+;	FindScriptRun
+;	FindWordBreaks				NFindWord FindWord
+;	FormatRecToString			Format2Str
+;	GetIndString			
+;	GetString
+;	IdenticalString				IUMagIDString IUMagIDPString IUEqualString IUEqualPString
+;	IdenticalText
+;	InitDateCache
+;	LanguageOrder				IULangOrder
+;	LongDateString				IULDateString
+;	LongTimeString				IULTimeString
+;	LowercaseText				LwrText LowerText
+;	Munger
+;	NewString				
+;	NumToString				
+;	RelString				
+;	ReplaceText
+;	ScriptOrder					IUScriptOrder
+;	SetString				
+;	StringOrder					IUStringOrder
+;	StringToDate				String2Date
+;	StringToExtended			FormatStr2X
+;	StringToFormatRec			Str2Format
+;	StringToNum				
+;	StringToTime								
+;	StripDiacritics				StripText
+;	StyledLineBreak
+;	TextOrder
+;	TimeString					IUTimeString IUTimePString
+;	TruncString
+;	TruncText
+;	UpperString					UprString
+;	UppercaseStripDiacritics	StripUpperText
+;	UppercaseText				UprText UprText
+;
+; New constants for System 7.0: 
+
+; Constants for truncWhere argument in TruncString and TruncText 
+truncEnd						EQU		0					; Truncate at end 
+truncMiddle						EQU		$4000				; Truncate in middle 
+smTruncEnd						EQU		0					; Truncate at end - obsolete 
+smTruncMiddle					EQU		$4000				; Truncate in middle - obsolete 
+; Constants for TruncString and TruncText results 
+notTruncated					EQU		0					; No truncation was necessary 
+truncated						EQU		1					; Truncation performed 
+truncErr						EQU		-1					; General error 
+smNotTruncated					EQU		0					; No truncation was necessary - obsolete 
+smTruncated						EQU		1					; Truncation performed	- obsolete 
+smTruncErr						EQU		-1					; General error - obsolete 
+
+fVNumber						EQU		0					; first version of NumFormatString 
+; Special language code values for Language Order 
+systemCurLang					EQU		-2					; current (itlbLang) lang for system script 
+systemDefLang					EQU		-3					; default (table) lang for system script 
+currentCurLang					EQU		-4					; current (itlbLang) lang for current script 
+currentDefLang					EQU		-5					; default lang for current script 
+scriptCurLang					EQU		-6					; current (itlbLang) lang for specified script 
+scriptDefLang					EQU		-7					; default language for a specified script 
+
+iuSystemCurLang					EQU		-2					; <obsolete> current (itlbLang) lang for system script 
+iuSystemDefLang					EQU		-3					; <obsolete> default (table) lang for system script 
+iuCurrentCurLang				EQU		-4					; <obsolete> current (itlbLang) lang for current script 
+iuCurrentDefLang				EQU		-5					; <obsolete> default lang for current script 
+iuScriptCurLang					EQU		-6					; <obsolete> current (itlbLang) lang for specified script 
+
+; <obsolete> default language for a specified script 
+iuScriptDefLang					EQU		-7
+
+; typedef SInt8 			StyledLineBreakCode
+
+smBreakWord						EQU		0
+smBreakChar						EQU		1
+smBreakOverflow					EQU		2
+
+; typedef SInt8 			FormatClass
+
+fPositive						EQU		0
+fNegative						EQU		1
+fZero							EQU		2
+
+; typedef SInt8 			FormatResultType
+
+fFormatOK						EQU		0
+fBestGuess						EQU		1
+fOutOfSynch						EQU		2
+fSpuriousChars					EQU		3
+fMissingDelimiter				EQU		4
+fExtraDecimal					EQU		5
+fMissingLiteral					EQU		6
+fExtraExp						EQU		7
+fFormatOverflow					EQU		8
+fFormStrIsNAN					EQU		9
+fBadPartsTable					EQU		10
+fExtraPercent					EQU		11
+fExtraSeparator					EQU		12
+fEmptyFormatString				EQU		13
+
+NumFormatString 		RECORD	0
+fLength					 ds.b   1		; offset: $0 (0)
+fVersion				 ds.b   1		; offset: $1 (1)
+data					 ds.b   254		; offset: $2 (2)		; private data 
+sizeof					 EQU *			; size:   $100 (256)
+						ENDR
+
+; typedef struct NumFormatString  NumFormatString
+; typedef struct NumFormatString  NumFormatStringRec
+FVector 				RECORD	0
+start					 ds.w   1		; offset: $0 (0)
+length					 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct FVector 	FVector
+; index by [fPositive..fZero] 
+; typedef FVector 			TripleInt[3]
+ScriptRunStatus 		RECORD	0
+script					 ds.b   1		; offset: $0 (0)
+runVariant				 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct ScriptRunStatus  ScriptRunStatus
+; New types for System 7.0: 
+; Type for truncWhere parameter in new TruncString, TruncText 
+; typedef short 			TruncCode
+
+shortDate						EQU		0
+longDate						EQU		1
+abbrevDate						EQU		2
+
+; typedef SInt8 			DateForm
+
+; StringToDate status values 
+fatalDateTime					EQU		$8000				; StringToDate and String2Time mask to a fatal error 
+longDateFound					EQU		1					; StringToDate mask to long date found 
+leftOverChars					EQU		2					; StringToDate & Time mask to warn of left over characters 
+sepNotIntlSep					EQU		4					; StringToDate & Time mask to warn of non-standard separators 
+fieldOrderNotIntl				EQU		8					; StringToDate & Time mask to warn of non-standard field order 
+extraneousStrings				EQU		16					; StringToDate & Time mask to warn of unparsable strings in text 
+tooManySeps						EQU		32					; StringToDate & Time mask to warn of too many separators 
+sepNotConsistent				EQU		64					; StringToDate & Time mask to warn of inconsistent separators 
+tokenErr						EQU		$8100				; StringToDate & Time mask for 'tokenizer err encountered' 
+cantReadUtilities				EQU		$8200
+dateTimeNotFound				EQU		$8400
+dateTimeInvalid					EQU		$8800
+
+; typedef short 			StringToDateStatus
+; typedef short 			String2DateStatus
+DateCacheRecord 		RECORD	0
+hidden					 ds.w   256		; offset: $0 (0)		; only for temporary use 
+sizeof					 EQU *			; size:   $200 (512)
+						ENDR
+
+; typedef struct DateCacheRecord  DateCacheRecord
+; typedef DateCacheRecord 	*DateCachePtr
+BreakTable 				RECORD	0
+charTypes				 ds.b   256		; offset: $0 (0)
+tripleLength			 ds.w   1		; offset: $100 (256)
+triples					 ds.w   1		; offset: $102 (258)
+sizeof					 EQU *			; size:   $104 (260)
+						ENDR
+
+; typedef struct BreakTable  BreakTable
+; typedef BreakTable 		*BreakTablePtr
+; New NBreakTable for System 7.0: 
+NBreakTable 			RECORD	0
+flags1					 ds.b   1		; offset: $0 (0)
+flags2					 ds.b   1		; offset: $1 (1)
+version					 ds.w   1		; offset: $2 (2)
+classTableOff			 ds.w   1		; offset: $4 (4)
+auxCTableOff			 ds.w   1		; offset: $6 (6)
+backwdTableOff			 ds.w   1		; offset: $8 (8)
+forwdTableOff			 ds.w   1		; offset: $A (10)
+doBackup				 ds.w   1		; offset: $C (12)
+length					 ds.w   1		; offset: $E (14)		; length of NBreakTable 
+charTypes				 ds.b   256		; offset: $10 (16)
+tables					 ds.w   1		; offset: $110 (272)
+sizeof					 EQU *			; size:   $112 (274)
+						ENDR
+
+; typedef struct NBreakTable  NBreakTable
+; typedef NBreakTable 		*NBreakTablePtr
+;
+; pascal OSErr InitDateCache(DateCachePtr theCache)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InitDateCache
+			dc.w 	$2F3C
+			dc.w 	$8204
+			dc.w 	$FFF8
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InitDateCache
+	ENDIF
+
+;
+; pascal long Munger(Handle h, long offset, const void *ptr1, long len1, const void *ptr2, long len2)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Munger:	OPWORD	$A9E0
+	ELSE
+		IMPORT_CFM_FUNCTION	Munger
+	ENDIF
+
+;
+; pascal StringHandle NewString(ConstStr255Param theString)
+;
+	IF ¬ GENERATINGCFM THEN
+		_NewString:	OPWORD	$A906
+	ELSE
+		IMPORT_CFM_FUNCTION	NewString
+	ENDIF
+
+;
+; pascal void SetString(StringHandle theString, ConstStr255Param strNew)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SetString:	OPWORD	$A907
+	ELSE
+		IMPORT_CFM_FUNCTION	SetString
+	ENDIF
+
+;
+; pascal StringHandle GetString(short stringID)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetString:	OPWORD	$A9BA
+	ELSE
+		IMPORT_CFM_FUNCTION	GetString
+	ENDIF
+
+;
+; pascal short ScriptOrder(ScriptCode script1, ScriptCode script2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ScriptOrder
+			move.w	#$001E,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ScriptOrder
+	ENDIF
+
+;
+; pascal StyledLineBreakCode StyledLineBreak(Ptr textPtr, long textLen, long textStart, long textEnd, long flags, Fixed *textWidth, long *textOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StyledLineBreak
+			dc.w 	$2F3C
+			dc.w 	$821C
+			dc.w 	$FFFE
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StyledLineBreak
+	ENDIF
+
+;
+; pascal short TruncString(short width, Str255 theString, TruncCode truncWhere)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TruncString
+			dc.w 	$2F3C
+			dc.w 	$8208
+			dc.w 	$FFE0
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TruncString
+	ENDIF
+
+;
+; pascal short TruncText(short width, Ptr textPtr, short *length, TruncCode truncWhere)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TruncText
+			dc.w 	$2F3C
+			dc.w 	$820C
+			dc.w 	$FFDE
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TruncText
+	ENDIF
+
+;
+; pascal short ReplaceText(Handle baseText, Handle substitutionText, Str15 key)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ReplaceText
+			dc.w 	$2F3C
+			dc.w 	$820C
+			dc.w 	$FFDC
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ReplaceText
+	ENDIF
+
+;
+; pascal void FindWordBreaks(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, BreakTablePtr breaks, OffsetTable offsets, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindWordBreaks
+			dc.w 	$2F3C
+			dc.w 	$C012
+			dc.w 	$001A
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindWordBreaks
+	ENDIF
+
+;
+; pascal void LowercaseText(Ptr textPtr, short len, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LowercaseText
+			move.w	#$0000,-(sp)
+			dc.w 	$2F3C
+			dc.w 	$800A
+			dc.w 	$FFB6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LowercaseText
+	ENDIF
+
+;
+; pascal void UppercaseText(Ptr textPtr, short len, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UppercaseText
+			move.w	#$0400,-(sp)
+			dc.w 	$2F3C
+			dc.w 	$800A
+			dc.w 	$FFB6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UppercaseText
+	ENDIF
+
+;
+; pascal void StripDiacritics(Ptr textPtr, short len, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StripDiacritics
+			move.w	#$0200,-(sp)
+			dc.w 	$2F3C
+			dc.w 	$800A
+			dc.w 	$FFB6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StripDiacritics
+	ENDIF
+
+;
+; pascal void UppercaseStripDiacritics(Ptr textPtr, short len, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UppercaseStripDiacritics
+			move.w	#$0600,-(sp)
+			dc.w 	$2F3C
+			dc.w 	$800A
+			dc.w 	$FFB6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UppercaseStripDiacritics
+	ENDIF
+
+;
+; pascal ScriptRunStatus FindScriptRun(Ptr textPtr, long textLen, long *lenUsed)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindScriptRun
+			dc.w 	$2F3C
+			dc.w 	$820C
+			dc.w 	$0026
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindScriptRun
+	ENDIF
+
+;
+; pascal void UpperString(Str255 theString, Boolean diacSensitive)
+;
+	IF ¬ GENERATINGCFM THEN
+		_UpperString:	OPWORD	$A054
+	ELSE
+		IMPORT_CFM_FUNCTION	UpperString
+	ENDIF
+
+;
+; pascal void StringToNum(ConstStr255Param theString, long *theNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StringToNum
+			move.w	#$0001,-(sp)
+			dc.w 	$A9EE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StringToNum
+	ENDIF
+
+;
+; pascal void NumToString(long theNum, Str255 theString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NumToString
+			move.w	#$0000,-(sp)
+			dc.w 	$A9EE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NumToString
+	ENDIF
+
+;
+; pascal short RelString(ConstStr255Param str1, ConstStr255Param str2, Boolean caseSensitive, Boolean diacSensitive)
+;
+	IF ¬ GENERATINGCFM THEN
+		_RelString:	OPWORD	$A050
+	ELSE
+		IMPORT_CFM_FUNCTION	RelString
+	ENDIF
+
+;
+; pascal StringToDateStatus StringToDate(Ptr textPtr, long textLen, DateCachePtr theCache, long *lengthUsed, LongDateRec *dateTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StringToDate
+			dc.w 	$2F3C
+			dc.w 	$8214
+			dc.w 	$FFF6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StringToDate
+	ENDIF
+
+;
+; pascal StringToDateStatus StringToTime(Ptr textPtr, long textLen, DateCachePtr theCache, long *lengthUsed, LongDateRec *dateTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StringToTime
+			dc.w 	$2F3C
+			dc.w 	$8214
+			dc.w 	$FFF4
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StringToTime
+	ENDIF
+
+;
+; pascal FormatStatus ExtendedToString(extended80 *x, const NumFormatString *myCanonical, const NumberParts *partsTable, Str255 outString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ExtendedToString
+			dc.w 	$2F3C
+			dc.w 	$8210
+			dc.w 	$FFE8
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ExtendedToString
+	ENDIF
+
+;
+; pascal FormatStatus StringToExtended(ConstStr255Param source, const NumFormatString *myCanonical, const NumberParts *partsTable, extended80 *x)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StringToExtended
+			dc.w 	$2F3C
+			dc.w 	$8210
+			dc.w 	$FFE6
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StringToExtended
+	ENDIF
+
+;
+; pascal FormatStatus StringToFormatRec(ConstStr255Param inString, const NumberParts *partsTable, NumFormatString *outString)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StringToFormatRec
+			dc.w 	$2F3C
+			dc.w 	$820C
+			dc.w 	$FFEC
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StringToFormatRec
+	ENDIF
+
+;
+; pascal FormatStatus FormatRecToString(const NumFormatString *myCanonical, const NumberParts *partsTable, Str255 outString, TripleInt positions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FormatRecToString
+			dc.w 	$2F3C
+			dc.w 	$8210
+			dc.w 	$FFEA
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FormatRecToString
+	ENDIF
+
+;
+;	The following functions are old names, but are required for PowerPC builds
+;	becuase InterfaceLib exports these names, instead of the new ones.
+;
+;
+; pascal short IUMagString(const void *aPtr, const void *bPtr, short aLen, short bLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUMagString
+			move.w	#$000A,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUMagString
+	ENDIF
+
+;
+; pascal short IUMagIDString(const void *aPtr, const void *bPtr, short aLen, short bLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUMagIDString
+			move.w	#$000C,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUMagIDString
+	ENDIF
+
+;
+; pascal short IUMagPString(const void *aPtr, const void *bPtr, short aLen, short bLen, Handle itl2Handle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUMagPString
+			move.w	#$001A,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUMagPString
+	ENDIF
+
+;
+; pascal short IUMagIDPString(const void *aPtr, const void *bPtr, short aLen, short bLen, Handle itl2Handle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUMagIDPString
+			move.w	#$001C,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUMagIDPString
+	ENDIF
+
+;
+; pascal void IUDateString(long dateTime, DateForm longFlag, Str255 result)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUDateString
+			dc.w 	$4267
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUDateString
+	ENDIF
+
+;
+; pascal void IUTimeString(long dateTime, Boolean wantSeconds, Str255 result)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUTimeString
+			move.w	#$0002,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUTimeString
+	ENDIF
+
+;
+; pascal void IUDatePString(long dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUDatePString
+			move.w	#$000E,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUDatePString
+	ENDIF
+
+;
+; pascal void IUTimePString(long dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUTimePString
+			move.w	#$0010,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUTimePString
+	ENDIF
+
+;
+; pascal void IULDateString(LongDateTime *dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IULDateString
+			move.w	#$0014,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IULDateString
+	ENDIF
+
+;
+; pascal void IULTimeString(LongDateTime *dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IULTimeString
+			move.w	#$0016,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IULTimeString
+	ENDIF
+
+;
+; pascal short IUScriptOrder(ScriptCode script1, ScriptCode script2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUScriptOrder
+			move.w	#$001E,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUScriptOrder
+	ENDIF
+
+;
+; pascal short IULangOrder(LangCode language1, LangCode language2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IULangOrder
+			move.w	#$0020,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IULangOrder
+	ENDIF
+
+;
+; pascal short IUTextOrder(const void *aPtr, const void *bPtr, short aLen, short bLen, ScriptCode aScript, ScriptCode bScript, LangCode aLang, LangCode bLang)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IUTextOrder
+			move.w	#$0022,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IUTextOrder
+	ENDIF
+
+;
+; pascal void FindWord(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, BreakTablePtr breaks, OffsetTable offsets)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindWord
+			dc.w 	$2F3C
+			dc.w 	$8012
+			dc.w 	$001A
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindWord
+	ENDIF
+
+;
+; pascal void NFindWord(Ptr textPtr, short textLength, short offset, Boolean leadingEdge, NBreakTablePtr nbreaks, OffsetTable offsets)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NFindWord
+			dc.w 	$2F3C
+			dc.w 	$8012
+			dc.w 	$FFE2
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NFindWord
+	ENDIF
+
+;
+; pascal void UprText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_UprText:	OPWORD	$A054
+	ELSE
+		IMPORT_CFM_FUNCTION	UprText
+	ENDIF
+
+;
+; pascal void LwrText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_LwrText:	OPWORD	$A056
+	ELSE
+		IMPORT_CFM_FUNCTION	LwrText
+	ENDIF
+
+;
+; pascal void LowerText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_LowerText:	OPWORD	$A056
+	ELSE
+		IMPORT_CFM_FUNCTION	LowerText
+	ENDIF
+
+;
+; pascal void StripText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_StripText:	OPWORD	$A256
+	ELSE
+		IMPORT_CFM_FUNCTION	StripText
+	ENDIF
+
+;
+; pascal void UpperText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_UpperText:	OPWORD	$A456
+	ELSE
+		IMPORT_CFM_FUNCTION	UpperText
+	ENDIF
+
+;
+; pascal void StripUpperText(Ptr textPtr, short len)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 textPtr       	=> A0
+		;	 len           	=> D0
+		_StripUpperText:	OPWORD	$A656
+	ELSE
+		IMPORT_CFM_FUNCTION	StripUpperText
+	ENDIF
+
+;
+;	The following provide direct function prototypes for new names for 68k
+;
+;
+; pascal void DateString(long dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DateString
+			move.w	#$000E,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DateString
+	ENDIF
+
+;
+; pascal void TimeString(long dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TimeString
+			move.w	#$0010,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TimeString
+	ENDIF
+
+;
+; pascal void LongDateString(LongDateTime *dateTime, DateForm longFlag, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LongDateString
+			move.w	#$0014,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LongDateString
+	ENDIF
+
+;
+; pascal void LongTimeString(LongDateTime *dateTime, Boolean wantSeconds, Str255 result, Handle intlHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LongTimeString
+			move.w	#$0016,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LongTimeString
+	ENDIF
+
+;
+; pascal short CompareString(ConstStr255Param aStr, ConstStr255Param bStr, Handle itl2Handle)
+;
+	IF ¬ GENERATINGCFM THEN
+		_CompareString:	OPWORD	$A03C
+	ELSE
+		IMPORT_CFM_FUNCTION	CompareString
+	ENDIF
+
+;
+; pascal short CompareText(const void *aPtr, const void *bPtr, short aLen, short bLen, Handle itl2Handle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompareText
+			move.w	#$001A,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompareText
+	ENDIF
+
+;
+; pascal short IdenticalText(const void *aPtr, const void *bPtr, short aLen, short bLen, Handle itl2Handle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_IdenticalText
+			move.w	#$001C,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	IdenticalText
+	ENDIF
+
+;
+; pascal short LanguageOrder(LangCode language1, LangCode language2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LanguageOrder
+			move.w	#$0020,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LanguageOrder
+	ENDIF
+
+;
+; pascal short TextOrder(const void *aPtr, const void *bPtr, short aLen, short bLen, ScriptCode aScript, ScriptCode bScript, LangCode aLang, LangCode bLang)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TextOrder
+			move.w	#$0022,-(sp)
+			dc.w 	$A9ED
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TextOrder
+	ENDIF
+
+	IF ¬ OLDROUTINELOCATIONS  THEN
+	ENDIF
+	ENDIF ; __TEXTUTILS__

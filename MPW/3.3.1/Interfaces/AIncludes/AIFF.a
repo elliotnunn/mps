@@ -1,0 +1,195 @@
+
+; Created: Thursday, December 19, 1991 3:38 PM
+;
+; File: AIFF.a
+;
+; Assembler Interface to the Macintosh Libraries
+; Copyright Apple Computer, Inc. 1990
+; All Rights Reserved
+;
+;___________________________________________________________________________
+
+ IF (&TYPE('__AIFF__') = 'UNDEFINED') THEN
+__AIFF__   SET 1
+
+
+AIFFID                   EQU     'AIFF'
+AIFCID                   EQU     'AIFC'
+FormatVersionID          EQU     'FVER'
+CommonID                 EQU     'COMM'
+FORMID                   EQU     'FORM'
+SoundDataID              EQU     'SSND'
+MarkerID                 EQU     'MARK'
+InstrumentID             EQU     'INST'
+MIDIDataID               EQU     'MIDI'
+AudioRecordingID         EQU     'AESD'
+ApplicationSpecificID    EQU     'APPL'
+CommentID                EQU     'COMT'
+NameID                   EQU     'NAME'
+AuthorID                 EQU     'AUTH'
+CopyrightID              EQU     '	'
+AnnotationID             EQU     'ANNO'
+NoLooping                EQU     0
+ForwardLooping           EQU     1
+ForwardBackwardLooping   EQU     2
+
+; AIFF-C Versions 
+AIFCVersion1             EQU     $A2805140
+
+; Compression Types 
+NoneType                 EQU     'NONE'
+ACE2Type                 EQU     'ACE2'
+ACE8Type                 EQU     'ACE8'
+MACE3Type                EQU     'MAC3'
+MACE6Type                EQU     'MAC6'
+
+ChunkHeader              RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+size                     EQU     *
+                         ENDR
+
+
+ContainerChunk           RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+formType                 DS.L    1   ; ID
+size                     EQU     *
+                         ENDR
+
+
+FormatVersionChunk       RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+timestamp                DS.L    1   ; long
+size                     EQU     *
+                         ENDR
+
+
+CommonChunk              RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+numChannels              DS.W    1   ; short
+numSampleFrames          DS.L    1   ; long
+sampleSize               DS.W    1   ; short
+sampleRate               DS.B    10  ; Extended80
+size                     EQU     *
+                         ENDR
+
+
+ExtCommonChunk           RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+numChannels              DS.W    1   ; short
+numSampleFrames          DS.L    1   ; long
+sampleSize               DS.W    1   ; short
+sampleRate               DS.B    10  ; Extended80
+compressionType          DS.L    1   ; ID
+compressionName          DS.B    1   ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+SoundDataChunk           RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+offset                   DS.L    1   ; long
+blockSize                DS.L    1   ; long
+size                     EQU     *
+                         ENDR
+
+
+Marker                   RECORD  0
+id                       DS.W    1   ; MarkerIdType
+position                 DS.L    1   ; long
+markerName               DS.B    256 ; Str255
+size                     EQU     *
+                         ENDR
+
+
+MarkerChunk              RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+numMarkers               DS.W    1   ; short
+Markers                  DS.B    Marker.size*1
+size                     EQU     *
+                         ENDR
+
+
+AIFFLoop                 RECORD  0
+playMode                 DS.W    1   ; short
+beginLoop                DS.W    1   ; MarkerIdType
+endLoop                  DS.W    1   ; MarkerIdType
+size                     EQU     *
+                         ENDR
+
+
+InstrumentChunk          RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+baseFrequency            DS.B    1   ; Byte
+detune                   DS.B    1   ; Byte
+lowFrequency             DS.B    1   ; Byte
+highFrequency            DS.B    1   ; Byte
+lowVelocity              DS.B    1   ; Byte
+highVelocity             DS.B    1   ; Byte
+gain                     DS.W    1   ; short
+sustainLoop              DS      AIFFLoop
+releaseLoop              DS      AIFFLoop
+size                     EQU     *
+                         ENDR
+
+
+MIDIDataChunk            RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+MIDIdata                 DS.B    1   ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+AudioRecordingChunk      RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+AESChannelStatus         DS.B    24  ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+ApplicationSpecificChunk RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+applicationSignature     DS.L    1   ; OSType
+data                     DS.B    1   ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+Comment                  RECORD  0
+timeStamp                DS.L    1   ; long
+marker                   DS.W    1   ; MarkerIdType
+count                    DS.W    1   ; short
+text                     DS.B    1   ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+CommentsChunk            RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+numComments              DS.W    1   ; short
+comments                 DS.B    Comment.size*1
+size                     EQU     *
+                         ENDR
+
+
+TextChunk                RECORD  0
+ckID                     DS.L    1   ; ID
+ckSize                   DS.L    1   ; long
+text                     DS.B    1   ; Array of Byte
+size                     EQU     *
+                         ENDR
+
+
+
+                         ENDIF	;  ...already included

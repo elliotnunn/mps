@@ -1,0 +1,390 @@
+;
+;	File:		Threads.a
+;
+;	Contains:	Thread Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__THREADS__') = 'UNDEFINED' THEN
+__THREADS__ SET 1
+
+
+	IF &TYPE('__ERRORS__') = 'UNDEFINED' THEN
+	include 'Errors.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'Types.a'											;
+;		include 'MixedMode.a'										;
+; typedef unsigned short 	ThreadState
+
+kReadyThreadState				EQU		0
+kStoppedThreadState				EQU		1
+kRunningThreadState				EQU		2
+
+; Error codes have been meoved to Errors.(pah) 
+; Thread environment characteristics 
+; typedef void 				*ThreadTaskRef
+; Thread characteristics 
+; typedef unsigned long 	ThreadStyle
+
+kCooperativeThread				EQU		1 << 0
+kPreemptiveThread				EQU		1 << 1
+
+; Thread identifiers 
+; typedef unsigned long 	ThreadID
+
+kNoThreadID						EQU		0
+kCurrentThreadID				EQU		1
+kApplicationThreadID			EQU		2
+
+; Options when creating a thread 
+; typedef unsigned long 	ThreadOptions
+
+kNewSuspend						EQU		(1 << 0)
+kUsePremadeThread				EQU		(1 << 1)
+kCreateIfNeeded					EQU		(1 << 2)
+kFPUNotNeeded					EQU		(1 << 3)
+kExactMatchThread				EQU		(1 << 4)
+
+; Information supplied to the custom scheduler 
+SchedulerInfoRec 		RECORD	0
+InfoRecSize				 ds.l   1		; offset: $0 (0)
+CurrentThreadID			 ds.l   1		; offset: $4 (4)
+SuggestedThreadID		 ds.l   1		; offset: $8 (8)
+InterruptedCoopThreadID	 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct SchedulerInfoRec  SchedulerInfoRec
+; typedef SchedulerInfoRec 	*SchedulerInfoRecPtr
+	IF GENERATING68K  ** GENERATINGCFM  THEN
+;
+;	The following UniversalProcPtrs are for CFM-68k compatiblity with
+;	the implementation of the Thread Manager.
+;
+; typedef UniversalProcPtr 	ThreadEntryProcPtr
+; typedef UniversalProcPtr 	ThreadSchedulerProcPtr
+; typedef UniversalProcPtr 	ThreadSwitchProcPtr
+; typedef UniversalProcPtr 	ThreadTerminationProcPtr
+; typedef UniversalProcPtr 	DebuggerNewThreadProcPtr
+; typedef UniversalProcPtr 	DebuggerDisposeThreadProcPtr
+; typedef UniversalProcPtr 	DebuggerThreadSchedulerProcPtr
+	ELSE
+;
+;	The following ProcPtrs cannot be interchanged with UniversalProcPtrs because
+;	of differences between 680x0 and PowerPC runtime architectures with regard to
+;	the implementation of the Thread Manager.
+; 
+; Prototype for thread's entry (main) routine 
+; typedef void 				*voidPtr
+; Prototype for custom thread scheduler routine 
+; Prototype for custom thread switcher routine 
+; Prototype for thread termination notification routine 
+; Prototype for debugger NewThread notification 
+; Prototype for debugger DisposeThread notification 
+; Prototype for debugger schedule notification 
+	ENDIF
+;
+; pascal OSErr CreateThreadPool(ThreadStyle threadStyle, short numToCreate, Size stackSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CreateThreadPool
+			move.w	#$0501,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CreateThreadPool
+	ENDIF
+
+;
+; pascal OSErr GetFreeThreadCount(ThreadStyle threadStyle, short *freeCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetFreeThreadCount
+			move.w	#$0402,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetFreeThreadCount
+	ENDIF
+
+;
+; pascal OSErr GetSpecificFreeThreadCount(ThreadStyle threadStyle, Size stackSize, short *freeCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSpecificFreeThreadCount
+			move.w	#$0615,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSpecificFreeThreadCount
+	ENDIF
+
+;
+; pascal OSErr GetDefaultThreadStackSize(ThreadStyle threadStyle, Size *stackSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDefaultThreadStackSize
+			move.w	#$0413,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDefaultThreadStackSize
+	ENDIF
+
+;
+; pascal OSErr ThreadCurrentStackSpace(ThreadID thread, unsigned long *freeStack)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ThreadCurrentStackSpace
+			move.w	#$0414,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ThreadCurrentStackSpace
+	ENDIF
+
+;
+; pascal OSErr NewThread(ThreadStyle threadStyle, ThreadEntryProcPtr threadEntry, void *threadParam, Size stackSize, ThreadOptions options, void **threadResult, ThreadID *threadMade)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewThread
+			move.w	#$0E03,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewThread
+	ENDIF
+
+;
+; pascal OSErr DisposeThread(ThreadID threadToDump, void *threadResult, Boolean recycleThread)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeThread
+			move.w	#$0504,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeThread
+	ENDIF
+
+;
+; pascal OSErr YieldToThread(ThreadID suggestedThread)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_YieldToThread
+			move.w	#$0205,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	YieldToThread
+	ENDIF
+
+;
+; pascal OSErr YieldToAnyThread(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_YieldToAnyThread
+			dc.w 	$42A7
+			move.w	#$0205,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	YieldToAnyThread
+	ENDIF
+
+;
+; pascal OSErr GetCurrentThread(ThreadID *currentThreadID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCurrentThread
+			move.w	#$0206,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCurrentThread
+	ENDIF
+
+;
+; pascal OSErr GetThreadState(ThreadID threadToGet, ThreadState *threadState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetThreadState
+			move.w	#$0407,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetThreadState
+	ENDIF
+
+;
+; pascal OSErr SetThreadState(ThreadID threadToSet, ThreadState newState, ThreadID suggestedThread)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadState
+			move.w	#$0508,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadState
+	ENDIF
+
+;
+; pascal OSErr SetThreadStateEndCritical(ThreadID threadToSet, ThreadState newState, ThreadID suggestedThread)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadStateEndCritical
+			move.w	#$0512,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadStateEndCritical
+	ENDIF
+
+;
+; pascal OSErr SetThreadScheduler(ThreadSchedulerProcPtr threadScheduler)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadScheduler
+			move.w	#$0209,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadScheduler
+	ENDIF
+
+;
+; pascal OSErr SetThreadSwitcher(ThreadID thread, ThreadSwitchProcPtr threadSwitcher, void *switchProcParam, Boolean inOrOut)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadSwitcher
+			move.w	#$070A,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadSwitcher
+	ENDIF
+
+;
+; pascal OSErr SetThreadTerminator(ThreadID thread, ThreadTerminationProcPtr threadTerminator, void *terminationProcParam)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadTerminator
+			move.w	#$0611,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadTerminator
+	ENDIF
+
+;
+; pascal OSErr ThreadBeginCritical(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ThreadBeginCritical
+			move.w	#$000B,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ThreadBeginCritical
+	ENDIF
+
+;
+; pascal OSErr ThreadEndCritical(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ThreadEndCritical
+			move.w	#$000C,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ThreadEndCritical
+	ENDIF
+
+;
+; pascal OSErr SetDebuggerNotificationProcs(DebuggerNewThreadProcPtr notifyNewThread, DebuggerDisposeThreadProcPtr notifyDisposeThread, DebuggerThreadSchedulerProcPtr notifyThreadScheduler)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDebuggerNotificationProcs
+			move.w	#$060D,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDebuggerNotificationProcs
+	ENDIF
+
+;
+; pascal OSErr GetThreadCurrentTaskRef(ThreadTaskRef *threadTRef)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetThreadCurrentTaskRef
+			move.w	#$020E,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetThreadCurrentTaskRef
+	ENDIF
+
+;
+; pascal OSErr GetThreadStateGivenTaskRef(ThreadTaskRef threadTRef, ThreadID threadToGet, ThreadState *threadState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetThreadStateGivenTaskRef
+			move.w	#$060F,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetThreadStateGivenTaskRef
+	ENDIF
+
+;
+; pascal OSErr SetThreadReadyGivenTaskRef(ThreadTaskRef threadTRef, ThreadID threadToSet)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetThreadReadyGivenTaskRef
+			move.w	#$0410,d0
+			dc.w 	$ABF2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetThreadReadyGivenTaskRef
+	ENDIF
+
+	ENDIF ; __THREADS__

@@ -1,0 +1,315 @@
+;
+;    File:       CFXMLNode.a
+;
+;    Contains:   CoreFoundation XML Node and XML Tree
+;
+;    Version:    Technology: Mac OS X
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 2000-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CFXMLNODE__') = 'UNDEFINED' THEN
+__CFXMLNODE__ SET 1
+
+	IF &TYPE('__CFARRAY__') = 'UNDEFINED' THEN
+	include 'CFArray.a'
+	ENDIF
+	IF &TYPE('__CFDICTIONARY__') = 'UNDEFINED' THEN
+	include 'CFDictionary.a'
+	ENDIF
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+	include 'CFString.a'
+	ENDIF
+	IF &TYPE('__CFTREE__') = 'UNDEFINED' THEN
+	include 'CFTree.a'
+	ENDIF
+	IF &TYPE('__CFURL__') = 'UNDEFINED' THEN
+	include 'CFURL.a'
+	ENDIF
+
+
+
+
+; typedef CFTreeRef 					CFXMLTreeRef
+
+;   An CFXMLNode describes an individual XML construct - like a tag, or a comment, or a string
+;    of character data.  Each CFXMLNode contains 3 main pieces of information - the node's type,
+;    the data string, and a pointer to an additional data structure.  The node's type ID is an enum
+;    value of type CFXMLNodeTypeID.  The data string is always a CFStringRef; the meaning of the
+;    string is dependent on the node's type ID. The format of the additional data is also dependent
+;    on the node's type; in general, there is a custom structure for each type that requires
+;    additional data.  See below for the mapping from type ID to meaning of the data string and
+;    structure of the additional data.  Note that these structures are versioned, and may change
+;    as the parser changes.  The current version can always be identified by kCFXMLNodeCurrentVersion;
+;    earlier versions can be identified and used by passing earlier values for the version number
+;    (although the older structures would have been removed from the header).
+;
+;    An CFXMLTree is simply a CFTree whose context data is known to be an CFXMLNodeRef.  As
+;    such, an CFXMLTree can be used to represent an entire XML document; the CFTree
+;    provides the tree structure of the document, while the CFXMLNodes identify and describe
+;    the nodes of the tree.  An XML document can be parsed to a CFXMLTree, and a CFXMLTree
+;    can generate the data for the equivalent XML document - see CFXMLParser.h for more
+;    information on parsing XML.
+;    
+
+
+kCFXMLNodeCurrentVersion		EQU		1
+;  Type codes for the different possible XML nodes; this list may grow.
+
+; typedef long							CFXMLNodeTypeCode
+kCFXMLNodeTypeDocument			EQU		1
+kCFXMLNodeTypeElement			EQU		2
+kCFXMLNodeTypeAttribute			EQU		3
+kCFXMLNodeTypeProcessingInstruction EQU	4
+kCFXMLNodeTypeComment			EQU		5
+kCFXMLNodeTypeText				EQU		6
+kCFXMLNodeTypeCDATASection		EQU		7
+kCFXMLNodeTypeDocumentFragment	EQU		8
+kCFXMLNodeTypeEntity			EQU		9
+kCFXMLNodeTypeEntityReference	EQU		10
+kCFXMLNodeTypeDocumentType		EQU		11
+kCFXMLNodeTypeWhitespace		EQU		12
+kCFXMLNodeTypeNotation			EQU		13
+kCFXMLNodeTypeElementTypeDeclaration EQU 14
+kCFXMLNodeTypeAttributeListDeclaration EQU 15
+CFXMLElementInfo		RECORD 0
+attributes				 ds.l	1				; offset: $0 (0)
+attributeOrder			 ds.l	1				; offset: $4 (4)
+isEmpty					 ds.b	1				; offset: $8 (8)
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+CFXMLProcessingInstructionInfo RECORD 0
+dataString				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CFXMLDocumentInfo		RECORD 0
+sourceURL				 ds.l	1				; offset: $0 (0)
+encoding				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CFXMLExternalID			RECORD 0
+systemID				 ds.l	1				; offset: $0 (0)
+publicID				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CFXMLDocumentTypeInfo	RECORD 0
+externalID				 ds		CFXMLExternalID ; offset: $0 (0)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CFXMLNotationInfo		RECORD 0
+externalID				 ds		CFXMLExternalID ; offset: $0 (0)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CFXMLElementTypeDeclarationInfo RECORD 0
+;  This is expected to change in future versions 
+contentDescription		 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CFXMLAttributeDeclarationInfo RECORD 0
+;  This is expected to change in future versions 
+attributeName			 ds.l	1				; offset: $0 (0)
+typeString				 ds.l	1				; offset: $4 (4)
+defaultString			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+CFXMLAttributeListDeclarationInfo RECORD 0
+numberOfAttributes		 ds.l	1				; offset: $0 (0)
+attributes				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+; typedef long							CFXMLEntityTypeCode
+kCFXMLEntityTypeParameter		EQU		0					; Implies parsed, internal 
+kCFXMLEntityTypeParsedInternal	EQU		1
+kCFXMLEntityTypeParsedExternal	EQU		2
+kCFXMLEntityTypeUnparsed		EQU		3
+kCFXMLEntityTypeCharacter		EQU		4
+CFXMLEntityInfo			RECORD 0
+entityType				 ds.l	1				; offset: $0 (0)
+replacementText			 ds.l	1				; offset: $4 (4)		;  NULL if entityType is external or unparsed 
+entityID				 ds		CFXMLExternalID ; offset: $8 (8)		;  entityID.systemID will be NULL if entityType is internal 
+notationName			 ds.l	1				; offset: $10 (16)		;  NULL if entityType is parsed 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+CFXMLEntityReferenceInfo RECORD 0
+entityType				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; 
+; dataTypeCode                       meaning of dataString                format of infoPtr
+; ===========                        =====================                =================
+; kCFXMLNodeTypeDocument             <currently unused>                   CFXMLDocumentInfo *
+; kCFXMLNodeTypeElement              tag name                             CFXMLElementInfo *
+; kCFXMLNodeTypeAttribute            <currently unused>                   <currently unused>
+; kCFXMLNodeTypeProcessInstruction   name of the target                   CFXMLProcessingInstructionInfo *
+; kCFXMLNodeTypeComment              text of the comment                  NULL
+; kCFXMLNodeTypeText                 the text's contents                  NULL
+; kCFXMLNodeTypeCDATASection         text of the CDATA                    NULL
+; kCFXMLNodeTypeDocumentFragment     <currently unused>                   <currently unused>
+; kCFXMLNodeTypeEntity               name of the entity                   CFXMLEntityInfo *
+; kCFXMLNodeTypeEntityReference      name of the referenced entity        CFXMLEntityReferenceInfo *
+; kCFXMLNodeTypeDocumentType         name given as top-level element      CFXMLDocumentTypeInfo *
+; kCFXMLNodeTypeWhitespace           text of the whitespace               NULL
+; kCFXMLNodeTypeNotation             notation name                        CFXMLNotationInfo *
+; kCFXMLNodeTypeElementTypeDeclaration     tag name                       CFXMLElementTypeDeclarationInfo *
+; kCFXMLNodeTypeAttributeListDeclaration   tag name                       CFXMLAttributeListDeclarationInfo *
+;
+
+
+; *  CFXMLNodeGetTypeID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeID CFXMLNodeGetTypeID(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeGetTypeID
+	ENDIF
+
+;  Creates a new node based on xmlType, dataString, and additionalInfoPtr.  version (together with xmlType) determines the expected structure of additionalInfoPtr 
+
+; *  CFXMLNodeCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLNodeRef CFXMLNodeCreate(CFAllocatorRef alloc, CFXMLNodeTypeCode xmlType, CFStringRef dataString, const void *additionalInfoPtr, CFIndex version)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeCreate
+	ENDIF
+
+;  Creates a copy of origNode (which may not be NULL). 
+
+; *  CFXMLNodeCreateCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLNodeRef CFXMLNodeCreateCopy(CFAllocatorRef alloc, CFXMLNodeRef origNode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeCreateCopy
+	ENDIF
+
+
+; *  CFXMLNodeGetTypeCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLNodeTypeCode CFXMLNodeGetTypeCode(CFXMLNodeRef node)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeGetTypeCode
+	ENDIF
+
+
+; *  CFXMLNodeGetString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFXMLNodeGetString(CFXMLNodeRef node)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeGetString
+	ENDIF
+
+
+; *  CFXMLNodeGetInfoPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern const void *CFXMLNodeGetInfoPtr(CFXMLNodeRef node)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeGetInfoPtr
+	ENDIF
+
+
+; *  CFXMLNodeGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFXMLNodeGetVersion(CFXMLNodeRef node)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLNodeGetVersion
+	ENDIF
+
+;  CFXMLTreeRef 
+;  Creates a childless, parentless tree from node 
+
+; *  CFXMLTreeCreateWithNode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLTreeRef CFXMLTreeCreateWithNode(CFAllocatorRef allocator, CFXMLNodeRef node)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLTreeCreateWithNode
+	ENDIF
+
+;  Extracts and returns the node stored in xmlTree 
+
+; *  CFXMLTreeGetNode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLNodeRef CFXMLTreeGetNode(CFXMLTreeRef xmlTree)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLTreeGetNode
+	ENDIF
+
+	ENDIF ; __CFXMLNODE__ 
+

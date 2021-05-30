@@ -1,0 +1,1541 @@
+;
+;    File:       QD3D.a
+;
+;    Contains:   Base types for Quickdraw 3D
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+__QD3D__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+	IF TARGET_OS_MAC THEN
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	ENDIF	; TARGET_OS_MAC
+	IF TARGET_OS_MAC THEN
+	OS_MACINTOSH: SET 1
+	OS_WIN32: SET 0
+	OS_UNIX: SET 0
+	OS_NEXT: SET 0
+	WINDOW_SYSTEM_MACINTOSH: SET 1
+	WINDOW_SYSTEM_WIN32: SET 0
+	WINDOW_SYSTEM_X11: SET 0
+	WINDOW_SYSTEM_NEXT: SET 0
+	ENDIF	; TARGET_OS_MAC
+
+; ******************************************************************************
+; **                                                                          **
+; **                             NULL definition                              **
+; **                                                                          **
+; ****************************************************************************
+
+; ******************************************************************************
+; **                                                                          **
+; **                                 Objects                                  **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; * Everything in QuickDraw 3D is an OBJECT: a bunch of data with a type,
+; * deletion, duplication, and i/o methods.
+; 
+
+; typedef long 							TQ3ObjectType
+
+
+
+;  
+; 
+; * There are four subclasses of OBJECT:
+; *  an ELEMENT, which is data that is placed in a SET
+; *  a SHAREDOBJECT, which is reference-counted data that is shared
+; *  VIEWs, which maintain state information for an image
+; *  a PICK, which used to query a VIEW
+; 
+
+; typedef TQ3Object 					TQ3ElementObject
+
+; typedef TQ3Object 					TQ3SharedObject
+
+; typedef TQ3Object 					TQ3ViewObject
+
+; typedef TQ3Object 					TQ3PickObject
+
+; 
+; * There are several types of SharedObjects:
+; *  RENDERERs, which paint to a drawContext
+; *  DRAWCONTEXTs, which are an interface to a device 
+; *  SETs, which maintains "mathematical sets" of ELEMENTs
+; *  FILEs, which maintain state information for a metafile
+; *  SHAPEs, which affect the state of the View
+; *  SHAPEPARTs, which contain geometry-specific data about a picking hit
+; *  CONTROLLERSTATEs, which hold state of the output channels for a CONTROLLER
+; *  TRACKERs, which represent a position and orientation in the user interface
+; *  STRINGs, which are abstractions of text string data.
+; *  STORAGE, which is an abstraction for stream-based data storage (files, memory)
+; *  TEXTUREs, for sharing bitmap information for TEXTURESHADERS
+; *  VIEWHINTs, which specifies viewing preferences in FILEs
+; 
+
+; typedef TQ3SharedObject 				TQ3RendererObject
+
+; typedef TQ3SharedObject 				TQ3DrawContextObject
+
+; typedef TQ3SharedObject 				TQ3SetObject
+
+; typedef TQ3SharedObject 				TQ3FileObject
+
+; typedef TQ3SharedObject 				TQ3ShapeObject
+
+; typedef TQ3SharedObject 				TQ3ShapePartObject
+
+; typedef TQ3SharedObject 				TQ3ControllerStateObject
+
+; typedef TQ3SharedObject 				TQ3TrackerObject
+
+; typedef TQ3SharedObject 				TQ3StringObject
+
+; typedef TQ3SharedObject 				TQ3StorageObject
+
+; typedef TQ3SharedObject 				TQ3TextureObject
+
+; typedef TQ3SharedObject 				TQ3ViewHintsObject
+
+; 
+; * There is one types of SET:
+; *  ATTRIBUTESETs, which contain ATTRIBUTEs which are inherited 
+; 
+
+; typedef TQ3SetObject 					TQ3AttributeSet
+
+; 
+; * There are many types of SHAPEs:
+; *  LIGHTs, which affect how the RENDERER draws 3-D cues
+; *  CAMERAs, which affects the location and orientation of the RENDERER in space
+; *  GROUPs, which may contain any number of SHARED OBJECTS
+; *  GEOMETRYs, which are representations of three-dimensional data
+; *  SHADERs, which affect how colors are drawn on a geometry
+; *  STYLEs, which affect how the RENDERER paints to the DRAWCONTEXT
+; *  TRANSFORMs, which affect the coordinate system in the VIEW
+; *  REFERENCEs, which are references to objects in FILEs
+; *  UNKNOWN, which hold unknown objects read from a metafile.
+; 
+
+; typedef TQ3ShapeObject 				TQ3GroupObject
+
+; typedef TQ3ShapeObject 				TQ3GeometryObject
+
+; typedef TQ3ShapeObject 				TQ3ShaderObject
+
+; typedef TQ3ShapeObject 				TQ3StyleObject
+
+; typedef TQ3ShapeObject 				TQ3TransformObject
+
+; typedef TQ3ShapeObject 				TQ3LightObject
+
+; typedef TQ3ShapeObject 				TQ3CameraObject
+
+; typedef TQ3ShapeObject 				TQ3UnknownObject
+
+; typedef TQ3ShapeObject 				TQ3ReferenceObject
+
+; typedef TQ3ShapeObject 				TQ3StateOperatorObject
+
+; 
+; * For now, there is only one type of SHAPEPARTs:
+; *  MESHPARTs, which describe some part of a mesh
+; 
+
+; typedef TQ3ShapePartObject 			TQ3MeshPartObject
+
+; 
+; * There are three types of MESHPARTs:
+; *  MESHFACEPARTs, which describe a face of a mesh
+; *  MESHEDGEPARTs, which describe a edge of a mesh
+; *  MESHVERTEXPARTs, which describe a vertex of a mesh
+; 
+
+; typedef TQ3MeshPartObject 			TQ3MeshFacePartObject
+
+; typedef TQ3MeshPartObject 			TQ3MeshEdgePartObject
+
+; typedef TQ3MeshPartObject 			TQ3MeshVertexPartObject
+
+; 
+; * A DISPLAY Group can be drawn to a view
+; 
+
+; typedef TQ3GroupObject 				TQ3DisplayGroupObject
+
+; 
+; * There are many types of SHADERs:
+; *  SURFACESHADERs, which affect how the surface of a geometry is painted
+; *  ILLUMINATIONSHADERs, which affect how lights affect the color of a surface
+; 
+
+; typedef TQ3ShaderObject 				TQ3SurfaceShaderObject
+
+; typedef TQ3ShaderObject 				TQ3IlluminationShaderObject
+
+; 
+; * A handle to an object in a group
+; 
+
+
+
+;  
+; * TQ3ObjectClassNameString is used for the class name of an object
+; 
+
+
+kQ3StringMaximumLength			EQU		1024
+TQ3ObjectClassNameString RECORD 0
+elements				 ds.b	1024
+sizeof					 EQU *					; size:   $400 (1024)
+						ENDR
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Client/Server Things                             **
+; **                                                                          **
+; ****************************************************************************
+
+; typedef void *						TQ3ControllerRef
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Flags and Switches                               **
+; **                                                                          **
+; ****************************************************************************
+
+
+; typedef long							TQ3Boolean
+kQ3False						EQU		0
+kQ3True							EQU		1
+
+; typedef long							TQ3Switch
+kQ3Off							EQU		0
+kQ3On							EQU		1
+
+; typedef long							TQ3Status
+kQ3Failure						EQU		0
+kQ3Success						EQU		1
+
+; typedef long							TQ3Axis
+kQ3AxisX						EQU		0
+kQ3AxisY						EQU		1
+kQ3AxisZ						EQU		2
+
+; typedef long							TQ3PixelType
+kQ3PixelTypeRGB32				EQU		0					; Alpha:8 (ignored), R:8, G:8, B:8   
+kQ3PixelTypeARGB32				EQU		1					; Alpha:8, R:8, G:8, B:8          
+kQ3PixelTypeRGB16				EQU		2					; Alpha:1 (ignored), R:5, G:5, B:5   
+kQ3PixelTypeARGB16				EQU		3					; Alpha:1, R:5, G:5, B:5          
+kQ3PixelTypeRGB16_565			EQU		4					; Win32 only: 16 bits/pixel, R:5, G:6, B:5     
+kQ3PixelTypeRGB24				EQU		5					; Win32 only: 24 bits/pixel, R:8, G:8, B:8     
+
+; typedef long							TQ3Endian
+kQ3EndianBig					EQU		0
+kQ3EndianLittle					EQU		1
+
+; typedef long							TQ3EndCapMasks
+kQ3EndCapNone					EQU		0
+kQ3EndCapMaskTop				EQU		$01
+kQ3EndCapMaskBottom				EQU		$02
+kQ3EndCapMaskInterior			EQU		$04
+; typedef unsigned long 				TQ3EndCap
+
+
+kQ3ArrayIndexNULL				EQU		-1
+; ******************************************************************************
+; **                                                                          **
+; **                     Point and Vector Definitions                         **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Vector2D				RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3Vector3D				RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+z						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TQ3Point2D				RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3Point3D				RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+z						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TQ3RationalPoint4D		RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+z						 ds		Float32			; offset: $8 (8)
+w						 ds		Float32			; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TQ3RationalPoint3D		RECORD 0
+x						 ds		Float32			; offset: $0 (0)
+y						 ds		Float32			; offset: $4 (4)
+w						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                             Quaternion                                   **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Quaternion			RECORD 0
+w						 ds		Float32			; offset: $0 (0)
+x						 ds		Float32			; offset: $4 (4)
+y						 ds		Float32			; offset: $8 (8)
+z						 ds		Float32			; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                             Ray Definition                               **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Ray3D				RECORD 0
+origin					 ds		TQ3Point3D		; offset: $0 (0)
+direction				 ds		TQ3Vector3D		; offset: $C (12)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                     Parameterization Data Structures                     **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Param2D				RECORD 0
+u						 ds		Float32			; offset: $0 (0)
+v						 ds		Float32			; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3Param3D				RECORD 0
+u						 ds		Float32			; offset: $0 (0)
+v						 ds		Float32			; offset: $4 (4)
+w						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TQ3Tangent2D			RECORD 0
+uTangent				 ds		TQ3Vector3D		; offset: $0 (0)
+vTangent				 ds		TQ3Vector3D		; offset: $C (12)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+TQ3Tangent3D			RECORD 0
+uTangent				 ds		TQ3Vector3D		; offset: $0 (0)
+vTangent				 ds		TQ3Vector3D		; offset: $C (12)
+wTangent				 ds		TQ3Vector3D		; offset: $18 (24)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                     Polar and Spherical Coordinates                      **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3PolarPoint			RECORD 0
+r						 ds		Float32			; offset: $0 (0)
+theta					 ds		Float32			; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+TQ3SphericalPoint		RECORD 0
+rho						 ds		Float32			; offset: $0 (0)
+theta					 ds		Float32			; offset: $4 (4)
+phi						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                         Color Definition                                 **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3ColorRGB				RECORD 0
+r						 ds		Float32			; offset: $0 (0)
+g						 ds		Float32			; offset: $4 (4)
+b						 ds		Float32			; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+TQ3ColorARGB			RECORD 0
+a						 ds		Float32			; offset: $0 (0)
+r						 ds		Float32			; offset: $4 (4)
+g						 ds		Float32			; offset: $8 (8)
+b						 ds		Float32			; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                                 Vertices                                 **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Vertex3D				RECORD 0
+point					 ds		TQ3Point3D		; offset: $0 (0)
+attributeSet			 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                                 Matrices                                 **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Matrix3x3			RECORD 0
+value					 ds.b	3 * 3 * Float32.sizeof ; offset: $0 (0)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+TQ3Matrix4x4			RECORD 0
+value					 ds.b	4 * 4 * Float32.sizeof ; offset: $0 (0)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; ******************************************************************************
+; **                                                                          **
+; **                             Bitmap/Pixmap                                **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Pixmap				RECORD 0
+image					 ds.l	1				; offset: $0 (0)
+width					 ds.l	1				; offset: $4 (4)
+height					 ds.l	1				; offset: $8 (8)
+rowBytes				 ds.l	1				; offset: $C (12)
+pixelSize				 ds.l	1				; offset: $10 (16)		;  MUST be 16 or 32 to use with the   Interactive Renderer on Mac OS
+pixelType				 ds.l	1				; offset: $14 (20)
+bitOrder				 ds.l	1				; offset: $18 (24)
+byteOrder				 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+TQ3StoragePixmap		RECORD 0
+image					 ds.l	1				; offset: $0 (0)
+width					 ds.l	1				; offset: $4 (4)
+height					 ds.l	1				; offset: $8 (8)
+rowBytes				 ds.l	1				; offset: $C (12)
+pixelSize				 ds.l	1				; offset: $10 (16)		;  MUST be 16 or 32 to use with the   Interactive Renderer on Mac OS
+pixelType				 ds.l	1				; offset: $14 (20)
+bitOrder				 ds.l	1				; offset: $18 (24)
+byteOrder				 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+TQ3Bitmap				RECORD 0
+image					 ds.l	1				; offset: $0 (0)
+width					 ds.l	1				; offset: $4 (4)
+height					 ds.l	1				; offset: $8 (8)
+rowBytes				 ds.l	1				; offset: $C (12)
+bitOrder				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+TQ3MipmapImage			RECORD 0
+;  An image for use as a texture mipmap  
+width					 ds.l	1				; offset: $0 (0)		;  Width of mipmap, must be power of 2   
+height					 ds.l	1				; offset: $4 (4)		;  Height of mipmap, must be power of 2  
+rowBytes				 ds.l	1				; offset: $8 (8)		;  Rowbytes of mipmap                    
+offset					 ds.l	1				; offset: $C (12)		;  Offset from image base to this mipmap 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TQ3Mipmap				RECORD 0
+image					 ds.l	1				; offset: $0 (0)		;  Data containing the texture map and     
+;  if (useMipmapping==kQ3True) the       
+;  mipmap data                  
+useMipmapping			 ds.l	1				; offset: $4 (4)		;  True if mipmapping should be used   
+;  and all mipmaps have been provided    
+pixelType				 ds.l	1				; offset: $8 (8)
+bitOrder				 ds.l	1				; offset: $C (12)
+byteOrder				 ds.l	1				; offset: $10 (16)
+reserved				 ds.l	1				; offset: $14 (20)		;  leave NULL for next version          
+mipmaps					 ds.b	32 * TQ3MipmapImage.sizeof ; offset: $18 (24) ;  The actual number of mipmaps is determined from the size of the first mipmap 
+sizeof					 EQU *					; size:   $218 (536)
+						ENDR
+
+
+TQ3CompressedPixmap		RECORD 0
+compressedImage			 ds.l	1				; offset: $0 (0)		;  storage obj containing compressed image data 
+imageDescByteOrder		 ds.l	1				; offset: $4 (4)		;  endianness of the data in the imageDesc 
+imageDesc				 ds.l	1				; offset: $8 (8)		;  storage obj containing image description created by Quicktime to store info about compressed image 
+makeMipmaps				 ds.l	1				; offset: $C (12)
+width					 ds.l	1				; offset: $10 (16)
+height					 ds.l	1				; offset: $14 (20)
+pixelSize				 ds.l	1				; offset: $18 (24)
+pixelType				 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+; ******************************************************************************
+; **                                                                          **
+; **                     Higher dimension quantities                          **
+; **                                                                          **
+; ****************************************************************************
+
+TQ3Area					RECORD 0
+min						 ds		TQ3Point2D		; offset: $0 (0)
+max						 ds		TQ3Point2D		; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TQ3PlaneEquation		RECORD 0
+normal					 ds		TQ3Vector3D		; offset: $0 (0)
+constant				 ds		Float32			; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+TQ3BoundingBox			RECORD 0
+min						 ds		TQ3Point3D		; offset: $0 (0)
+max						 ds		TQ3Point3D		; offset: $C (12)
+isEmpty					 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+TQ3BoundingSphere		RECORD 0
+origin					 ds		TQ3Point3D		; offset: $0 (0)
+radius					 ds		Float32			; offset: $C (12)
+isEmpty					 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; 
+; *  The TQ3ComputeBounds flag passed to StartBoundingBox or StartBoundingSphere
+; *  calls in the View. It's a hint to the system as to how it should 
+; *  compute the bbox of a shape:
+; *
+; *  kQ3ComputeBoundsExact:  
+; *      Vertices of shapes are transformed into world space and
+; *      the world space bounding box is computed from them.  Slow!
+; *  
+; *  kQ3ComputeBoundsApproximate: 
+; *      A local space bounding box is computed from a shape's
+; *      vertices.  This bbox is then transformed into world space,
+; *      and its bounding box is taken as the shape's approximate
+; *      bbox.  Fast but the bbox is larger than optimal.
+; 
+
+
+; typedef long							TQ3ComputeBounds
+kQ3ComputeBoundsExact			EQU		0
+kQ3ComputeBoundsApproximate		EQU		1
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Object System Types                              **
+; **                                                                          **
+; ****************************************************************************
+
+
+
+
+; typedef unsigned long 				TQ3XMethodType
+
+; 
+; * Object methods
+; 
+
+;  
+; *  Return true from the metahandler if this 
+; *  object can be submitted in a rendering loop 
+; 
+
+; 
+; * MetaHandler:
+; *      When you give a metahandler to QuickDraw 3D, it is called multiple 
+; *      times to build method tables, and then is thrown away. You are 
+; *      guaranteed that your metahandler will never be called again after a 
+; *      call that was passed a metahandler returns.
+; *
+; *      Your metahandler should contain a switch on the methodType passed to it
+; *      and should return the corresponding method as an TQ3XFunctionPointer.
+; *
+; *      IMPORTANT: A metaHandler MUST always "return" a value. If you are
+; *      passed a methodType that you do not understand, ALWAYS return NULL.
+; *
+; *      These types here are prototypes of how your functions should look.
+; 
+
+; 
+; * See QD3DIO.h for the IO method types: 
+; *      ObjectReadData, ObjectTraverse, ObjectWrite
+; 
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Set Types                                    **
+; **                                                                          **
+; ****************************************************************************
+
+; typedef long 							TQ3ElementType
+
+
+kQ3ElementTypeNone				EQU		0
+kQ3ElementTypeUnknown			EQU		32
+kQ3ElementTypeSet				EQU		33
+
+;  
+; *  kQ3ElementTypeUnknown is a TQ3Object. 
+; *  
+; *      Do Q3Set_Add(s, ..., &obj) or Q3Set_Get(s, ..., &obj);
+; *      
+; *      Note that the object is always referenced when copying around. 
+; *      
+; *      Generally, it is an Unknown object, a Group of Unknown objects, or a 
+; *      group of other "objects" which have been found in the metafile and
+; *      have no attachment method to their parent. Be prepared to handle
+; *      any or all of these cases if you actually access the set on a shape.
+; *
+; *  kQ3ElementTypeSet is a TQ3SetObject. 
+; *  
+; *      Q3Shape_GetSet(s,&o) is eqivalent to 
+; *          Q3Shape_GetElement(s, kQ3ElementTypeSet, &o)
+; *          
+; *      Q3Shape_SetSet(s,o)  is eqivalent to 
+; *          Q3Shape_SetElement(s, kQ3ElementTypeSet, &o)
+; *  
+; *      Note that the object is always referenced when copying around. 
+; *      
+; *  See the note below about the Set and Shape changes.
+; 
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Object System Macros                             **
+; **                                                                          **
+; ****************************************************************************
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Object Types                                 **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; * Note:    a call to Q3Foo_GetType will return a value kQ3FooTypeBar
+; *          e.g. Q3Shared_GetType(object) returns kQ3SharedTypeShape, etc.
+; 
+
+
+kQ3ObjectTypeInvalid			EQU		0
+kQ3ObjectTypeView				EQU		'view'
+kQ3ObjectTypeElement			EQU		'elmn'
+kQ3ElementTypeAttribute			EQU		'eatt'
+kQ3ObjectTypePick				EQU		'pick'
+kQ3PickTypeWindowPoint			EQU		'pkwp'
+kQ3PickTypeWindowRect			EQU		'pkwr'
+kQ3PickTypeWorldRay				EQU		'pkry'
+kQ3ObjectTypeShared				EQU		'shrd'
+kQ3SharedTypeRenderer			EQU		'rddr'
+kQ3RendererTypeWireFrame		EQU		'wrfr'
+kQ3RendererTypeGeneric			EQU		'gnrr'
+kQ3RendererTypeInteractive		EQU		'ctwn'
+kQ3SharedTypeShape				EQU		'shap'
+kQ3ShapeTypeGeometry			EQU		'gmtr'
+kQ3GeometryTypeBox				EQU		'box '
+kQ3GeometryTypeGeneralPolygon	EQU		'gpgn'
+kQ3GeometryTypeLine				EQU		'line'
+kQ3GeometryTypeMarker			EQU		'mrkr'
+kQ3GeometryTypePixmapMarker		EQU		'mrkp'
+kQ3GeometryTypeMesh				EQU		'mesh'
+kQ3GeometryTypeNURBCurve		EQU		'nrbc'
+kQ3GeometryTypeNURBPatch		EQU		'nrbp'
+kQ3GeometryTypePoint			EQU		'pnt '
+kQ3GeometryTypePolygon			EQU		'plyg'
+kQ3GeometryTypePolyLine			EQU		'plyl'
+kQ3GeometryTypeTriangle			EQU		'trng'
+kQ3GeometryTypeTriGrid			EQU		'trig'
+kQ3GeometryTypeCone				EQU		'cone'
+kQ3GeometryTypeCylinder			EQU		'cyln'
+kQ3GeometryTypeDisk				EQU		'disk'
+kQ3GeometryTypeEllipse			EQU		'elps'
+kQ3GeometryTypeEllipsoid		EQU		'elpd'
+kQ3GeometryTypePolyhedron		EQU		'plhd'
+kQ3GeometryTypeTorus			EQU		'tors'
+kQ3GeometryTypeTriMesh			EQU		'tmsh'
+kQ3ShapeTypeShader				EQU		'shdr'
+kQ3ShaderTypeSurface			EQU		'sush'
+kQ3SurfaceShaderTypeTexture		EQU		'txsu'
+kQ3ShaderTypeIllumination		EQU		'ilsh'
+kQ3IlluminationTypePhong		EQU		'phil'
+kQ3IlluminationTypeLambert		EQU		'lmil'
+kQ3IlluminationTypeNULL			EQU		'nuil'
+kQ3ShapeTypeStyle				EQU		'styl'
+kQ3StyleTypeBackfacing			EQU		'bckf'
+kQ3StyleTypeInterpolation		EQU		'intp'
+kQ3StyleTypeFill				EQU		'fist'
+kQ3StyleTypePickID				EQU		'pkid'
+kQ3StyleTypeReceiveShadows		EQU		'rcsh'
+kQ3StyleTypeHighlight			EQU		'high'
+kQ3StyleTypeSubdivision			EQU		'sbdv'
+kQ3StyleTypeOrientation			EQU		'ofdr'
+kQ3StyleTypePickParts			EQU		'pkpt'
+kQ3StyleTypeAntiAlias			EQU		'anti'
+kQ3StyleTypeFog					EQU		'fogg'
+kQ3ShapeTypeTransform			EQU		'xfrm'
+kQ3TransformTypeMatrix			EQU		'mtrx'
+kQ3TransformTypeScale			EQU		'scal'
+kQ3TransformTypeTranslate		EQU		'trns'
+kQ3TransformTypeRotate			EQU		'rott'
+kQ3TransformTypeRotateAboutPoint EQU	'rtap'
+kQ3TransformTypeRotateAboutAxis	EQU		'rtaa'
+kQ3TransformTypeQuaternion		EQU		'qtrn'
+kQ3TransformTypeReset			EQU		'rset'
+kQ3ShapeTypeLight				EQU		'lght'
+kQ3LightTypeAmbient				EQU		'ambn'
+kQ3LightTypeDirectional			EQU		'drct'
+kQ3LightTypePoint				EQU		'pntl'
+kQ3LightTypeSpot				EQU		'spot'
+kQ3ShapeTypeCamera				EQU		'cmra'
+kQ3CameraTypeOrthographic		EQU		'orth'
+kQ3CameraTypeViewPlane			EQU		'vwpl'
+kQ3CameraTypeViewAngleAspect	EQU		'vana'
+kQ3ShapeTypeStateOperator		EQU		'stop'
+kQ3StateOperatorTypePush		EQU		'push'
+kQ3StateOperatorTypePop			EQU		'pop '
+kQ3ShapeTypeGroup				EQU		'grup'
+kQ3GroupTypeDisplay				EQU		'dspg'
+kQ3DisplayGroupTypeOrdered		EQU		'ordg'
+kQ3DisplayGroupTypeIOProxy		EQU		'iopx'
+kQ3GroupTypeLight				EQU		'lghg'
+kQ3GroupTypeInfo				EQU		'info'
+kQ3ShapeTypeUnknown				EQU		'unkn'
+kQ3UnknownTypeText				EQU		'uktx'
+kQ3UnknownTypeBinary			EQU		'ukbn'
+kQ3ShapeTypeReference			EQU		'rfrn'
+kQ3ReferenceTypeExternal		EQU		'rfex'
+kQ3SharedTypeSet				EQU		'set '
+kQ3SetTypeAttribute				EQU		'attr'
+kQ3SharedTypeDrawContext		EQU		'dctx'
+kQ3DrawContextTypePixmap		EQU		'dpxp'
+kQ3DrawContextTypeMacintosh		EQU		'dmac'
+kQ3DrawContextTypeWin32DC		EQU		'dw32'
+kQ3DrawContextTypeDDSurface		EQU		'ddds'
+kQ3DrawContextTypeX11			EQU		'dx11'
+kQ3SharedTypeTexture			EQU		'txtr'
+kQ3TextureTypePixmap			EQU		'txpm'
+kQ3TextureTypeMipmap			EQU		'txmm'
+kQ3TextureTypeCompressedPixmap	EQU		'txcp'
+kQ3SharedTypeFile				EQU		'file'
+kQ3SharedTypeStorage			EQU		'strg'
+kQ3StorageTypeMemory			EQU		'mems'
+kQ3MemoryStorageTypeHandle		EQU		'hndl'
+kQ3StorageTypeUnix				EQU		'uxst'
+kQ3UnixStorageTypePath			EQU		'unix'
+kQ3StorageTypeMacintosh			EQU		'macn'
+kQ3MacintoshStorageTypeFSSpec	EQU		'macp'
+kQ3StorageTypeWin32				EQU		'wist'
+kQ3SharedTypeString				EQU		'strn'
+kQ3StringTypeCString			EQU		'strc'
+kQ3SharedTypeShapePart			EQU		'sprt'
+kQ3ShapePartTypeMeshPart		EQU		'spmh'
+kQ3MeshPartTypeMeshFacePart		EQU		'mfac'
+kQ3MeshPartTypeMeshEdgePart		EQU		'medg'
+kQ3MeshPartTypeMeshVertexPart	EQU		'mvtx'
+kQ3SharedTypeControllerState	EQU		'ctst'
+kQ3SharedTypeTracker			EQU		'trkr'
+kQ3SharedTypeViewHints			EQU		'vwhn'
+kQ3SharedTypeEndGroup			EQU		'endg'
+; ******************************************************************************
+; **                                                                          **
+; **                         QuickDraw 3D System Routines                     **
+; **                                                                          **
+; ****************************************************************************
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3Initialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Initialize(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Initialize
+	ENDIF
+
+
+; *  Q3Exit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Exit(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Exit
+	ENDIF
+
+
+; *  Q3IsInitialized()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3IsInitialized(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3IsInitialized
+	ENDIF
+
+
+; *  Q3GetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3GetVersion(unsigned long *majorRevision, unsigned long *minorRevision)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3GetVersion
+	ENDIF
+
+; 
+; *  Q3GetReleaseVersion returns the release version number,
+; *  in the format of the first four bytes of a 'vers' resource
+; *  (e.g. 0x01518000 ==> 1.5.1 release).
+; 
+
+
+; *  Q3GetReleaseVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3GetReleaseVersion(unsigned long *releaseRevision)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3GetReleaseVersion
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         ObjectClass Routines                             **
+; **                                                                          **
+; ****************************************************************************
+
+;  
+; *  New object system calls to query the object system.
+; *
+; *  These comments to move to the stubs file before final release, they 
+; *  are here for documentation for developers using early seeds.
+; 
+
+; 
+; *  Given a class name as a string return the associated class type for the 
+; *  class, may return kQ3Failure if the string representing the class is 
+; *  invalid.
+; 
+
+
+; *  Q3ObjectHierarchy_GetTypeFromString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ObjectHierarchy_GetTypeFromString(TQ3ObjectClassNameString objectClassString, TQ3ObjectType *objectClassType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_GetTypeFromString
+	ENDIF
+
+; 
+; *  Given a class type as return the associated string for the class name, 
+; *  may return kQ3Failure if the type representing the class is invalid.
+; 
+
+
+; *  Q3ObjectHierarchy_GetStringFromType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ObjectHierarchy_GetStringFromType(TQ3ObjectType objectClassType, TQ3ObjectClassNameString objectClassString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_GetStringFromType
+	ENDIF
+
+;  
+; *  Return true if the class with this type is registered, false if not 
+; 
+
+
+; *  Q3ObjectHierarchy_IsTypeRegistered()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3ObjectHierarchy_IsTypeRegistered(TQ3ObjectType objectClassType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_IsTypeRegistered
+	ENDIF
+
+;  
+; *  Return true if the class with this name is registered, false if not 
+; 
+
+
+; *  Q3ObjectHierarchy_IsNameRegistered()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3ObjectHierarchy_IsNameRegistered(const char *objectClassName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_IsNameRegistered
+	ENDIF
+
+; 
+; * TQ3SubClassData is used when querying the object system for
+; * the subclasses of a particular parent type:
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+TQ3SubClassData			RECORD 0
+numClasses				 ds.l	1				; offset: $0 (0)		;  the # of subclass types found for a parent class 
+classTypes				 ds.l	1				; offset: $4 (4)		;  an array containing the class types 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+; *  Given a parent type and an instance of the TQ3SubClassData struct fill
+; *  it in with the number and class types of all of the subclasses immediately
+; *  below the parent in the class hierarchy.  Return kQ3Success to indicate no
+; *  errors occurred, else kQ3Failure.
+; *
+; *  NOTE:  This function will allocate memory for the classTypes array.  Be 
+; *  sure to call Q3ObjectClass_EmptySubClassData to free this memory up.
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Q3ObjectHierarchy_GetSubClassData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ObjectHierarchy_GetSubClassData(TQ3ObjectType objectClassType, TQ3SubClassData *subClassData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_GetSubClassData
+	ENDIF
+
+; 
+; *  Given an instance of the TQ3SubClassData struct free all memory allocated 
+; *  by the Q3ObjectClass_GetSubClassData call.
+; *
+; *  NOTE: This call MUST be made after a call to Q3ObjectClass_GetSubClassData
+; *  to avoid memory leaks.
+; 
+
+
+; *  Q3ObjectHierarchy_EmptySubClassData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3ObjectHierarchy_EmptySubClassData(TQ3SubClassData *subClassData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3ObjectHierarchy_EmptySubClassData
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Object Routines                              **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Object_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Object_Dispose(TQ3Object object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_Dispose
+	ENDIF
+
+
+; *  Q3Object_Duplicate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Object Q3Object_Duplicate(TQ3Object object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_Duplicate
+	ENDIF
+
+
+; *  Q3Object_Submit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Object_Submit(TQ3Object object, TQ3ViewObject view)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_Submit
+	ENDIF
+
+
+; *  Q3Object_IsDrawable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Object_IsDrawable(TQ3Object object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_IsDrawable
+	ENDIF
+
+
+; *  Q3Object_IsWritable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Object_IsWritable(TQ3Object object, TQ3FileObject theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_IsWritable
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Object Type Routines                             **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Object_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Object_GetType(TQ3Object object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_GetType
+	ENDIF
+
+
+; *  Q3Object_GetLeafType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Object_GetLeafType(TQ3Object object)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_GetLeafType
+	ENDIF
+
+
+; *  Q3Object_IsType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Object_IsType(TQ3Object object, TQ3ObjectType theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Object_IsType
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Shared Object Routines                           **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Shared_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Shared_GetType(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_GetType
+	ENDIF
+
+
+; *  Q3Shared_GetReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3SharedObject Q3Shared_GetReference(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_GetReference
+	ENDIF
+
+;  
+; *  Q3Shared_IsReferenced
+; *      Returns kQ3True if there is more than one reference to sharedObject.
+; *      Returns kQ3False if there is ONE reference to sharedObject.
+; *  
+; *  This call is intended to allow applications and plug-in objects to delete
+; *  objects of which they hold THE ONLY REFERENCE. This is useful when
+; *  caching objects, etc.
+; *  
+; *  Although many may be tempted, DO NOT DO THIS:
+; *      while (Q3Shared_IsReferenced(foo)) { Q3Object_Dispose(foo); }
+; *  
+; *  Your application will crash and no one will buy it. Chapter 11 is 
+; *  never fun (unless you short the stock). Thanks.
+; 
+
+
+; *  Q3Shared_IsReferenced()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Shared_IsReferenced(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_IsReferenced
+	ENDIF
+
+; 
+; *  Q3Shared_GetEditIndex
+; *      Returns the "serial number" of sharedObject. Usefuly for caching 
+; *      object information. Returns 0 on error.
+; *      
+; *      Hold onto this number to determine if an object has changed since you
+; *      last built your caches... To validate, do:
+; *      
+; *      if (Q3Shared_GetEditIndex(foo) == oldFooEditIndex) {
+; *          // Cache is valid
+; *      } else {
+; *          // Cache is invalid
+; *          RebuildSomeSortOfCache(foo);
+; *          oldFooEditIndex = Q3Shared_GetEditIndex(foo);
+; *      }
+; 
+
+
+; *  Q3Shared_GetEditIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern unsigned long Q3Shared_GetEditIndex(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_GetEditIndex
+	ENDIF
+
+; 
+; *  Q3Shared_Edited
+; *      Bumps the "serial number" of sharedObject to a different value. This
+; *      call is intended to be used solely from a plug-in object which is 
+; *      shared. Call this whenever your private instance data changes.
+; *      
+; *      Returns kQ3Failure iff sharedObject is not a shared object, OR
+; *          QuickDraw 3D isn't initialized.
+; 
+
+
+; *  Q3Shared_Edited()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shared_Edited(TQ3SharedObject sharedObject)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shared_Edited
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                             Shape Routines                               **
+; **                                                                          **
+; ****************************************************************************
+
+; 
+; *  QuickDraw 3D 1.5 Note:
+; *
+; *  Shapes and Sets are now (sort of) polymorphic.
+; *
+; *      You may call Q3Shape_Foo or Q3Set_Foo on a shape or a set.
+; *      The following calls are identical, in implementation:
+; *
+; *          Q3Shape_GetElement          =   Q3Set_Get
+; *          Q3Shape_AddElement          =   Q3Set_Add
+; *          Q3Shape_ContainsElement     =   Q3Set_Contains
+; *          Q3Shape_GetNextElementType  =   Q3Set_GetNextElementType
+; *          Q3Shape_EmptyElements       =   Q3Set_Empty
+; *          Q3Shape_ClearElement        =   Q3Set_Clear
+; *
+; *  All of these calls accept a shape or a set as their first parameter.
+; *
+; *  The Q3Shape_GetSet and Q3ShapeSetSet calls are implemented via a new
+; *  element type kQ3ElementTypeSet. See the note above about 
+; *  kQ3ElementTypeSet;
+; *
+; *  It is important to note that the new Q3Shape_...Element... calls do not
+; *  create a set on a shape and then add the element to it. This data is
+; *  attached directly to the shape. Therefore, it is possible for an element
+; *  to exist on a shape without a set existing on it as well. 
+; *
+; *  In your application, if you attach an element to a shape like this:
+; *      (this isn't checking for errors for simplicity)
+; *
+; *      set = Q3Set_New();
+; *      Q3Set_AddElement(set, kMyElemType, &data);
+; *      Q3Shape_SetSet(shape, set);
+; *
+; *  You should retrieve it in the same manner:
+; *
+; *      Q3Shape_GetSet(shape, &set);
+; *      if (Q3Set_Contains(set, kMyElemType) == kTrue) {
+; *          Q3Set_Get(set, kMyElemType, &data);
+; *      }
+; *
+; *  Similarly, if you attach data to a shape with the new calls:
+; *
+; *      Q3Shape_AddElement(shape, kMyElemType, &data);
+; *
+; *  You should retrieve it in the same manner:
+; *
+; *      if (Q3Shape_ContainsElement(set, kMyElemType) == kTrue) {
+; *          Q3Shape_GetElement(set, kMyElemType, &data);
+; *      }
+; *
+; *  This really becomes an issue when dealing with version 1.0 and version 1.1 
+; *  metafiles.
+; *
+; *  When attempting to find a particular element on a shape, you should
+; *  first check with Q3Shape_GetNextElementType or Q3Shape_GetElement, then,
+; *  Q3Shape_GetSet(s, &set) (or Q3Shape_GetElement(s, kQ3ElementTypeSet, &set))
+; *  and then Q3Shape_GetElement(set, ...).
+; *
+; *  In terms of implementation, Q3Shape_SetSet and Q3Shape_GetSet should only be
+; *  used for sets of information that are shared among multiple shapes.
+; *  
+; *  Q3Shape_AddElement, Q3Shape_GetElement, etc. calls should only be used
+; *  for elements that are unique for a particular shape.
+; *  
+; 
+
+
+; *  Q3Shape_GetType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3ObjectType Q3Shape_GetType(TQ3ShapeObject shape)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_GetType
+	ENDIF
+
+
+; *  Q3Shape_GetSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_GetSet(TQ3ShapeObject shape, TQ3SetObject *theSet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_GetSet
+	ENDIF
+
+
+; *  Q3Shape_SetSet()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_SetSet(TQ3ShapeObject shape, TQ3SetObject theSet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_SetSet
+	ENDIF
+
+
+; *  Q3Shape_AddElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_AddElement(TQ3ShapeObject shape, TQ3ElementType theType, const void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_AddElement
+	ENDIF
+
+
+; *  Q3Shape_GetElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_GetElement(TQ3ShapeObject shape, TQ3ElementType theType, void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_GetElement
+	ENDIF
+
+
+; *  Q3Shape_ContainsElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Boolean Q3Shape_ContainsElement(TQ3ShapeObject shape, TQ3ElementType theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_ContainsElement
+	ENDIF
+
+
+; *  Q3Shape_GetNextElementType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_GetNextElementType(TQ3ShapeObject shape, TQ3ElementType *theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_GetNextElementType
+	ENDIF
+
+
+; *  Q3Shape_EmptyElements()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_EmptyElements(TQ3ShapeObject shape)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_EmptyElements
+	ENDIF
+
+
+; *  Q3Shape_ClearElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Shape_ClearElement(TQ3ShapeObject shape, TQ3ElementType theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Shape_ClearElement
+	ENDIF
+
+
+; ******************************************************************************
+; **                                                                          **
+; **                         Color Table Routines                             **
+; **                                                                          **
+; ****************************************************************************
+
+
+; *  Q3Bitmap_Empty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQ3Status Q3Bitmap_Empty(TQ3Bitmap *bitmap)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Bitmap_Empty
+	ENDIF
+
+
+; *  Q3Bitmap_GetImageSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern unsigned long Q3Bitmap_GetImageSize(unsigned long width, unsigned long height)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Q3Bitmap_GetImageSize
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __QD3D__ 
+

@@ -1,0 +1,2925 @@
+;
+;    File:       ImageCodec.a
+;
+;    Contains:   QuickTime Interfaces.
+;
+;    Version:    Technology: QuickTime 5.0.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__IMAGECODEC__') = 'UNDEFINED' THEN
+__IMAGECODEC__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__GXTYPES__') = 'UNDEFINED' THEN
+	include 'GXTypes.a'
+	ENDIF
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+	include 'ImageCompression.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+
+
+
+;   codec capabilities flags    
+
+codecCanScale					EQU		$00000001
+codecCanMask					EQU		$00000002
+codecCanMatte					EQU		$00000004
+codecCanTransform				EQU		$00000008
+codecCanTransferMode			EQU		$00000010
+codecCanCopyPrev				EQU		$00000020
+codecCanSpool					EQU		$00000040
+codecCanClipVertical			EQU		$00000080
+codecCanClipRectangular			EQU		$00000100
+codecCanRemapColor				EQU		$00000200
+codecCanFastDither				EQU		$00000400
+codecCanSrcExtract				EQU		$00000800
+codecCanCopyPrevComp			EQU		$00001000
+codecCanAsync					EQU		$00002000
+codecCanMakeMask				EQU		$00004000
+codecCanShift					EQU		$00008000
+codecCanAsyncWhen				EQU		$00010000
+codecCanShieldCursor			EQU		$00020000
+codecCanManagePrevBuffer		EQU		$00040000
+codecHasVolatileBuffer			EQU		$00080000			; codec requires redraw after window movement 
+codecWantsRegionMask			EQU		$00100000
+codecImageBufferIsOnScreen		EQU		$00200000			; old def of codec using overlay surface, = ( codecIsDirectToScreenOnly | codecUsesOverlaySurface | codecImageBufferIsOverlaySurface | codecSrcMustBeImageBuffer ) 
+codecWantsDestinationPixels		EQU		$00400000
+codecWantsSpecialScaling		EQU		$00800000
+codecHandlesInputs				EQU		$01000000
+codecCanDoIndirectSurface		EQU		$02000000			; codec can handle indirect surface (GDI) 
+codecIsSequenceSensitive		EQU		$04000000
+codecRequiresOffscreen			EQU		$08000000
+codecRequiresMaskBits			EQU		$10000000
+codecCanRemapResolution			EQU		$20000000
+codecIsDirectToScreenOnly		EQU		$40000000			; codec can only decompress data to the screen 
+codecCanLockSurface				EQU		$80000000			; codec can lock destination surface, icm doesn't lock for you 
+;   codec capabilities flags2   
+
+codecUsesOverlaySurface			EQU		$00000001			; codec uses overlay surface 
+codecImageBufferIsOverlaySurface EQU	$00000002			; codec image buffer is overlay surface, the bits in the buffer are on the screen 
+codecSrcMustBeImageBuffer		EQU		$00000004			; codec can only source data from an image buffer 
+codecImageBufferIsInAGPMemory	EQU		$00000010			; codec image buffer is in AGP space, byte writes are OK 
+codecImageBufferIsInPCIMemory	EQU		$00000020			; codec image buffer is across a PCI bus; byte writes are bad 
+CodecCapabilities		RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+wantedPixelSize			 ds.w	1				; offset: $4 (4)
+extendWidth				 ds.w	1				; offset: $6 (6)
+extendHeight			 ds.w	1				; offset: $8 (8)
+bandMin					 ds.w	1				; offset: $A (10)
+bandInc					 ds.w	1				; offset: $C (12)
+pad						 ds.w	1				; offset: $E (14)
+time					 ds.l	1				; offset: $10 (16)
+flags2					 ds.l	1				; offset: $14 (20)		;  field new in QuickTime 4.0 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;   codec condition flags   
+
+codecConditionFirstBand			EQU		$00000001
+codecConditionLastBand			EQU		$00000002
+codecConditionFirstFrame		EQU		$00000004
+codecConditionNewDepth			EQU		$00000008
+codecConditionNewTransform		EQU		$00000010
+codecConditionNewSrcRect		EQU		$00000020
+codecConditionNewMask			EQU		$00000040
+codecConditionNewMatte			EQU		$00000080
+codecConditionNewTransferMode	EQU		$00000100
+codecConditionNewClut			EQU		$00000200
+codecConditionNewAccuracy		EQU		$00000400
+codecConditionNewDestination	EQU		$00000800
+codecConditionFirstScreen		EQU		$00001000
+codecConditionDoCursor			EQU		$00002000
+codecConditionCatchUpDiff		EQU		$00004000
+codecConditionMaskMayBeChanged	EQU		$00008000
+codecConditionToBuffer			EQU		$00010000
+codecConditionCodecChangedMask	EQU		$80000000
+
+
+codecInfoResourceType			EQU		'cdci'				; codec info resource type 
+codecInterfaceVersion			EQU		2					; high word returned in component GetVersion 
+CDSequenceDataSourceQueueEntry RECORD 0
+nextBusy				 ds.l	1				; offset: $0 (0)
+descSeed				 ds.l	1				; offset: $4 (4)
+dataDesc				 ds.l	1				; offset: $8 (8)
+data					 ds.l	1				; offset: $C (12)
+dataSize				 ds.l	1				; offset: $10 (16)
+useCount				 ds.l	1				; offset: $14 (20)
+frameTime				 ds.l	1				; offset: $18 (24)
+frameDuration			 ds.l	1				; offset: $1C (28)
+timeScale				 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; typedef struct CDSequenceDataSourceQueueEntry * CDSequenceDataSourceQueueEntryPtr
+
+CDSequenceDataSource	RECORD 0
+recordSize				 ds.l	1				; offset: $0 (0)
+next					 ds.l	1				; offset: $4 (4)
+seqID					 ds.l	1				; offset: $8 (8)
+sourceID				 ds.l	1				; offset: $C (12)
+sourceType				 ds.l	1				; offset: $10 (16)
+sourceInputNumber		 ds.l	1				; offset: $14 (20)
+dataPtr					 ds.l	1				; offset: $18 (24)
+dataDescription			 ds.l	1				; offset: $1C (28)
+changeSeed				 ds.l	1				; offset: $20 (32)
+transferProc			 ds.l	1				; offset: $24 (36)
+transferRefcon			 ds.l	1				; offset: $28 (40)
+dataSize				 ds.l	1				; offset: $2C (44)
+;  fields available in QT 3 and later 
+dataQueue				 ds.l	1				; offset: $30 (48)		;  queue of CDSequenceDataSourceQueueEntry structures
+originalDataPtr			 ds.l	1				; offset: $34 (52)
+originalDataSize		 ds.l	1				; offset: $38 (56)
+originalDataDescription	 ds.l	1				; offset: $3C (60)
+originalDataDescriptionSeed  ds.l 1				; offset: $40 (64)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+; typedef struct CDSequenceDataSource *	CDSequenceDataSourcePtr
+
+ICMFrameTimeInfo		RECORD 0
+startTime				 ds		wide			; offset: $0 (0)
+scale					 ds.l	1				; offset: $8 (8)
+duration				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct ICMFrameTimeInfo *		ICMFrameTimeInfoPtr
+
+CodecCompressParams		RECORD 0
+sequenceID				 ds.l	1				; offset: $0 (0)		;  precompress,bandcompress 
+imageDescription		 ds.l	1				; offset: $4 (4)		;  precompress,bandcompress 
+data					 ds.l	1				; offset: $8 (8)
+bufferSize				 ds.l	1				; offset: $C (12)
+frameNumber				 ds.l	1				; offset: $10 (16)
+startLine				 ds.l	1				; offset: $14 (20)
+stopLine				 ds.l	1				; offset: $18 (24)
+conditionFlags			 ds.l	1				; offset: $1C (28)
+callerFlags				 ds.w	1				; offset: $20 (32)
+capabilities			 ds.l	1				; offset: $22 (34)		;  precompress,bandcompress 
+progressProcRecord		 ds		ICMProgressProcRecord ; offset: $26 (38)
+completionProcRecord	 ds		ICMCompletionProcRecord ; offset: $2E (46)
+flushProcRecord			 ds		ICMFlushProcRecord ; offset: $36 (54)
+srcPixMap				 ds		PixMap			; offset: $3E (62)		;  precompress,bandcompress 
+prevPixMap				 ds		PixMap			; offset: $70 (112)
+spatialQuality			 ds.l	1				; offset: $A2 (162)
+temporalQuality			 ds.l	1				; offset: $A6 (166)
+similarity				 ds.l	1				; offset: $AA (170)
+dataRateParams			 ds.l	1				; offset: $AE (174)
+reserved				 ds.l	1				; offset: $B2 (178)
+;  The following fields only exist for QuickTime 2.1 and greater 
+majorSourceChangeSeed	 ds.w	1				; offset: $B6 (182)
+minorSourceChangeSeed	 ds.w	1				; offset: $B8 (184)
+sourceData				 ds.l	1				; offset: $BA (186)
+;  The following fields only exist for QuickTime 2.5 and greater 
+preferredPacketSizeInBytes  ds.l 1				; offset: $BE (190)
+;  The following fields only exist for QuickTime 3.0 and greater 
+requestedBufferWidth	 ds.l	1				; offset: $C2 (194)		;  must set codecWantsSpecialScaling to indicate this field is valid
+requestedBufferHeight	 ds.l	1				; offset: $C6 (198)		;  must set codecWantsSpecialScaling to indicate this field is valid
+;  The following fields only exist for QuickTime 4.0 and greater 
+wantedSourcePixelType	 ds.l	1				; offset: $CA (202)
+;  The following fields only exist for QuickTime 5.0 and greater 
+compressedDataSize		 ds.l	1				; offset: $CE (206)		;  if nonzero, this overrides (*imageDescription)->dataSize
+taskWeight				 ds.l	1				; offset: $D2 (210)		;  preferred weight for MP tasks implementing this operation
+taskName				 ds.l	1				; offset: $D6 (214)		;  preferred name (type) for MP tasks implementing this operation
+sizeof					 EQU *					; size:   $DA (218)
+						ENDR
+CodecDecompressParams	RECORD 0
+sequenceID				 ds.l	1				; offset: $0 (0)		;  predecompress,banddecompress 
+imageDescription		 ds.l	1				; offset: $4 (4)		;  predecompress,banddecompress 
+data					 ds.l	1				; offset: $8 (8)
+bufferSize				 ds.l	1				; offset: $C (12)
+frameNumber				 ds.l	1				; offset: $10 (16)
+startLine				 ds.l	1				; offset: $14 (20)
+stopLine				 ds.l	1				; offset: $18 (24)
+conditionFlags			 ds.l	1				; offset: $1C (28)
+callerFlags				 ds.w	1				; offset: $20 (32)
+capabilities			 ds.l	1				; offset: $22 (34)		;  predecompress,banddecompress 
+progressProcRecord		 ds		ICMProgressProcRecord ; offset: $26 (38)
+completionProcRecord	 ds		ICMCompletionProcRecord ; offset: $2E (46)
+dataProcRecord			 ds		ICMDataProcRecord ; offset: $36 (54)
+port					 ds.l	1				; offset: $3E (62)		;  predecompress,banddecompress 
+dstPixMap				 ds		PixMap			; offset: $42 (66)		;  predecompress,banddecompress 
+maskBits				 ds.l	1				; offset: $74 (116)
+mattePixMap				 ds.l	1				; offset: $78 (120)
+srcRect					 ds		Rect			; offset: $7C (124)		;  predecompress,banddecompress 
+matrix					 ds.l	1				; offset: $84 (132)		;  predecompress,banddecompress 
+accuracy				 ds.l	1				; offset: $88 (136)		;  predecompress,banddecompress 
+transferMode			 ds.w	1				; offset: $8C (140)		;  predecompress,banddecompress 
+frameTime				 ds.l	1				; offset: $8E (142)		;  banddecompress 
+reserved				 ds.l	1				; offset: $92 (146) <-- really an array of length one
+;  The following fields only exist for QuickTime 2.0 and greater 
+matrixFlags				 ds.b	1				; offset: $96 (150)		;  high bit set if 2x resize 
+matrixType				 ds.b	1				; offset: $97 (151)
+dstRect					 ds		Rect			; offset: $98 (152)		;  only valid for simple transforms 
+;  The following fields only exist for QuickTime 2.1 and greater 
+majorSourceChangeSeed	 ds.w	1				; offset: $A0 (160)
+minorSourceChangeSeed	 ds.w	1				; offset: $A2 (162)
+sourceData				 ds.l	1				; offset: $A4 (164)
+maskRegion				 ds.l	1				; offset: $A8 (168)
+;  The following fields only exist for QuickTime 2.5 and greater 
+wantedDestinationPixelTypes  ds.l 1				; offset: $AC (172)		;  Handle to 0-terminated list of OSTypes 
+screenFloodMethod		 ds.l	1				; offset: $B0 (176)
+screenFloodValue		 ds.l	1				; offset: $B4 (180)
+preferredOffscreenPixelSize  ds.w 1				; offset: $B8 (184)
+;  The following fields only exist for QuickTime 3.0 and greater 
+syncFrameTime			 ds.l	1				; offset: $BA (186)		;  banddecompress 
+needUpdateOnTimeChange	 ds.b	1				; offset: $BE (190)		;  banddecompress 
+enableBlackLining		 ds.b	1				; offset: $BF (191)
+needUpdateOnSourceChange  ds.b	1				; offset: $C0 (192)		;  band decompress 
+pad						 ds.b	1				; offset: $C1 (193)
+unused					 ds.l	1				; offset: $C2 (194)
+finalDestinationPort	 ds.l	1				; offset: $C6 (198)
+requestedBufferWidth	 ds.l	1				; offset: $CA (202)		;  must set codecWantsSpecialScaling to indicate this field is valid
+requestedBufferHeight	 ds.l	1				; offset: $CE (206)		;  must set codecWantsSpecialScaling to indicate this field is valid
+;  The following fields only exist for QuickTime 4.0 and greater 
+displayableAreaOfRequestedBuffer  ds Rect		; offset: $D2 (210)		;  set in predecompress
+requestedSingleField	 ds.b	1				; offset: $DA (218)
+needUpdateOnNextIdle	 ds.b	1				; offset: $DB (219)
+pad2					 ds.b	2				; offset: $DC (220)
+bufferGammaLevel		 ds.l	1				; offset: $DE (222)
+;  The following fields only exist for QuickTime 5.0 and greater 
+taskWeight				 ds.l	1				; offset: $E2 (226)		;  preferred weight for MP tasks implementing this operation
+taskName				 ds.l	1				; offset: $E6 (230)		;  preferred name (type) for MP tasks implementing this operation
+sizeof					 EQU *					; size:   $EA (234)
+						ENDR
+
+matrixFlagScale2x				EQU		$00000080
+matrixFlagScale1x				EQU		$00000040
+matrixFlagScaleHalf				EQU		$00000020
+
+kScreenFloodMethodNone			EQU		0
+kScreenFloodMethodKeyColor		EQU		1
+kScreenFloodMethodAlpha			EQU		2
+
+kFlushLastQueuedFrame			EQU		0
+kFlushFirstQueuedFrame			EQU		1
+
+kNewImageGWorldErase			EQU		$00000001
+
+; *  NewImageCodecTimeTriggerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewImageCodecDrawBandCompleteUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeImageCodecTimeTriggerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeImageCodecDrawBandCompleteUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeImageCodecTimeTriggerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeImageCodecDrawBandCompleteUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+ImageSubCodecDecompressCapabilities RECORD 0
+recordSize				 ds.l	1				; offset: $0 (0)		;  sizeof(ImageSubCodecDecompressCapabilities)
+decompressRecordSize	 ds.l	1				; offset: $4 (4)		;  size of your codec's decompress record
+canAsync				 ds.b	1				; offset: $8 (8)		;  default true
+pad0					 ds.b	1				; offset: $9 (9)
+;  The following field only exists for QuickTime 4.1 and greater 
+suggestedQueueSize		 ds.w	1				; offset: $A (10)
+;  The following field only exists for QuickTime 4.0 and greater 
+canProvideTrigger		 ds.b	1				; offset: $C (12)
+;  The following fields only exist for QuickTime 5.0 and greater 
+subCodecFlushesScreen	 ds.b	1				; offset: $D (13)		;  only used on Mac OS X
+subCodecCallsDrawBandComplete  ds.b 1			; offset: $E (14)
+pad2					 ds.b	1				; offset: $F (15) <-- really an array of length one
+;  The following fields only exist for QuickTime 5.0.1 and greater 
+isChildCodec			 ds.b	1				; offset: $10 (16)		;  set by base codec before calling Initialize
+pad3					 ds.b	3				; offset: $11 (17)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+kCodecFrameTypeUnknown			EQU		0
+kCodecFrameTypeKey				EQU		1
+kCodecFrameTypeDifference		EQU		2
+kCodecFrameTypeDroppableDifference EQU	3
+ImageSubCodecDecompressRecord RECORD 0
+baseAddr				 ds.l	1				; offset: $0 (0)
+rowBytes				 ds.l	1				; offset: $4 (4)
+codecData				 ds.l	1				; offset: $8 (8)
+progressProcRecord		 ds		ICMProgressProcRecord ; offset: $C (12)
+dataProcRecord			 ds		ICMDataProcRecord ; offset: $14 (20)
+userDecompressRecord	 ds.l	1				; offset: $1C (28)		;  pointer to codec-specific per-band data
+frameType				 ds.b	1				; offset: $20 (32)
+inhibitMP				 ds.b	1				; offset: $21 (33)		;  set this in BeginBand to tell the base decompressor not to call DrawBand from an MP task for this frame.  (Only has any effect for MP-capable subcodecs.  New in QuickTime 5.0.)
+pad						 ds.b	2				; offset: $22 (34)
+priv					 ds.l	2				; offset: $24 (36)
+;  The following fields only exist for QuickTime 5.0 and greater 
+drawBandCompleteUPP		 ds.l	1				; offset: $2C (44)		;  only used if subcodec set subCodecCallsDrawBandComplete; if drawBandCompleteUPP is non-nil, codec must call it when a frame is finished, but may return from DrawBand before the frame is finished. 
+drawBandCompleteRefCon	 ds.l	1				; offset: $30 (48)		;  Note: do not call drawBandCompleteUPP directly from a hardware interrupt; instead, use DTInstall to run a function at deferred task time, and call drawBandCompleteUPP from that. 
+sizeof					 EQU *					; size:   $34 (52)
+						ENDR
+
+;  These data structures are used by code that wants to pass planar pixmap 
+;   information around.
+;  The structure below gives the basic idea of what is being done.
+;  Normal instances of code will use a fixed number of planes (eg YUV420 uses 
+;   three planes, Y, U and V). Each such code instance will define its own
+;   version of the PlanarPixMapInfo struct counting the number of planes it 
+;   needs along with defining constants that specify the meanings of each
+;   plane.
+
+
+PlanarComponentInfo		RECORD 0
+offset					 ds.l	1				; offset: $0 (0)
+rowBytes				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+PlanarPixMapInfo		RECORD 0
+componentInfo			 ds		PlanarComponentInfo ; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+PlanarPixmapInfoSorensonYUV9 RECORD 0
+componentInfoY			 ds		PlanarComponentInfo ; offset: $0 (0)
+componentInfoU			 ds		PlanarComponentInfo ; offset: $8 (8)
+componentInfoV			 ds		PlanarComponentInfo ; offset: $10 (16)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+PlanarPixmapInfoYUV420	RECORD 0
+componentInfoY			 ds		PlanarComponentInfo ; offset: $0 (0)
+componentInfoCb			 ds		PlanarComponentInfo ; offset: $8 (8)
+componentInfoCr			 ds		PlanarComponentInfo ; offset: $10 (16)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  name of parameters or effect -- placed in root container, required 
+
+kParameterTitleName				EQU		'name'
+kParameterTitleID				EQU		1
+;  codec sub-type of parameters or effect -- placed in root container, required 
+
+kParameterWhatName				EQU		'what'
+kParameterWhatID				EQU		1
+;  effect version -- placed in root container, optional, but recommended 
+
+kParameterVersionName			EQU		'vers'
+kParameterVersionID				EQU		1
+;  is effect repeatable -- placed in root container, optional, default is TRUE
+
+kParameterRepeatableName		EQU		'pete'
+kParameterRepeatableID			EQU		1
+
+kParameterRepeatableTrue		EQU		1
+kParameterRepeatableFalse		EQU		0
+;  substitution codec in case effect is missing -- placed in root container, recommended 
+
+kParameterAlternateCodecName	EQU		'subs'
+kParameterAlternateCodecID		EQU		1
+;  maximum number of sources -- placed in root container, required 
+
+kParameterSourceCountName		EQU		'srcs'
+kParameterSourceCountID			EQU		1
+
+
+kParameterDependencyName		EQU		'deep'
+kParameterDependencyID			EQU		1
+
+kParameterListDependsUponColorProfiles EQU 'prof'
+kParameterListDependsUponFonts	EQU		'font'
+ParameterDependancyRecord RECORD 0
+dependCount				 ds.l	1				; offset: $0 (0)
+depends					 ds.l	1				; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   enumeration list in container -- placed in root container, optional unless used by a
+;   parameter in the list
+
+
+
+kParameterEnumList				EQU		'enum'
+EnumValuePair			RECORD 0
+value					 ds.l	1				; offset: $0 (0)
+name					 ds		Str255			; offset: $4 (4)
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+EnumListRecord			RECORD 0
+enumCount				 ds.l	1				; offset: $0 (0)		;  number of enumeration items to follow
+values					 ds		EnumValuePair	; offset: $4 (4) <-- really an array of length one ;  values and names for them, packed 
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+;  atom type of parameter
+
+kParameterAtomTypeAndID			EQU		'type'
+
+kNoAtom							EQU		'none'				; atom type for no data got/set
+kAtomNoFlags					EQU		$00000000
+kAtomNotInterpolated			EQU		$00000001			; atom can never be interpolated
+kAtomInterpolateIsOptional		EQU		$00000002			; atom can be interpolated, but it is an advanced user operation
+kAtomMayBeIndexed				EQU		$00000004			; more than one value of atom can exist with accending IDs (ie, lists of colors)
+ParameterAtomTypeAndID	RECORD 0
+atomType				 ds.l	1				; offset: $0 (0)		;  type of atom this data comes from/goes into
+atomID					 ds.l	1				; offset: $4 (4)		;  ID of atom this data comes from/goes into
+atomFlags				 ds.l	1				; offset: $8 (8)		;  options for this atom
+atomName				 ds		Str255			; offset: $C (12)		;  name of this value type
+sizeof					 EQU *					; size:   $10C (268)
+						ENDR
+;  data type of a parameter
+
+kParameterDataType				EQU		'data'
+
+kParameterTypeDataLong			EQU		2					; integer value
+kParameterTypeDataFixed			EQU		3					; fixed point value
+kParameterTypeDataRGBValue		EQU		8					; RGBColor data
+kParameterTypeDataDouble		EQU		11					; IEEE 64 bit floating point value
+kParameterTypeDataText			EQU		'text'				; editable text item
+kParameterTypeDataEnum			EQU		'enum'				; enumerated lookup value
+kParameterTypeDataBitField		EQU		'bool'				; bit field value (something that holds boolean(s))
+kParameterTypeDataImage			EQU		'imag'				; reference to an image via Picture data
+ParameterDataType		RECORD 0
+dataType				 ds.l	1				; offset: $0 (0)		;  type of data this item is stored as
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+;   alternate (optional) data type -- main data type always required.  
+;   Must be modified or deleted when modifying main data type.
+;   Main data type must be modified when alternate is modified.
+
+
+
+kParameterAlternateDataType		EQU		'alt1'
+kParameterTypeDataColorValue	EQU		'cmlr'				; CMColor data (supported on machines with ColorSync)
+kParameterTypeDataCubic			EQU		'cubi'				; cubic bezier(s) (no built-in support)
+kParameterTypeDataNURB			EQU		'nurb'				; nurb(s) (no built-in support)
+ParameterAlternateDataEntry RECORD 0
+dataType				 ds.l	1				; offset: $0 (0)		;  type of data this item is stored as
+alternateAtom			 ds.l	1				; offset: $4 (4)		;  where to store
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ParameterAlternateDataType RECORD 0
+numEntries				 ds.l	1				; offset: $0 (0)
+entries					 ds		ParameterAlternateDataEntry ; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  legal values for the parameter
+
+kParameterDataRange				EQU		'rang'
+
+kNoMinimumLongFixed				EQU		$7FFFFFFF			; ignore minimum/maxiumum values
+kNoMaximumLongFixed				EQU		$80000000
+kNoScaleLongFixed				EQU		0					; don't perform any scaling of value
+kNoPrecision					EQU		-1					; allow as many digits as format
+;  'text'
+StringRangeRecord		RECORD 0
+maxChars				 ds.l	1				; offset: $0 (0)		;  maximum length of string
+maxLines				 ds.l	1				; offset: $4 (4)		;  number of editing lines to use (1 typical, 0 to default)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  'long'
+LongRangeRecord			RECORD 0
+minValue				 ds.l	1				; offset: $0 (0)		;  no less than this
+maxValue				 ds.l	1				; offset: $4 (4)		;  no more than this
+scaleValue				 ds.l	1				; offset: $8 (8)		;  muliply content by this going in, divide going out
+precisionDigits			 ds.l	1				; offset: $C (12)		;  # digits of precision when editing via typing
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  'enum'
+EnumRangeRecord			RECORD 0
+enumID					 ds.l	1				; offset: $0 (0)		;  'enum' list in root container to search within
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  'fixd'
+FixedRangeRecord		RECORD 0
+minValue				 ds.l	1				; offset: $0 (0)		;  no less than this
+maxValue				 ds.l	1				; offset: $4 (4)		;  no more than this
+scaleValue				 ds.l	1				; offset: $8 (8)		;  muliply content by this going in, divide going out
+precisionDigits			 ds.l	1				; offset: $C (12)		;  # digits of precision when editing via typing
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  'doub'
+;  'bool'   
+BooleanRangeRecord		RECORD 0
+maskValue				 ds.l	1				; offset: $0 (0)		;  value to mask on/off to set/clear the boolean
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  'rgb '
+RGBRangeRecord			RECORD 0
+minColor				 ds		RGBColor		; offset: $0 (0)
+maxColor				 ds		RGBColor		; offset: $6 (6)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  'imag'
+
+kParameterImageNoFlags			EQU		0
+kParameterImageIsPreset			EQU		1
+
+kStandardPresetGroup			EQU		'pset'
+ImageRangeRecord		RECORD 0
+imageFlags				 ds.l	1				; offset: $0 (0)
+fileType				 ds.l	1				; offset: $4 (4)		;  file type to contain the preset group (normally kStandardPresetGroup)
+replacedAtoms			 ds.l	1				; offset: $8 (8)		;  # atoms at this level replaced by this preset group
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  union of all of the above
+;  UI behavior of a parameter
+
+kParameterDataBehavior			EQU		'ditl'
+
+															; items edited via typing
+kParameterItemEditText			EQU		'edit'				; edit text box
+kParameterItemEditLong			EQU		'long'				; long number editing box
+kParameterItemEditFixed			EQU		'fixd'				; fixed point number editing box
+kParameterItemEditDouble		EQU		'doub'				; double number editing box
+															; items edited via control(s)
+kParameterItemPopUp				EQU		'popu'				; pop up value for enum types
+kParameterItemRadioCluster		EQU		'radi'				; radio cluster for enum types
+kParameterItemCheckBox			EQU		'chex'				; check box for booleans
+kParameterItemControl			EQU		'cntl'				; item controlled via a standard control of some type
+															; special user items
+kParameterItemLine				EQU		'line'				; line
+kParameterItemColorPicker		EQU		'pick'				; color swatch & picker
+kParameterItemGroupDivider		EQU		'divi'				; start of a new group of items
+kParameterItemStaticText		EQU		'stat'				; display "parameter name" as static text
+kParameterItemDragImage			EQU		'imag'				; allow image display, along with drag and drop
+															; flags valid for lines and groups
+kGraphicsNoFlags				EQU		$00000000			; no options for graphics
+kGraphicsFlagsGray				EQU		$00000001			; draw lines with gray
+															; flags valid for groups
+kGroupNoFlags					EQU		$00000000			; no options for group -- may be combined with graphics options             
+kGroupAlignText					EQU		$00010000			; edit text items in group have the same size
+kGroupSurroundBox				EQU		$00020000			; group should be surrounded with a box
+kGroupMatrix					EQU		$00040000			; side-by-side arrangement of group is okay
+kGroupNoName					EQU		$00080000			; name of group should not be displayed above box
+															; flags valid for popup/radiocluster/checkbox/control
+kDisableControl					EQU		$00000001
+kDisableWhenNotEqual			EQU		$00000001
+kDisableWhenEqual				EQU		$00000011
+kDisableWhenLessThan			EQU		$00000021
+kDisableWhenGreaterThan			EQU		$00000031			; flags valid for popups
+kPopupStoreAsString				EQU		$00010000
+ControlBehaviors		RECORD 0
+groupID					 ds.l	1				; offset: $0 (0)		;  group under control of this item
+controlValue			 ds.l	1				; offset: $4 (4)		;  control value for comparison purposes
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ParameterDataBehavior	RECORD 0
+behaviorType			 ds.l	1				; offset: $0 (0)
+behaviorFlags			 ds.l	1				; offset: $4 (4)
+controls				 ds		ControlBehaviors ; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  higher level purpose of a parameter or set of parameters
+
+kParameterDataUsage				EQU		'use '
+
+kParameterUsagePixels			EQU		'pixl'
+kParameterUsageRectangle		EQU		'rect'
+kParameterUsagePoint			EQU		'xy  '
+kParameterUsage3DPoint			EQU		'xyz '
+kParameterUsageDegrees			EQU		'degr'
+kParameterUsageRadians			EQU		'rads'
+kParameterUsagePercent			EQU		'pcnt'
+kParameterUsageSeconds			EQU		'secs'
+kParameterUsageMilliseconds		EQU		'msec'
+kParameterUsageMicroseconds		EQU		'µsec'
+kParameterUsage3by3Matrix		EQU		'3by3'
+kParameterUsageCircularDegrees	EQU		'degc'
+kParameterUsageCircularRadians	EQU		'radc'
+ParameterDataUsage		RECORD 0
+usageType				 ds.l	1				; offset: $0 (0)		;  higher level purpose of the data or group
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  default value(s) for a parameter
+
+kParameterDataDefaultItem		EQU		'dflt'
+;  atoms that help to fill in data within the info window 
+
+kParameterInfoLongName			EQU		'©nam'
+kParameterInfoCopyright			EQU		'©cpy'
+kParameterInfoDescription		EQU		'©inf'
+kParameterInfoWindowTitle		EQU		'©wnt'
+kParameterInfoPicture			EQU		'©pix'
+kParameterInfoManufacturer		EQU		'©man'
+kParameterInfoIDs				EQU		1
+;  flags for ImageCodecValidateParameters 
+
+kParameterValidationNoFlags		EQU		$00000000
+kParameterValidationFinalValidation EQU	$00000001
+; typedef long 							QTParameterValidationOptions
+
+;  QTAtomTypes for atoms in image compressor settings containers
+
+kImageCodecSettingsFieldCount	EQU		'fiel'				; Number of fields (UInt8) 
+kImageCodecSettingsFieldOrdering EQU	'fdom'				; Ordering of fields (UInt8)
+kImageCodecSettingsFieldOrderingF1F2 EQU 1
+kImageCodecSettingsFieldOrderingF2F1 EQU 2
+
+;  Additional Image Description Extensions
+
+kColorInfoImageDescriptionExtension EQU	'colr'				; image description extension describing the color properties    
+kPixelAspectRatioImageDescriptionExtension EQU 'pasp'		; image description extension describing the pixel aspect ratio
+kCleanApertureImageDescriptionExtension EQU 'clap'			; image description extension describing the pixel aspect ratio
+
+;  Color Info Image Description Extension types
+
+kVideoColorInfoImageDescriptionExtensionType EQU 'nclc'		; For video color descriptions (defined below)    
+kICCProfileColorInfoImageDescriptionExtensionType EQU 'prof' ; For ICC Profile color descriptions (not defined here)
+
+;  Video Color Info Image Description Extensions
+NCLCColorInfoImageDescriptionExtension RECORD 0
+colorParamType			 ds.l	1				; offset: $0 (0)		;  Type of color parameter 'nclc'               
+primaries				 ds.w	1				; offset: $4 (4)		;  CIE 1931 xy chromaticity coordinates          
+transferFunction		 ds.w	1				; offset: $6 (6)		;  Nonlinear transfer function from RGB to ErEgEb 
+matrix					 ds.w	1				; offset: $8 (8)		;  Matrix from ErEgEb to EyEcbEcr           
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+;  Primaries
+
+kQTPrimaries_ITU_R709_2			EQU		1					; ITU-R BT.709-2, SMPTE 274M-1995, and SMPTE 296M-1997 
+kQTPrimaries_Unknown			EQU		2					; Unknown 
+kQTPrimaries_EBU_3213			EQU		5					; EBU Tech. 3213 (1981) 
+kQTPrimaries_SMPTE_C			EQU		6					; SMPTE C Primaries from SMPTE RP 145-1993 
+;  Transfer Function
+
+kQTTransferFunction_ITU_R709_2	EQU		1					; Recommendation ITU-R BT.709-2, SMPTE 274M-1995, SMPTE 296M-1997, SMPTE 293M-1996 and SMPTE 170M-1994 
+kQTTransferFunction_Unknown		EQU		2					; Unknown 
+kQTTransferFunction_SMPTE_240M_1995 EQU	7					; SMPTE 240M-1995 and interim color implementation of SMPTE 274M-1995 
+;  Matrix
+
+kQTMatrix_ITU_R_709_2			EQU		1					; Recommendation ITU-R BT.709-2 (1125/60/2:1 only), SMPTE 274M-1995 and SMPTE 296M-1997 
+kQTMatrix_Unknown				EQU		2					; Unknown 
+kQTMatrix_ITU_R_601_4			EQU		6					; Recommendation ITU-R BT.601-4, Recommendation ITU-R BT.470-4 System B and G, SMPTE 170M-1994 and SMPTE 293M-1996 
+kQTMatrix_SMPTE_240M_1995		EQU		7					; SMPTE 240M-1995 and interim color implementation of SMPTE 274M-1995 
+
+;  Field/Frame Info Image Description (this remaps to FieldInfoImageDescriptionExtension)
+FieldInfoImageDescriptionExtension2 RECORD 0
+fields					 ds.b	1				; offset: $0 (0)
+detail					 ds.b	1				; offset: $1 (1)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+
+kQTFieldsProgressiveScan		EQU		1
+kQTFieldsInterlaced				EQU		2
+
+kQTFieldDetailUnknown			EQU		0
+kQTFieldDetailTemporalTopFirst	EQU		1
+kQTFieldDetailTemporalBottomFirst EQU	6
+kQTFieldDetailSpatialFirstLineEarly EQU	9
+kQTFieldDetailSpatialFirstLineLate EQU	14
+
+;  Pixel Aspect Ratio Image Description Extensions
+PixelAspectRatioImageDescriptionExtension RECORD 0
+hSpacing				 ds.l	1				; offset: $0 (0)		;  Horizontal Spacing 
+vSpacing				 ds.l	1				; offset: $4 (4)		;  Vertical Spacing 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Clean Aperture Image Description Extensions
+CleanApertureImageDescriptionExtension RECORD 0
+cleanApertureWidthN		 ds.l	1				; offset: $0 (0)		;  width of clean aperture, numerator, denominator 
+cleanApertureWidthD		 ds.l	1				; offset: $4 (4)
+cleanApertureHeightN	 ds.l	1				; offset: $8 (8)		;  height of clean aperture, numerator, denominator
+cleanApertureHeightD	 ds.l	1				; offset: $C (12)
+horizOffN				 ds.l	1				; offset: $10 (16)		;  horizontal offset of clean aperture center minus (width-1)/2, numerator, denominator 
+horizOffD				 ds.l	1				; offset: $14 (20)
+vertOffN				 ds.l	1				; offset: $18 (24)		;  vertical offset of clean aperture center minus (height-1)/2, numerator, denominator 
+vertOffD				 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+; *  NewImageCodecMPDrawBandUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeImageCodecMPDrawBandUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeImageCodecMPDrawBandUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;   codec selectors 0-127 are reserved by Apple 
+;   codec selectors 128-191 are subtype specific 
+;   codec selectors 192-255 are vendor specific 
+;   codec selectors 256-32767 are available for general use 
+;   negative selectors are reserved by the Component Manager 
+
+; *  ImageCodecGetCodecInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetCodecInfo(ComponentInstance ci, CodecInfo *info)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetCodecInfo
+			move.l              #$00040000,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetCodecInfo
+	ENDIF
+
+
+; *  ImageCodecGetCompressionTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetCompressionTime(ComponentInstance ci, PixMapHandle src, const Rect *srcRect, short depth, CodecQ *spatialQuality, CodecQ *temporalQuality, unsigned long *time)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetCompressionTime
+			move.l              #$00160001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetCompressionTime
+	ENDIF
+
+
+; *  ImageCodecGetMaxCompressionSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetMaxCompressionSize(ComponentInstance ci, PixMapHandle src, const Rect *srcRect, short depth, CodecQ quality, long *size)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetMaxCompressionSize
+			move.l              #$00120002,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetMaxCompressionSize
+	ENDIF
+
+
+; *  ImageCodecPreCompress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecPreCompress(ComponentInstance ci, CodecCompressParams *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecPreCompress
+			move.l              #$00040003,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecPreCompress
+	ENDIF
+
+
+; *  ImageCodecBandCompress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecBandCompress(ComponentInstance ci, CodecCompressParams *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecBandCompress
+			move.l              #$00040004,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecBandCompress
+	ENDIF
+
+
+; *  ImageCodecPreDecompress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecPreDecompress(ComponentInstance ci, CodecDecompressParams *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecPreDecompress
+			move.l              #$00040005,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecPreDecompress
+	ENDIF
+
+
+; *  ImageCodecBandDecompress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecBandDecompress(ComponentInstance ci, CodecDecompressParams *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecBandDecompress
+			move.l              #$00040006,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecBandDecompress
+	ENDIF
+
+
+; *  ImageCodecBusy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecBusy(ComponentInstance ci, ImageSequence seq)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecBusy
+			move.l              #$00040007,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecBusy
+	ENDIF
+
+
+; *  ImageCodecGetCompressedImageSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetCompressedImageSize(ComponentInstance ci, ImageDescriptionHandle desc, Ptr data, long bufferSize, ICMDataProcRecordPtr dataProc, long *dataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetCompressedImageSize
+			move.l              #$00140008,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetCompressedImageSize
+	ENDIF
+
+
+; *  ImageCodecGetSimilarity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetSimilarity(ComponentInstance ci, PixMapHandle src, const Rect *srcRect, ImageDescriptionHandle desc, Ptr data, Fixed *similarity)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetSimilarity
+			move.l              #$00140009,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetSimilarity
+	ENDIF
+
+
+; *  ImageCodecTrimImage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecTrimImage(ComponentInstance ci, ImageDescriptionHandle Desc, Ptr inData, long inBufferSize, ICMDataProcRecordPtr dataProc, Ptr outData, long outBufferSize, ICMFlushProcRecordPtr flushProc, Rect *trimRect, ICMProgressProcRecordPtr progressProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecTrimImage
+			move.l              #$0024000A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecTrimImage
+	ENDIF
+
+
+; *  ImageCodecRequestSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecRequestSettings(ComponentInstance ci, Handle settings, Rect *rp, ModalFilterUPP filterProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecRequestSettings
+			move.l              #$000C000B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecRequestSettings
+	ENDIF
+
+
+; *  ImageCodecGetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetSettings(ComponentInstance ci, Handle settings)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetSettings
+			move.l              #$0004000C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetSettings
+	ENDIF
+
+
+; *  ImageCodecSetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecSetSettings(ComponentInstance ci, Handle settings)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecSetSettings
+			move.l              #$0004000D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecSetSettings
+	ENDIF
+
+
+; *  ImageCodecFlush()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecFlush(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecFlush
+			move.l              #$0000000E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecFlush
+	ENDIF
+
+
+; *  ImageCodecSetTimeCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecSetTimeCode(ComponentInstance ci, void *timeCodeFormat, void *timeCodeTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecSetTimeCode
+			move.l              #$0008000F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecSetTimeCode
+	ENDIF
+
+
+; *  ImageCodecIsImageDescriptionEquivalent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecIsImageDescriptionEquivalent(ComponentInstance ci, ImageDescriptionHandle newDesc, Boolean *equivalent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecIsImageDescriptionEquivalent
+			move.l              #$00080010,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecIsImageDescriptionEquivalent
+	ENDIF
+
+
+; *  ImageCodecNewMemory()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecNewMemory(ComponentInstance ci, Ptr *data, Size dataSize, long dataUse, ICMMemoryDisposedUPP memoryGoneProc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecNewMemory
+			move.l              #$00140011,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecNewMemory
+	ENDIF
+
+
+; *  ImageCodecDisposeMemory()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecDisposeMemory(ComponentInstance ci, Ptr data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecDisposeMemory
+			move.l              #$00040012,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecDisposeMemory
+	ENDIF
+
+
+; *  ImageCodecHitTestData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecHitTestData(ComponentInstance ci, ImageDescriptionHandle desc, void *data, Size dataSize, Point where, Boolean *hit)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecHitTestData
+			move.l              #$00140013,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecHitTestData
+	ENDIF
+
+
+; *  ImageCodecNewImageBufferMemory()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecNewImageBufferMemory(ComponentInstance ci, CodecDecompressParams *params, long flags, ICMMemoryDisposedUPP memoryGoneProc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecNewImageBufferMemory
+			move.l              #$00100014,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecNewImageBufferMemory
+	ENDIF
+
+
+; *  ImageCodecExtractAndCombineFields()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecExtractAndCombineFields(ComponentInstance ci, long fieldFlags, void *data1, long dataSize1, ImageDescriptionHandle desc1, void *data2, long dataSize2, ImageDescriptionHandle desc2, void *outputData, long *outDataSize, ImageDescriptionHandle descOut)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecExtractAndCombineFields
+			move.l              #$00280015,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecExtractAndCombineFields
+	ENDIF
+
+
+; *  ImageCodecGetMaxCompressionSizeWithSources()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetMaxCompressionSizeWithSources(ComponentInstance ci, PixMapHandle src, const Rect *srcRect, short depth, CodecQ quality, CDSequenceDataSourcePtr sourceData, long *size)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetMaxCompressionSizeWithSources
+			move.l              #$00160016,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetMaxCompressionSizeWithSources
+	ENDIF
+
+
+; *  ImageCodecSetTimeBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecSetTimeBase(ComponentInstance ci, void *base)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecSetTimeBase
+			move.l              #$00040017,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecSetTimeBase
+	ENDIF
+
+
+; *  ImageCodecSourceChanged()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecSourceChanged(ComponentInstance ci, UInt32 majorSourceChangeSeed, UInt32 minorSourceChangeSeed, CDSequenceDataSourcePtr sourceData, long *flagsOut)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecSourceChanged
+			move.l              #$00100018,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecSourceChanged
+	ENDIF
+
+
+; *  ImageCodecFlushFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecFlushFrame(ComponentInstance ci, UInt32 flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecFlushFrame
+			move.l              #$00040019,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecFlushFrame
+	ENDIF
+
+
+; *  ImageCodecGetSettingsAsText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetSettingsAsText(ComponentInstance ci, Handle *text)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetSettingsAsText
+			move.l              #$0004001A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetSettingsAsText
+	ENDIF
+
+
+; *  ImageCodecGetParameterListHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetParameterListHandle(ComponentInstance ci, Handle *parameterDescriptionHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetParameterListHandle
+			move.l              #$0004001B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetParameterListHandle
+	ENDIF
+
+
+; *  ImageCodecGetParameterList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetParameterList(ComponentInstance ci, QTAtomContainer *parameterDescription)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetParameterList
+			move.l              #$0004001C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetParameterList
+	ENDIF
+
+
+; *  ImageCodecCreateStandardParameterDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecCreateStandardParameterDialog(ComponentInstance ci, QTAtomContainer parameterDescription, QTAtomContainer parameters, QTParameterDialogOptions dialogOptions, DialogPtr existingDialog, short existingUserItem, QTParameterDialog *createdDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecCreateStandardParameterDialog
+			move.l              #$0016001D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecCreateStandardParameterDialog
+	ENDIF
+
+
+; *  ImageCodecIsStandardParameterDialogEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecIsStandardParameterDialogEvent(ComponentInstance ci, EventRecord *pEvent, QTParameterDialog createdDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecIsStandardParameterDialogEvent
+			move.l              #$0008001E,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecIsStandardParameterDialogEvent
+	ENDIF
+
+
+; *  ImageCodecDismissStandardParameterDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecDismissStandardParameterDialog(ComponentInstance ci, QTParameterDialog createdDialog)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecDismissStandardParameterDialog
+			move.l              #$0004001F,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecDismissStandardParameterDialog
+	ENDIF
+
+
+; *  ImageCodecStandardParameterDialogDoAction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecStandardParameterDialogDoAction(ComponentInstance ci, QTParameterDialog createdDialog, long action, void *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecStandardParameterDialogDoAction
+			move.l              #$000C0020,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecStandardParameterDialogDoAction
+	ENDIF
+
+
+; *  ImageCodecNewImageGWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecNewImageGWorld(ComponentInstance ci, CodecDecompressParams *params, GWorldPtr *newGW, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecNewImageGWorld
+			move.l              #$000C0021,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecNewImageGWorld
+	ENDIF
+
+
+; *  ImageCodecDisposeImageGWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecDisposeImageGWorld(ComponentInstance ci, GWorldPtr theGW)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecDisposeImageGWorld
+			move.l              #$00040022,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecDisposeImageGWorld
+	ENDIF
+
+
+; *  ImageCodecHitTestDataWithFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecHitTestDataWithFlags(ComponentInstance ci, ImageDescriptionHandle desc, void *data, Size dataSize, Point where, long *hit, long hitFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecHitTestDataWithFlags
+			move.l              #$00180023,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecHitTestDataWithFlags
+	ENDIF
+
+
+; *  ImageCodecValidateParameters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecValidateParameters(ComponentInstance ci, QTAtomContainer parameters, QTParameterValidationOptions validationFlags, StringPtr errorString)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecValidateParameters
+			move.l              #$000C0024,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecValidateParameters
+	ENDIF
+
+
+; *  ImageCodecGetBaseMPWorkFunction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetBaseMPWorkFunction(ComponentInstance ci, ComponentMPWorkFunctionUPP *workFunction, void **refCon, ImageCodecMPDrawBandUPP drawProc, void *drawProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetBaseMPWorkFunction
+			move.l              #$00100025,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetBaseMPWorkFunction
+	ENDIF
+
+
+; *  ImageCodecRequestGammaLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecRequestGammaLevel(ComponentInstance ci, Fixed srcGammaLevel, Fixed dstGammaLevel, long *codecCanMatch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecRequestGammaLevel
+			move.l              #$000C0028,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecRequestGammaLevel
+	ENDIF
+
+
+; *  ImageCodecGetSourceDataGammaLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetSourceDataGammaLevel(ComponentInstance ci, Fixed *sourceDataGammaLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetSourceDataGammaLevel
+			move.l              #$00040029,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetSourceDataGammaLevel
+	ENDIF
+
+
+; *  ImageCodecGetDecompressLatency()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 5.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecGetDecompressLatency(ComponentInstance ci, TimeRecord *latency)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecGetDecompressLatency
+			move.l              #$0004002B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecGetDecompressLatency
+	ENDIF
+
+
+; *  ImageCodecPreflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecPreflight(ComponentInstance ci, CodecDecompressParams *params)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecPreflight
+			move.l              #$00040200,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecPreflight
+	ENDIF
+
+
+; *  ImageCodecInitialize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecInitialize(ComponentInstance ci, ImageSubCodecDecompressCapabilities *cap)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecInitialize
+			move.l              #$00040201,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecInitialize
+	ENDIF
+
+
+; *  ImageCodecBeginBand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecBeginBand(ComponentInstance ci, CodecDecompressParams *params, ImageSubCodecDecompressRecord *drp, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecBeginBand
+			move.l              #$000C0202,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecBeginBand
+	ENDIF
+
+
+; *  ImageCodecDrawBand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecDrawBand(ComponentInstance ci, ImageSubCodecDecompressRecord *drp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecDrawBand
+			move.l              #$00040203,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecDrawBand
+	ENDIF
+
+
+; *  ImageCodecEndBand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEndBand(ComponentInstance ci, ImageSubCodecDecompressRecord *drp, OSErr result, long flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEndBand
+			move.l              #$000A0204,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEndBand
+	ENDIF
+
+
+; *  ImageCodecQueueStarting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecQueueStarting(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecQueueStarting
+			move.l              #$00000205,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecQueueStarting
+	ENDIF
+
+
+; *  ImageCodecQueueStopping()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecQueueStopping(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecQueueStopping
+			move.l              #$00000206,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecQueueStopping
+	ENDIF
+
+
+; *  ImageCodecDroppingFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecDroppingFrame(ComponentInstance ci, const ImageSubCodecDecompressRecord *drp)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecDroppingFrame
+			move.l              #$00040207,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecDroppingFrame
+	ENDIF
+
+
+; *  ImageCodecScheduleFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecScheduleFrame(ComponentInstance ci, const ImageSubCodecDecompressRecord *drp, ImageCodecTimeTriggerUPP triggerProc, void *triggerProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecScheduleFrame
+			move.l              #$000C0208,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecScheduleFrame
+	ENDIF
+
+
+; *  ImageCodecCancelTrigger()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecCancelTrigger(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecCancelTrigger
+			move.l              #$00000209,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecCancelTrigger
+	ENDIF
+
+
+
+
+
+
+
+
+
+
+
+kMotionJPEGTag					EQU		'mjpg'
+kJPEGQuantizationTablesImageDescriptionExtension EQU 'mjqt'
+kJPEGHuffmanTablesImageDescriptionExtension EQU 'mjht'
+kFieldInfoImageDescriptionExtension EQU	'fiel'				; image description extension describing the field count and field orderings
+
+kFieldOrderUnknown				EQU		0
+kFieldsStoredF1F2DisplayedF1F2	EQU		1
+kFieldsStoredF1F2DisplayedF2F1	EQU		2
+kFieldsStoredF2F1DisplayedF1F2	EQU		5
+kFieldsStoredF2F1DisplayedF2F1	EQU		6
+MotionJPEGApp1Marker	RECORD 0
+unused					 ds.l	1				; offset: $0 (0)
+tag						 ds.l	1				; offset: $4 (4)
+fieldSize				 ds.l	1				; offset: $8 (8)
+paddedFieldSize			 ds.l	1				; offset: $C (12)
+offsetToNextField		 ds.l	1				; offset: $10 (16)
+qTableOffset			 ds.l	1				; offset: $14 (20)
+huffmanTableOffset		 ds.l	1				; offset: $18 (24)
+sofOffset				 ds.l	1				; offset: $1C (28)
+sosOffset				 ds.l	1				; offset: $20 (32)
+soiOffset				 ds.l	1				; offset: $24 (36)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+FieldInfoImageDescriptionExtension RECORD 0
+fieldCount				 ds.b	1				; offset: $0 (0)
+fieldOrderings			 ds.b	1				; offset: $1 (1)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+
+
+; *  QTPhotoSetSampling()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTPhotoSetSampling(ComponentInstance codec, short yH, short yV, short cbH, short cbV, short crH, short crV)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTPhotoSetSampling
+			move.l              #$000C0100,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTPhotoSetSampling
+	ENDIF
+
+
+; *  QTPhotoSetRestartInterval()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTPhotoSetRestartInterval(ComponentInstance codec, unsigned short restartInterval)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTPhotoSetRestartInterval
+			move.l              #$00020101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTPhotoSetRestartInterval
+	ENDIF
+
+
+; *  QTPhotoDefineHuffmanTable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTPhotoDefineHuffmanTable(ComponentInstance codec, short componentNumber, Boolean isDC, unsigned char *lengthCounts, unsigned char *values)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTPhotoDefineHuffmanTable
+			move.l              #$000C0102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTPhotoDefineHuffmanTable
+	ENDIF
+
+
+; *  QTPhotoDefineQuantizationTable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult QTPhotoDefineQuantizationTable(ComponentInstance codec, short componentNumber, unsigned char *table)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_QTPhotoDefineQuantizationTable
+			move.l              #$00060103,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTPhotoDefineQuantizationTable
+	ENDIF
+
+
+
+
+
+;  source identifier -- placed in root container of description, one or more required 
+
+kEffectSourceName				EQU		'src '
+
+;  source type -- placed in the input map to identify the source kind 
+
+kEffectDataSourceType			EQU		'dtst'
+;   default effect types 
+
+kEffectRawSource				EQU		0					; the source is raw image data
+kEffectGenericType				EQU		'geff'				; generic effect for combining others
+
+
+; typedef EffectSource *				EffectSourcePtr
+
+SourceData				RECORD 0
+image					 ds.l	1				; offset: $0 (0)
+						 ORG 0
+effect					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+EffectSource			RECORD 0
+effectType				 ds.l	1				; offset: $0 (0)		;  type of effect or kEffectRawSource if raw ICM data
+data					 ds.l	1				; offset: $4 (4)		;  track data for this effect
+source					 ds		SourceData		; offset: $8 (8)		;  source/effect pointers
+next					 ds.l	1				; offset: $C (12)		;  the next source for the parent effect
+;  fields added for QuickTime 4.0
+lastTranslatedFrameTime	 ds.l	1				; offset: $10 (16)		;  start frame time of last converted frame, may be -1
+lastFrameDuration		 ds.l	1				; offset: $14 (20)		;  duration of the last converted frame, may be zero
+lastFrameTimeScale		 ds.l	1				; offset: $18 (24)		;  time scale of this source frame, only has meaning if above fields are valid
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+EffectsFrameParams		RECORD 0
+frameTime				 ds		ICMFrameTimeRecord ; offset: $0 (0)		;  timing data
+effectDuration			 ds.l	1				; offset: $30 (48)		;  the duration of a single effect frame
+doAsync					 ds.b	1				; offset: $34 (52)		;  set to true if the effect can go async
+pad						 ds.b	3				; offset: $35 (53)
+source					 ds.l	1				; offset: $38 (56)		;  ptr to the source input tree
+refCon					 ds.l	1				; offset: $3C (60)		;  storage for the effect
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; typedef struct EffectsFrameParams *	EffectsFrameParamsPtr
+
+
+
+
+; *  ImageCodecEffectSetup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectSetup(ComponentInstance effect, CodecDecompressParams *p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectSetup
+			move.l              #$00040300,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectSetup
+	ENDIF
+
+
+; *  ImageCodecEffectBegin()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectBegin(ComponentInstance effect, CodecDecompressParams *p, EffectsFrameParamsPtr ePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectBegin
+			move.l              #$00080301,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectBegin
+	ENDIF
+
+
+; *  ImageCodecEffectRenderFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectRenderFrame(ComponentInstance effect, EffectsFrameParamsPtr p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectRenderFrame
+			move.l              #$00040302,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectRenderFrame
+	ENDIF
+
+
+; *  ImageCodecEffectConvertEffectSourceToFormat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectConvertEffectSourceToFormat(ComponentInstance effect, EffectSourcePtr sourceToConvert, ImageDescriptionHandle requestedDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectConvertEffectSourceToFormat
+			move.l              #$00080303,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectConvertEffectSourceToFormat
+	ENDIF
+
+
+; *  ImageCodecEffectCancel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectCancel(ComponentInstance effect, EffectsFrameParamsPtr p)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectCancel
+			move.l              #$00040304,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectCancel
+	ENDIF
+
+
+; *  ImageCodecEffectGetSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectGetSpeed(ComponentInstance effect, QTAtomContainer parameters, Fixed *pFPS)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectGetSpeed
+			move.l              #$00080305,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectGetSpeed
+	ENDIF
+
+
+
+kSMPTENoFlag					EQU		0
+kSMPTESmoothEdgeFlag			EQU		$01					; smooth edges of the stroke
+kSMPTEStrokeEdgeFlag			EQU		$02					; stroke edge with color
+; typedef long 							SMPTEFlags
+
+; typedef long 							SMPTEFrameReference
+
+
+kSlideHorizontalWipe			EQU		1
+kSlideVerticalWipe				EQU		2
+kTopLeftWipe					EQU		3
+kTopRightWipe					EQU		4
+kBottomRightWipe				EQU		5
+kBottomLeftWipe					EQU		6
+kFourCornerWipe					EQU		7
+kFourBoxWipe					EQU		8
+kBarnVerticalWipe				EQU		21
+kBarnHorizontalWipe				EQU		22
+kTopCenterWipe					EQU		23
+kRightCenterWipe				EQU		24
+kBottomCenterWipe				EQU		25
+kLeftCenterWipe					EQU		26
+kDiagonalLeftDownWipe			EQU		41
+kDiagonalRightDownWipe			EQU		42
+kTopBottomBowTieWipe			EQU		43
+kLeftRightBowTieWipe			EQU		44
+kDiagonalLeftOutWipe			EQU		45
+kDiagonalRightOutWipe			EQU		46
+kDiagonalCrossWipe				EQU		47
+kDiagonalBoxWipe				EQU		48
+kFilledVWipe					EQU		61
+kFilledVRightWipe				EQU		62
+kFilledVBottomWipe				EQU		63
+kFilledVLeftWipe				EQU		64
+kHollowVWipe					EQU		65
+kHollowVRightWipe				EQU		66
+kHollowVBottomWipe				EQU		67
+kHollowVLeftWipe				EQU		68
+kVerticalZigZagWipe				EQU		71
+kHorizontalZigZagWipe			EQU		72
+kVerticalBarnZigZagWipe			EQU		73
+kHorizontalBarnZigZagWipe		EQU		74
+
+kRectangleWipe					EQU		101
+kDiamondWipe					EQU		102
+kTriangleWipe					EQU		103
+kTriangleRightWipe				EQU		104
+kTriangleUpsideDownWipe			EQU		105
+kTriangleLeftWipe				EQU		106
+kSpaceShipWipe					EQU		107
+kSpaceShipRightWipe				EQU		108
+kSpaceShipUpsideDownWipe		EQU		109
+kSpaceShipLeftWipe				EQU		110
+kPentagonWipe					EQU		111
+kPentagonUpsideDownWipe			EQU		112
+kHexagonWipe					EQU		113
+kHexagonSideWipe				EQU		114
+kCircleWipe						EQU		119
+kOvalWipe						EQU		120
+kOvalSideWipe					EQU		121
+kCatEyeWipe						EQU		122
+kCatEyeSideWipe					EQU		123
+kRoundRectWipe					EQU		124
+kRoundRectSideWipe				EQU		125
+kFourPointStarWipe				EQU		127
+kFivePointStarWipe				EQU		128
+kStarOfDavidWipe				EQU		129
+kHeartWipe						EQU		130
+kKeyholeWipe					EQU		131
+
+kRotatingTopWipe				EQU		201
+kRotatingRightWipe				EQU		202
+kRotatingBottomWipe				EQU		203
+kRotatingLeftWipe				EQU		204
+kRotatingTopBottomWipe			EQU		205
+kRotatingLeftRightWipe			EQU		206
+kRotatingQuadrantWipe			EQU		207
+kTopToBottom180Wipe				EQU		211
+kRightToLeft180Wipe				EQU		212
+kTopToBottom90Wipe				EQU		213
+kRightToLeft90Wipe				EQU		214
+kTop180Wipe						EQU		221
+kRight180Wipe					EQU		222
+kBottom180Wipe					EQU		223
+kLeft180Wipe					EQU		224
+kCounterRotatingTopBottomWipe	EQU		225
+kCounterRotatingLeftRightWipe	EQU		226
+kDoubleRotatingTopBottomWipe	EQU		227
+kDoubleRotatingLeftRightWipe	EQU		228
+kVOpenTopWipe					EQU		231
+kVOpenRightWipe					EQU		232
+kVOpenBottomWipe				EQU		233
+kVOpenLeftWipe					EQU		234
+kVOpenTopBottomWipe				EQU		235
+kVOpenLeftRightWipe				EQU		236
+kRotatingTopLeftWipe			EQU		241
+kRotatingBottomLeftWipe			EQU		242
+kRotatingBottomRightWipe		EQU		243
+kRotatingTopRightWipe			EQU		244
+kRotatingTopLeftBottomRightWipe	EQU		245
+kRotatingBottomLeftTopRightWipe	EQU		246
+kRotatingTopLeftRightWipe		EQU		251
+kRotatingLeftTopBottomWipe		EQU		252
+kRotatingBottomLeftRightWipe	EQU		253
+kRotatingRightTopBottomWipe		EQU		254
+kRotatingDoubleCenterRightWipe	EQU		261
+kRotatingDoubleCenterTopWipe	EQU		262
+kRotatingDoubleCenterTopBottomWipe EQU	263
+kRotatingDoubleCenterLeftRightWipe EQU	264
+
+kHorizontalMatrixWipe			EQU		301
+kVerticalMatrixWipe				EQU		302
+kTopLeftDiagonalMatrixWipe		EQU		303
+kTopRightDiagonalMatrixWipe		EQU		304
+kBottomRightDiagonalMatrixWipe	EQU		305
+kBottomLeftDiagonalMatrixWipe	EQU		306
+kClockwiseTopLeftMatrixWipe		EQU		310
+kClockwiseTopRightMatrixWipe	EQU		311
+kClockwiseBottomRightMatrixWipe	EQU		312
+kClockwiseBottomLeftMatrixWipe	EQU		313
+kCounterClockwiseTopLeftMatrixWipe EQU	314
+kCounterClockwiseTopRightMatrixWipe EQU	315
+kCounterClockwiseBottomRightMatrixWipe EQU 316
+kCounterClockwiseBottomLeftMatrixWipe EQU 317
+kVerticalStartTopMatrixWipe		EQU		320
+kVerticalStartBottomMatrixWipe	EQU		321
+kVerticalStartTopOppositeMatrixWipe EQU	322
+kVerticalStartBottomOppositeMatrixWipe EQU 323
+kHorizontalStartLeftMatrixWipe	EQU		324
+kHorizontalStartRightMatrixWipe	EQU		325
+kHorizontalStartLeftOppositeMatrixWipe EQU 326
+kHorizontalStartRightOppositeMatrixWipe EQU 327
+kDoubleDiagonalTopRightMatrixWipe EQU	328
+kDoubleDiagonalBottomRightMatrixWipe EQU 329
+kDoubleSpiralTopMatixWipe		EQU		340
+kDoubleSpiralBottomMatixWipe	EQU		341
+kDoubleSpiralLeftMatixWipe		EQU		342
+kDoubleSpiralRightMatixWipe		EQU		343
+kQuadSpiralVerticalMatixWipe	EQU		344
+kQuadSpiralHorizontalMatixWipe	EQU		345
+kVerticalWaterfallLeftMatrixWipe EQU	350
+kVerticalWaterfallRightMatrixWipe EQU	351
+kHorizontalWaterfallLeftMatrixWipe EQU	352
+kHorizontalWaterfallRightMatrixWipe EQU	353
+kRandomWipe						EQU		409					; non-SMPTE standard numbers
+kRandomWipeGroupWipe			EQU		501
+kRandomIrisGroupWipe			EQU		502
+kRandomRadialGroupWipe			EQU		503
+kRandomMatrixGroupWipe			EQU		504
+; typedef unsigned long 				SMPTEWipeType
+
+
+; *  ImageCodecEffectPrepareSMPTEFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectPrepareSMPTEFrame(ComponentInstance effect, PixMapPtr destPixMap, SMPTEFrameReference *returnValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectPrepareSMPTEFrame
+			move.l              #$00080100,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectPrepareSMPTEFrame
+	ENDIF
+
+
+; *  ImageCodecEffectDisposeSMPTEFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectDisposeSMPTEFrame(ComponentInstance effect, SMPTEFrameReference frameRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectDisposeSMPTEFrame
+			move.l              #$00040101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectDisposeSMPTEFrame
+	ENDIF
+
+
+; *  ImageCodecEffectRenderSMPTEFrame()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 4.0 and later
+; 
+
+;
+; pascal ComponentResult ImageCodecEffectRenderSMPTEFrame(ComponentInstance effect, PixMapPtr destPixMap, SMPTEFrameReference frameRef, Fixed effectPercentageEven, Fixed effectPercentageOdd, Rect *pSourceRect, MatrixRecord *pMatrix, SMPTEWipeType effectNumber, long xRepeat, long yRepeat, SMPTEFlags flags, Fixed penWidth, long strokeValue)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ImageCodecEffectRenderSMPTEFrame
+			move.l              #$00300102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ImageCodecEffectRenderSMPTEFrame
+	ENDIF
+
+
+
+;  curve atom types and data structures 
+
+kCurvePathAtom					EQU		'path'
+kCurveEndAtom					EQU		'zero'
+kCurveAntialiasControlAtom		EQU		'anti'
+kCurveAntialiasOff				EQU		0
+kCurveAntialiasOn				EQU		$FFFFFFFF
+kCurveFillTypeAtom				EQU		'fill'
+kCurvePenThicknessAtom			EQU		'pent'
+kCurveMiterLimitAtom			EQU		'mitr'
+kCurveJoinAttributesAtom		EQU		'join'
+kCurveMinimumDepthAtom			EQU		'mind'
+kCurveDepthAlwaysOffscreenMask	EQU		$80000000
+kCurveTransferModeAtom			EQU		'xfer'
+kCurveGradientAngleAtom			EQU		'angl'
+kCurveGradientRadiusAtom		EQU		'radi'
+kCurveGradientOffsetAtom		EQU		'cent'
+
+kCurveARGBColorAtom				EQU		'argb'
+ARGBColor				RECORD 0
+alpha					 ds.w	1				; offset: $0 (0)
+red						 ds.w	1				; offset: $2 (2)
+green					 ds.w	1				; offset: $4 (4)
+blue					 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+kCurveGradientRecordAtom		EQU		'grad'
+GradientColorRecord		RECORD 0
+thisColor				 ds		ARGBColor		; offset: $0 (0)
+endingPercentage		 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct GradientColorRecord *	GradientColorPtr
+
+
+kCurveGradientTypeAtom			EQU		'grdt'
+;  currently supported gradient types 
+
+kLinearGradient					EQU		0
+kCircularGradient				EQU		1
+; typedef long 							GradientType
+
+
+; *  CurveGetLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveGetLength(ComponentInstance effect, gxPaths *target, long index, wide *wideLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveGetLength
+			move.l              #$000C0100,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveGetLength
+	ENDIF
+
+
+; *  CurveLengthToPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveLengthToPoint(ComponentInstance effect, gxPaths *target, long index, Fixed length, FixedPoint *location, FixedPoint *tangent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveLengthToPoint
+			move.l              #$00140101,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveLengthToPoint
+	ENDIF
+
+
+; *  CurveNewPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveNewPath(ComponentInstance effect, Handle *pPath)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveNewPath
+			move.l              #$00040102,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveNewPath
+	ENDIF
+
+
+; *  CurveCountPointsInPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveCountPointsInPath(ComponentInstance effect, gxPaths *aPath, unsigned long contourIndex, unsigned long *pCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveCountPointsInPath
+			move.l              #$000C0103,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveCountPointsInPath
+	ENDIF
+
+
+; *  CurveGetPathPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveGetPathPoint(ComponentInstance effect, gxPaths *aPath, unsigned long contourIndex, unsigned long pointIndex, gxPoint *thePoint, Boolean *ptIsOnPath)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveGetPathPoint
+			move.l              #$00140104,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveGetPathPoint
+	ENDIF
+
+
+; *  CurveInsertPointIntoPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveInsertPointIntoPath(ComponentInstance effect, gxPoint *aPoint, Handle thePath, unsigned long contourIndex, unsigned long pointIndex, Boolean ptIsOnPath)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveInsertPointIntoPath
+			move.l              #$00120105,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveInsertPointIntoPath
+	ENDIF
+
+
+; *  CurveSetPathPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveSetPathPoint(ComponentInstance effect, gxPaths *aPath, unsigned long contourIndex, unsigned long pointIndex, gxPoint *thePoint, Boolean ptIsOnPath)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveSetPathPoint
+			move.l              #$00120106,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveSetPathPoint
+	ENDIF
+
+
+; *  CurveGetNearestPathPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveGetNearestPathPoint(ComponentInstance effect, gxPaths *aPath, FixedPoint *thePoint, unsigned long *contourIndex, unsigned long *pointIndex, Fixed *theDelta)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveGetNearestPathPoint
+			move.l              #$00140107,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveGetNearestPathPoint
+	ENDIF
+
+
+; *  CurvePathPointToLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurvePathPointToLength(ComponentInstance ci, gxPaths *aPath, Fixed startDist, Fixed endDist, FixedPoint *thePoint, Fixed *pLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurvePathPointToLength
+			move.l              #$00140108,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurvePathPointToLength
+	ENDIF
+
+
+; *  CurveCreateVectorStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveCreateVectorStream(ComponentInstance effect, Handle *pStream)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveCreateVectorStream
+			move.l              #$00040109,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveCreateVectorStream
+	ENDIF
+
+
+; *  CurveAddAtomToVectorStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveAddAtomToVectorStream(ComponentInstance effect, OSType atomType, Size atomSize, void *pAtomData, Handle vectorStream)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveAddAtomToVectorStream
+			move.l              #$0010010A,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveAddAtomToVectorStream
+	ENDIF
+
+
+; *  CurveAddPathAtomToVectorStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveAddPathAtomToVectorStream(ComponentInstance effect, Handle pathData, Handle vectorStream)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveAddPathAtomToVectorStream
+			move.l              #$0008010B,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveAddPathAtomToVectorStream
+	ENDIF
+
+
+; *  CurveAddZeroAtomToVectorStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveAddZeroAtomToVectorStream(ComponentInstance effect, Handle vectorStream)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveAddZeroAtomToVectorStream
+			move.l              #$0004010C,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveAddZeroAtomToVectorStream
+	ENDIF
+
+
+; *  CurveGetAtomDataFromVectorStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QuickTimeLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CurveGetAtomDataFromVectorStream(ComponentInstance effect, Handle vectorStream, long atomType, long *dataSize, Ptr *dataPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CurveGetAtomDataFromVectorStream
+			move.l              #$0010010D,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurveGetAtomDataFromVectorStream
+	ENDIF
+
+
+;  UPP call backs 
+	ENDIF ; __IMAGECODEC__ 
+

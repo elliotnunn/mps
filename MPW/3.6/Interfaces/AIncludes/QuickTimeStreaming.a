@@ -1,0 +1,2543 @@
+;
+;    File:       QuickTimeStreaming.a
+;
+;    Contains:   QuickTime Interfaces.
+;
+;    Version:    Technology: QuickTime 5.0.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__QUICKTIMESTREAMING__') = 'UNDEFINED' THEN
+__QUICKTIMESTREAMING__ SET 1
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__MOVIES__') = 'UNDEFINED' THEN
+	include 'Movies.a'
+	ENDIF
+	IF &TYPE('__QUICKTIMECOMPONENTS__') = 'UNDEFINED' THEN
+	include 'QuickTimeComponents.a'
+	ENDIF
+
+
+kQTSInfiniteDuration			EQU		$7FFFFFFF
+kQTSUnknownDuration				EQU		$00000000
+kQTSNormalForwardRate			EQU		$00010000
+kQTSStoppedRate					EQU		$00000000
+QTSPresentationRecord	RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct QTSPresentationRecord * QTSPresentation
+
+QTSStreamRecord			RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct QTSStreamRecord *		QTSStream
+
+QTSEditEntry			RECORD 0
+presentationDuration	 ds		TimeValue64		; offset: $0 (0)
+streamStartTime			 ds		TimeValue64		; offset: $8 (8)
+streamRate				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+QTSEditList				RECORD 0
+numEdits				 ds.l	1				; offset: $0 (0)
+edits					 ds		QTSEditEntry	; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct QTSEditList *			QTSEditListPtr
+
+; typedef QTSEditListPtr *				QTSEditListHandle
+
+; -----------------------------------------
+;    Get / Set Info
+;-----------------------------------------
+
+
+kQTSGetURLLink					EQU		'gull'				; QTSGetURLLinkRecord* 
+;  get and set 
+
+kQTSTargetBufferDurationInfo	EQU		'bufr'				; Fixed* in seconds; expected, not actual 
+kQTSDurationInfo				EQU		'dura'				; QTSDurationAtom* 
+kQTSSoundLevelMeteringEnabledInfo EQU	'mtrn'				; Boolean* 
+kQTSSoundLevelMeterInfo			EQU		'levm'				; LevelMeterInfoPtr 
+kQTSSourceTrackIDInfo			EQU		'otid'				; UInt32* 
+kQTSSourceLayerInfo				EQU		'olyr'				; UInt16* 
+kQTSSourceLanguageInfo			EQU		'olng'				; UInt16* 
+kQTSSourceTrackFlagsInfo		EQU		'otfl'				; SInt32* 
+kQTSSourceDimensionsInfo		EQU		'odim'				; QTSDimensionParams* 
+kQTSSourceVolumesInfo			EQU		'ovol'				; QTSVolumesParams* 
+kQTSSourceMatrixInfo			EQU		'omat'				; MatrixRecord* 
+kQTSSourceClipRectInfo			EQU		'oclp'				; Rect* 
+kQTSSourceGraphicsModeInfo		EQU		'ogrm'				; QTSGraphicsModeParams* 
+kQTSSourceScaleInfo				EQU		'oscl'				; Point* 
+kQTSSourceBoundingRectInfo		EQU		'orct'				; Rect* 
+kQTSSourceUserDataInfo			EQU		'oudt'				; UserData 
+kQTSSourceInputMapInfo			EQU		'oimp'				; QTAtomContainer 
+kQTSInfo_DataProc				EQU		'datp'				; QTSDataProcParams* 
+kQTSInfo_SendDataExtras			EQU		'dext'				; QTSSendDataExtrasParams* 
+kQTSInfo_HintTrackID			EQU		'htid'				; long* 
+;  get only 
+
+kQTSStatisticsInfo				EQU		'stat'				; QTSStatisticsParams* 
+kQTSMinStatusDimensionsInfo		EQU		'mstd'				; QTSDimensionParams* 
+kQTSNormalStatusDimensionsInfo	EQU		'nstd'				; QTSDimensionParams* 
+kQTSTotalDataRateInfo			EQU		'drtt'				; UInt32*, add to what's there 
+kQTSTotalDataRateInInfo			EQU		'drti'				; UInt32*, add to what's there 
+kQTSTotalDataRateOutInfo		EQU		'drto'				; UInt32*, add to what's there 
+kQTSLostPercentInfo				EQU		'lpct'				; QTSLostPercentParams*, add to what's there 
+kQTSNumViewersInfo				EQU		'nviw'				; UInt32* 
+kQTSMediaTypeInfo				EQU		'mtyp'				; OSType* 
+kQTSNameInfo					EQU		'name'				; QTSNameParams* 
+kQTSCanHandleSendDataType		EQU		'chsd'				; QTSCanHandleSendDataTypeParams* 
+kQTSAnnotationsInfo				EQU		'meta'				; QTAtomContainer 
+kQTSRemainingBufferTimeInfo		EQU		'btms'				; UInt32* remaining buffer time before playback, in microseconds 
+kQTSInfo_SettingsText			EQU		'sttx'				; QTSSettingsTextParams* 
+
+
+kQTSTargetBufferDurationTimeScale EQU	1000
+QTSPanelFilterParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+inStream				 ds.l	1				; offset: $4 (4)
+inPanelType				 ds.l	1				; offset: $8 (8)
+inPanelSubType			 ds.l	1				; offset: $C (12)
+details					 ds		QTAtomSpec		; offset: $10 (16)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  return true to keep this panel
+
+kQTSSettingsTextSummary			EQU		'set1'
+kQTSSettingsTextDetails			EQU		'setd'
+QTSSettingsTextParams	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  None yet defined
+inSettingsSelector		 ds.l	1				; offset: $4 (4)		;  which kind of setting you want from enum above
+outSettingsAsText		 ds.l	1				; offset: $8 (8)		;  QTS allocates; Caller disposes
+inPanelFilterProc		 ds.l	1				; offset: $C (12)		;  To get a subset filter with this   
+inPanelFilterProcRefCon	 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+QTSCanHandleSendDataTypeParams RECORD 0
+modifierTypeOrInputID	 ds.l	1				; offset: $0 (0)
+isModifierType			 ds.b	1				; offset: $4 (4)
+returnedCanHandleSendDataType  ds.b 1			; offset: $5 (5)		;  callee sets to true if it can handle it
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+QTSNameParams			RECORD 0
+maxNameLength			 ds.l	1				; offset: $0 (0)
+requestedLanguage		 ds.l	1				; offset: $4 (4)
+returnedActualLanguage	 ds.l	1				; offset: $8 (8)
+returnedName			 ds.l	1				; offset: $C (12)		;  pascal string; caller supplies
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+QTSLostPercentParams	RECORD 0
+receivedPkts			 ds.l	1				; offset: $0 (0)
+lostPkts				 ds.l	1				; offset: $4 (4)
+percent					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+QTSDimensionParams		RECORD 0
+width					 ds.l	1				; offset: $0 (0)
+height					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSVolumesParams		RECORD 0
+leftVolume				 ds.w	1				; offset: $0 (0)
+rightVolume				 ds.w	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+QTSGraphicsModeParams	RECORD 0
+graphicsMode			 ds.w	1				; offset: $0 (0)
+opColor					 ds		RGBColor		; offset: $2 (2)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSGetURLLinkRecord		RECORD 0
+displayWhere			 ds		Point			; offset: $0 (0)
+returnedURLLink			 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+kQTSDataProcParamsVersion1		EQU		1
+
+kQTSDataProcType_MediaSample	EQU		'mdia'
+kQTSDataProcType_HintSample		EQU		'hint'
+QTSDataProcParams		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+stream					 ds.l	1				; offset: $8 (8)
+procType				 ds.l	1				; offset: $C (12)
+proc					 ds.l	1				; offset: $10 (16)
+procRefCon				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+kQTSDataProcSelector_SampleData	EQU		'samp'
+kQTSDataProcSelector_UserData	EQU		'user'
+
+kQTSSampleDataCallbackParamsVersion1 EQU 1
+QTSSampleDataCallbackParams RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+stream					 ds.l	1				; offset: $8 (8)
+procType				 ds.l	1				; offset: $C (12)
+mediaType				 ds.l	1				; offset: $10 (16)
+mediaTimeScale			 ds.l	1				; offset: $14 (20)
+sampleDesc				 ds.l	1				; offset: $18 (24)
+sampleDescSeed			 ds.l	1				; offset: $1C (28)
+sampleTime				 ds		TimeValue64		; offset: $20 (32)
+duration				 ds		TimeValue64		; offset: $28 (40)		;  could be 0 
+sampleFlags				 ds.l	1				; offset: $30 (48)
+dataLength				 ds.l	1				; offset: $34 (52)
+data					 ds.l	1				; offset: $38 (56)
+sizeof					 EQU *					; size:   $3C (60)
+						ENDR
+
+kQTSUserDataCallbackParamsVersion1 EQU	1
+QTSUserDataCallbackParams RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+stream					 ds.l	1				; offset: $8 (8)
+procType				 ds.l	1				; offset: $C (12)
+userDataType			 ds.l	1				; offset: $10 (16)
+userDataHandle			 ds.l	1				; offset: $14 (20)		;  caller must make copy if it wants to keep the data around
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+kQTSSendDataExtrasParamsVersion1 EQU	1
+QTSSendDataExtrasParams	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+procType				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; -----------------------------------------
+;    Characteristics
+;-----------------------------------------
+
+;  characteristics in Movies.h work here too 
+
+kQTSSupportsPerStreamControlCharacteristic EQU 'psct'
+QTSVideoParams			RECORD 0
+width					 ds.l	1				; offset: $0 (0)
+height					 ds.l	1				; offset: $4 (4)
+matrix					 ds		MatrixRecord	; offset: $8 (8)
+gWorld					 ds.l	1				; offset: $2C (44)
+gdHandle				 ds.l	1				; offset: $30 (48)
+clip					 ds.l	1				; offset: $34 (52)
+graphicsMode			 ds.w	1				; offset: $38 (56)
+opColor					 ds		RGBColor		; offset: $3A (58)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+QTSAudioParams			RECORD 0
+leftVolume				 ds.w	1				; offset: $0 (0)
+rightVolume				 ds.w	1				; offset: $2 (2)
+bassLevel				 ds.w	1				; offset: $4 (4)
+trebleLevel				 ds.w	1				; offset: $6 (6)
+frequencyBandsCount		 ds.w	1				; offset: $8 (8)
+frequencyBands			 ds.l	1				; offset: $A (10)
+levelMeteringEnabled	 ds.b	1				; offset: $E (14)
+						 ORG 16
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+QTSMediaParams			RECORD 0
+v						 ds		QTSVideoParams ; offset: $0 (0)
+a						 ds		QTSAudioParams ; offset: $40 (64)
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+
+kQTSMustDraw					EQU		$08
+kQTSAtEnd						EQU		$10
+kQTSPreflightDraw				EQU		$20
+kQTSSyncDrawing					EQU		$40
+;  media task result flags 
+
+kQTSDidDraw						EQU		$01
+kQTSNeedsToDraw					EQU		$04
+kQTSDrawAgain					EQU		$08
+kQTSPartialDraw					EQU		$10
+; ============================================================================
+;        Notifications
+;============================================================================
+
+;  ------ notification types ------ 
+
+kQTSNullNotification			EQU		'null'				; NULL 
+kQTSErrorNotification			EQU		'err '				; QTSErrorParams*, optional 
+kQTSNewPresDetectedNotification	EQU		'newp'				; QTSNewPresDetectedParams* 
+kQTSPresBeginChangingNotification EQU	'prcb'				; NULL 
+kQTSPresDoneChangingNotification EQU	'prcd'				; NULL 
+kQTSPresentationChangedNotification EQU	'prch'				; NULL 
+kQTSNewStreamNotification		EQU		'stnw'				; QTSNewStreamParams* 
+kQTSStreamBeginChangingNotification EQU	'stcb'				; QTSStream 
+kQTSStreamDoneChangingNotification EQU	'stcd'				; QTSStream 
+kQTSStreamChangedNotification	EQU		'stch'				; QTSStreamChangedParams* 
+kQTSStreamGoneNotification		EQU		'stgn'				; QTSStreamGoneParams* 
+kQTSPreviewAckNotification		EQU		'pvak'				; QTSStream 
+kQTSPrerollAckNotification		EQU		'pack'				; QTSStream 
+kQTSStartAckNotification		EQU		'sack'				; QTSStream 
+kQTSStopAckNotification			EQU		'xack'				; QTSStream 
+kQTSStatusNotification			EQU		'stat'				; QTSStatusParams* 
+kQTSURLNotification				EQU		'url '				; QTSURLParams* 
+kQTSDurationNotification		EQU		'dura'				; QTSDurationAtom* 
+kQTSNewPresentationNotification	EQU		'nprs'				; QTSPresentation 
+kQTSPresentationGoneNotification EQU	'xprs'				; QTSPresentation 
+kQTSPresentationDoneNotification EQU	'pdon'				; NULL 
+kQTSBandwidthAlertNotification	EQU		'bwal'				; QTSBandwidthAlertParams* 
+kQTSAnnotationsChangedNotification EQU	'meta'				; NULL 
+
+;  flags for QTSErrorParams 
+
+kQTSFatalErrorFlag				EQU		$00000001
+QTSErrorParams			RECORD 0
+errorString				 ds.l	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSNewPresDetectedParams RECORD 0
+data					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+QTSNewStreamParams		RECORD 0
+stream					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+QTSStreamChangedParams	RECORD 0
+stream					 ds.l	1				; offset: $0 (0)
+mediaComponent			 ds.l	1				; offset: $4 (4)		;  could be NULL 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSStreamGoneParams		RECORD 0
+stream					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+QTSStatusParams			RECORD 0
+status					 ds.l	1				; offset: $0 (0)
+statusString			 ds.l	1				; offset: $4 (4)
+detailedStatus			 ds.l	1				; offset: $8 (8)
+detailedStatusString	 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+QTSInfoParams			RECORD 0
+infoType				 ds.l	1				; offset: $0 (0)
+infoParams				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSURLParams			RECORD 0
+urlLength				 ds.l	1				; offset: $0 (0)
+url						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+kQTSBandwidthAlertNeedToStop	EQU		$01
+kQTSBandwidthAlertRestartAt		EQU		$02
+QTSBandwidthAlertParams	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+restartAt				 ds.l	1				; offset: $4 (4)		;  new field in QT 4.1
+reserved				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; ============================================================================
+;        Presentation
+;============================================================================
+
+; -----------------------------------------
+;     Flags
+;-----------------------------------------
+
+;  flags for NewPresentationFromData 
+
+kQTSAutoModeFlag				EQU		$00000001
+kQTSDontShowStatusFlag			EQU		$00000008
+kQTSSendMediaFlag				EQU		$00010000
+kQTSReceiveMediaFlag			EQU		$00020000
+QTSNewPresentationParams RECORD 0
+dataType				 ds.l	1				; offset: $0 (0)
+data					 ds.l	1				; offset: $4 (4)
+dataLength				 ds.l	1				; offset: $8 (8)
+editList				 ds.l	1				; offset: $C (12)
+flags					 ds.l	1				; offset: $10 (16)
+timeScale				 ds.l	1				; offset: $14 (20)		;  set to 0 for default timescale 
+mediaParams				 ds.l	1				; offset: $18 (24)
+notificationProc		 ds.l	1				; offset: $1C (28)
+notificationRefCon		 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+QTSPresParams			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+editList				 ds.l	1				; offset: $4 (4)
+flags					 ds.l	1				; offset: $8 (8)
+timeScale				 ds.l	1				; offset: $C (12)		;  set to 0 for default timescale 
+mediaParams				 ds.l	1				; offset: $10 (16)
+notificationProc		 ds.l	1				; offset: $14 (20)
+notificationRefCon		 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+kQTSPresParamsVersion1			EQU		1
+QTSPresIdleParams		RECORD 0
+stream					 ds.l	1				; offset: $0 (0)
+movieTimeToDisplay		 ds		TimeValue64		; offset: $4 (4)
+flagsIn					 ds.l	1				; offset: $C (12)
+flagsOut				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+kQTSExportFlag_ShowDialog		EQU		$00000001
+
+kQTSExportParamsVersion1		EQU		1
+QTSExportParams			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+exportType				 ds.l	1				; offset: $4 (4)
+exportExtraData			 ds.l	1				; offset: $8 (8)
+destinationContainerType  ds.l	1				; offset: $C (12)
+destinationContainerData  ds.l	1				; offset: $10 (16)
+destinationContainerExtras  ds.l 1				; offset: $14 (20)
+flagsIn					 ds.l	1				; offset: $18 (24)
+flagsOut				 ds.l	1				; offset: $1C (28)
+filterProc				 ds.l	1				; offset: $20 (32)
+filterProcRefCon		 ds.l	1				; offset: $24 (36)
+exportComponent			 ds.l	1				; offset: $28 (40)		;  NULL unless you want to override 
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+; -----------------------------------------
+;    Toolbox Init/Close
+;-----------------------------------------
+
+;  all "apps" must call this 
+
+; *  InitializeQTS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr InitializeQTS(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitializeQTS
+	ENDIF
+
+
+; *  TerminateQTS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr TerminateQTS(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TerminateQTS
+	ENDIF
+
+; -----------------------------------------
+;    Presentation Functions
+;-----------------------------------------
+
+
+; *  QTSNewPresentation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSNewPresentation(const QTSNewPresentationParams *inParams, QTSPresentation *outPresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewPresentation
+	ENDIF
+
+
+; *  QTSNewPresentationFromData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSNewPresentationFromData(OSType inDataType, const void *inData, const SInt64 *inDataLength, const QTSPresParams *inPresParams, QTSPresentation *outPresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewPresentationFromData
+	ENDIF
+
+
+; *  QTSNewPresentationFromFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSNewPresentationFromFile(const FSSpec *inFileSpec, const QTSPresParams *inPresParams, QTSPresentation *outPresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewPresentationFromFile
+	ENDIF
+
+
+; *  QTSNewPresentationFromDataRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSNewPresentationFromDataRef(Handle inDataRef, OSType inDataRefType, const QTSPresParams *inPresParams, QTSPresentation *outPresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewPresentationFromDataRef
+	ENDIF
+
+
+; *  QTSDisposePresentation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSDisposePresentation(QTSPresentation inPresentation, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSDisposePresentation
+	ENDIF
+
+
+; *  QTSPresExport()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSPresExport(QTSPresentation inPresentation, QTSStream inStream, QTSExportParams *inExportParams)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresExport
+	ENDIF
+
+
+; *  QTSPresIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern void QTSPresIdle(QTSPresentation inPresentation, QTSPresIdleParams *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresIdle
+	ENDIF
+
+
+; *  QTSPresInvalidateRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresInvalidateRegion(QTSPresentation inPresentation, RgnHandle inRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresInvalidateRegion
+	ENDIF
+
+; -----------------------------------------
+;    Presentation Configuration
+;-----------------------------------------
+
+
+; *  QTSPresSetFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetFlags(QTSPresentation inPresentation, SInt32 inFlags, SInt32 inFlagsMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetFlags
+	ENDIF
+
+
+; *  QTSPresGetFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetFlags(QTSPresentation inPresentation, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetFlags
+	ENDIF
+
+
+; *  QTSPresGetTimeBase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetTimeBase(QTSPresentation inPresentation, TimeBase *outTimeBase)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetTimeBase
+	ENDIF
+
+
+; *  QTSPresGetTimeScale()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetTimeScale(QTSPresentation inPresentation, TimeScale *outTimeScale)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetTimeScale
+	ENDIF
+
+
+; *  QTSPresSetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetInfo(QTSPresentation inPresentation, QTSStream inStream, OSType inSelector, void *ioParam)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetInfo
+	ENDIF
+
+
+; *  QTSPresGetInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetInfo(QTSPresentation inPresentation, QTSStream inStream, OSType inSelector, void *ioParam)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetInfo
+	ENDIF
+
+
+; *  QTSPresHasCharacteristic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresHasCharacteristic(QTSPresentation inPresentation, QTSStream inStream, OSType inCharacteristic, Boolean *outHasIt)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresHasCharacteristic
+	ENDIF
+
+
+; *  QTSPresSetNotificationProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetNotificationProc(QTSPresentation inPresentation, QTSNotificationUPP inNotificationProc, void *inRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetNotificationProc
+	ENDIF
+
+
+; *  QTSPresGetNotificationProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetNotificationProc(QTSPresentation inPresentation, QTSNotificationUPP *outNotificationProc, void **outRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetNotificationProc
+	ENDIF
+
+; -----------------------------------------
+;    Presentation Control
+;-----------------------------------------
+
+
+; *  QTSPresPreview()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresPreview(QTSPresentation inPresentation, QTSStream inStream, const TimeValue64 *inTimeValue, Fixed inRate, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresPreview
+	ENDIF
+
+
+; *  QTSPresPreroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresPreroll(QTSPresentation inPresentation, QTSStream inStream, UInt32 inTimeValue, Fixed inRate, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresPreroll
+	ENDIF
+
+
+; *  QTSPresPreroll64()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPresPreroll64(QTSPresentation inPresentation, QTSStream inStream, const TimeValue64 *inPrerollTime, Fixed inRate, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresPreroll64
+	ENDIF
+
+
+; *  QTSPresStart()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresStart(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresStart
+	ENDIF
+
+
+; *  QTSPresSkipTo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSkipTo(QTSPresentation inPresentation, UInt32 inTimeValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSkipTo
+	ENDIF
+
+
+; *  QTSPresSkipTo64()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPresSkipTo64(QTSPresentation inPresentation, const TimeValue64 *inTimeValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSkipTo64
+	ENDIF
+
+
+; *  QTSPresStop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresStop(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresStop
+	ENDIF
+
+; ============================================================================
+;        Streams
+;============================================================================
+
+; -----------------------------------------
+;    Stream Functions
+;-----------------------------------------
+
+
+; *  QTSPresNewStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresNewStream(QTSPresentation inPresentation, OSType inDataType, const void *inData, UInt32 inDataLength, SInt32 inFlags, QTSStream *outStream)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresNewStream
+	ENDIF
+
+
+; *  QTSDisposeStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSDisposeStream(QTSStream inStream, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSDisposeStream
+	ENDIF
+
+
+; *  QTSPresGetNumStreams()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern UInt32 QTSPresGetNumStreams(QTSPresentation inPresentation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetNumStreams
+	ENDIF
+
+
+; *  QTSPresGetIndStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSStream QTSPresGetIndStream(QTSPresentation inPresentation, UInt32 inIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetIndStream
+	ENDIF
+
+
+; *  QTSGetStreamPresentation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSPresentation QTSGetStreamPresentation(QTSStream inStream)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSGetStreamPresentation
+	ENDIF
+
+
+; *  QTSPresSetPreferredRate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetPreferredRate(QTSPresentation inPresentation, Fixed inRate, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetPreferredRate
+	ENDIF
+
+
+; *  QTSPresGetPreferredRate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetPreferredRate(QTSPresentation inPresentation, Fixed *outRate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetPreferredRate
+	ENDIF
+
+
+; *  QTSPresSetEnable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetEnable(QTSPresentation inPresentation, QTSStream inStream, Boolean inEnableMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetEnable
+	ENDIF
+
+
+; *  QTSPresGetEnable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetEnable(QTSPresentation inPresentation, QTSStream inStream, Boolean *outEnableMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetEnable
+	ENDIF
+
+
+; *  QTSPresSetPresenting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetPresenting(QTSPresentation inPresentation, QTSStream inStream, Boolean inPresentingMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetPresenting
+	ENDIF
+
+
+; *  QTSPresGetPresenting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetPresenting(QTSPresentation inPresentation, QTSStream inStream, Boolean *outPresentingMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetPresenting
+	ENDIF
+
+
+; *  QTSPresSetActiveSegment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPresSetActiveSegment(QTSPresentation inPresentation, QTSStream inStream, const TimeValue64 *inStartTime, const TimeValue64 *inDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetActiveSegment
+	ENDIF
+
+
+; *  QTSPresGetActiveSegment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPresGetActiveSegment(QTSPresentation inPresentation, QTSStream inStream, TimeValue64 *outStartTime, TimeValue64 *outDuration)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetActiveSegment
+	ENDIF
+
+
+; *  QTSPresSetPlayHints()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetPlayHints(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags, SInt32 inFlagsMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetPlayHints
+	ENDIF
+
+
+; *  QTSPresGetPlayHints()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetPlayHints(QTSPresentation inPresentation, QTSStream inStream, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetPlayHints
+	ENDIF
+
+; -----------------------------------------
+;    Stream Spatial Functions
+;-----------------------------------------
+
+
+; *  QTSPresSetGWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetGWorld(QTSPresentation inPresentation, QTSStream inStream, CGrafPtr inGWorld, GDHandle inGDHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetGWorld
+	ENDIF
+
+
+; *  QTSPresGetGWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetGWorld(QTSPresentation inPresentation, QTSStream inStream, CGrafPtr *outGWorld, GDHandle *outGDHandle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetGWorld
+	ENDIF
+
+
+; *  QTSPresSetClip()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetClip(QTSPresentation inPresentation, QTSStream inStream, RgnHandle inClip)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetClip
+	ENDIF
+
+
+; *  QTSPresGetClip()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetClip(QTSPresentation inPresentation, QTSStream inStream, RgnHandle *outClip)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetClip
+	ENDIF
+
+
+; *  QTSPresSetMatrix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetMatrix(QTSPresentation inPresentation, QTSStream inStream, const MatrixRecord *inMatrix)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetMatrix
+	ENDIF
+
+
+; *  QTSPresGetMatrix()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetMatrix(QTSPresentation inPresentation, QTSStream inStream, MatrixRecord *outMatrix)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetMatrix
+	ENDIF
+
+
+; *  QTSPresSetDimensions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetDimensions(QTSPresentation inPresentation, QTSStream inStream, Fixed inWidth, Fixed inHeight)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetDimensions
+	ENDIF
+
+
+; *  QTSPresGetDimensions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetDimensions(QTSPresentation inPresentation, QTSStream inStream, Fixed *outWidth, Fixed *outHeight)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetDimensions
+	ENDIF
+
+
+; *  QTSPresSetGraphicsMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetGraphicsMode(QTSPresentation inPresentation, QTSStream inStream, short inMode, const RGBColor *inOpColor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetGraphicsMode
+	ENDIF
+
+
+; *  QTSPresGetGraphicsMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetGraphicsMode(QTSPresentation inPresentation, QTSStream inStream, short *outMode, RGBColor *outOpColor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetGraphicsMode
+	ENDIF
+
+
+; *  QTSPresGetPicture()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetPicture(QTSPresentation inPresentation, QTSStream inStream, PicHandle *outPicture)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetPicture
+	ENDIF
+
+; -----------------------------------------
+;    Stream Sound Functions
+;-----------------------------------------
+
+
+; *  QTSPresSetVolumes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresSetVolumes(QTSPresentation inPresentation, QTSStream inStream, short inLeftVolume, short inRightVolume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetVolumes
+	ENDIF
+
+
+; *  QTSPresGetVolumes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSPresGetVolumes(QTSPresentation inPresentation, QTSStream inStream, short *outLeftVolume, short *outRightVolume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetVolumes
+	ENDIF
+
+; -----------------------------------------
+;    Sourcing
+;-----------------------------------------
+
+
+; *  QTSPresGetSettingsAsText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; 
+
+;
+; extern OSErr QTSPresGetSettingsAsText(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags, OSType inSettingsType, Handle *outText, QTSPanelFilterUPP inPanelFilterProc, void *inPanelFilterProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetSettingsAsText
+	ENDIF
+
+
+; *  QTSPresSettingsDialog()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresSettingsDialog(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags, QTSModalFilterUPP inFilterProc, void *inFilterProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSettingsDialog
+	ENDIF
+
+
+; *  QTSPresSettingsDialogWithFilters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; 
+
+;
+; extern OSErr QTSPresSettingsDialogWithFilters(QTSPresentation inPresentation, QTSStream inStream, SInt32 inFlags, QTSModalFilterUPP inFilterProc, void *inFilterProcRefCon, QTSPanelFilterUPP inPanelFilterProc, void *inPanelFilterProcRefCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSettingsDialogWithFilters
+	ENDIF
+
+
+; *  QTSPresSetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresSetSettings(QTSPresentation inPresentation, QTSStream inStream, QTAtomSpecPtr inSettings, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresSetSettings
+	ENDIF
+
+
+; *  QTSPresGetSettings()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresGetSettings(QTSPresentation inPresentation, QTSStream inStream, QTAtomContainer *outSettings, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetSettings
+	ENDIF
+
+
+; *  QTSPresAddSourcer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresAddSourcer(QTSPresentation inPresentation, QTSStream inStream, ComponentInstance inSourcer, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresAddSourcer
+	ENDIF
+
+
+; *  QTSPresRemoveSourcer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresRemoveSourcer(QTSPresentation inPresentation, QTSStream inStream, ComponentInstance inSourcer, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresRemoveSourcer
+	ENDIF
+
+
+; *  QTSPresGetNumSourcers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 QTSPresGetNumSourcers(QTSPresentation inPresentation, QTSStream inStream)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetNumSourcers
+	ENDIF
+
+
+; *  QTSPresGetIndSourcer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSErr QTSPresGetIndSourcer(QTSPresentation inPresentation, QTSStream inStream, UInt32 inIndex, ComponentInstance *outSourcer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPresGetIndSourcer
+	ENDIF
+
+; ============================================================================
+;        Misc
+;============================================================================
+
+;  flags for Get/SetNetworkAppName 
+
+kQTSNetworkAppNameIsFullNameFlag EQU	$00000001
+
+; *  QTSSetNetworkAppName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSSetNetworkAppName(const char *inAppName, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSSetNetworkAppName
+	ENDIF
+
+
+; *  QTSGetNetworkAppName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSGetNetworkAppName(SInt32 inFlags, char **outCStringPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSGetNetworkAppName
+	ENDIF
+
+; -----------------------------------------
+;    Statistics Utilities
+;-----------------------------------------
+
+QTSStatHelperRecord		RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct QTSStatHelperRecord *	QTSStatHelper
+
+
+kQTSInvalidStatHelper			EQU		0
+;  flags for QTSStatHelperNextParams 
+
+kQTSStatHelperReturnPascalStringsFlag EQU $00000001
+QTSStatHelperNextParams	RECORD 0
+flags					 ds.l	1				; offset: $0 (0)
+returnedStatisticsType	 ds.l	1				; offset: $4 (4)
+returnedStream			 ds.l	1				; offset: $8 (8)
+maxStatNameLength		 ds.l	1				; offset: $C (12)
+returnedStatName		 ds.l	1				; offset: $10 (16)		;  NULL if you don't want it
+maxStatStringLength		 ds.l	1				; offset: $14 (20)
+returnedStatString		 ds.l	1				; offset: $18 (24)		;  NULL if you don't want it
+maxStatUnitLength		 ds.l	1				; offset: $1C (28)
+returnedStatUnit		 ds.l	1				; offset: $20 (32)		;  NULL if you don't want it
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+QTSStatisticsParams		RECORD 0
+statisticsType			 ds.l	1				; offset: $0 (0)
+container				 ds.l	1				; offset: $4 (4)
+parentAtom				 ds.l	1				; offset: $8 (8)
+flags					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  general statistics types 
+
+kQTSAllStatisticsType			EQU		'all '
+kQTSShortStatisticsType			EQU		'shrt'
+kQTSSummaryStatisticsType		EQU		'summ'
+;  statistics flags 
+
+kQTSGetNameStatisticsFlag		EQU		$00000001
+kQTSDontGetDataStatisticsFlag	EQU		$00000002
+kQTSUpdateAtomsStatisticsFlag	EQU		$00000004
+kQTSGetUnitsStatisticsFlag		EQU		$00000008
+kQTSUpdateAllIfNecessaryStatisticsFlag EQU $00010000
+;  statistics atom types 
+
+kQTSStatisticsStreamAtomType	EQU		'strm'
+kQTSStatisticsNameAtomType		EQU		'name'				; chars only, no length or terminator 
+kQTSStatisticsDataFormatAtomType EQU	'frmt'				; OSType 
+kQTSStatisticsDataAtomType		EQU		'data'
+kQTSStatisticsUnitsAtomType		EQU		'unit'				; OSType 
+kQTSStatisticsUnitsNameAtomType	EQU		'unin'				; chars only, no length or terminator 
+;  statistics data formats 
+
+kQTSStatisticsSInt32DataFormat	EQU		'si32'
+kQTSStatisticsUInt32DataFormat	EQU		'ui32'
+kQTSStatisticsSInt16DataFormat	EQU		'si16'
+kQTSStatisticsUInt16DataFormat	EQU		'ui16'
+kQTSStatisticsFixedDataFormat	EQU		'fixd'
+kQTSStatisticsUnsignedFixedDataFormat EQU 'ufix'
+kQTSStatisticsStringDataFormat	EQU		'strg'
+kQTSStatisticsOSTypeDataFormat	EQU		'ostp'
+kQTSStatisticsRectDataFormat	EQU		'rect'
+kQTSStatisticsPointDataFormat	EQU		'pont'
+;  statistics units types 
+
+kQTSStatisticsNoUnitsType		EQU		0
+kQTSStatisticsPercentUnitsType	EQU		'pcnt'
+kQTSStatisticsBitsPerSecUnitsType EQU	'bps '
+kQTSStatisticsFramesPerSecUnitsType EQU	'fps '
+;  specific statistics types 
+
+kQTSTotalDataRateStat			EQU		'drtt'
+kQTSTotalDataRateInStat			EQU		'drti'
+kQTSTotalDataRateOutStat		EQU		'drto'
+kQTSNetworkIDStringStat			EQU		'nids'
+
+; *  QTSNewStatHelper()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSNewStatHelper(QTSPresentation inPresentation, QTSStream inStream, OSType inStatType, SInt32 inFlags, QTSStatHelper *outStatHelper)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewStatHelper
+	ENDIF
+
+
+; *  QTSDisposeStatHelper()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSDisposeStatHelper(QTSStatHelper inStatHelper)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSDisposeStatHelper
+	ENDIF
+
+
+; *  QTSStatHelperGetStats()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSStatHelperGetStats(QTSStatHelper inStatHelper)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSStatHelperGetStats
+	ENDIF
+
+
+; *  QTSStatHelperResetIter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSStatHelperResetIter(QTSStatHelper inStatHelper)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSStatHelperResetIter
+	ENDIF
+
+
+; *  QTSStatHelperNext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern Boolean QTSStatHelperNext(QTSStatHelper inStatHelper, QTSStatHelperNextParams *ioParams)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSStatHelperNext
+	ENDIF
+
+
+; *  QTSStatHelperGetNumStats()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern UInt32 QTSStatHelperGetNumStats(QTSStatHelper inStatHelper)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSStatHelperGetNumStats
+	ENDIF
+
+;  used by components to put statistics into the atom container 
+
+; *  QTSGetOrMakeStatAtomForStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSGetOrMakeStatAtomForStream(QTAtomContainer inContainer, QTSStream inStream, QTAtom *outParentAtom)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSGetOrMakeStatAtomForStream
+	ENDIF
+
+
+; *  QTSInsertStatistic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSInsertStatistic(QTAtomContainer inContainer, QTAtom inParentAtom, OSType inStatType, void *inStatData, UInt32 inStatDataLength, OSType inStatDataFormat, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSInsertStatistic
+	ENDIF
+
+
+; *  QTSInsertStatisticName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSInsertStatisticName(QTAtomContainer inContainer, QTAtom inParentAtom, OSType inStatType, const char *inStatName, UInt32 inStatNameLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSInsertStatisticName
+	ENDIF
+
+
+; *  QTSInsertStatisticUnits()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern OSErr QTSInsertStatisticUnits(QTAtomContainer inContainer, QTAtom inParentAtom, OSType inStatType, OSType inUnitsType, const char *inUnitsName, UInt32 inUnitsNameLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSInsertStatisticUnits
+	ENDIF
+
+; ============================================================================
+;        Data Formats
+;============================================================================
+
+; -----------------------------------------
+;    Data Types
+;-----------------------------------------
+
+;  universal data types 
+
+kQTSNullDataType				EQU		'NULL'
+kQTSUnknownDataType				EQU		'huh?'
+kQTSAtomContainerDataType		EQU		'qtac'				; QTAtomContainer 
+kQTSAtomDataType				EQU		'qtat'				; QTSAtomContainerDataStruct* 
+kQTSAliasDataType				EQU		'alis'
+kQTSFileDataType				EQU		'fspc'				; FSSpec* 
+kQTSFileSpecDataType			EQU		'fspc'				; FSSpec* 
+kQTSHandleDataType				EQU		'hndl'				; Handle* 
+kQTSDataRefDataType				EQU		'dref'				; DataReferencePtr 
+;  these data types are specific to presentations 
+
+kQTSRTSPDataType				EQU		'rtsp'
+kQTSSDPDataType					EQU		'sdp '
+; -----------------------------------------
+;    Atom IDs
+;-----------------------------------------
+
+
+kQTSAtomType_Presentation		EQU		'pres'
+kQTSAtomType_PresentationHeader	EQU		'phdr'				; QTSPresentationHeaderAtom 
+kQTSAtomType_MediaStream		EQU		'mstr'
+kQTSAtomType_MediaStreamHeader	EQU		'mshd'				; QTSMediaStreamHeaderAtom 
+kQTSAtomType_MediaDescriptionText EQU	'mdes'				; chars, no length 
+kQTSAtomType_ClipRect			EQU		'clip'				; QTSClipRectAtom 
+kQTSAtomType_Duration			EQU		'dura'				; QTSDurationAtom 
+kQTSAtomType_BufferTime			EQU		'bufr'				; QTSBufferTimeAtom 
+QTSAtomContainerDataStruct RECORD 0
+container				 ds.l	1				; offset: $0 (0)
+parentAtom				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  flags for QTSPresentationHeaderAtom 
+
+kQTSPresHeaderTypeIsData		EQU		$00000100
+kQTSPresHeaderDataIsHandle		EQU		$00000200
+QTSPresentationHeaderAtom RECORD 0
+versionAndFlags			 ds.l	1				; offset: $0 (0)
+conductorOrDataType		 ds.l	1				; offset: $4 (4)
+dataAtomType			 ds.l	1				; offset: $8 (8)		;  where the data really is
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+QTSMediaStreamHeaderAtom RECORD 0
+versionAndFlags			 ds.l	1				; offset: $0 (0)
+mediaTransportType		 ds.l	1				; offset: $4 (4)
+mediaTransportDataAID	 ds.l	1				; offset: $8 (8)		;  where the data really is
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+QTSBufferTimeAtom		RECORD 0
+versionAndFlags			 ds.l	1				; offset: $0 (0)
+bufferTime				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSDurationAtom			RECORD 0
+versionAndFlags			 ds.l	1				; offset: $0 (0)
+timeScale				 ds.l	1				; offset: $4 (4)
+duration				 ds		TimeValue64		; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+QTSClipRectAtom			RECORD 0
+versionAndFlags			 ds.l	1				; offset: $0 (0)
+clipRect				 ds		Rect			; offset: $4 (4)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+kQTSEmptyEditStreamStartTime	EQU		-1
+
+; typedef UInt32 						QTSStatus
+
+
+kQTSNullStatus					EQU		0
+kQTSUninitializedStatus			EQU		1
+kQTSConnectingStatus			EQU		2
+kQTSOpeningConnectionDetailedStatus EQU	3
+kQTSMadeConnectionDetailedStatus EQU	4
+kQTSNegotiatingStatus			EQU		5
+kQTSGettingDescriptionDetailedStatus EQU 6
+kQTSGotDescriptionDetailedStatus EQU	7
+kQTSSentSetupCmdDetailedStatus	EQU		8
+kQTSReceivedSetupResponseDetailedStatus EQU 9
+kQTSSentPlayCmdDetailedStatus	EQU		10
+kQTSReceivedPlayResponseDetailedStatus EQU 11
+kQTSBufferingStatus				EQU		12
+kQTSPlayingStatus				EQU		13
+kQTSPausedStatus				EQU		14
+kQTSAutoConfiguringStatus		EQU		15
+kQTSDownloadingStatus			EQU		16
+kQTSBufferingWithTimeStatus		EQU		17
+kQTSWaitingDisconnectStatus		EQU		100
+; -----------------------------------------
+;    QuickTime Preferences Types
+;-----------------------------------------
+
+
+kQTSConnectionPrefsType			EQU		'stcm'				; root atom that all other atoms are contained in
+															;    kQTSNotUsedForProxyPrefsType = 'nopr',     //        comma-delimited list of URLs that are never used for proxies
+kQTSConnectionMethodPrefsType	EQU		'mthd'				;      connection method (OSType that matches one of the following three)
+kQTSDirectConnectPrefsType		EQU		'drct'				;       used if direct connect (QTSDirectConnectPrefsRecord)
+															;    kQTSRTSPProxyPrefsType =     'rtsp',   //   used if RTSP Proxy (QTSProxyPrefsRecord)
+kQTSSOCKSPrefsType				EQU		'sock'				;       used if SOCKS Proxy (QTSProxyPrefsRecord)
+
+kQTSDirectConnectHTTPProtocol	EQU		'http'
+kQTSDirectConnectRTSPProtocol	EQU		'rtsp'
+QTSDirectConnectPrefsRecord RECORD 0
+tcpPortID				 ds.l	1				; offset: $0 (0)
+protocol				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+QTSProxyPrefsRecord		RECORD 0
+serverNameStr			 ds		Str255			; offset: $0 (0)
+portID					 ds.l	1				; offset: $100 (256)
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+
+kConnectionActive				EQU		$00000001
+kConnectionUseSystemPref		EQU		$00000002
+QTSTransportPref		RECORD 0
+protocol				 ds.l	1				; offset: $0 (0)		;  udp, http, tcp, etc
+portID					 ds.l	1				; offset: $4 (4)		;  port to use for this connection type
+flags					 ds.l	1				; offset: $8 (8)		;  connection flags
+seed					 ds.l	1				; offset: $C (12)		;  seed value last time this setting was read from system prefs
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+kProxyActive					EQU		$00000001
+kProxyUseSystemPref				EQU		$00000002
+QTSProxyPref			RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  proxy flags
+portID					 ds.l	1				; offset: $4 (4)		;  port to use for this connection type
+seed					 ds.l	1				; offset: $8 (8)		;  seed value last time this setting was read from system prefs
+serverNameStr			 ds		Str255			; offset: $C (12)		;  proxy server url
+sizeof					 EQU *					; size:   $10C (268)
+						ENDR
+
+kNoProxyUseSystemPref			EQU		$00000001
+QTSNoProxyPref			RECORD 0
+flags					 ds.l	1				; offset: $0 (0)		;  no-proxy flags
+seed					 ds.l	1				; offset: $4 (4)		;  seed value last time this setting was read from system prefs
+urlList					 ds.b	1				; offset: $8 (8) <-- really an array of length one ;  NULL terminated, comma delimited list of urls
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+
+kQTSTransAndProxyAtomType		EQU		'strp'				; transport/proxy prefs root atom
+kQTSConnectionPrefsVersion		EQU		'vers'				;   prefs format version
+kQTSTransportPrefsAtomType		EQU		'trns'				;   tranport prefs root atom
+kQTSConnectionAtomType			EQU		'conn'				;     connection prefs atom type, one for each transport type
+kQTSUDPTransportType			EQU		'udp '				;     udp transport prefs
+kQTSHTTPTransportType			EQU		'http'				;     http transport prefs
+kQTSTCPTransportType			EQU		'tcp '				;     tcp transport prefs    
+kQTSProxyPrefsAtomType			EQU		'prxy'				;   proxy prefs root atom
+kQTSHTTPProxyPrefsType			EQU		'http'				;     http proxy settings
+kQTSRTSPProxyPrefsType			EQU		'rtsp'				;     rtsp proxy settings
+kQTSSOCKSProxyPrefsType			EQU		'scks'				;     socks proxy settings
+kQTSProxyUserInfoPrefsType		EQU		'user'				;   proxy username/password root atom
+kQTSDontProxyPrefsAtomType		EQU		'nopr'				;   no-proxy prefs root atom
+kQTSDontProxyDataType			EQU		'data'				;     no proxy settings
+
+; *  QTSPrefsAddProxySetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsAddProxySetting(OSType proxyType, SInt32 portID, UInt32 flags, UInt32 seed, Str255 srvrURL)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsAddProxySetting
+	ENDIF
+
+
+; *  QTSPrefsFindProxyByType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsFindProxyByType(OSType proxyType, UInt32 flags, UInt32 flagsMask, QTSProxyPref **proxyHndl, SInt16 *count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsFindProxyByType
+	ENDIF
+
+
+; *  QTSPrefsAddConnectionSetting()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsAddConnectionSetting(OSType protocol, SInt32 portID, UInt32 flags, UInt32 seed)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsAddConnectionSetting
+	ENDIF
+
+
+; *  QTSPrefsFindConnectionByType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsFindConnectionByType(OSType protocol, UInt32 flags, UInt32 flagsMask, QTSTransportPref **connectionHndl, SInt16 *count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsFindConnectionByType
+	ENDIF
+
+
+; *  QTSPrefsGetActiveConnection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsGetActiveConnection(OSType protocol, QTSTransportPref *connectInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsGetActiveConnection
+	ENDIF
+
+
+; *  QTSPrefsGetNoProxyURLs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsGetNoProxyURLs(QTSNoProxyPref **noProxyHndl)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsGetNoProxyURLs
+	ENDIF
+
+
+; *  QTSPrefsSetNoProxyURLs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsSetNoProxyURLs(char *urls, UInt32 flags, UInt32 seed)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsSetNoProxyURLs
+	ENDIF
+
+
+; *  QTSPrefsAddProxyUserInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; *    Windows:          in QTSClient.lib 5.0.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsAddProxyUserInfo(OSType proxyType, SInt32 flags, SInt32 flagsMask, StringPtr username, StringPtr password)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsAddProxyUserInfo
+	ENDIF
+
+
+; *  QTSPrefsFindProxyUserInfoByType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; *    Windows:          in QTSClient.lib 5.0.1 and later
+; 
+
+;
+; extern OSErr QTSPrefsFindProxyUserInfoByType(OSType proxyType, SInt32 flags, SInt32 flagsMask, StringPtr username, StringPtr password)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSPrefsFindProxyUserInfoByType
+	ENDIF
+
+
+
+; ============================================================================
+;        Memory Management Services
+;============================================================================
+
+
+;   These routines allocate normal pointers and handles,
+;   but do the correct checking, etc.
+;   Dispose using the normal DisposePtr and DisposeHandle
+;   Call these routines for one time memory allocations.
+;   You do not need to set any hints to use these calls.
+
+
+
+
+; *  QTSNewPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern Ptr QTSNewPtr(UInt32 inByteCount, SInt32 inFlags, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewPtr
+	ENDIF
+
+
+; *  QTSNewHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern Handle QTSNewHandle(UInt32 inByteCount, SInt32 inFlags, SInt32 *outFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewHandle
+	ENDIF
+
+;  flags in
+
+kQTSMemAllocClearMem			EQU		$00000001
+kQTSMemAllocDontUseTempMem		EQU		$00000002
+kQTSMemAllocTryTempMemFirst		EQU		$00000004
+kQTSMemAllocDontUseSystemMem	EQU		$00000008
+kQTSMemAllocTrySystemMemFirst	EQU		$00000010
+kQTSMemAllocHoldMemory			EQU		$00001000
+kQTSMemAllocIsInterruptTime		EQU		$01010000			; currently not supported for alloc
+;  flags out
+
+kQTSMemAllocAllocatedInTempMem	EQU		$00000001
+kQTSMemAllocAllocatedInSystemMem EQU	$00000002
+
+
+
+;   These routines are for buffers that will be recirculated
+;   you must use QTReleaseMemPtr instead of DisposePtr
+;   QTSReleaseMemPtr can be used at interrupt time
+;   but QTSAllocMemPtr currently cannot 
+
+
+
+; *  QTSAllocMemPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSMemPtr QTSAllocMemPtr(UInt32 inByteCount, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSAllocMemPtr
+	ENDIF
+
+
+; *  QTSReleaseMemPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern void QTSReleaseMemPtr(QTSMemPtr inMemPtr, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSReleaseMemPtr
+	ENDIF
+
+
+; ============================================================================
+;        Buffer Management Services
+;============================================================================
+
+
+
+kQTSStreamBufferVersion1		EQU		1
+QTSStreamBuffer			RECORD 0
+reserved1				 ds.l	1				; offset: $0 (0)
+reserved2				 ds.l	1				; offset: $4 (4)
+next					 ds.l	1				; offset: $8 (8)		;  next message block in a message 
+rptr					 ds.l	1				; offset: $C (12)		;  first byte with real data in the DataBuffer 
+wptr					 ds.l	1				; offset: $10 (16)		;  last+1 byte with real data in the DataBuffer 
+version					 ds.l	1				; offset: $14 (20)
+metadata				 ds.l	4				; offset: $18 (24)		;  usage defined by message sender 
+flags					 ds.l	1				; offset: $28 (40)		;  reserved 
+reserved3				 ds.l	1				; offset: $2C (44)
+reserved4				 ds.l	1				; offset: $30 (48)
+reserved5				 ds.l	1				; offset: $34 (52)
+moreMeta				 ds.l	8				; offset: $38 (56)
+sizeof					 EQU *					; size:   $58 (88)
+						ENDR
+;  flags for QTSDuplicateMessage
+
+kQTSDuplicateBufferFlag_CopyData EQU	$00000001
+kQTSDuplicateBufferFlag_FlattenMessage EQU $00000002
+
+
+; *  QTSNewStreamBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSNewStreamBuffer(UInt32 inDataSize, SInt32 inFlags, QTSStreamBuffer **outStreamBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSNewStreamBuffer
+	ENDIF
+
+
+; *  QTSFreeMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern void QTSFreeMessage(QTSStreamBuffer *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFreeMessage
+	ENDIF
+
+; 
+;    kQTSDuplicateBufferFlag_CopyData - forces a copy of the data itself
+;    kQTSCopyBufferFlag_FlattenMessage - copies the data if it needs to be flattened
+;    QTSDuplicateMessage never frees the old message
+;
+
+
+; *  QTSDuplicateMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern OSErr QTSDuplicateMessage(QTSStreamBuffer *inMessage, SInt32 inFlags, QTSStreamBuffer **outDuplicatedMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSDuplicateMessage
+	ENDIF
+
+
+; *  QTSMessageLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern UInt32 QTSMessageLength(QTSStreamBuffer *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSMessageLength
+	ENDIF
+
+
+; *  QTSStreamBufferDataInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 5.0 and later
+; 
+
+;
+; extern void QTSStreamBufferDataInfo(QTSStreamBuffer *inStreamBuffer, unsigned char **outDataStart, UInt32 *outDataMaxLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSStreamBufferDataInfo
+	ENDIF
+
+;  ---- old calls (don't use these)
+
+
+; *  QTSAllocBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSStreamBuffer *QTSAllocBuffer(SInt32 inSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSAllocBuffer
+	ENDIF
+
+
+; *  QTSDupMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSStreamBuffer *QTSDupMessage(QTSStreamBuffer *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSDupMessage
+	ENDIF
+
+
+; *  QTSCopyMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSStreamBuffer *QTSCopyMessage(QTSStreamBuffer *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSCopyMessage
+	ENDIF
+
+
+; *  QTSFlattenMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern QTSStreamBuffer *QTSFlattenMessage(QTSStreamBuffer *inMessage)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSFlattenMessage
+	ENDIF
+
+
+
+; ============================================================================
+;        Misc
+;============================================================================
+
+
+; *  QTSGetErrorString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in QTSClient.lib 4.0 and later
+; 
+
+;
+; extern Boolean QTSGetErrorString(SInt32 inErrorCode, UInt32 inMaxErrorStringLength, char *outErrorString, SInt32 inFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSGetErrorString
+	ENDIF
+
+
+; *  QTSInitializeMediaParams()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in QTStreamLib 5.0.1 and later
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; *    Windows:          in QTSClient.lib 5.0.1 and later
+; 
+
+;
+; extern OSErr QTSInitializeMediaParams(QTSMediaParams *inMediaParams)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QTSInitializeMediaParams
+	ENDIF
+
+
+
+;  UPP call backs 
+
+; *  NewQTSNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewQTSPanelFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib on Mac OS X
+; *    Mac OS X:         in after version 10.0
+; 
+
+
+; *  NewQTSModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeQTSNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeQTSPanelFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib on Mac OS X
+; *    Mac OS X:         in after version 10.0
+; 
+
+
+; *  DisposeQTSModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeQTSNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeQTSPanelFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib on Mac OS X
+; *    Mac OS X:         in after version 10.0
+; 
+
+
+; *  InvokeQTSModalFilterUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	ENDIF ; __QUICKTIMESTREAMING__ 
+

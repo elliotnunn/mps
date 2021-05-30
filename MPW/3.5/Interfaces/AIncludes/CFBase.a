@@ -1,0 +1,459 @@
+;
+;    File:       CFBase.a
+;
+;    Contains:   CoreFoundation base types
+;
+;    Version:    Technology: Mac OS X
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CFBASE__') = 'UNDEFINED' THEN
+__CFBASE__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+
+; typedef UInt32 						CFTypeID
+
+; typedef UInt32 						CFOptionFlags
+
+; typedef UInt32 						CFHashCode
+
+; typedef SInt32 						CFIndex
+
+
+
+
+
+;  Values returned from comparison functions 
+
+; typedef long							CFComparisonResult
+kCFCompareLessThan				EQU		-1
+kCFCompareEqualTo				EQU		0
+kCFCompareGreaterThan			EQU		1
+;  A standard comparison function 
+;  Constant used by some functions to indicate failed searches. 
+;  This is of type CFIndex. 
+
+; typedef long							CFNotFound
+kCFNotFound						EQU		-1
+;  Range type 
+CFRange					RECORD 0
+location				 ds.l	1				; offset: $0 (0)
+length					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Allocator API
+;
+;   Most of the time when specifying an allocator to Create functions, the NULL
+;   argument indicates "use the default"; this is the same as using kCFAllocatorDefault
+;   or the return value from CFAllocatorGetDefault().  This assures that you will use
+;   the allocator in effect at that time.
+;
+;   You should rarely use kCFAllocatorSystemDefault, the default default allocator.
+;
+
+
+
+;  This is a synonym for NULL, if you'd rather use a named constant. 
+
+; *  kCFAllocatorDefault
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  Default system allocator; you rarely need to use this. 
+
+; *  kCFAllocatorSystemDefault
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  This allocator uses malloc(), realloc(), and free(). This should not be
+;   generally used; stick to kCFAllocatorDefault whenever possible. This
+;   allocator is useful as the "bytesDeallocator" in CFData or
+;   "contentsDeallocator" in CFString where the memory was obtained as a
+;   result of malloc() type functions.
+;
+
+
+; *  kCFAllocatorMalloc
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  Null allocator which does nothing and allocates no memory. This allocator
+;   is useful as the "bytesDeallocator" in CFData or "contentsDeallocator"
+;   in CFString where the memory should not be freed.
+;
+
+
+; *  kCFAllocatorNull
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  Special allocator argument to CFAllocatorCreate() which means
+;   "use the functions given in the context to allocate the allocator
+;   itself as well".
+;
+
+
+; *  kCFAllocatorUseContext
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+CFAllocatorContext		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+info					 ds.l	1				; offset: $4 (4)
+retain					 ds.l	1				; offset: $8 (8)
+release					 ds.l	1				; offset: $C (12)
+copyDescription			 ds.l	1				; offset: $10 (16)
+allocate				 ds.l	1				; offset: $14 (20)
+reallocate				 ds.l	1				; offset: $18 (24)
+deallocate				 ds.l	1				; offset: $1C (28)
+preferredSize			 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+
+; *  CFAllocatorGetTypeID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeID CFAllocatorGetTypeID(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorGetTypeID
+	ENDIF
+
+; 
+;    CFAllocatorSetDefault() sets the allocator that is used in the current
+;    thread whenever NULL is specified as an allocator argument. This means
+;    that most, if not all allocations will go through this allocator. It
+;    also means that any allocator set as the default needs to be ready to
+;    deal with arbitrary memory allocation requests; in addition, the size
+;    and number of requests will change between releases.
+;
+;    An allocator set as the default will never be released, even if later
+;    another allocator replaces it as the default. Not only is it impractical
+;    for it to be released (as there might be caches created under the covers
+;    that refer to the allocator), in general it's also safer and more
+;    efficient to keep it around.
+;
+;    If you wish to use a custom allocator in a context, it's best to provide
+;    it as the argument to the various creation functions rather than setting
+;    it as the default. Setting the default allocator is not encouraged.
+;
+;    If you do set an allocator as the default, either do it for all time in
+;    your app, or do it in a nested fashion (by restoring the previous allocator
+;    when you exit your context). The latter might be appropriate for plug-ins
+;    or libraries that wish to set the default allocator.
+;
+
+
+; *  CFAllocatorSetDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFAllocatorSetDefault(CFAllocatorRef allocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorSetDefault
+	ENDIF
+
+
+; *  CFAllocatorGetDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFAllocatorRef CFAllocatorGetDefault(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorGetDefault
+	ENDIF
+
+
+; *  CFAllocatorCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFAllocatorRef CFAllocatorCreate(CFAllocatorRef allocator, CFAllocatorContext *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorCreate
+	ENDIF
+
+
+; *  CFAllocatorAllocate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *CFAllocatorAllocate(CFAllocatorRef allocator, CFIndex size, CFOptionFlags hint)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorAllocate
+	ENDIF
+
+
+; *  CFAllocatorReallocate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *CFAllocatorReallocate(CFAllocatorRef allocator, void *ptr, CFIndex newsize, CFOptionFlags hint)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorReallocate
+	ENDIF
+
+
+; *  CFAllocatorDeallocate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFAllocatorDeallocate(CFAllocatorRef allocator, void *ptr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorDeallocate
+	ENDIF
+
+
+; *  CFAllocatorGetPreferredSizeForSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFAllocatorGetPreferredSizeForSize(CFAllocatorRef allocator, CFIndex size, CFOptionFlags hint)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorGetPreferredSizeForSize
+	ENDIF
+
+
+; *  CFAllocatorGetContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFAllocatorGetContext(CFAllocatorRef allocator, CFAllocatorContext *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFAllocatorGetContext
+	ENDIF
+
+;  Base "type" of all "CF objects", and polymorphic functions on them 
+; typedef const void *					CFTypeRef
+
+
+; *  CFGetTypeID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeID CFGetTypeID(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFGetTypeID
+	ENDIF
+
+
+; *  CFCopyTypeIDDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFCopyTypeIDDescription(CFTypeID type_id)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFCopyTypeIDDescription
+	ENDIF
+
+
+; *  CFRetain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeRef CFRetain(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFRetain
+	ENDIF
+
+
+; *  CFRelease()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFRelease(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFRelease
+	ENDIF
+
+
+; *  CFGetRetainCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFGetRetainCount(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFGetRetainCount
+	ENDIF
+
+
+; *  CFEqual()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFEqual(CFTypeRef cf1, CFTypeRef cf2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFEqual
+	ENDIF
+
+
+; *  CFHash()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFHashCode CFHash(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFHash
+	ENDIF
+
+
+; *  CFCopyDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFCopyDescription(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFCopyDescription
+	ENDIF
+
+
+; *  CFGetAllocator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFAllocatorRef CFGetAllocator(CFTypeRef cf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFGetAllocator
+	ENDIF
+
+	ENDIF ; __CFBASE__ 
+

@@ -1,0 +1,499 @@
+;
+;    File:       CursorDevices.a
+;
+;    Contains:   Cursor Devices (mouse/trackball/etc) Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CURSORDEVICES__') = 'UNDEFINED' THEN
+__CURSORDEVICES__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+; 
+;                        * * *  I M P O R T A N T  * * * 
+;
+;            You will need CursorDevicesGlue.o to use CDM from PowerPC
+;
+;
+;    In order to use the Cursor Devices Manager (CDM) on PowerPC systems, you must 
+;    link with the file CursorDevicesGlue.o and InterfaceLib 1.1.3.  This is necessary
+;    because the original MixedMode transition code for CDM in InterfaceLib in ROM
+;    was wrong.  The code in CursorDevicesGlue.o will check to see if the ROM has
+;    been fixed and calls through to it if so.  If it detects that the ROM has not
+;    been fixed, it uses its own implementation of the CDM MixedMode transition 
+;    routines. 
+;    
+;
+
+
+; typedef short 						ButtonOpcode
+
+;  ButtonOpcodes 
+
+kButtonNoOp						EQU		0					; No action for this button 
+kButtonSingleClick				EQU		1					; Normal mouse button 
+kButtonDoubleClick				EQU		2					; Click-release-click when pressed 
+kButtonClickLock				EQU		3					; Click on press, release on next press 
+
+kButtonCustom					EQU		6					; Custom behavior, data = CursorDeviceCustomButtonUPP 
+;  Device Classes 
+
+kDeviceClassAbsolute			EQU		0					; a flat-response device 
+kDeviceClassMouse				EQU		1					; mechanical or optical mouse 
+kDeviceClassTrackball			EQU		2					; trackball 
+kDeviceClassTrackPad			EQU		3
+
+kDeviceClass3D					EQU		6					; a 3D pointing device 
+;  Structures used in Cursor Device Manager calls 
+CursorData				RECORD 0
+nextCursorData			 ds.l	1				; offset: $0 (0)		;  next in global list 
+displayInfo				 ds.l	1				; offset: $4 (4)		;  unused (reserved for future) 
+whereX					 ds.l	1				; offset: $8 (8)		;  horizontal position 
+whereY					 ds.l	1				; offset: $C (12)		;  vertical position 
+where					 ds		Point			; offset: $10 (16)		;  the pixel position 
+isAbs					 ds.b	1				; offset: $14 (20)		;  has been stuffed with absolute coords 
+buttonCount				 ds.b	1				; offset: $15 (21)		;  number of buttons currently pressed 
+screenRes				 ds.l	1				; offset: $16 (22)		;  pixels per inch on the current display 
+privateFields			 ds.w	22				; offset: $1A (26)		;  fields use internally by CDM 
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+; typedef struct CursorData *			CursorDataPtr
+
+CursorDevice			RECORD 0
+nextCursorDevice		 ds.l	1				; offset: $0 (0)		;  pointer to next record in linked list 
+whichCursor				 ds.l	1				; offset: $4 (4)		;  pointer to data for target cursor 
+refCon					 ds.l	1				; offset: $8 (8)		;  application-defined 
+unused					 ds.l	1				; offset: $C (12)		;  reserved for future 
+devID					 ds.l	1				; offset: $10 (16)		;  device identifier (from ADB reg 1) 
+resolution				 ds.l	1				; offset: $14 (20)		;  units/inch (orig. from ADB reg 1) 
+devClass				 ds.b	1				; offset: $18 (24)		;  device class (from ADB reg 1) 
+cntButtons				 ds.b	1				; offset: $19 (25)		;  number of buttons (from ADB reg 1) 
+filler1					 ds.b	1				; offset: $1A (26)		;  reserved for future 
+buttons					 ds.b	1				; offset: $1B (27)		;  state of all buttons 
+buttonOp				 ds.b	8				; offset: $1C (28)		;  action performed per button 
+buttonTicks				 ds.l	8				; offset: $24 (36)		;  ticks when button last went up (for debounce) 
+buttonData				 ds.l	8				; offset: $44 (68)		;  data for the button operation 
+doubleClickTime			 ds.l	1				; offset: $64 (100)		;  device-specific double click speed 
+acceleration			 ds.l	1				; offset: $68 (104)		;  current acceleration 
+privateFields			 ds.w	15				; offset: $6C (108)		;  fields used internally to CDM 
+sizeof					 EQU *					; size:   $8A (138)
+						ENDR
+; typedef struct CursorDevice *			CursorDevicePtr
+
+;  for use with CursorDeviceButtonOp when opcode = kButtonCustom 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewCursorDeviceCustomButtonUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeCursorDeviceCustomButtonUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeCursorDeviceCustomButtonUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CursorDeviceMove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceMove(CursorDevicePtr ourDevice, long deltaX, long deltaY)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceMove
+			moveq           	#0,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceMove
+	ENDIF
+
+
+; *  CursorDeviceMoveTo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceMoveTo(CursorDevicePtr ourDevice, long absX, long absY)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceMoveTo
+			moveq           	#1,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceMoveTo
+	ENDIF
+
+
+; *  CursorDeviceFlush()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceFlush(CursorDevicePtr ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceFlush
+			moveq           	#2,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceFlush
+	ENDIF
+
+
+; *  CursorDeviceButtons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceButtons(CursorDevicePtr ourDevice, short buttons)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceButtons
+			moveq           	#3,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceButtons
+	ENDIF
+
+
+; *  CursorDeviceButtonDown()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceButtonDown(CursorDevicePtr ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceButtonDown
+			moveq           	#4,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceButtonDown
+	ENDIF
+
+
+; *  CursorDeviceButtonUp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceButtonUp(CursorDevicePtr ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceButtonUp
+			moveq           	#5,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceButtonUp
+	ENDIF
+
+
+; *  CursorDeviceButtonOp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceButtonOp(CursorDevicePtr ourDevice, short buttonNumber, ButtonOpcode opcode, long data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceButtonOp
+			moveq           	#6,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceButtonOp
+	ENDIF
+
+
+; *  CursorDeviceSetButtons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceSetButtons(CursorDevicePtr ourDevice, short numberOfButtons)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceSetButtons
+			moveq           	#7,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceSetButtons
+	ENDIF
+
+
+; *  CursorDeviceSetAcceleration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceSetAcceleration(CursorDevicePtr ourDevice, Fixed acceleration)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceSetAcceleration
+			moveq           	#8,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceSetAcceleration
+	ENDIF
+
+
+; *  CursorDeviceDoubleTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceDoubleTime(CursorDevicePtr ourDevice, long durationTicks)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceDoubleTime
+			moveq           	#9,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceDoubleTime
+	ENDIF
+
+
+; *  CursorDeviceUnitsPerInch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceUnitsPerInch(CursorDevicePtr ourDevice, Fixed resolution)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceUnitsPerInch
+			moveq           	#10,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceUnitsPerInch
+	ENDIF
+
+
+; *  CursorDeviceNextDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceNextDevice(CursorDevicePtr *ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceNextDevice
+			moveq           	#11,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceNextDevice
+	ENDIF
+
+
+; *  CursorDeviceNewDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceNewDevice(CursorDevicePtr *ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceNewDevice
+			moveq           	#12,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceNewDevice
+	ENDIF
+
+
+; *  CursorDeviceDisposeDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CursorDeviceDisposeDevice(CursorDevicePtr ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CursorDeviceDisposeDevice
+			moveq           	#13,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CursorDeviceDisposeDevice
+	ENDIF
+
+
+; 
+;                       * * *  W A R N I N G  * * * 
+;                
+;    The routines CrsrDevMoveTo and CrsrDevNextDevice are no longer needed.
+;    They were added as a work around until the glue code CursorDevicesGlue.o
+;    was created.  Please use the functions CursorDeviceMoveTo and
+;    CursorDeviceNextDevice instead.
+;
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OLDROUTINENAMES THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CrsrDevMoveTo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CrsrDevMoveTo(CursorDevicePtr ourDevice, long absX, long absY)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CrsrDevMoveTo
+			moveq           	#1,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CrsrDevMoveTo
+	ENDIF
+
+
+; *  CrsrDevNextDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CrsrDevNextDevice(CursorDevicePtr *ourDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CrsrDevNextDevice
+			moveq           	#11,D0
+			dc.w            	$AADB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CrsrDevNextDevice
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; OLDROUTINENAMES
+
+	ENDIF ; __CURSORDEVICES__ 
+

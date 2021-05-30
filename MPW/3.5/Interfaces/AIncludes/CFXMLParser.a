@@ -1,0 +1,462 @@
+;
+;    File:       CFXMLParser.a
+;
+;    Contains:   CoreFoundation XML parser
+;
+;    Version:    Technology: Mac OS X
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CFXMLPARSER__') = 'UNDEFINED' THEN
+__CFXMLPARSER__ SET 1
+
+	IF &TYPE('__CFBASE__') = 'UNDEFINED' THEN
+	include 'CFBase.a'
+	ENDIF
+	IF &TYPE('__CFARRAY__') = 'UNDEFINED' THEN
+	include 'CFArray.a'
+	ENDIF
+	IF &TYPE('__CFDATA__') = 'UNDEFINED' THEN
+	include 'CFData.a'
+	ENDIF
+	IF &TYPE('__CFDICTIONARY__') = 'UNDEFINED' THEN
+	include 'CFDictionary.a'
+	ENDIF
+	IF &TYPE('__CFTREE__') = 'UNDEFINED' THEN
+	include 'CFTree.a'
+	ENDIF
+	IF &TYPE('__CFURL__') = 'UNDEFINED' THEN
+	include 'CFURL.a'
+	ENDIF
+	IF &TYPE('__CFXMLNODE__') = 'UNDEFINED' THEN
+	include 'CFXMLNode.a'
+	ENDIF
+
+
+
+
+;  These are the various options you can configure the parser with.  These are
+;   chosen such that an option flag of 0 (kCFXMLParserNoOptions) leaves the XML
+;   as "intact" as possible (reports all structures; performs no replacements).
+;   Hence, to make the parser do the most work, returning only the pure element
+;   tree, set the option flag to kCFXMLParserAllOptions.
+;
+;kCFXMLParserValidateDocument -
+;   validate the document against its grammar from the DTD, reporting any errors.
+;   Currently not supported.
+;
+;kCFXMLParserSkipMetaData -
+;   silently skip over metadata constructs (the DTD and comments)
+;
+;kCFXMLParserReplacePhysicalEntities -
+;   replace declared entities like &lt;.  Note that other than the 5 predefined
+;   entities (lt, gt, quot, amp, apos), these must be defined in the DTD.
+;   Currently not supported.
+;
+;kCFXMLParserSkipWhitespace -
+;   skip over all whitespace that does not abut non-whitespace character data.
+;   In other words, given <foo>  <bar> blah </bar></foo>, the whitespace between
+;   foo's open tag and bar's open tag would be suppressed, but the whitespace
+;   around blah would be preserved.
+;
+;kCFXMLParserAddImpliedAttributes -
+;   where the DTD specifies implied attribute-value pairs for a particular element,
+;   add those pairs to any occurances of the element in the element tree.
+;   Currently not supported.
+;
+
+
+; typedef long							CFXMLParserOptions
+kCFXMLParserValidateDocument	EQU		$01
+kCFXMLParserSkipMetaData		EQU		$02
+kCFXMLParserReplacePhysicalEntities EQU	$04
+kCFXMLParserSkipWhitespace		EQU		$08
+kCFXMLParserResolveExternalEntities EQU	$10
+kCFXMLParserAddImpliedAttributes EQU	$20
+kCFXMLParserAllOptions			EQU		$00FFFFFF
+kCFXMLParserNoOptions			EQU		0
+;  This list is expected to grow 
+
+; typedef long							CFXMLParserStatusCode
+kCFXMLStatusParseNotBegun		EQU		-2
+kCFXMLStatusParseInProgress		EQU		-1
+kCFXMLStatusParseSuccessful		EQU		0
+kCFXMLErrorUnexpectedEOF		EQU		1
+kCFXMLErrorUnknownEncoding		EQU		2
+kCFXMLErrorEncodingConversionFailure EQU 3
+kCFXMLErrorMalformedProcessingInstruction EQU 4
+kCFXMLErrorMalformedDTD			EQU		5
+kCFXMLErrorMalformedName		EQU		6
+kCFXMLErrorMalformedCDSect		EQU		7
+kCFXMLErrorMalformedCloseTag	EQU		8
+kCFXMLErrorMalformedStartTag	EQU		9
+kCFXMLErrorMalformedDocument	EQU		10
+kCFXMLErrorElementlessDocument	EQU		11
+kCFXMLErrorMalformedComment		EQU		12
+kCFXMLErrorMalformedCharacterReference EQU 13
+kCFXMLErrorMalformedParsedCharacterData EQU 14
+kCFXMLErrorNoData				EQU		15
+;   These functions are called as a parse progresses.
+;
+;createXMLStructure -
+;  called as new XML structures are encountered by the parser.  May return NULL to indicate
+;  that the given structure should be skipped; if NULL is returned for a given structure,
+;  only minimal parsing is done for that structure (enough to correctly determine its end,
+;  and to extract any data necessary for the remainder of the parse, such as Entity definitions).
+;  createXMLStructure (or indeed, any of the tree-creation callbacks) will not be called for any
+;  children of the skipped structure.  The only exception is that the top-most element will always
+;  be reported even if NULL was returned for the document as a whole.  NOTE: for performance reasons,
+;  the node passed to createXMLStructure cannot be safely retained by the client; the node as
+;  a whole must be copied (via CFXMLNodeCreateCopy), or its contents must be extracted and copied.
+;
+;addChild -
+;  called as children are parsed and are ready to be added to the tree.  If createXMLStructure
+;  returns NULL for a given structure, that structure is omitted entirely, and addChild will
+;  NOT be called for either a NULL child or parent.
+;
+;endXMLStructure -
+;  called once a structure (and all its children) are completely parsed.  As elements are encountered,
+;  createXMLStructure is called for them first, then addChild to add the new structure to its parent,
+;  then addChild (potentially several times) to add the new structure's children to it, then finally
+;  endXMLStructure to show that the structure has been fully parsed.
+;
+;createXMLStructure, addChild, and endXMLStructure are all REQUIRED TO BE NON-NULL.
+;
+;resolveExternalEntity -
+;  called when external entities are referenced (NOT when they are simply defined).  If the function
+;  pointer is NULL, the parser uses its internal routines to try and resolve the entity.  If the
+;  function pointer is set, and the function returns NULL, a place holder for the external entity
+;  is inserted into the tree.  In this manner, the parser's client can prevent any external network
+;  or file accesses.
+;
+;handleError - called as errors/warnings are encountered in the data stream.  At some point, we will
+;  have an enum of the expected errors, some of which will be fatal, others of which will not.  If
+;  the function pointer is NULL, the parser will silently attempt to recover.  The
+;  handleError function may always return FALSE to force the parser to stop; if handleError returns
+;  TRUE, the parser will attempt to recover (fatal errors will still cause the parse to abort
+;  immediately).
+;
+
+CFXMLParserCallBacks	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+createXMLStructure		 ds.l	1				; offset: $4 (4)
+addChild				 ds.l	1				; offset: $8 (8)
+endXMLStructure			 ds.l	1				; offset: $C (12)
+resolveExternalEntity	 ds.l	1				; offset: $10 (16)
+handleError				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+CFXMLParserContext		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+info					 ds.l	1				; offset: $4 (4)
+retain					 ds.l	1				; offset: $8 (8)
+release					 ds.l	1				; offset: $C (12)
+copyDescription			 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+; *  CFXMLParserGetTypeID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFTypeID CFXMLParserGetTypeID(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetTypeID
+	ENDIF
+
+;  Creates a parser which will parse the given data with the given options.  xmlData may not be NULL.
+;   dataSource should be the URL from which the data came, and may be NULL; it is used to resolve any
+;   relative references found in xmlData. versionOfNodes determines which version CFXMLNodes are produced
+;   by the parser; see CFXMLNode.h for more details.  callBacks are the callbacks called by the parser as
+;   the parse progresses; callBacks, callBacks->createXMLStructure, callBacks->addChild, and
+;   callBacks->endXMLStructure must all be non-NULL.  context determines what if any info pointer is
+;   passed to the callbacks as the parse progresses; context may be NULL.  
+
+
+; *  CFXMLParserCreate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLParserRef CFXMLParserCreate(CFAllocatorRef allocator, CFDataRef xmlData, CFURLRef dataSource, CFOptionFlags parseOptions, CFIndex versionOfNodes, CFXMLParserCallBacks *callBacks, CFXMLParserContext *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserCreate
+	ENDIF
+
+;  Arguments as above, except that the data to be parsed is loaded directly
+;   from dataSource.  dataSource may not be NULL.  
+
+; *  CFXMLParserCreateWithDataFromURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLParserRef CFXMLParserCreateWithDataFromURL(CFAllocatorRef allocator, CFURLRef dataSource, CFOptionFlags parseOptions, CFIndex versionOfNodes, CFXMLParserCallBacks *callBacks, CFXMLParserContext *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserCreateWithDataFromURL
+	ENDIF
+
+
+; *  CFXMLParserGetContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFXMLParserGetContext(CFXMLParserRef parser, CFXMLParserContext *context)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetContext
+	ENDIF
+
+
+; *  CFXMLParserGetCallBacks()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFXMLParserGetCallBacks(CFXMLParserRef parser, CFXMLParserCallBacks *callBacks)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetCallBacks
+	ENDIF
+
+
+; *  CFXMLParserGetSourceURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFURLRef CFXMLParserGetSourceURL(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetSourceURL
+	ENDIF
+
+;  Returns the character index of the current parse location 
+
+; *  CFXMLParserGetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFXMLParserGetLocation(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetLocation
+	ENDIF
+
+;  Returns the line number of the current parse location 
+
+; *  CFXMLParserGetLineNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFIndex CFXMLParserGetLineNumber(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetLineNumber
+	ENDIF
+
+;  Returns the top-most object returned by the createXMLStructure callback 
+
+; *  CFXMLParserGetDocument()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *CFXMLParserGetDocument(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetDocument
+	ENDIF
+
+;  Get the status code or a user-readable description of the last error that occurred in a parse.
+;   If no error has occurred, a null description string is returned.  See the enum above for
+;   possible status returns 
+
+
+; *  CFXMLParserGetStatusCode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLParserStatusCode CFXMLParserGetStatusCode(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserGetStatusCode
+	ENDIF
+
+
+; *  CFXMLParserCopyErrorDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFStringRef CFXMLParserCopyErrorDescription(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserCopyErrorDescription
+	ENDIF
+
+;  Cause any in-progress parse to abort with the given error code and description.  errorCode
+;   must be positive, and errorDescription may not be NULL.  Cannot be called asynchronously
+;   (i.e. must be called from within a parser callback) 
+
+
+; *  CFXMLParserAbort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void CFXMLParserAbort(CFXMLParserRef parser, CFXMLParserStatusCode errorCode, CFStringRef errorDescription)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserAbort
+	ENDIF
+
+;  Starts a parse of the data the parser was created with; returns success or failure.
+;   Upon success, use CFXMLParserGetDocument() to get the product of the parse.  Upon
+;   failure, use CFXMLParserGetErrorCode() or CFXMLParserCopyErrorDescription() to get
+;   information about the error.  It is an error to call CFXMLParserParse() while a
+;   parse is already underway. 
+
+
+; *  CFXMLParserParse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean CFXMLParserParse(CFXMLParserRef parser)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLParserParse
+	ENDIF
+
+;  These functions provide a higher-level interface.  The XML data is parsed to a
+;   special CFTree (an CFXMLTree) with known contexts and callbacks.  See CFXMLNode.h
+;   for full details on using an CFXMLTree and the CFXMLNodes contained therein.
+;
+
+;  Parse to an CFXMLTreeRef.  parseOptions are as above. versionOfNodes determines
+;   what version CFXMLNodes are used to populate the tree.  
+
+; *  CFXMLTreeCreateFromData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLTreeRef CFXMLTreeCreateFromData(CFAllocatorRef allocator, CFDataRef xmlData, CFURLRef dataSource, CFOptionFlags parseOptions, CFIndex versionOfNodes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLTreeCreateFromData
+	ENDIF
+
+;  Loads the data to be parsed directly from dataSource.  Arguments as above. 
+
+; *  CFXMLTreeCreateWithDataFromURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFXMLTreeRef CFXMLTreeCreateWithDataFromURL(CFAllocatorRef allocator, CFURLRef dataSource, CFOptionFlags parseOptions, CFIndex versionOfNodes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLTreeCreateWithDataFromURL
+	ENDIF
+
+;  Generate the XMLData (ready to be written to whatever permanent storage is to be
+;   used) from an CFXMLTree.  Will NOT regenerate entity references (except those
+;   required for syntactic correctness) if they were replaced at the parse time;
+;   clients that wish this should walk the tree and re-insert any entity references
+;   that should appear in the final output file. 
+
+
+; *  CFXMLTreeCreateXMLData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern CFDataRef CFXMLTreeCreateXMLData(CFAllocatorRef allocator, CFXMLTreeRef xmlTree)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CFXMLTreeCreateXMLData
+	ENDIF
+
+	ENDIF ; __CFXMLPARSER__ 
+

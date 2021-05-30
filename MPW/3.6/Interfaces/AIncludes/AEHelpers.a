@@ -1,0 +1,574 @@
+;
+;    File:       AEHelpers.a
+;
+;    Contains:   AEPrint, AEBuild and AEStream for Carbon
+;
+;    Version:    Technology: Mac OS X, CarbonLib
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1999-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+; 
+; * Originally from AEGIzmos by Jens Alfke, circa 1992.
+; 
+
+	IF &TYPE('__AEHELPERS__') = 'UNDEFINED' THEN
+__AEHELPERS__ SET 1
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__AEDATAMODEL__') = 'UNDEFINED' THEN
+	include 'AEDataModel.a'
+	ENDIF
+; 
+; * AEBuild:
+; *
+; * AEBuild provides a very high level abstraction for building
+; * complete AppleEvents and complex ObjectSpeciers.  Using AEBuild it
+; * is easy to produce a textual representation of an AEDesc.  The
+; * format is similar to the stdio printf call, where meta data is
+; * extracted from a format string and used to build the final
+; * representation.
+; * 
+; * The structure of the format string is described here:
+; * 
+; *          < describe it >
+; 
+
+;  Syntax Error Codes: 
+
+; typedef UInt32						AEBuildErrorCode
+aeBuildSyntaxNoErr				EQU		0					; (No error) 
+aeBuildSyntaxBadToken			EQU		1					; Illegal character 
+aeBuildSyntaxBadEOF				EQU		2					; Unexpected end of format string 
+aeBuildSyntaxNoEOF				EQU		3					; Unexpected extra stuff past end 
+aeBuildSyntaxBadNegative		EQU		4					; "-" not followed by digits 
+aeBuildSyntaxMissingQuote		EQU		5					; Missing close "'" 
+aeBuildSyntaxBadHex				EQU		6					; Non-digit in hex string 
+aeBuildSyntaxOddHex				EQU		7					; Odd # of hex digits 
+aeBuildSyntaxNoCloseHex			EQU		8					; Missing "»" 
+aeBuildSyntaxUncoercedHex		EQU		9					; Hex string must be coerced to a type 
+aeBuildSyntaxNoCloseString		EQU		10					; Missing "”" 
+aeBuildSyntaxBadDesc			EQU		11					; Illegal descriptor 
+aeBuildSyntaxBadData			EQU		12					; Bad data value inside (…) 
+aeBuildSyntaxNoCloseParen		EQU		13					; Missing ")" after data value 
+aeBuildSyntaxNoCloseBracket		EQU		14					; Expected "," or "]" 
+aeBuildSyntaxNoCloseBrace		EQU		15					; Expected "," or "}" 
+aeBuildSyntaxNoKey				EQU		16					; Missing keyword in record 
+aeBuildSyntaxNoColon			EQU		17					; Missing ":" after keyword in record 
+aeBuildSyntaxCoercedList		EQU		18					; Cannot coerce a list 
+aeBuildSyntaxUncoercedDoubleAt	EQU		19					; "@@" substitution must be coerced 
+;  A structure containing error state.
+
+AEBuildError			RECORD 0
+fError					 ds.l	1				; offset: $0 (0)
+fErrorPos				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   Create an AEDesc from the format string.  AEBuildError can be NULL, in which case
+;   no explicit error information will be returned.
+
+
+
+; *  AEBuildDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEBuildDesc(AEDesc *dst, AEBuildError *error, const char *src, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEBuildDesc
+	ENDIF
+
+;  varargs version of AEBuildDesc
+
+; *  vAEBuildDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus vAEBuildDesc(AEDesc *dst, AEBuildError *error, const char *src, va_list args)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vAEBuildDesc
+	ENDIF
+
+
+;  Append parameters to an existing AppleEvent
+
+; *  AEBuildParameters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEBuildParameters(AppleEvent *event, AEBuildError *error, const char *format, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEBuildParameters
+	ENDIF
+
+;  varargs version of AEBuildParameters
+
+; *  vAEBuildParameters()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus vAEBuildParameters(AppleEvent *event, AEBuildError *error, const char *format, va_list args)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vAEBuildParameters
+	ENDIF
+
+;  Building an entire Apple event:
+
+; *  AEBuildAppleEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEBuildAppleEvent(AEEventClass theClass, AEEventID theID, DescType addressType, const void *addressData, long addressLength, short returnID, long transactionID, AppleEvent *result, AEBuildError *error, const char *paramsFmt, ...)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEBuildAppleEvent
+	ENDIF
+
+;  varargs version of AEBuildAppleEvent
+
+; *  vAEBuildAppleEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus vAEBuildAppleEvent(AEEventClass theClass, AEEventID theID, DescType addressType, const void *addressData, long addressLength, short returnID, long transactionID, AppleEvent *resultEvt, AEBuildError *error, const char *paramsFmt, va_list args)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION vAEBuildAppleEvent
+	ENDIF
+
+; 
+; * AEPrintDescToHandle
+; *
+; * AEPrintDescToHandle provides a way to turn an AEDesc into a textual
+; * representation.  This is most useful for debugging calls to
+; * AEBuildDesc and friends.  The Handle returned should be disposed by
+; * the caller.  The size of the handle is the actual number of
+; * characters in the string.
+; 
+
+
+; *  AEPrintDescToHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEPrintDescToHandle(const AEDesc *desc, Handle *result)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEPrintDescToHandle
+	ENDIF
+
+; 
+; * AEStream:
+; *
+; * The AEStream interface allows you to build AppleEvents by appending
+; * to an opaque structure (an AEStreamRef) and then turning this
+; * structure into an AppleEvent.  The basic idea is to open the
+; * stream, write data, and then close it - closing it produces an
+; * AEDesc, which may be partially complete, or may be a complete
+; * AppleEvent.
+; 
+
+
+
+
+;   Create and return an AEStreamRef
+;   Returns NULL on memory allocation failure
+
+
+
+; *  AEStreamOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern AEStreamRef AEStreamOpen(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpen
+	ENDIF
+
+
+;   Closes and disposes of an AEStreamRef, producing
+;   results in the desc.  You must dispose of the desc yourself.
+;   If you just want to dispose of the AEStreamRef, you can pass NULL for desc.
+
+
+
+; *  AEStreamClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamClose(AEStreamRef ref, AEDesc *desc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamClose
+	ENDIF
+
+
+;   Prepares an AEStreamRef for appending data to a newly created desc.
+;   You append data with AEStreamWriteData
+
+
+
+; *  AEStreamOpenDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamOpenDesc(AEStreamRef ref, DescType newType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpenDesc
+	ENDIF
+
+;  Append data to the previously opened desc.
+
+; *  AEStreamWriteData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamWriteData(AEStreamRef ref, const void *data, Size length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamWriteData
+	ENDIF
+
+
+;   Finish a desc.  After this, you can close the stream, or adding new
+;   descs, if you're assembling a list.
+
+
+
+; *  AEStreamCloseDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamCloseDesc(AEStreamRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamCloseDesc
+	ENDIF
+
+;  Write data as a desc to the stream
+
+; *  AEStreamWriteDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamWriteDesc(AEStreamRef ref, DescType newType, const void *data, Size length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamWriteDesc
+	ENDIF
+
+;  Write an entire desc to the stream
+
+; *  AEStreamWriteAEDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamWriteAEDesc(AEStreamRef ref, const AEDesc *desc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamWriteAEDesc
+	ENDIF
+
+
+;   Begin a list.  You can then append to the list by doing
+;   AEStreamOpenDesc, or AEStreamWriteDesc.
+
+
+
+; *  AEStreamOpenList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamOpenList(AEStreamRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpenList
+	ENDIF
+
+;  Finish a list.
+
+; *  AEStreamCloseList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamCloseList(AEStreamRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamCloseList
+	ENDIF
+
+
+;   Begin a record.  A record usually has type 'reco', however, this is
+;   rather generic, and frequently a different type is used.
+
+
+
+; *  AEStreamOpenRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamOpenRecord(AEStreamRef ref, DescType newType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpenRecord
+	ENDIF
+
+;  Change the type of a record.
+
+; *  AEStreamSetRecordType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamSetRecordType(AEStreamRef ref, DescType newType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamSetRecordType
+	ENDIF
+
+;  Finish a record
+
+; *  AEStreamCloseRecord()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamCloseRecord(AEStreamRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamCloseRecord
+	ENDIF
+
+
+;   Add a keyed descriptor to a record.  This is analogous to AEPutParamDesc.
+;   it can only be used when writing to a record.
+
+
+
+; *  AEStreamWriteKeyDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamWriteKeyDesc(AEStreamRef ref, AEKeyword key, DescType newType, const void *data, Size length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamWriteKeyDesc
+	ENDIF
+
+
+;   OpenDesc for a keyed record entry.  You can youse AEStreamWriteData
+;   after opening a keyed desc.
+
+
+
+; *  AEStreamOpenKeyDesc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamOpenKeyDesc(AEStreamRef ref, AEKeyword key, DescType newType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpenKeyDesc
+	ENDIF
+
+;  Write a key to the stream - you can follow this with an AEWriteDesc.
+
+; *  AEStreamWriteKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamWriteKey(AEStreamRef ref, AEKeyword key)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamWriteKey
+	ENDIF
+
+
+;   Create a complete AppleEvent.  This creates and returns a new stream.
+;   Use this call to populate the meta fields in an AppleEvent record.
+;   After this, you can add your records, lists and other parameters.
+
+
+
+; *  AEStreamCreateEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern AEStreamRef AEStreamCreateEvent(AEEventClass clazz, AEEventID id, DescType targetType, const void *targetData, long targetLength, short returnID, long transactionID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamCreateEvent
+	ENDIF
+
+
+;   This call lets you augment an existing AppleEvent using the stream
+;   APIs.  This would be useful, for example, in constructing the reply
+;   record in an AppleEvent handler.  Note that AEStreamOpenEvent will
+;   consume the AppleEvent passed in - you can't access it again until the
+;   stream is closed.  When you're done building the event, AEStreamCloseStream
+;    will reconstitute it.
+
+
+
+; *  AEStreamOpenEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern AEStreamRef AEStreamOpenEvent(AppleEvent *event)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOpenEvent
+	ENDIF
+
+;  Mark a keyword as being an optional parameter.
+
+; *  AEStreamOptionalParam()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus AEStreamOptionalParam(AEStreamRef ref, AEKeyword key)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AEStreamOptionalParam
+	ENDIF
+
+	ENDIF ; __AEHELPERS__ 
+

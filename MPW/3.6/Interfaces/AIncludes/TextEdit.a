@@ -1,0 +1,1903 @@
+;
+;    File:       TextEdit.a
+;
+;    Contains:   TextEdit Interfaces.
+;
+;    Version:    Technology: System 8.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+__TEXTEDIT__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+
+
+
+; typedef TERec *						TEPtr
+
+; typedef TEPtr *						TEHandle
+
+;  
+;    Important note about TEClickLoopProcPtr and WordBreakProcPtr
+;
+;    At one point these were defined as returning the function result in the 
+;    condition code Z-bit.  This was correct, in that it was what the 68K
+;    implementation of TextEdit actually tested.  But, MixedMode had a different 
+;    idea of what returning a boolean in the Z-bit meant.  MixedMode was setting
+;    the Z-bit the complement of what was wanted.  
+;    
+;    Therefore, these ProcPtrs have been changed (back) to return the result in
+;    register D0.  It turns out that for register based routines, 
+;    MixedMode sets the Z-bit of the 68K emulator based on the contents 
+;    of the return result register.  Thus we can get the Z-bit set correctly.  
+;    
+;    But, when TextEdit is recoded in PowerPC, if it calls a 68K ClickLoop
+;    or WordBreak routine, register D0 had better have the result (in addition
+;    to the Z-bit). Therefore all 68K apps should make sure their ClickLoop or
+;    WordBreak routines set register D0 at the end.
+;
+
+
+;  
+;    There is no function to get/set the low-mem for FindWordHook at 0x07F8.
+;    This is because it is not a low-mem ProcPtr. That address is the entry
+;    in the OS TrapTable for trap 0xA0FE.  You can use Get/SetTrapAddress to 
+;    acccess it. 
+;
+
+
+; 
+;    The following ProcPtrs cannot be written in or called from a high-level 
+;    language without the help of mixed mode or assembly glue because they 
+;    use the following parameter-passing conventions:
+;
+;    typedef pascal void (*HighHookProcPtr)(const Rect *r, TEPtr pTE);
+;    typedef pascal void (*CaretHookProcPtr)(const Rect *r, TEPtr pTE);
+;
+;        In:
+;            =>  r                       on stack
+;            =>  pTE                     A3.L
+;        Out:
+;            none
+;
+;    typedef pascal Boolean (*EOLHookProcPtr)(char theChar, TEPtr pTE, TEHandle hTE);
+;
+;        In:
+;            =>  theChar                 D0.B
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            <=  Boolean                 Z bit of the CCR
+;
+;    typedef pascal unsigned short (*WidthHookProcPtr)(unsigned short textLen,
+;     unsigned short textOffset, void *textBufferPtr, TEPtr pTE, TEHandle hTE);
+;    typedef pascal unsigned short (*TextWidthHookProcPtr)(unsigned short textLen,
+;     unsigned short textOffset, void *textBufferPtr, TEPtr pTE, TEHandle hTE);
+;
+;        In:
+;            =>  textLen                 D0.W
+;            =>  textOffset              D1.W
+;            =>  textBufferPtr           A0.L
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            <=  unsigned short          D1.W
+;
+;    typedef pascal unsigned short (*NWidthHookProcPtr)(unsigned short styleRunLen,
+;     unsigned short styleRunOffset, short slop, short direction, void *textBufferPtr, 
+;     short *lineStart, TEPtr pTE, TEHandle hTE);
+;
+;        In:
+;            =>  styleRunLen             D0.W
+;            =>  styleRunOffset          D1.W
+;            =>  slop                    D2.W (low)
+;            =>  direction               D2.W (high)
+;            =>  textBufferPtr           A0.L
+;            =>  lineStart               A2.L
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            <=  unsigned short          D1.W
+;
+;    typedef pascal void (*DrawHookProcPtr)(unsigned short textOffset, unsigned short drawLen,
+;     void *textBufferPtr, TEPtr pTE, TEHandle hTE);
+;
+;        In:
+;            =>  textOffset              D0.W
+;            =>  drawLen                 D1.W
+;            =>  textBufferPtr           A0.L
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            none
+;
+;    typedef pascal Boolean (*HitTestHookProcPtr)(unsigned short styleRunLen,
+;     unsigned short styleRunOffset, unsigned short slop, void *textBufferPtr,
+;     TEPtr pTE, TEHandle hTE, unsigned short *pixelWidth, unsigned short *charOffset, 
+;     Boolean *pixelInChar);
+;
+;        In:
+;            =>  styleRunLen             D0.W
+;            =>  styleRunOffset          D1.W
+;            =>  slop                    D2.W
+;            =>  textBufferPtr           A0.L
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            <=  pixelWidth              D0.W (low)
+;            <=  Boolean                 D0.W (high)
+;            <=  charOffset              D1.W
+;            <=  pixelInChar             D2.W
+;
+;    typedef pascal void (*TEFindWordProcPtr)(unsigned short currentPos, short caller, 
+;     TEPtr pTE, TEHandle hTE, unsigned short *wordStart, unsigned short *wordEnd);
+;
+;        In:
+;            =>  currentPos              D0.W
+;            =>  caller                  D2.W
+;            =>  pTE                     A3.L
+;            =>  hTE                     A4.L
+;        Out:
+;            <=  wordStart               D0.W
+;            <=  wordEnd                 D1.W
+;
+;    typedef pascal void (*TERecalcProcPtr)(TEPtr pTE, unsigned short changeLength,
+;     unsigned short *lineStart, unsigned short *firstChar, unsigned short *lastChar);
+;
+;        In:
+;            =>  pTE                     A3.L
+;            =>  changeLength            D7.W
+;        Out:
+;            <=  lineStart               D2.W
+;            <=  firstChar               D3.W
+;            <=  lastChar                D4.W
+;
+;    typedef pascal void (*TEDoTextProcPtr)(TEPtr pTE, unsigned short firstChar, unsigned short lastChar,
+;                        short selector, GrafPtr *currentGrafPort, short *charPosition);
+;
+;        In:
+;            =>  pTE                     A3.L
+;            =>  firstChar               D3.W
+;            =>  lastChar                D4.W
+;            =>  selector                D7.W
+;        Out:
+;            <=  currentGrafPort         A0.L
+;            <=  charPosition            D0.W
+;            
+;
+
+TERec					RECORD 0
+destRect				 ds		Rect			; offset: $0 (0)
+viewRect				 ds		Rect			; offset: $8 (8)
+selRect					 ds		Rect			; offset: $10 (16)
+lineHeight				 ds.w	1				; offset: $18 (24)
+fontAscent				 ds.w	1				; offset: $1A (26)
+selPoint				 ds		Point			; offset: $1C (28)
+selStart				 ds.w	1				; offset: $20 (32)
+selEnd					 ds.w	1				; offset: $22 (34)
+active					 ds.w	1				; offset: $24 (36)
+wordBreak				 ds.l	1				; offset: $26 (38)		;  NOTE: This field is ignored on non-Roman systems and on Carbon (see IM-Text 2-60) 
+clickLoop				 ds.l	1				; offset: $2A (42)
+clickTime				 ds.l	1				; offset: $2E (46)
+clickLoc				 ds.w	1				; offset: $32 (50)
+caretTime				 ds.l	1				; offset: $34 (52)
+caretState				 ds.w	1				; offset: $38 (56)
+just					 ds.w	1				; offset: $3A (58)
+teLength				 ds.w	1				; offset: $3C (60)
+hText					 ds.l	1				; offset: $3E (62)
+hDispatchRec			 ds.l	1				; offset: $42 (66)		;  added to replace recalBack & recalLines.  it's a handle anyway 
+clikStuff				 ds.w	1				; offset: $46 (70)
+crOnly					 ds.w	1				; offset: $48 (72)
+txFont					 ds.w	1				; offset: $4A (74)
+txFace					 ds.w	1				; offset: $4C (76)		; StyleField occupies 16-bits, but only first 8-bits are used
+txMode					 ds.w	1				; offset: $4E (78)
+txSize					 ds.w	1				; offset: $50 (80)
+inPort					 ds.l	1				; offset: $52 (82)
+highHook				 ds.l	1				; offset: $56 (86)
+caretHook				 ds.l	1				; offset: $5A (90)
+nLines					 ds.w	1				; offset: $5E (94)
+lineStarts				 ds.w	16001			; offset: $60 (96)
+sizeof					 EQU *					; size:   $7D62 (32098)
+						ENDR
+
+															; Justification (word alignment) styles 
+teJustLeft						EQU		0
+teJustCenter					EQU		1
+teJustRight						EQU		-1
+teForceLeft						EQU		-2					; new names for the Justification (word alignment) styles 
+teFlushDefault					EQU		0					;flush according to the line direction 
+teCenter						EQU		1					;center justify (word alignment) 
+teFlushRight					EQU		-1					;flush right for all scripts 
+teFlushLeft						EQU		-2					;flush left for all scripts 
+
+															; Set/Replace style modes 
+fontBit							EQU		0					;set font
+faceBit							EQU		1					;set face
+sizeBit							EQU		2					;set size
+clrBit							EQU		3					;set color
+addSizeBit						EQU		4					;add size mode
+toggleBit						EQU		5					;set faces in toggle mode
+
+															; TESetStyle/TEContinuousStyle modes 
+doFont							EQU		1					; set font (family) number
+doFace							EQU		2					;set character style
+doSize							EQU		4					;set type size
+doColor							EQU		8					;set color
+doAll							EQU		15					;set all attributes
+addSize							EQU		16					;adjust type size
+doToggle						EQU		32					;toggle mode for TESetStyle
+
+															; offsets into TEDispatchRec 
+EOLHook							EQU		0					;[UniversalProcPtr] TEEOLHook
+DRAWHook						EQU		4					;[UniversalProcPtr] TEWidthHook
+WIDTHHook						EQU		8					;[UniversalProcPtr] TEDrawHook
+HITTESTHook						EQU		12					;[UniversalProcPtr] TEHitTestHook
+nWIDTHHook						EQU		24					;[UniversalProcPtr] nTEWidthHook
+TextWidthHook					EQU		28					;[UniversalProcPtr] TETextWidthHook
+
+															; selectors for TECustomHook 
+intEOLHook						EQU		0					;TEIntHook value
+intDrawHook						EQU		1					;TEIntHook value
+intWidthHook					EQU		2					;TEIntHook value
+intHitTestHook					EQU		3					;TEIntHook value
+intNWidthHook					EQU		6					;TEIntHook value for new version of WidthHook
+intTextWidthHook				EQU		7					;TEIntHook value for new TextWidthHook
+intInlineInputTSMTEPreUpdateHook EQU	8					;TEIntHook value for TSMTEPreUpdateProcPtr callback
+intInlineInputTSMTEPostUpdateHook EQU	9					;TEIntHook value for TSMTEPostUpdateProcPtr callback
+
+															; feature or bit definitions for TEFeatureFlag 
+teFAutoScroll					EQU		0					;00000001b
+teFTextBuffering				EQU		1					;00000010b
+teFOutlineHilite				EQU		2					;00000100b
+teFInlineInput					EQU		3					;00001000b 
+teFUseWhiteBackground			EQU		4					;00010000b 
+teFUseInlineInput				EQU		5					;00100000b 
+teFInlineInputAutoScroll		EQU		6					;01000000b 
+
+															; feature or bit definitions for TEFeatureFlag -- Carbon only                
+															; To avoid having to call TEIdle in Carbon apps, automatic idling can be activated   
+															; via the following feature flag, but you must ensure that the destRect and/or     
+															; GrafPort's origin be setup properly for drawing in a given TERec when       
+															; the timer fires.    When this feature flag is set, TEIdle is a noop.          
+															; Activate this feature flag before calling TEActivate.                 
+teFIdleWithEventLoopTimer		EQU		7					;10000000b 
+
+															; action for the new "bit (un)set" interface, TEFeatureFlag 
+teBitClear						EQU		0
+teBitSet						EQU		1					;set the selector bit
+teBitTest						EQU		-1					;no change; just return the current setting
+
+															;constants for identifying the routine that called FindWord 
+teWordSelect					EQU		4					;clickExpand to select word
+teWordDrag						EQU		8					;clickExpand to drag new word
+teFromFind						EQU		12					;FindLine called it ($0C)
+teFromRecal						EQU		16					;RecalLines called it ($10)      obsolete 
+
+															;constants for identifying TEDoText selectors 
+teFind							EQU		0					;TEDoText called for searching
+teHighlight						EQU		1					;TEDoText called for highlighting
+teDraw							EQU		-1					;TEDoText called for drawing text
+teCaret							EQU		-2					;TEDoText called for drawing the caret
+
+Chars					RECORD 0
+elements				 ds.b	32001
+						 ORG 32002
+sizeof					 EQU *					; size:   $7D02 (32002)
+						ENDR
+
+
+; typedef char *						CharsPtr
+
+; typedef CharsPtr *					CharsHandle
+
+StyleRun				RECORD 0
+startChar				 ds.w	1				; offset: $0 (0)		; starting character position
+styleIndex				 ds.w	1				; offset: $2 (2)		; index in style table
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+STElement				RECORD 0
+stCount					 ds.w	1				; offset: $0 (0)		; number of runs in this style
+stHeight				 ds.w	1				; offset: $2 (2)		; line height
+stAscent				 ds.w	1				; offset: $4 (4)		; font ascent
+stFont					 ds.w	1				; offset: $6 (6)		; font (family) number
+stFace					 ds.w	1				; offset: $8 (8)		; StyleField occupies 16-bits, but only first 8-bits are used 
+stSize					 ds.w	1				; offset: $A (10)		; size in points
+stColor					 ds		RGBColor		; offset: $C (12)		; absolute (RGB) color
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+TEStyleTable			RECORD 0
+elements				 ds.b	1777 * STElement.sizeof
+sizeof					 EQU *					; size:   $7CF2 (31986)
+						ENDR
+
+
+; typedef struct STElement *			STPtr
+
+; typedef STPtr *						STHandle
+
+LHElement				RECORD 0
+lhHeight				 ds.w	1				; offset: $0 (0)		; maximum height in line
+lhAscent				 ds.w	1				; offset: $2 (2)		; maximum ascent in line
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+LHTable					RECORD 0
+elements				 ds.b	8001 * LHElement.sizeof
+sizeof					 EQU *					; size:   $7D04 (32004)
+						ENDR
+
+
+; typedef struct LHElement *			LHPtr
+
+; typedef LHPtr *						LHHandle
+
+ScrpSTElement			RECORD 0
+scrpStartChar			 ds.l	1				; offset: $0 (0)		; starting character position
+scrpHeight				 ds.w	1				; offset: $4 (4)
+scrpAscent				 ds.w	1				; offset: $6 (6)
+scrpFont				 ds.w	1				; offset: $8 (8)
+scrpFace				 ds.w	1				; offset: $A (10)		; StyleField occupies 16-bits, but only first 8-bits are used
+scrpSize				 ds.w	1				; offset: $C (12)
+scrpColor				 ds		RGBColor		; offset: $E (14)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  ARRAY [0..1600] OF ScrpSTElement 
+ScrpSTTable				RECORD 0
+elements				 ds.b	1601 * ScrpSTElement.sizeof
+sizeof					 EQU *					; size:   $7D14 (32020)
+						ENDR
+
+
+StScrpRec				RECORD 0
+scrpNStyles				 ds.w	1				; offset: $0 (0)		; number of styles in scrap
+scrpStyleTab			 ds		ScrpSTTable		; offset: $2 (2)		; table of styles for scrap
+sizeof					 EQU *					; size:   $7D16 (32022)
+						ENDR
+; typedef struct StScrpRec *			StScrpPtr
+
+; typedef StScrpPtr *					StScrpHandle
+
+NullStRec				RECORD 0
+teReserved				 ds.l	1				; offset: $0 (0)		; reserved for future expansion
+nullScrap				 ds.l	1				; offset: $4 (4)		; handle to scrap style table
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NullStRec *			NullStPtr
+
+; typedef NullStPtr *					NullStHandle
+
+TEStyleRec				RECORD 0
+nRuns					 ds.w	1				; offset: $0 (0)		; number of style runs
+nStyles					 ds.w	1				; offset: $2 (2)		; size of style table
+styleTab				 ds.l	1				; offset: $4 (4)		; handle to style table
+lhTab					 ds.l	1				; offset: $8 (8)		; handle to line-height table
+teRefCon				 ds.l	1				; offset: $C (12)		; reserved for application use
+nullStyle				 ds.l	1				; offset: $10 (16)		; Handle to style set at null selection
+runs					 ds.b	8001 * StyleRun.sizeof ; offset: $14 (20) ; ARRAY [0..8000] OF StyleRun
+sizeof					 EQU *					; size:   $7D18 (32024)
+						ENDR
+; typedef struct TEStyleRec *			TEStylePtr
+
+; typedef TEStylePtr *					TEStyleHandle
+
+TextStyle				RECORD 0
+tsFont					 ds.w	1				; offset: $0 (0)		; font (family) number
+tsFace					 ds.w	1				; offset: $2 (2)		; StyleField occupies 16-bits, but only first 8-bits are used
+tsSize					 ds.w	1				; offset: $4 (4)		; size in point
+tsColor					 ds		RGBColor		; offset: $6 (6)		; absolute (RGB) color
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct TextStyle *			TextStylePtr
+
+; typedef TextStylePtr *				TextStyleHandle
+
+; typedef short 						TEIntHook
+
+
+; *  NewHighHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewEOLHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewCaretHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTextWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewNWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDrawHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewHitTestHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTEFindWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTERecalcUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTEDoTextUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewTEClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewWordBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DisposeHighHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeEOLHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeCaretHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTextWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeNWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDrawHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHitTestHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTEFindWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTERecalcUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTEDoTextUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeTEClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DisposeWordBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  InvokeHighHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeEOLHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeCaretHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTextWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeNWidthHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDrawHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHitTestHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTEFindWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTERecalcUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTEDoTextUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeTEClickLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InvokeWordBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+															; feature bit 4 for TEFeatureFlag no longer in use 
+teFUseTextServices				EQU		4					;00010000b 
+
+
+; *  TEScrapHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Handle TEScrapHandle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEScrapHandle        &dest=(sp)
+			move.l            $0AB4,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEScrapHandle
+	ENDIF
+
+
+
+; *  TEGetScrapLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long TEGetScrapLength(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetScrapLength
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  TEInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TEInit(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEInit:	OPWORD	$A9CC
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEInit
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  TENew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEHandle TENew(const Rect *destRect, const Rect *viewRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TENew:	OPWORD	$A9D2
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TENew
+	ENDIF
+
+
+; *  TEDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEDispose(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEDispose:	OPWORD	$A9CD
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEDispose
+	ENDIF
+
+
+; *  TESetText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetText(const void *text, long length, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TESetText:	OPWORD	$A9CF
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetText
+	ENDIF
+
+
+; *  TEGetText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal CharsHandle TEGetText(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEGetText:	OPWORD	$A9CB
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetText
+	ENDIF
+
+
+; *  TEIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEIdle(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEIdle:	OPWORD	$A9DA
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEIdle
+	ENDIF
+
+
+; *  TESetSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetSelect(long selStart, long selEnd, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TESetSelect:	OPWORD	$A9D1
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetSelect
+	ENDIF
+
+
+; *  TEActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEActivate(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEActivate:	OPWORD	$A9D8
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEActivate
+	ENDIF
+
+
+; *  TEDeactivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEDeactivate(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEDeactivate:	OPWORD	$A9D9
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEDeactivate
+	ENDIF
+
+
+; *  TEKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEKey(CharParameter key, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEKey:	OPWORD	$A9DC
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEKey
+	ENDIF
+
+
+; *  TECut()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TECut(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TECut:	OPWORD	$A9D6
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TECut
+	ENDIF
+
+
+; *  TECopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TECopy(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TECopy:	OPWORD	$A9D5
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TECopy
+	ENDIF
+
+
+; *  TEPaste()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEPaste(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEPaste:	OPWORD	$A9DB
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEPaste
+	ENDIF
+
+
+; *  TEDelete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEDelete(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEDelete:	OPWORD	$A9D7
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEDelete
+	ENDIF
+
+
+; *  TEInsert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEInsert(const void *text, long length, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEInsert:	OPWORD	$A9DE
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEInsert
+	ENDIF
+
+
+; *  TESetAlignment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetAlignment(short just, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TESetAlignment:	OPWORD	$A9DF
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetAlignment
+	ENDIF
+
+
+; *  TEUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEUpdate(const Rect *rUpdate, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEUpdate:	OPWORD	$A9D3
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEUpdate
+	ENDIF
+
+
+; *  TETextBox()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TETextBox(const void *text, long length, const Rect *box, short just)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TETextBox:	OPWORD	$A9CE
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TETextBox
+	ENDIF
+
+
+; *  TEScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEScroll(short dh, short dv, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEScroll:	OPWORD	$A9DD
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEScroll
+	ENDIF
+
+
+; *  TESelView()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESelView(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TESelView:	OPWORD	$A811
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESelView
+	ENDIF
+
+
+; *  TEPinScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEPinScroll(short dh, short dv, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEPinScroll:	OPWORD	$A812
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEPinScroll
+	ENDIF
+
+
+; *  TEAutoView()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEAutoView(Boolean fAuto, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEAutoView:	OPWORD	$A813
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEAutoView
+	ENDIF
+
+
+; *  TECalText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TECalText(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TECalText:	OPWORD	$A9D0
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TECalText
+	ENDIF
+
+
+; *  TEGetOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short TEGetOffset(Point pt, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEGetOffset:	OPWORD	$A83C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetOffset
+	ENDIF
+
+
+; *  TEGetPoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Point TEGetPoint(short offset, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetPoint
+			move.w              #$0008,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetPoint
+	ENDIF
+
+
+; *  TEClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEClick(Point pt, Boolean fExtend, TEHandle h)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEClick:	OPWORD	$A9D4
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEClick
+	ENDIF
+
+
+; *  TEStyleNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEHandle TEStyleNew(const Rect *destRect, const Rect *viewRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TEStyleNew:	OPWORD	$A83E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEStyleNew
+	ENDIF
+
+
+; *  TESetStyleHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetStyleHandle(TEStyleHandle theHandle, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TESetStyleHandle
+			move.w              #$0005,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetStyleHandle
+	ENDIF
+
+
+; *  TEGetStyleHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEStyleHandle TEGetStyleHandle(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetStyleHandle
+			move.w              #$0004,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetStyleHandle
+	ENDIF
+
+
+; *  TEGetStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEGetStyle(short offset, TextStyle *theStyle, short *lineHeight, short *fontAscent, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetStyle
+			move.w              #$0003,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetStyle
+	ENDIF
+
+
+; *  TEStylePaste()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEStylePaste(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEStylePaste
+			move.w              #$0000,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEStylePaste
+	ENDIF
+
+
+; *  TESetStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetStyle(short mode, const TextStyle *newStyle, Boolean fRedraw, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TESetStyle
+			move.w              #$0001,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetStyle
+	ENDIF
+
+
+; *  TEReplaceStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEReplaceStyle(short mode, const TextStyle *oldStyle, const TextStyle *newStyle, Boolean fRedraw, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEReplaceStyle
+			move.w              #$0002,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEReplaceStyle
+	ENDIF
+
+
+; *  TEGetStyleScrapHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal StScrpHandle TEGetStyleScrapHandle(TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetStyleScrapHandle
+			move.w              #$0006,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetStyleScrapHandle
+	ENDIF
+
+
+; *  TEStyleInsert()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEStyleInsert(const void *text, long length, StScrpHandle hST, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEStyleInsert
+			move.w              #$0007,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEStyleInsert
+	ENDIF
+
+
+; *  TEGetHeight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long TEGetHeight(long endLine, long startLine, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetHeight
+			move.w              #$0009,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetHeight
+	ENDIF
+
+
+; *  TEContinuousStyle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean TEContinuousStyle(short *mode, TextStyle *aStyle, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEContinuousStyle
+			move.w              #$000A,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEContinuousStyle
+	ENDIF
+
+
+; *  TEUseStyleScrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TEUseStyleScrap(long rangeStart, long rangeEnd, StScrpHandle newStyles, Boolean fRedraw, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEUseStyleScrap
+			move.w              #$000B,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEUseStyleScrap
+	ENDIF
+
+
+; *  TECustomHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TECustomHook(TEIntHook which, UniversalProcPtr *addr, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TECustomHook
+			move.w              #$000C,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TECustomHook
+	ENDIF
+
+
+; *  TENumStyles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long TENumStyles(long rangeStart, long rangeEnd, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TENumStyles
+			move.w              #$000D,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TENumStyles
+	ENDIF
+
+
+; *  TEFeatureFlag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short TEFeatureFlag(short feature, short action, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEFeatureFlag
+			move.w              #$000E,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEFeatureFlag
+	ENDIF
+
+
+; *  TEGetHiliteRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DragLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr TEGetHiliteRgn(RgnHandle region, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TEGetHiliteRgn
+			move.w              #$000F,-(sp)
+			dc.w            	$A83D
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetHiliteRgn
+	ENDIF
+
+
+; *  TESetScrapLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetScrapLength(long length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetScrapLength
+	ENDIF
+
+
+; *  TEFromScrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr TEFromScrap(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEFromScrap
+	ENDIF
+
+
+; *  TEToScrap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr TEToScrap(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEToScrap
+	ENDIF
+
+
+; *  TESetClickLoop()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetClickLoop(TEClickLoopUPP clikProc, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetClickLoop
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  TESetWordBreak()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TESetWordBreak(WordBreakUPP wBrkProc, TEHandle hTE)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetWordBreak
+	ENDIF
+
+
+
+
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  TEGetDoTextHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEDoTextUPP TEGetDoTextHook(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetDoTextHook
+	ENDIF
+
+
+; *  TESetDoTextHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetDoTextHook(TEDoTextUPP value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetDoTextHook
+	ENDIF
+
+
+; *  TEGetRecalcHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TERecalcUPP TEGetRecalcHook(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetRecalcHook
+	ENDIF
+
+
+; *  TESetRecalcHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetRecalcHook(TERecalcUPP value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetRecalcHook
+	ENDIF
+
+
+; *  TEGetFindWordHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TEFindWordUPP TEGetFindWordHook(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetFindWordHook
+	ENDIF
+
+
+; *  TESetFindWordHook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetFindWordHook(TEFindWordUPP value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetFindWordHook
+	ENDIF
+
+
+; *  TEGetScrapHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Handle TEGetScrapHandle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TEGetScrapHandle
+	ENDIF
+
+
+; *  TESetScrapHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void TESetScrapHandle(Handle value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TESetScrapHandle
+	ENDIF
+
+
+
+;  LMGetWordRedraw and LMSetWordRedraw were previously in LowMem.h  
+;  Deprecated for Carbon on MacOS X                                 
+;  This lomem is no longer used by the implementation of TextEdit   
+;  on MacOS X, so setting it will have no effect.                   
+
+; *  LMGetWordRedraw()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 LMGetWordRedraw(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMGetWordRedraw      &dest=(sp)
+			move.b            $0BA5,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMGetWordRedraw
+	ENDIF
+
+
+; *  LMSetWordRedraw()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void LMSetWordRedraw(UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_LMSetWordRedraw      &src=(sp)+
+			move.b            &src,$0BA5
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LMSetWordRedraw
+	ENDIF
+
+
+
+	IF OLDROUTINENAMES THEN
+	ENDIF	; OLDROUTINENAMES
+	ENDIF ; __TEXTEDIT__ 
+

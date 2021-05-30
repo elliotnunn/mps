@@ -1,0 +1,1823 @@
+;
+;	File:		GXPrinterDrivers.a
+;
+;	Contains:	This file defines data types and API functions for printer driver development.
+;
+;	Version:	Technology:	Quickdraw GX 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__GXPRINTERDRIVERS__') = 'UNDEFINED' THEN
+__GXPRINTERDRIVERS__ SET 1
+
+
+	IF &TYPE('__SCALERTYPES__') = 'UNDEFINED' THEN
+	include 'ScalerTypes.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'GXMath.a'											;
+;			include 'FixMath.a'									;
+;		include 'SFNTTypes.a'										;
+;			include 'GXTypes.a'									;
+
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+	include 'Printing.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+;		include 'Dialogs.a'										;
+;			include 'Memory.a'										;
+;			include 'Menus.a'										;
+;			include 'Controls.a'									;
+;			include 'Windows.a'									;
+;				include 'Events.a'									;
+;					include 'OSUtils.a'							;
+;			include 'TextEdit.a'									;
+
+	IF &TYPE('__GXPRINTING__') = 'UNDEFINED' THEN
+	include 'GXPrinting.a'
+	ENDIF
+;		include 'Collections.a'									;
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+;		include 'GXFonts.a'										;
+;		include 'Lists.a'											;
+;		include 'GXMessages.a'										;
+gxManualFeedAlertPrefs 	RECORD	0
+alertFlags				 ds.l   1		; offset: $0 (0)		;	Flags--first word is for driver's private use, the rest is predefined. 
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct gxManualFeedAlertPrefs  gxManualFeedAlertPrefs, *gxManualFeedAlertPrefsPtr, **gxManualFeedAlertPrefsHdl
+; Constants for the alertFlags field of gxManualFeedAlertPrefs.
+
+gxShowAlerts					EQU		$00000001			; Show alerts for this desktop printer. 
+gxAlertOnPaperChange			EQU		$00000002			; …only if the papertype changes. 
+
+gxDefaultMFeedAlertSettings		EQU		(gxShowAlerts | gxAlertOnPaperChange)
+
+; Driver output settings structure for desktop printer gxDriverOutputType resource 
+gxDriverOutputSettings 	RECORD	0
+driverflags				 ds.l   1		; offset: $0 (0)		;	Flags -- for use by driver. 
+outputSettings			 ds.l   1		; offset: $4 (4)		;	Flags -- predefined. 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct gxDriverOutputSettings  gxDriverOutputSettings, *gxDriverOutputSettingsPtr, **gxDriverOutputSettingsHdl
+; Constants for the outputSettings field of gxDriverOutputSettings. 
+
+gxCanConfigureTrays				EQU		$00000001			; Desktop printer represents a device with a paper feed. 
+
+; ------------------------------------------------------------------------------
+;
+;						Printing Driver Constants and Types
+;
+;-------------------------------------------------------------------------------- 
+gxInputTraysMenuItem			EQU		-1					; Menu item number for "Input Trays..." 
+
+; Buffering and IO preferences-- this structure mirrors the 'iobm' resource 
+gxIOPrefsRec 			RECORD	0
+communicationsOptions	 ds.l   1		; offset: $0 (0)		; Standard or nonstandard I/O? 
+numBuffers				 ds.l   1		; offset: $4 (4)		; Requested number of buffers for QDGX to create 
+bufferSize				 ds.l   1		; offset: $8 (8)		; The size of each buffer 
+numReqBlocks			 ds.l   1		; offset: $C (12)		; The number of async I/O request blocks which will be needed 
+openCloseTimeout		 ds.l   1		; offset: $10 (16)		; The open/close timeout (in ticks) 
+readWriteTimeout		 ds.l   1		; offset: $14 (20)		; The read/write timeout (in ticks) 
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct gxIOPrefsRec  gxIOPrefsRec, *gxIOPrefsPtr, **gxIOPrefsHdl
+; Constants for the communicationsOptions field of IOPrefsRec. 
+
+gxUseCustomIO					EQU		$00000001			; Driver uses a non-standard IO mechanism 
+
+; Information about writing to a file 
+gxPrintDestinationRec 	RECORD	0
+printToFile				 ds.b   1		; offset: $0 (0)		; True if output is to go to a file 
+padByte					 ds.b   1		; offset: $1 (1)
+fSpec					 ds     FSSpec	; offset: $2 (2)		; If going to a file, the FSSpec for the file 
+includeFonts			 ds.b   1		; offset: $48 (72)		; True if fonts are to be included 
+fileFormat				 ds.l   8		; offset: $49 (73)		; Format to write file 
+						 ORG 106
+sizeof					 EQU *			; size:   $6A (106)
+						ENDR
+
+; typedef struct gxPrintDestinationRec  gxPrintDestinationRec, *gxPrintDestinationPtr, **gxPrintDestinationHdl
+; This structure is the content of each cell in the standard PACK LDEF 
+gxPortListRec 			RECORD	0
+firstMarker				 ds.b   1		; offset: $0 (0)		; Markers to indicate icon or non-icon version 
+secondMarker			 ds.b   1		; offset: $1 (1)		; if these are ≈ and ≈, then the cell is an icon cell. 
+; Otherwise, it is assumed to be a standard text LDEF 
+; cell 
+iconSuiteHandle			 ds.l   1		; offset: $2 (2)		; The icon suite to draw for this cell 
+outputDriverName		 ds.l   1		; offset: $6 (6)		; Handle to the output driver name (for serial) 
+inputDriverName			 ds.l   1		; offset: $A (10)		; Handle to the input driver name (for serial) 
+iconName				 ds.l   64		; offset: $E (14)		; Name to draw under the icon 
+sizeof					 EQU *			; size:   $10E (270)
+						ENDR
+
+; typedef struct gxPortListRec  gxPortListRec, *gxPortListPtr
+; ------------------------------------------------------------------------------
+;
+;						Printing Driver Constants for resources in the desktop printer
+;
+;-------------------------------------------------------------------------------- 
+
+gxDeviceCommunicationsID		EQU		0
+
+; ----------------------------------• 'prod' •---------------------------------- 
+;
+;	  For PostScript devices, the device and version names of the device.
+;	  (0) product name is of type PString
+;	  (1) version is of type PString
+;	  (2) revision is of type PString
+;	  (3) vm available is of type long
+;	  (4) font stream type is of type scalerStreamTypeFlag
+;	  (5) language level is of type long
+;
+gxPostscriptProductInfoType		EQU		'prod'
+gxPostscriptProductNameID		EQU		0
+gxPostscriptVersionID			EQU		1
+gxPostscriptRevisionID			EQU		2
+gxPostscriptVMAvailableID		EQU		3
+gxPostscriptFontStreamTypeID	EQU		4
+gxPostscriptLanguageLevelID		EQU		5
+
+; ------------------------------------------------------------------------------
+;
+;						Printing Driver Constants for status alerts
+;
+;-------------------------------------------------------------------------------- 
+; Structure passed in statusBuffer of StatusRecord for manual feed alert 
+gxManualFeedRecord 		RECORD	0
+canAutoFeed				 ds.b   1		; offset: $0 (0)		; True if driver can switch to auto feed 
+paperTypeName			 ds.l   8		; offset: $1 (1)		; Name of paperType to feed manually 
+						 ORG 34
+sizeof					 EQU *			; size:   $22 (34)
+						ENDR
+
+; typedef struct gxManualFeedRecord  gxManualFeedRecord
+; Structure passed in statusBuffer of StatusRecord for out of paper alert 
+gxOutOfPaperRecord 		RECORD	0
+paperTypeName			 ds.l   8		; offset: $0 (0)		; Name of printing document 
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct gxOutOfPaperRecord  gxOutOfPaperRecord
+; The DITL id for the auto feed button in the manual feed alert 
+
+gxAutoFeedButtonId				EQU		3
+
+; Status resource id for the alerts 
+gxUnivAlertStatusResourceId		EQU		-28508
+
+; Status resource indices for alerts 
+gxUnivManualFeedIndex			EQU		2
+gxUnivFailToPrintIndex			EQU		3
+gxUnivPaperJamIndex				EQU		4
+gxUnivOutOfPaperIndex			EQU		5
+gxUnivNoPaperTrayIndex			EQU		6
+gxUnivPrinterReadyIndex			EQU		7
+gxUnivAlertBeforeIndex			EQU		9
+gxUnivAlertAfterIndex			EQU		10
+
+; Allocation sizes for status buffers needed for automatic alerts 
+gxDefaultStatusBufferSize		EQU		10
+gxManualFeedStatusBufferSize	EQU		34
+gxOutOfPaperStatusBufferSize	EQU		42
+
+; ------------------------------------------------------------------------------
+;
+;								Old Application Support
+;
+;-------------------------------------------------------------------------------- 
+; The format of a 'cust' resource  
+gxCustomizationRec 		RECORD	0
+horizontalResolution	 ds.w   1		; offset: $0 (0)		; Horizontal res (integral part) 
+verticalResolution		 ds.w   1		; offset: $2 (2)		; Vertical res (integral part) 
+upDriverType			 ds.w   1		; offset: $4 (4)		; "upDriver" emulation type 
+patternStretch			 ds     Point	; offset: $6 (6)		; Pattern stretch factor 
+translatorSettings		 ds.w   1		; offset: $A (10)		; Translator settings to use 
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct gxCustomizationRec  gxCustomizationRec, *gxCustomizationPtr, **gxCustomizationHdl
+; The format of a 'resl' resource 
+gxResolutionRec 		RECORD	0
+rangeType				 ds.w   1		; offset: $0 (0)		; Always 1 
+xMinimumResolution		 ds.w   1		; offset: $2 (2)		; Min X resolution available 
+xMaximumResolution		 ds.w   1		; offset: $4 (4)		; Max X resolution available 
+yMinimumResolution		 ds.w   1		; offset: $6 (6)		; Min Y resolution available 
+yMaximumResolution		 ds.w   1		; offset: $8 (8)		; Max Y resolution available 
+resolutionCount			 ds.w   1		; offset: $A (10)		; Number of resolutions 
+resolutions				 ds     Point	; offset: $C (12)		; Array of resolutions 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct gxResolutionRec  gxResolutionRec, *gxResolutionPtr, **gxResolutionHdl
+;
+;
+;		Constants for the "universal" print record.
+;
+;
+; Constant for version number in universal print record 
+
+gxPrintRecordVersion			EQU		8
+
+; Constants for feed field in universal print record 
+gxAutoFeed						EQU		0
+gxManualFeed					EQU		1
+
+; Constants for options field in universal print record 
+gxPreciseBitmap					EQU		$0001				; Tall adjusted (IW), precise bitmap (LW, SC) 
+gxBiggerPages					EQU		$0002				; No gaps (IW), larger print area (LW) 
+gxGraphicSmoothing				EQU		$0004				; Graphic smoothing (LW) 
+gxTextSmoothing					EQU		$0008				; Text smoothing (SC) 
+gxFontSubstitution				EQU		$0010				; Font substitution 
+gxInvertPage					EQU		$0020				; B/W invert image 
+gxFlipPageHoriz					EQU		$0040				; Flip horizontal 
+gxFlipPageVert					EQU		$0080				; Flip vertical 
+gxColorMode						EQU		$0100				; Color printing 
+gxBidirectional					EQU		$0200				; Bidirectional printing 
+gxUserFlag0						EQU		$0400				; User flag 0 
+gxUserFlag1						EQU		$0800				; User flag 1 
+gxUserFlag2						EQU		$1000				; User flag 2 
+gxReservedFlag0					EQU		$2000				; Reserved flag 0 
+gxReservedFlag1					EQU		$4000				; Reserved flag 1 
+gxReservedFlag2					EQU		$8000				; Reserved flag 2 
+
+; Constants for orientation field in universal print record 
+gxPortraitOrientation			EQU		0
+gxLandscapeOrientation			EQU		1
+gxAltPortraitOrientation		EQU		2
+gxAltLandscapeOrientation		EQU		3
+
+; Constants for qualityMode field in universal print record 
+gxBestQuality					EQU		0
+gxFasterQuality					EQU		1
+gxDraftQuality					EQU		2
+
+; Constants for firstTray and remainingTray fields in universal print record 
+gxFirstTray						EQU		0
+gxSecondTray					EQU		1
+gxThirdTray						EQU		2
+
+; Constants for coverPage field in universal print record 
+gxNoCoverPage					EQU		0
+gxFirstPageCover				EQU		1
+gxLastPageCover					EQU		2
+
+; Constants for headMotion field in universal print record 
+gxUnidirectionalMotion			EQU		0
+gxBidirectionalMotion			EQU		1
+
+; Constants for saveFile field in universal print record 
+gxNoFile						EQU		0
+gxPostScriptFile				EQU		1
+
+; The format of the "universal" print record 
+gxUniversalPrintRecord 	RECORD	0
+prVersion				 ds.w   1		; offset: $0 (0)		; Print record version 
+;
+;														prInfo subrecord
+;												
+appDev					 ds.w   1		; offset: $2 (2)		; Device kind, always 0 
+appVRes					 ds.w   1		; offset: $4 (4)		; Application vertical resolution 
+appHRes					 ds.w   1		; offset: $6 (6)		; Application horizontal resolution 
+appPage					 ds     Rect	; offset: $8 (8)		; Page size, in application resolution 
+appPaper				 ds     Rect	; offset: $10 (16)		; Paper rectangle [offset from rPage] 
+;
+;														prStl subrecord
+;												
+devType					 ds.w   1		; offset: $18 (24)		; Device type, always 0xA900 (was wDev) 
+pageV					 ds.w   1		; offset: $1A (26)		; Page height in 120ths of an inch 
+pageH					 ds.w   1		; offset: $1C (28)		; Page width in 120ths of an inch 
+fillByte				 ds.b   1		; offset: $1E (30)		; Page calculation mode 
+feed					 ds.b   1		; offset: $1F (31)		; Feed mode 
+;
+;														prInfoPT subrecord
+;												
+devKind					 ds.w   1		; offset: $20 (32)		; Device kind, always 0 
+devVRes					 ds.w   1		; offset: $22 (34)		; Device vertical resolution 
+devHRes					 ds.w   1		; offset: $24 (36)		; Device horizontal resolution 
+devPage					 ds     Rect	; offset: $26 (38)		; Device page size 
+;
+;														prXInfo subrecord
+;												
+actualCopies			 ds.w   1		; offset: $2E (46)		; Actual number of copies for this job 
+options					 ds.w   1		; offset: $30 (48)		; Options for this device 
+reduction				 ds.w   1		; offset: $32 (50)		; Reduce/enlarge factor 
+orientation				 ds.b   1		; offset: $34 (52)		; Orientation of paper ( 0=portrait, 1=landscape ) 
+;
+;														Clusters and PopUps
+;												
+qualityMode				 ds.b   1		; offset: $35 (53)		; Quality mode 
+coverPage				 ds.b   1		; offset: $36 (54)		; Cover page 
+firstTray				 ds.b   1		; offset: $37 (55)		; First feed tray 
+remainingTray			 ds.b   1		; offset: $38 (56)		; Remaining feed tray 
+headMotion				 ds.b   1		; offset: $39 (57)		; Head motion 
+saveFile				 ds.b   1		; offset: $3A (58)		; Save file 
+userCluster1			 ds.b   1		; offset: $3B (59)		; Three clusters left over 
+userCluster2			 ds.b   1		; offset: $3C (60)
+userCluster3			 ds.b   1		; offset: $3D (61)
+;
+;														prJob subrecord
+;												
+firstPage				 ds.w   1		; offset: $3E (62)		; First page 
+lastPage				 ds.w   1		; offset: $40 (64)		; Last page 
+copies					 ds.w   1		; offset: $42 (66)		; Number of copies, always 1 
+reserved1				 ds.b   1		; offset: $44 (68)		; Always true, unused 
+reserved2				 ds.b   1		; offset: $45 (69)		; Always true, unused 
+pIdleProc				 ds.l   1		; offset: $46 (70)		; Idle proc 
+pFileName				 ds.l   1		; offset: $4A (74)		; Spool file name pointer 
+fileVol					 ds.w   1		; offset: $4E (78)		; Spool file vRefNum 
+fileVers				 ds.b   1		; offset: $50 (80)		; File version, must be 0 
+reserved3				 ds.b   1		; offset: $51 (81)		; Always 0 
+printX					 ds.w   19		; offset: $52 (82)		; Internal use 
+sizeof					 EQU *			; size:   $78 (120)
+						ENDR
+
+; typedef struct gxUniversalPrintRecord  gxUniversalPrintRecord, *gxUniversalPrintRecordPtr, **gxUniversalPrintRecordHdl
+; ------------------------------------------------------------------------------
+;
+;							Compatibility Printing Messages
+;
+;-------------------------------------------------------------------------------- 
+;
+; OSErr Forward_GXPrOpenDoc(THPrint hPrint, TPPrPort *pPort)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrOpenDoc
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrOpenDoc
+	ENDIF
+
+;
+; OSErr Forward_GXPrCloseDoc(TPPrPort pPort)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrCloseDoc
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrCloseDoc
+	ENDIF
+
+;
+; OSErr Forward_GXPrOpenPage(TPPrPort pPort, TPRect pRect, Point resolution)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrOpenPage
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrOpenPage
+	ENDIF
+
+;
+; OSErr Forward_GXPrClosePage(TPPrPort pPort)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrClosePage
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrClosePage
+	ENDIF
+
+;
+; OSErr Forward_GXPrintDefault(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrintDefault
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrintDefault
+	ENDIF
+
+;
+; OSErr Forward_GXPrStlDialog(THPrint hPrint, Boolean *confirmed)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrStlDialog
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrStlDialog
+	ENDIF
+
+;
+; OSErr Forward_GXPrJobDialog(THPrint hPrint, Boolean *confirmed)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrJobDialog
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrJobDialog
+	ENDIF
+
+;
+; OSErr Forward_GXPrStlInit(THPrint hPrint, TPPrDlgRef *pDlg)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrStlInit
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrStlInit
+	ENDIF
+
+;
+; OSErr Forward_GXPrJobInit(THPrint hPrint, TPPrDlgRef *pDlg)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrJobInit
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrJobInit
+	ENDIF
+
+;
+; OSErr Forward_GXPrDlgMain(THPrint hPrint, PDlgInitUPP initProc, Boolean *confirmed)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrDlgMain
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrDlgMain
+	ENDIF
+
+;
+; OSErr Forward_GXPrValidate(THPrint hPrint, Boolean *changedPrintRecord)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrValidate
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrValidate
+	ENDIF
+
+;
+; OSErr Forward_GXPrJobMerge(THPrint srcPrint, THPrint destPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrJobMerge
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrJobMerge
+	ENDIF
+
+;
+; OSErr Forward_GXPrGeneral(Ptr dataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrGeneral
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrGeneral
+	ENDIF
+
+;
+; OSErr Forward_GXConvertPrintRecordTo(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXConvertPrintRecordTo
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXConvertPrintRecordTo
+	ENDIF
+
+;
+; OSErr Forward_GXConvertPrintRecordFrom(THPrint hPrint)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXConvertPrintRecordFrom
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXConvertPrintRecordFrom
+	ENDIF
+
+;
+; OSErr Forward_GXPrintRecordToJob(THPrint hPrint, gxJob aJob)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPrintRecordToJob
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPrintRecordToJob
+	ENDIF
+
+; ------------------------------------------------------------------------------
+;
+;						Raster Driver Contants and Types
+;
+;-------------------------------------------------------------------------------- 
+; typedef long 				gxRasterPlaneOptions
+; Input structure for setting up the offscreen 
+gxPlaneSetupRec 		RECORD	0
+planeOptions			 ds.l   1		; offset: $0 (0)		; Options for the offscreen package 
+planeHalftone			 ds     gxHalftone ; offset: $4 (4)		; OPTIONAL: halftone structure for this plane 
+planeSpace				 ds.l   1		; offset: $38 (56)		; OPTIONAL: noSpace will get the graphics default 
+planeSet				 ds.l   1		; offset: $3C (60)		; OPTIONAL: NIL gets the default 
+planeProfile			 ds.l   1		; offset: $40 (64)		; OPTIONAL: NIL gets no matching 
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct gxPlaneSetupRec  gxPlaneSetupRec
+; Constants for planeOptions field in gxPlaneSetupRec 
+
+gxDefaultOffscreen				EQU		$00000000			; Default value - bits are allocated for the client, halftoning takes place 
+gxDontSetHalftone				EQU		$00000001			; Don't call SetViewPortHalftone 
+gxDotTypeIsDitherLevel			EQU		$00000002			; Call SetViewPortDither using the dotType as the level 
+
+gxOffscreenSetupRec 	RECORD	0
+width					 ds.w   1		; offset: $0 (0)		; Width in pixels 
+minHeight				 ds.w   1		; offset: $2 (2)		; Minimum height in pixels - actual height returned here 
+maxHeight				 ds.w   1		; offset: $4 (4)		; Maximum height in pixels 
+ramPercentage			 ds.l   1		; offset: $6 (6)		; Maximum percentage of RAM to take 
+ramSlop					 ds.l   1		; offset: $A (10)		; Amount of RAM to be sure to leave 
+depth					 ds.w   1		; offset: $E (14)		; Depths in bits of each plane 
+vpMapping				 ds     gxMapping ; offset: $10 (16)	; Mapping to assign to offscreen viewPorts 
+vdMapping				 ds     gxMapping ; offset: $34 (52)	; Mapping to assign to offscreen viewDevices 
+planes					 ds.w   1		; offset: $58 (88)		; Number of planes to allocate of depth bits each (can be more than 4) 
+planeSetup				 ds.b   4 * gxPlaneSetupRec.sizeof ; offset: $5A (90) ; Parameters for each plane, 4 is provided because it is most handy for writers of devices 
+sizeof					 EQU *			; size:   $16A (362)
+						ENDR
+
+; typedef struct gxOffscreenSetupRec  gxOffscreenSetupRec
+; The format of one plane in the offscreen planar area 
+gxOffscreenPlaneRec 	RECORD	0
+theViewPort				 ds.l   1		; offset: $0 (0)		; viewPort for the offscreen 
+theDevice				 ds.l   1		; offset: $4 (4)		; viewDevice for the offscreen 
+theViewGroup			 ds.l   1		; offset: $8 (8)		; The viewGroup that they share 
+theBitmap				 ds.l   1		; offset: $C (12)		; The offscreen bitmap shape 
+theBits					 ds     gxBitmap ; offset: $10 (16)		; The bits of the offscreen 
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct gxOffscreenPlaneRec  gxOffscreenPlaneRec
+; The format of an entire offscreen area 
+gxOffscreenRec 			RECORD	0
+numberOfPlanes			 ds.w   1		; offset: $0 (0)		; Number of planes we have 
+offscreenStorage		 ds.l   1		; offset: $2 (2)		; Handle containing the bitmaps image data 
+thePlanes				 ds     gxOffscreenPlaneRec ; offset: $6 (6) ; Planes to draw in 
+sizeof					 EQU *			; size:   $36 (54)
+						ENDR
+
+; typedef struct gxOffscreenRec  gxOffscreenRec, *gxOffscreenPtr, **gxOffscreenHdl
+; typedef long 				gxRasterRenderOptions
+; Structure that mirrors 'rdip' resource. 
+gxRasterPrefsRec 		RECORD	0
+renderOptions			 ds.l   1		; offset: $0 (0)		; Options for the raster imaging system 
+hImageRes				 ds.l   1		; offset: $4 (4)		; Horizontal resolution to image at 
+vImageRes				 ds.l   1		; offset: $8 (8)		; Vertical resolution to image at 
+minBandSize				 ds.w   1		; offset: $C (12)		; Minimum band size to use (in pixels) 
+maxBandSize				 ds.w   1		; offset: $E (14)		; Maximum band size to use (in pixels), 0 == entire page 
+ramPercentage			 ds.l   1		; offset: $10 (16)		; Maximum percentage of RAM to take 
+ramSlop					 ds.l   1		; offset: $14 (20)		; Amount of RAM to be sure to leave 
+depth					 ds.w   1		; offset: $18 (24)		; Depth in pixels (PER PLANE!) 
+numPlanes				 ds.w   1		; offset: $1A (26)		; Number of planes to render 
+planeSetup				 ds     gxPlaneSetupRec ; offset: $1C (28) ; One for each plane 
+sizeof					 EQU *			; size:   $60 (96)
+						ENDR
+
+; Constants for renderOptions field in gxRasterPrefsRec. 
+
+gxDefaultRaster					EQU		$00000000			; Default raster options 
+gxDontResolveTransferModes		EQU		$00000001			; 0=Resolve, 1=Don't Resolve 
+gxRenderInReverse				EQU		$00000002			; Traverse image in reverse order 
+gxOnePlaneAtATime				EQU		$00000004			; Render each plane separately 
+gxSendAllBands					EQU		$00000008			; Send even empty bands 
+
+; typedef struct gxRasterPrefsRec  gxRasterPrefsRec, *gxRasterPrefsPtr, **gxRasterPrefsHdl
+; typedef long 				gxRasterPackageOptions
+; Structure that mirrors 'rpck' resource. 
+gxRasterPackageRec 		RECORD	0
+bufferSize				 ds.l   1		; offset: $0 (0)		; Buffer size for packaging (>= maximum head pass size) 
+colorPasses				 ds.w   1		; offset: $4 (4)		; 1 (b/w) or 4 (CMYK) is typical 
+headHeight				 ds.w   1		; offset: $6 (6)		; Printhead height in pixels 
+numberPasses			 ds.w   1		; offset: $8 (8)		; Number of head passes it takes to == iHeadHeight 
+passOffset				 ds.w   1		; offset: $A (10)		; Offset between passes, in pixels 
+packageOptions			 ds.l   1		; offset: $C (12)		; Packaging options 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct gxRasterPackageRec  gxRasterPackageRec, *gxRasterPackagePtr, **gxRasterPackageHdl
+; Constants for packageOptions field in gxRasterPackageRec. 
+
+gxSendAllColors					EQU		$00000001			; Send even clean bands through 
+gxInterlaceColor				EQU		$00000002			; Ribbon contamination is a concern 
+gxOverlayColor					EQU		$00000004			; Color printer without a ribbon problem 
+gxUseColor						EQU		(gxInterlaceColor | gxOverlayColor) ; This is a color printer 
+
+; Structure for RasterPackageBitmap message 
+gxRasterPackageBitmapRec RECORD	0
+bitmapToPackage			 ds.l   1		; offset: $0 (0)		; Bitmap containing the data to package 
+startRaster				 ds.w   1		; offset: $4 (4)		; Raster to begin the packaging from 
+colorBand				 ds.w   1		; offset: $6 (6)		; For which color pass this is a packaging request 
+isBandDirty				 ds.b   1		; offset: $8 (8)		; Whether there are any dirty bits in this band 
+padByte					 ds.b   1		; offset: $9 (9)
+dirtyRect				 ds     Rect	; offset: $A (10)		; Which bits are dirty 
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct gxRasterPackageBitmapRec  gxRasterPackageBitmapRec
+; Structure of number record in gxRasterPackageControlsRec 
+gxStandardNumberRec 	RECORD	0
+numberType				 ds.w   1		; offset: $0 (0)		; Type of numberic output desired 
+minWidth				 ds.w   1		; offset: $2 (2)		; Minimum output width of the number 
+padChar					 ds.b   1		; offset: $4 (4)		; Pad character for numbers shorter than the minWidth 
+padChar2				 ds.b   1		; offset: $5 (5)
+startString				 ds.l   8		; offset: $6 (6)		; Prefix string 
+endString				 ds.l   8		; offset: $26 (38)		; Postfix string 
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct gxStandardNumberRec  gxStandardNumberRec, *gxStandardNumberPtr
+; Structure that mirrors 'ropt' resource 
+gxRasterPackageControlsRec RECORD	0
+startPageStringID		 ds.w   1		; offset: $0 (0)		; 'wstr' to send to the device at start of page 
+formFeedStringID		 ds.w   1		; offset: $2 (2)		; 'wstr' to send to the device to cause a form feed 
+forwardMax				 ds.w   1		; offset: $4 (4)		; Line feed strings 
+forwardLineFeed			 ds     gxStandardNumberRec ; offset: $6 (6) ; Number record for forward line feed 
+reverseMax				 ds.w   1		; offset: $4C (76)		; Max number of reverse line feeds device can do 
+reverseLineFeed			 ds     gxStandardNumberRec ; offset: $4E (78) ; Number record for forward line feed 
+sizeof					 EQU *			; size:   $94 (148)
+						ENDR
+
+; typedef struct gxRasterPackageControlsRec  gxRasterPackageControlsRec, *gxRasterPackageControlsPtr, **gxRasterPackageControlsHdl
+; Raster imaging system imageData structure 
+gxRasterImageDataRec 	RECORD	0
+renderOptions			 ds.l   1		; offset: $0 (0)		; Options for the raster imaging system 
+hImageRes				 ds.l   1		; offset: $4 (4)		; horizontal resolution to image at 
+vImageRes				 ds.l   1		; offset: $8 (8)		; vertical resolution to image at 
+minBandSize				 ds.w   1		; offset: $C (12)		; smallest band that makes sense for this device 
+maxBandSize				 ds.w   1		; offset: $E (14)		; biggest band that makes sense, or 0 for "full page" 
+pageSize				 ds     gxRectangle ; offset: $10 (16)	; size of page for device 
+;
+;			Values used within the RasterDataIn message
+;	
+currentYPos				 ds.w   1		; offset: $20 (32)		; Current position moving down the page 
+packagingInfo			 ds     gxRasterPackageRec ; offset: $22 (34) ; Raster packaging record 
+;
+;			Values used within the remaining messages
+;	
+optionsValid			 ds.b   1		; offset: $32 (50)		; Were options specified by the driver? 
+padByte					 ds.b   1		; offset: $33 (51)
+packageControls			 ds     gxRasterPackageControlsRec ; offset: $34 (52) ; Options for the packaging messages 
+theSetup				 ds     gxOffscreenSetupRec ; offset: $C8 (200) ; setup for the offscreen code, variable length componant 
+sizeof					 EQU *			; size:   $232 (562)
+						ENDR
+
+; typedef struct gxRasterImageDataRec  gxRasterImageDataRec, *gxRasterImageDataPtr, **gxRasterImageDataHdl
+; ------------------------------------------------------------------------------
+;
+;								Raster Driver Imaging Messages
+;
+;-------------------------------------------------------------------------------- 
+;
+; OSErr Send_GXRasterDataIn(gxOffscreenHdl offScreen, gxRectangle *bandRectangle, gxRectangle *dirtyRectangle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXRasterDataIn
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0000
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXRasterDataIn
+	ENDIF
+
+;
+; OSErr Forward_GXRasterDataIn(gxOffscreenHdl offScreen, gxRectangle *bandRectangle, gxRectangle *dirtyRectangle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXRasterDataIn
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXRasterDataIn
+	ENDIF
+
+;
+; OSErr Send_GXRasterLineFeed(long *lineFeedSize, Ptr buffer, unsigned long *bufferPos, gxRasterImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXRasterLineFeed
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0001
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXRasterLineFeed
+	ENDIF
+
+;
+; OSErr Forward_GXRasterLineFeed(long *lineFeedSize, Ptr buffer, unsigned long *bufferPos, gxRasterImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXRasterLineFeed
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXRasterLineFeed
+	ENDIF
+
+;
+; OSErr Send_GXRasterPackageBitmap(gxRasterPackageBitmapRec *whatToPackage, Ptr buffer, unsigned long *bufferPos, gxRasterImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXRasterPackageBitmap
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0002
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXRasterPackageBitmap
+	ENDIF
+
+;
+; OSErr Forward_GXRasterPackageBitmap(gxRasterPackageBitmapRec *whatToPackage, Ptr buffer, unsigned long *bufferPos, gxRasterImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXRasterPackageBitmap
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXRasterPackageBitmap
+	ENDIF
+
+; ------------------------------------------------------------------------------
+;
+;						Vector Driver Contants and Types
+;
+;-------------------------------------------------------------------------------- 
+; Vector device halftone component record 
+gxVHalftoneCompRec 		RECORD	0
+angle					 ds.l   1		; offset: $0 (0)		; Angle to halftone at. Must be 0, 90, 45 or 135 
+penIndex				 ds.l   1		; offset: $4 (4)		; index of the pen to draw this component with 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct gxVHalftoneCompRec  gxVHalftoneCompRec
+; Vector device halftone record 
+gxVHalftoneRec 			RECORD	0
+halftoneSpace			 ds.l   1		; offset: $0 (0)
+halftoneComps			 ds.b   4 * gxVHalftoneCompRec.sizeof ; offset: $4 (4) ; Info for each color component 
+penIndexForBW			 ds.l   1		; offset: $24 (36)		; Pen index to draw one bit deep or black and white bitmap with 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct gxVHalftoneRec  gxVHalftoneRec
+; Vector shape rendering information 
+; typedef long 				gxVectorShapeOptions
+gxVectorShapeDataRec 	RECORD	0
+shapeOptions			 ds.l   1		; offset: $0 (0)		; Options to control shape handling 
+maxPolyPoints			 ds.l   1		; offset: $4 (4)		; Maximum number of polygon points that device can support 
+shapeError				 ds.l   1		; offset: $8 (8)		; Defines allowed deviation from the original shape 
+textSize				 ds.l   1		; offset: $C (12)		; Text above this size is filled; text below this size is outlined 
+frameSize				 ds.l   1		; offset: $10 (16)		; Frame's smaller than this -> shape stroked; frame's larger -> shape is filled 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct gxVectorShapeDataRec  gxVectorShapeDataRec
+; Constants for shapeOptions field in gxVectorShapeDataRec. 
+
+gxUnidirectionalFill			EQU		$00000001			; Generate scanlines in one direction only.  Useful for transparencies 
+gxAlsoOutlineFilledShape		EQU		$00000002			; Turn on this bit to also outline solid filled shapes 
+
+; Vector device rendering information 
+; typedef long 				gxVectorRenderOptions
+; Vector imaging system imageData structure 
+gxVectorImageDataRec 	RECORD	0
+renderOptions			 ds.l   1		; offset: $0 (0)		; Options to control rendering: color sort, clipping, etc. 
+devRes					 ds.l   1		; offset: $4 (4)		; Device resolution 
+devTransform			 ds.l   1		; offset: $8 (8)		; Mapping, clip and halftoning information for colored bitmaps 
+clrSet					 ds.l   1		; offset: $C (12)		; Entire set of colors; usually indexed color space for pen plotters 
+bgColor					 ds     gxColor	; offset: $10 (16)		; The background color in the color space specified by the clrSpace field 
+halftoneInfo			 ds     gxVHalftoneRec ; offset: $20 (32) ; Defines halftone information for color bitmaps 
+hPenTable				 ds.l   1		; offset: $48 (72)		; Complete list of pens along with their pen positions and thickness 
+pageRect				 ds     gxRectangle ; offset: $4C (76)	; Page dimensions 
+shapeData				 ds     gxVectorShapeDataRec ; offset: $5C (92) ; Information on how to render a shape 
+sizeof					 EQU *			; size:   $70 (112)
+						ENDR
+
+; typedef struct gxVectorImageDataRec  gxVectorImageDataRec, *gxVectorImageDataPtr, **gxVectorImageDataHdl
+; Constants for renderOptions field in gxVectorImageDataRec. 
+
+gxColorSort						EQU		$00000001			; Set for pen plotters 
+gxATransferMode					EQU		$00000002			; Set if transfer modes need to be resolved 
+gxNoOverlap						EQU		$00000004			; Set if non-overlapping output is desired
+gxAColorBitmap					EQU		$00000008			; Set if color bitmap output is desired 
+gxSortbyPenPos					EQU		$00000010			; Set if shapes are to be drawn in the order of the pen index 
+; in the pen table. NOTE: this is not the pen position in the carousel 
+gxPenLessPlotter				EQU		$00000020			; Indicates raster printer/plotter 
+gxCutterPlotter					EQU		$00000040			; Indicates cutter 
+gxNoBackGround					EQU		$00000080			; Set if shapes that map to the background color should not be sent to driver 
+
+; ------------------------------------------------------------------------------
+;
+;								Vector Driver Imaging Messages
+;
+;-------------------------------------------------------------------------------- 
+;
+; OSErr Send_GXVectorPackageShape(gxShape theShape, long penIndex)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXVectorPackageShape
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0000
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXVectorPackageShape
+	ENDIF
+
+;
+; OSErr Forward_GXVectorPackageShape(gxShape theShape, long penIndex)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXVectorPackageShape
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXVectorPackageShape
+	ENDIF
+
+;
+; OSErr Send_GXVectorLoadPens(gxPenTableHdl penTable, long *shapeCounts, Boolean *penTableChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXVectorLoadPens
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0001
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXVectorLoadPens
+	ENDIF
+
+;
+; OSErr Forward_GXVectorLoadPens(gxPenTableHdl penTable, long *shapeCounts, Boolean *penTableChanged)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXVectorLoadPens
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXVectorLoadPens
+	ENDIF
+
+;
+; OSErr Send_GXVectorVectorizeShape(gxShape theShape, long penIndex, gxVectorShapeDataRec *vectorData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXVectorVectorizeShape
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0002
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXVectorVectorizeShape
+	ENDIF
+
+;
+; OSErr Forward_GXVectorVectorizeShape(gxShape theShape, long penIndex, gxVectorShapeDataRec *vectorData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXVectorVectorizeShape
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXVectorVectorizeShape
+	ENDIF
+
+; ------------------------------------------------------------------------------
+;
+;							PostScript Driver Contants and Types
+;
+;-------------------------------------------------------------------------------- 
+gxPostSynonym					EQU		'post'
+
+; PostScript glyphs record 
+gxPrinterGlyphsRec 		RECORD	0
+theFont					 ds.l   1		; offset: $0 (0)		;  ---> Font reference 
+nGlyphs					 ds.l   1		; offset: $4 (4)		;  ---> Number of glyphs in the font 
+platform				 ds.l   1		; offset: $8 (8)		; <---  How printer font is encoded 
+script					 ds.l   1		; offset: $C (12)		; <---  Script if platform != glyphPlatform 
+language				 ds.l   1		; offset: $10 (16)		; <---  Language if platform != glyphPlatform 
+vmUsage					 ds.l   1		; offset: $14 (20)		; <---  How much PostScript VM font uses 
+; Size of this array is long-alligned(nGlyphs) 
+glyphBits				 ds.l   1		; offset: $18 (24)		; <---  Bit array of which system glyphs are in printer 
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct gxPrinterGlyphsRec  gxPrinterGlyphsRec
+; PostScript device rendering information 
+; typedef long 				gxPostScriptRenderOptions
+gxPostScriptImageDataRec RECORD	0
+languageLevel			 ds.w   1		; offset: $0 (0)		; PostScript language level 
+devCSpace				 ds.l   1		; offset: $2 (2)		; The printer's color space 
+devCProfile				 ds.l   1		; offset: $6 (6)		; The printer's color profile for matching 
+renderOptions			 ds.l   1		; offset: $A (10)		; Options for the imaging system 
+pathLimit				 ds.l   1		; offset: $E (14)		; Maximum path size 
+gsaveLimit				 ds.w   1		; offset: $12 (18)		; Maximum number of gsaves allowed 
+opStackLimit			 ds.w   1		; offset: $14 (20)		; Operand stack limit 
+fontType				 ds.l   1		; offset: $16 (22)		; These are the font types that the printer supports  
+printerVM				 ds.l   1		; offset: $1A (26)		; How much memory is in the printer 
+reserved0				 ds.l   1		; offset: $1E (30)
+sizeof					 EQU *			; size:   $22 (34)
+						ENDR
+
+; typedef struct gxPostScriptImageDataRec  gxPostScriptImageDataRec, *gxPostScriptImageDataPtr, **gxPostScriptImageDataHdl
+; Constants for renderOptions field in gxPostScriptImageDataRec. 
+
+gxNeedsHexOption				EQU		$00000001			; Convert all binary data to hex 
+gxNeedsCommentsOption			EQU		$00000002			; Issue PostScript comments 
+gxBoundingBoxesOption			EQU		$00000004			; Calculate the values for %%BoundingBox: and %%PageBoundingBox: -- requires needsCommentsOption 
+gxPortablePostScriptOption		EQU		$00000008			; Generate portable PostScript 
+gxTextClipsToPathOption			EQU		$00000010			; Convert all clips that are composed of text to path shapes 
+gxFlattenClipPathOption			EQU		$00000020			; Convert all clips that are path shapes to polygons (helps better control point limit) 
+gxUseCharpath1Option			EQU		$00000040			; (ignored if text clips are converted to paths)  When the clip is text,  
+; Do it one glyph at a time, redrawing the main shape each time 
+gxUseLevel2ColorOption			EQU		$00000080			; When printing to level-2 use level-2 device independent color 
+gxNoEPSIllegalOperators			EQU		$00000100			; Don't use any operators prohibited by the Encapsulated PostScript File Format V3.0 
+gxEPSTargetOption				EQU		gxNoEPSIllegalOperators + gxNeedsCommentsOption + gxBoundingBoxesOption ; PostScript intended for EPS Use. 
+
+; Structure for gxPostScriptGetProcSetList / gxPostScriptDownLoadProcSetList 
+gxProcSetListRec 		RECORD	0
+clientid				 ds.l   1		; offset: $0 (0)
+controlType				 ds.l   1		; offset: $4 (4)		; The driver will call FetchTaggedData on each of these resources 
+controlid				 ds.w   1		; offset: $8 (8)
+dataType				 ds.l   1		; offset: $A (10)
+reserved0				 ds.l   1		; offset: $E (14)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct gxProcSetListRec  gxProcSetListRec, *gxProcSetListPtr, **gxProcSetListHdl
+; Possible results of querying printer (returned by gxPostScriptQueryPrinter message) 
+
+gxPrinterOK						EQU		0
+gxIntializePrinter				EQU		1
+gxFilePrinting					EQU		2
+gxResetPrinter					EQU		128
+
+; ------------------------------------------------------------------------------
+;
+;								PostScript Driver Imaging Messages
+;
+;-------------------------------------------------------------------------------- 
+;
+; OSErr Send_GXPostScriptQueryPrinter(long *queryData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptQueryPrinter
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0000
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptQueryPrinter
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptQueryPrinter(long *queryData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptQueryPrinter
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptQueryPrinter
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptInitializePrinter(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptInitializePrinter
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0001
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptInitializePrinter
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptInitializePrinter(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptInitializePrinter
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptInitializePrinter
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptResetPrinter(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptResetPrinter
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0002
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptResetPrinter
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptResetPrinter(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptResetPrinter
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptResetPrinter
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptExitServer(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptExitServer
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0003
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptExitServer
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptExitServer(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptExitServer
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptExitServer
+	ENDIF
+
+;
+;
+;		Device communication messages
+;
+;
+;
+; OSErr Send_GXPostScriptGetStatusText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptGetStatusText
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0004
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptGetStatusText
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptGetStatusText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptGetStatusText
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptGetStatusText
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptGetPrinterText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptGetPrinterText
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0005
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptGetPrinterText
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptGetPrinterText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptGetPrinterText
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptGetPrinterText
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptScanStatusText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptScanStatusText
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0006
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptScanStatusText
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptScanStatusText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptScanStatusText
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptScanStatusText
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptScanPrinterText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptScanPrinterText
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0007
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptScanPrinterText
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptScanPrinterText(Handle textHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptScanPrinterText
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptScanPrinterText
+	ENDIF
+
+;
+;
+;		Proc set management messages
+;
+;
+;
+; OSErr Send_GXPostScriptGetDocumentProcSetList(gxProcSetListHdl procSet, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptGetDocumentProcSetList
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0008
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptGetDocumentProcSetList
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptGetDocumentProcSetList(gxProcSetListHdl procSet, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptGetDocumentProcSetList
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptGetDocumentProcSetList
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptDownloadProcSetList(gxProcSetListHdl procSet, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDownloadProcSetList
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0009
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDownloadProcSetList
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDownloadProcSetList(gxProcSetListHdl procSet, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDownloadProcSetList
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDownloadProcSetList
+	ENDIF
+
+;
+;
+;		Font management messages
+;
+;
+;
+; OSErr Send_GXPostScriptGetPrinterGlyphsInformation(gxPrinterGlyphsRec *glyphsInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptGetPrinterGlyphsInformation
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000A
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptGetPrinterGlyphsInformation
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptGetPrinterGlyphsInformation(gxPrinterGlyphsRec *glyphsInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptGetPrinterGlyphsInformation
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptGetPrinterGlyphsInformation
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptStreamFont(gxFont fontref, scalerStream *streamPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptStreamFont
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000B
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptStreamFont
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptStreamFont(gxFont fontref, scalerStream *streamPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptStreamFont
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptStreamFont
+	ENDIF
+
+;
+;
+;		Document structuring and formatting messages
+;
+;
+;
+; OSErr Send_GXPostScriptDoDocumentHeader(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDoDocumentHeader
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000C
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDoDocumentHeader
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDoDocumentHeader(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDoDocumentHeader
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDoDocumentHeader
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptDoDocumentSetup(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDoDocumentSetup
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000D
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDoDocumentSetup
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDoDocumentSetup(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDoDocumentSetup
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDoDocumentSetup
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptDoDocumentTrailer(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDoDocumentTrailer
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000E
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDoDocumentTrailer
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDoDocumentTrailer(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDoDocumentTrailer
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDoDocumentTrailer
+	ENDIF
+
+;
+;
+;		Page structuring and formatting messages
+;
+;
+;
+; OSErr Send_GXPostScriptDoPageSetup(gxFormat pageFormat, long thePage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDoPageSetup
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$000F
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDoPageSetup
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDoPageSetup(gxFormat pageFormat, long thePage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDoPageSetup
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDoPageSetup
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptSelectPaperType(gxPaperType thePapertype, long thePage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptSelectPaperType
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0010
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptSelectPaperType
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptSelectPaperType(gxPaperType thePapertype, long thePage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptSelectPaperType
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptSelectPaperType
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptDoPageTrailer(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptDoPageTrailer
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0011
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptDoPageTrailer
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptDoPageTrailer(gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptDoPageTrailer
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptDoPageTrailer
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptEjectPage(gxPaperType thePapertype, long pagenumber, long copiescount, long erasepage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptEjectPage
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0012
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptEjectPage
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptEjectPage(gxPaperType thePapertype, long pagenumber, long copiescount, long erasepage, gxPostScriptImageDataHdl imageDataHdl)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptEjectPage
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptEjectPage
+	ENDIF
+
+;
+; OSErr Send_GXPostScriptEjectPendingPage(Boolean *pageWasEjected)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptEjectPendingPage
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0014
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptEjectPendingPage
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptEjectPendingPage(Boolean *pageWasEjected)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptEjectPendingPage
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptEjectPendingPage
+	ENDIF
+
+;
+;
+;		Shape imaging messages
+;
+;
+;
+; OSErr Send_GXPostScriptProcessShape(gxShape page, long trcount, gxTransform trlist[])
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Send_GXPostScriptProcessShape
+			moveq	#50,d0
+			dc.w 	$223C
+			dc.w 	$0001
+			dc.w 	$0013
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Send_GXPostScriptProcessShape
+	ENDIF
+
+;
+; OSErr Forward_GXPostScriptProcessShape(gxShape page, long trcount, gxTransform trlist[])
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Forward_GXPostScriptProcessShape
+			moveq	#54,d0
+			dc.w 	$ABFB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Forward_GXPostScriptProcessShape
+	ENDIF
+
+; ------------------------------------------------------------------------------
+;
+;											Driver API Functions
+;
+;-------------------------------------------------------------------------------- 
+gxMissingImagePointer			EQU		-4
+
+;
+; OSErr GXAddPrinterViewDevice(gxPrinter thePrinter, gxViewDevice theViewDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXAddPrinterViewDevice
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0000
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXAddPrinterViewDevice
+	ENDIF
+
+;
+; OSErr GXGetAvailableJobFormatModes(gxJobFormatModeTableHdl *theFormatModes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetAvailableJobFormatModes
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0001
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetAvailableJobFormatModes
+	ENDIF
+
+;
+; OSErr GXSetPreferredJobFormatMode(gxJobFormatMode theFormatMode, Boolean directOnly)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXSetPreferredJobFormatMode
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0002
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXSetPreferredJobFormatMode
+	ENDIF
+
+;
+; OSErr GXPrintingAlert(long iconId, long txtSize, long defaultTitleNum, long cancelTitleNum, long textLength, Ptr pAlertMsg, StringPtr actionTitle, StringPtr title2, StringPtr title3, StringPtr msgFont, ModalFilterUPP filterProc, short *itemHit, StringPtr alertTitle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXPrintingAlert
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0003
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXPrintingAlert
+	ENDIF
+
+;
+; OSErr GXGetPrintingAlert(long alertResId, ModalFilterUPP filterProc, short *itemHit)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetPrintingAlert
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0004
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetPrintingAlert
+	ENDIF
+
+;
+; OSErr GXFetchDTPData(Str31 dtpName, OSType theType, long theID, Handle *theData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXFetchDTPData
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0005
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXFetchDTPData
+	ENDIF
+
+;
+; OSErr GXWriteDTPData(Str31 dtpName, OSType theType, long theID, Handle theData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXWriteDTPData
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0006
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXWriteDTPData
+	ENDIF
+
+;
+; OSErr GXHandleChooserMessage(gxJob *aJob, Str31 driverName, long message, long caller, StringPtr objName, StringPtr zoneName, ListHandle theList, long p2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXHandleChooserMessage
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0007
+			dc.w 	$ABFE
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXHandleChooserMessage
+	ENDIF
+
+	ENDIF ; __GXPRINTERDRIVERS__

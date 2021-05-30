@@ -1,0 +1,1163 @@
+;
+;    File:       Terminals.a
+;
+;    Contains:   Communications Toolbox Terminal tool Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1988-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TERMINALS__') = 'UNDEFINED' THEN
+__TERMINALS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+	IF &TYPE('__CTBUTILITIES__') = 'UNDEFINED' THEN
+	include 'CTBUtilities.a'
+	ENDIF
+	IF &TYPE('__CONNECTIONS__') = 'UNDEFINED' THEN
+	include 'Connections.a'
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+curTMVersion					EQU		2					; current Terminal Manager version 
+
+curTermEnvRecVers				EQU		0					; current Terminal Manager Environment Record version 
+
+															; error codes    
+tmGenericError					EQU		-1
+tmNoErr							EQU		0
+tmNotSent						EQU		1
+tmEnvironsChanged				EQU		2
+tmNotSupported					EQU		7
+tmNoTools						EQU		8
+; typedef OSErr 						TMErr
+
+
+; typedef UInt32						TMFlags
+tmInvisible						EQU		$01
+tmSaveBeforeClear				EQU		$02
+tmNoMenus						EQU		$04
+tmAutoScroll					EQU		$08
+tmConfigChanged					EQU		$10
+
+; typedef SInt16						TMSelTypes
+selTextNormal					EQU		$01
+selTextBoxed					EQU		$02
+selGraphicsMarquee				EQU		$04
+selGraphicsLasso				EQU		$08
+
+; typedef UInt16						TMSearchTypes
+tmSearchNoDiacrit				EQU		$0100
+tmSearchNoCase					EQU		$0200
+
+; typedef UInt16						TMCursorTypes
+cursorText						EQU		1
+cursorGraphics					EQU		2
+
+; typedef UInt16						TMTermTypes
+tmTextTerminal					EQU		$01
+tmGraphicsTerminal				EQU		$02
+TermDataBlock			RECORD 0
+flags					 ds.w	1				; offset: $0 (0)
+theData					 ds.l	1				; offset: $2 (2)
+auxData					 ds.l	1				; offset: $6 (6)
+reserved				 ds.l	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; typedef struct TermDataBlock *		TermDataBlockPtr
+
+; typedef TermDataBlockPtr *			TermDataBlockH
+
+; typedef TermDataBlockPtr *			TermDataBlockHandle
+
+TermEnvironRec			RECORD 0
+version					 ds.w	1				; offset: $0 (0)
+termType				 ds.w	1				; offset: $2 (2)
+textRows				 ds.w	1				; offset: $4 (4)
+textCols				 ds.w	1				; offset: $6 (6)
+cellSize				 ds		Point			; offset: $8 (8)
+graphicSize				 ds		Rect			; offset: $C (12)
+slop					 ds		Point			; offset: $14 (20)
+auxSpace				 ds		Rect			; offset: $18 (24)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct TermEnvironRec *		TermEnvironPtr
+
+TMSelection				RECORD 0
+selRect					 ds		Rect			; offset: $0 (0)
+						 ORG 0
+selRgnHandle			 ds.l	1				; offset: $0 (0)
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+; typedef TermRecord *					TermPtr
+
+; typedef TermPtr *						TermHandle
+
+;     TMTermTypes     
+TermRecord				RECORD 0
+procID					 ds.w	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $2 (2)
+errCode					 ds.w	1				; offset: $6 (6)
+refCon					 ds.l	1				; offset: $8 (8)
+userData				 ds.l	1				; offset: $C (12)
+defProc					 ds.l	1				; offset: $10 (16)
+config					 ds.l	1				; offset: $14 (20)
+oldConfig				 ds.l	1				; offset: $18 (24)
+environsProc			 ds.l	1				; offset: $1C (28)
+reserved1				 ds.l	1				; offset: $20 (32)
+reserved2				 ds.l	1				; offset: $24 (36)
+tmPrivate				 ds.l	1				; offset: $28 (40)
+sendProc				 ds.l	1				; offset: $2C (44)
+breakProc				 ds.l	1				; offset: $30 (48)
+cacheProc				 ds.l	1				; offset: $34 (52)
+clikLoop				 ds.l	1				; offset: $38 (56)
+owner					 ds.l	1				; offset: $3C (60)
+termRect				 ds		Rect			; offset: $40 (64)
+viewRect				 ds		Rect			; offset: $48 (72)
+visRect					 ds		Rect			; offset: $50 (80)
+lastIdle				 ds.l	1				; offset: $58 (88)
+selection				 ds		TMSelection		; offset: $5C (92)
+selType					 ds.w	1				; offset: $64 (100)
+mluField				 ds.l	1				; offset: $66 (102)
+sizeof					 EQU *					; size:   $6A (106)
+						ENDR
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewTerminalSendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalCacheUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalClikLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalEnvironsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewTerminalToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalSendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalCacheUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalClikLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalEnvironsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeTerminalToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalSendUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalBreakUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalCacheUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalClikLoopUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalEnvironsUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeTerminalToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitTM()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TMErr InitTM(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitTM
+	ENDIF
+
+
+; *  TMGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle TMGetVersion(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetVersion
+	ENDIF
+
+
+; *  TMGetTMVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMGetTMVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetTMVersion
+	ENDIF
+
+
+; *  TMNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TermHandle TMNew(const Rect *termRect, const Rect *viewRect, TMFlags flags, short procID, WindowRef owner, TerminalSendUPP sendProc, TerminalCacheUPP cacheProc, TerminalBreakUPP breakProc, TerminalClikLoopUPP clikLoop, TerminalEnvironsUPP environsProc, long refCon, long userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMNew
+	ENDIF
+
+
+; *  TMDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMDispose(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMDispose
+	ENDIF
+
+
+; *  TMKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMKey(TermHandle hTerm, const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMKey
+	ENDIF
+
+
+; *  TMUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMUpdate(TermHandle hTerm, RgnHandle visRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMUpdate
+	ENDIF
+
+
+; *  TMPaint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMPaint(TermHandle hTerm, const TermDataBlock *theTermData, const Rect *theRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMPaint
+	ENDIF
+
+
+; *  TMActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMActivate(TermHandle hTerm, Boolean activate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMActivate
+	ENDIF
+
+
+; *  TMResume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMResume(TermHandle hTerm, Boolean resume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMResume
+	ENDIF
+
+
+; *  TMClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMClick(TermHandle hTerm, const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMClick
+	ENDIF
+
+
+; *  TMIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMIdle(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMIdle
+	ENDIF
+
+
+; *  TMStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long TMStream(TermHandle hTerm, void *theBuffer, long theLength, CMFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMStream
+	ENDIF
+
+
+; *  TMMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TMMenu(TermHandle hTerm, short menuID, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMMenu
+	ENDIF
+
+
+; *  TMReset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMReset(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMReset
+	ENDIF
+
+
+; *  TMClear()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMClear(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMClear
+	ENDIF
+
+
+; *  TMResize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMResize(TermHandle hTerm, const Rect *newViewRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMResize
+	ENDIF
+
+
+; *  TMGetSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long TMGetSelect(TermHandle hTerm, Handle theData, ResType *theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetSelect
+	ENDIF
+
+
+; *  TMGetLine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMGetLine(TermHandle hTerm, short lineNo, TermDataBlock *theTermData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetLine
+	ENDIF
+
+
+; *  TMSetSelection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetSelection(TermHandle hTerm, const TMSelection *theSelection, TMSelTypes selType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetSelection
+	ENDIF
+
+
+; *  TMScroll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMScroll(TermHandle hTerm, short dh, short dv)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMScroll
+	ENDIF
+
+
+; *  TMValidate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TMValidate(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMValidate
+	ENDIF
+
+
+; *  TMDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMDefault(Ptr *theConfig, short procID, Boolean allocate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMDefault
+	ENDIF
+
+
+; *  TMSetupPreflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle TMSetupPreflight(short procID, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupPreflight
+	ENDIF
+
+
+; *  TMSetupSetup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetupSetup(short procID, const void *theConfig, short count, DialogRef theDialog, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupSetup
+	ENDIF
+
+
+; *  TMSetupFilter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TMSetupFilter(short procID, const void *theConfig, short count, DialogRef theDialog, EventRecord *theEvent, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupFilter
+	ENDIF
+
+
+; *  TMSetupItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetupItem(short procID, const void *theConfig, short count, DialogRef theDialog, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupItem
+	ENDIF
+
+
+; *  TMSetupXCleanup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetupXCleanup(short procID, const void *theConfig, short count, DialogRef theDialog, Boolean OKed, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupXCleanup
+	ENDIF
+
+
+; *  TMSetupPostflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetupPostflight(short procID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetupPostflight
+	ENDIF
+
+
+; *  TMGetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Ptr TMGetConfig(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetConfig
+	ENDIF
+
+
+; *  TMSetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMSetConfig(TermHandle hTerm, const void *thePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetConfig
+	ENDIF
+
+
+; *  TMIntlToEnglish()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr TMIntlToEnglish(TermHandle hTerm, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMIntlToEnglish
+	ENDIF
+
+
+; *  TMEnglishToIntl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr TMEnglishToIntl(TermHandle hTerm, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMEnglishToIntl
+	ENDIF
+
+
+; *  TMGetToolName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMGetToolName(short id, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetToolName
+	ENDIF
+
+
+; *  TMGetProcID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMGetProcID(ConstStr255Param name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetProcID
+	ENDIF
+
+
+; *  TMSetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetRefCon(TermHandle hTerm, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetRefCon
+	ENDIF
+
+
+; *  TMGetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long TMGetRefCon(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetRefCon
+	ENDIF
+
+
+; *  TMSetUserData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMSetUserData(TermHandle hTerm, long userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMSetUserData
+	ENDIF
+
+
+; *  TMGetUserData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long TMGetUserData(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetUserData
+	ENDIF
+
+
+; *  TMAddSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMAddSearch(TermHandle hTerm, ConstStr255Param theString, const Rect *where, TMSearchTypes searchType, TerminalSearchCallBackUPP callBack)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMAddSearch
+	ENDIF
+
+
+; *  TMRemoveSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMRemoveSearch(TermHandle hTerm, short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMRemoveSearch
+	ENDIF
+
+
+; *  TMClearSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMClearSearch(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMClearSearch
+	ENDIF
+
+
+; *  TMGetCursor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Point TMGetCursor(TermHandle hTerm, TMCursorTypes cursType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetCursor
+	ENDIF
+
+
+; *  TMGetTermEnvirons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal TMErr TMGetTermEnvirons(TermHandle hTerm, TermEnvironRec *theEnvirons)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetTermEnvirons
+	ENDIF
+
+
+; *  TMChoose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMChoose(TermHandle *hTerm, Point where, TerminalChooseIdleUPP idleProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMChoose
+	ENDIF
+
+
+; *  TMEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMEvent(TermHandle hTerm, const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMEvent
+	ENDIF
+
+
+; *  TMDoTermKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean TMDoTermKey(TermHandle hTerm, ConstStr255Param theKey)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMDoTermKey
+	ENDIF
+
+
+; *  TMCountTermKeys()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short TMCountTermKeys(TermHandle hTerm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMCountTermKeys
+	ENDIF
+
+
+; *  TMGetIndTermKey()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMGetIndTermKey(TermHandle hTerm, short id, Str255 theKey)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetIndTermKey
+	ENDIF
+
+
+; *  TMGetErrorString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void TMGetErrorString(TermHandle hTerm, short id, Str255 errMsg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TMGetErrorString
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __TERMINALS__ 
+

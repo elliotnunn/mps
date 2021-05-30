@@ -1,0 +1,966 @@
+; Version: 1.04
+; Created: Tuesday, August 2, 1988 at 9:39:54 PM
+;
+; File: Private.a
+;
+; Assembler Interface to the Macintosh Libraries
+; Copyright Apple Computer, Inc. 1986-1988
+; All Rights Reserved
+;
+;
+; The following information was formerly in "private" files that were
+; not released to the general developer community.
+;
+; The information in this file is not needed for normal application
+; development. These equates and macros were necessary for development
+; of the Macintosh ToolBox and Operating System, and are likely to be
+; dependent on their current implementation. Use of any information
+; in this file is likely to cause your software to fail on future
+; versions of Macintosh system software or hardware.
+;
+; Apple Developer Support will not support any use of the following
+; information.
+;
+; In order to prevent any "accidental" use of this information, it has
+; been disabled using the conditional-assembly variable defined below.
+; If you change this to a non-zero value, you're on your own.
+;___________________________________________________________________________
+
+
+
+				IF			(&TYPE('PrNonPortable') = 'UNDEFINED') THEN
+PrNonPortable	EQU 		0
+				ENDIF
+
+				IF			PrNonPortable THEN
+
+
+;_______________________________________________________________________
+;
+; System Equates -- These equates supplement the low-level equates for the
+; Macintosh hardware and software defined in SysEqu. These equates are private
+; to Apple Computer, Inc. and should be used solely for building system
+; software.
+;
+;_______________________________________________________________________
+
+;+ Hardware Address Equates (for 512K through 128K Macs)
+
+; Unpacked, user versions of parameter ram
+
+SdEnable		EQU 		$261					; Sound enabled? [byte]
+
+; Event Record Definition
+
+evtMax			EQU 		$1E 					; maximum number of events in buffer
+
+; Heap Zone header
+
+spare1			EQU 		$2C 					; unused spare [long]
+
+
+; Mouse/Keyboard
+
+Tocks			EQU 		$173					; Lisa sub-tick count [byte]
+
+;Chooser
+
+ChooserBits 	EQU 		$946					; bit 7 = 0, don't run; bit 6 = 0, gray out Appletalk
+
+; Memory Manager
+
+minFree 		EQU 		12						; 12 byte minimum block size
+freeTag 		EQU 		$0						; Tag for Free block
+nRelTag 		EQU 		$40000000				; Tag for Non-Relocatable block
+relTag			EQU 		$80000000				; Tag for Relocatable block
+minAddr 		EQU 		$0						; Min legal address
+maxAddr 		EQU 		$800000 				; Max legal address for 512K machine
+maxMasters		EQU 		$1000					; Ridiculously large allocation chunk size
+dfltMasters 	EQU 		32						; Default to 32 master pointers
+
+; Driver Status record definition
+
+dsQType 		EQU 		$A						; not used [word]
+dsNeedsFlush	EQU 		$13 					; reserved [byte]
+
+;This variable was named RetryCount in SONYEqu
+
+SONYRetry		EQU 		5
+SonyVars		EQU 		$134					; 3-1/2 disk driver vars [pointer]
+DskRtnAdr		EQU 		$124					; temp for disk driver [pointer]
+PollRtnAddr 	EQU 		$128					; 'other' driver locals [pointer]
+PWMValue		EQU 		$138					; current PWM value [word]
+PollStack		EQU 		$13A					; SCC poll data start stack location [pointer]
+PollProc		EQU 		$13E					; SCC poll data procedure [pointer]
+DiskVars		EQU 		$222					; Disk driver variables [62 bytes]
+
+
+LastPGlobal 	EQU 		$954					; address of last printer global
+
+; QuickDraw Glue Vectors
+
+JHideCursor 	EQU 		$800
+JShowCursor 	EQU 		$804
+JShieldCursor	EQU 		$808
+JScrnAddr		EQU 		$80C
+JScrnSize		EQU 		$810
+JInitCrsr		EQU 		$814
+JSetCrsr		EQU 		$818
+JCrsrObscure	EQU 		$81C
+JUpdateProc 	EQU 		$820
+LGrafJump		EQU 		$824
+JSwapFont		EQU 		$8E0					; jump entry for FMSwapFont [long]
+JFontInfo		EQU 		$8E4					; jump entry for FMFontMetrics [long]
+
+; Miscellaneous Globals
+
+SysCom			EQU 		$100					; start of system communication area
+DispatchTab 	EQU 		$400					; A-Trap dispatch table [1024 bytes]
+OSTable 		EQU 		$0400					; 256 longs, up to $800, where old table of 512 words was
+toolDisp		EQU 		10						; bit #10 distinguishes Tool/OS Get/Set Trap address
+oldDisp 		EQU 		9						; bit #9 distinguishes Old/New trap numbering
+; moved HeapStart equate to hwequ file <C1/14Apr86>
+; moved DoEject equate to hwequ file <C1/14Apr86>
+
+FontFlag		EQU 		$15E					; font manager loop flag [byte]
+JShell			EQU 		$212					; journaling shell state [wprd]
+MacJmp			EQU 		$120					; MACSBUG jumptable [pointer]
+FileVars		EQU 		$340					; file system vars [184 bytes]
+LoadVars		EQU 		$900					; loader variables [68 bytes]
+LastLGlobal 	EQU 		$944					; address past last loader global
+CoreEditVars	EQU 		$954					; core edit variables [12 bytes]
+ScreenVars		EQU 		$292					; Screen driver variables [8 bytes]
+SoundVars		EQU 		$262					; Sound driver variables [32 bytes]
+
+; Font Manager Low Memory Globals
+
+FOutError		EQU 		$998					; error code
+FOutFontHandle	EQU 		$99A					; handle to font bits
+FOutBold		EQU 		$99E					; bolding factor
+FOutItalic		EQU 		$99F					; italic factor
+FOutULOffset	EQU 		$9A0					; underline offset
+FOutULShadow	EQU 		$9A1					; underline halo
+FOutULThick 	EQU 		$9A2					; underline thickness
+FOutShadow		EQU 		$9A3					; shadow factor
+FOutExtra		EQU 		$9A4					; extra horizontal width
+FOutAscent		EQU 		$9A5					; height above baseline
+FOutDescent 	EQU 		$9A6					; height below baseline
+FOutWidMax		EQU 		$9A7					; maximum width of character
+FOutLeading 	EQU 		$9A8					; space between lines
+FOutUnused		EQU 		$9A9					; unused byte (must have even number)
+FOutNumer		EQU 		$9AA					; point for numerators of scale factor
+FOutDenom		EQU 		$9AE					; point for denominators of scale factor
+
+;_______________________________________________________________________
+;
+; Toolbox Equates -- These equates supplement the high-level equates for the
+; Macintosh toolbox software in ToolEqu.a. These equates are private
+; to Apple Computer, Inc. and should be used solely for building system
+; software.
+;
+;_______________________________________________________________________
+
+DeskPort		EQU 		$9E2					; Desk grafPort (Whole screen) [pointer]
+
+;_______________________________________________________________________
+;
+; QuickDraw Equates -- This file supplements the public equates for QuickDraw.
+; found in the file QuickEqu.a These equates are private
+; to Apple Computer, Inc. and should be used solely for building system
+; software.
+;
+;_______________________________________________________________________
+
+symbols 		EQU 		0
+forMac			EQU 		1
+
+; Region State record
+
+rgnPtr			EQU 		$0						; [handle]
+dataPtr 		EQU 		$4						; [handle]
+scanBuf 		EQU 		$8						; [pointer]
+scanSize		EQU 		$C						; [word]
+thisV			EQU 		$E						; [word]
+nextV			EQU 		$10 					; [word]
+minH			EQU 		$12 					; [word]
+maxH			EQU 		$14 					; [word]
+leftH			EQU 		$16 					; [word]
+rgnRec			EQU 		$18 					; size of as region record
+
+;-----------------------------------------------------
+;
+; Offsets in a PicSave record:
+;
+thePic			EQU 		0						;PICHANDLE
+picMax			EQU 		4						;LongInt
+picIndex		EQU 		8						;LongInt
+picClipRgn		EQU 		12						;RgnHandle
+picBkPat		EQU 		16						;Pattern
+picTxFont		EQU 		24						;WORD
+picTxFace		EQU 		26						;Style
+picTxMode		EQU 		28						;WORD
+picTxSize		EQU 		30						;WORD
+picSpExtra		EQU 		32						;Fixed Point
+picTxNumer		EQU 		36						;Point
+picTxDenom		EQU 		40						;Point
+picTxLoc		EQU 		44						;Point
+picPnLoc		EQU 		48						;Point
+picPnSize		EQU 		52						;Point
+picPnMode		EQU 		56						;WORD
+picPnPat		EQU 		58						;Pattern
+picFillPat		EQU 		66						;Pattern
+picTheRect		EQU 		74						;Rect
+picOvSize		EQU 		82						;Point
+picOrigin		EQU 		86						;Point
+picFgColor		EQU 		90						;Long
+picBkColor		EQU 		94						;Long
+picSaveRec		EQU 		98						;total size in bytes
+
+; Quickdraw privates
+
+; additional offsets in a PicSave record
+
+picVersion		EQU 		98						;WORD
+picRGBFgCol 	EQU 		100 					;RGB (6 bytes)
+picRGBBkCol 	EQU 		106 					;RGB (6 bytes)
+picChExtra		EQU 		112 					;WORD
+picLocHFrac 	EQU 		114 					;WORD
+picRGBOpColor	EQU 		116 					;RGB (6 bytes)
+picRGBHiColor	EQU 		122 					;RGB (6 bytes)
+picFillPP		EQU 		128 					;Handle
+picPnPP 		EQU 		132 					;Handle
+picBkPP 		EQU 		136 					;Handle
+npicSaveRec 	EQU 		140 					;total size in bytes
+pictVersion 	EQU 		1						;version number for pict
+npicVersion 	EQU 		$2FF					;version number for npic
+
+;-----------------------------------------------
+;
+; PICTURE OPCODES
+;
+
+opNOP			EQU 		$0						; nop opcode
+opClip			EQU 		$1						; clip opcode
+opBkPat 		EQU 		$2						; background pattern opcode
+opTxFont		EQU 		$3						; text font opcode
+opTxFace		EQU 		$4						; text face opcode
+opTxMode		EQU 		$5						; text mode opcode
+opSpExtra		EQU 		$6						; space extra opcode
+opPnSize		EQU 		$7						; pen size opcode
+opPnMode		EQU 		$8						; pen mode opcode
+opPnPat 		EQU 		$9						; pen pattern opcode
+opFillPat		EQU 		$A						; fill pattern opcode
+opOvSize		EQU 		$B						; oval size opcode
+opOrigin		EQU 		$C						; origin opcode
+opTxSize		EQU 		$D						; text size opcode
+opFgColor		EQU 		$E						; foreground color opcode
+opBkColor		EQU 		$F						; background color opcode
+opTxRatio		EQU 		$10 					; text ratio opcode
+opVersion		EQU 		$11 					; version opcode
+opBkPixPat		EQU 		$12 					; color background pattern opcode
+opPnPixPat		EQU 		$13 					; color pen pattern opcode
+opFillPixPat	EQU 		$14 					; color fill pattern opcode
+opPnLocHFrac	EQU 		$15 					; fractional pen position opcode
+opChExtra		EQU 		$16 					; extra for each character
+
+; opcode $17 unused
+
+opIFore 		EQU 		$18 					; foreColor index opcode
+opIBack 		EQU 		$19 					; backColor index opcode
+opRGBFgCol		EQU 		$1A 					; RGB foreColor opcode
+opRGBBkCol		EQU 		$1B 					; RGB backColor opcode
+opHiliteMode	EQU 		$1C 					; hilite mode flag
+opHiliteColor	EQU 		$1D 					; RGB hilite color
+opDefHilite 	EQU 		$1E 					; Use default hilite color
+opOpColor		EQU 		$1F 					; RGB OpColor for arithmetic modes
+opLine			EQU 		$20 					; line opcode
+opLineFrom		EQU 		$21 					; line from opcode
+opShortLine 	EQU 		$22 					; short line opcode
+opShortLineFrom   EQU		$23 					; short line from opcode
+opLongText		EQU 		$28 					; long text opcode
+opDHText		EQU 		$29 					; dh text opcode
+opDVText		EQU 		$2A 					; dv text opcode
+opDHDVText		EQU 		$2B 					; dh,dv text opcode
+opBitsRect		EQU 		$90 					; copybits, rect clipped opcode
+opBitsRgn		EQU 		$91 					; copybits, rgn clipped opcode
+opPackBitsRect	EQU 		$98 					; packed copybits, rect clipped opcode
+opPackBitsRgn	EQU 		$99 					; packed copybits, rgn clipped opcode
+opShortComment	EQU 		$A0 					; short comment opcode
+opLongComment	EQU 		$A1 					; long comment opcode
+opEndPic		EQU 		$FF 					; end of picture opcode
+ngHeaderOp		EQU 		$0C00					; NuGraf Header opcode
+;-----------------------------------------------
+;
+; COLOR QUICKDRAW EQUATES
+;
+
+rbMask			EQU 		$1FFF					; mask top 3 bits of rowbytes
+pmFlag			EQU 		$8000					; flag to say it's a new pixMap
+cPortFlag		EQU 		$C000					; isPixMap+isCPort
+pixVersion		EQU 		$0000					; isPixMap
+isPixMap		EQU 		15						; for testing high bit of pRowbytes
+isCPort 		EQU 		14						; indicates that "bitmap" belongs to port
+
+
+;for Mac+ Only - 2-way comm cmd
+
+rDSync			EQU 		0						; sync up w/each other
+
+; command byte from nub to MPS
+
+rDSysErr		EQU 		1						; system error
+rDTrapCall		EQU 		2						; trap call
+rDDta			EQU 		3						; data comin' down the road 
+
+; command byte from MPS to nub
+
+rDGetN			EQU 		1						; GetNBytes
+rDSetN			EQU 		2						; SetNBytes
+rDCallProc		EQU 		3						; CallProc
+rDSetAtrap		EQU 		4						; SetATrap
+rDResume		EQU 		5						; Resume execution
+
+; end Mac+ only
+
+
+FlEvtMask		EQU 		$25E					; (word) mask of allowable events to flush at FlushEvents.
+TrapAgain		EQU 		$B00					; use 4 bytes here for another trap
+PWMBuf1 		EQU 		$B0A					; (long) PWM buffer ptr
+BootMask		EQU 		$B0E					; (word) needed during boot 
+AtalkHk1		EQU 		$B14					; (long) Appletalk hook
+AtalkHk2		EQU 		$B18					; (long) Appletalk hook
+SCSIFlag		EQU 		$B22					; (word) Configuration Flag for SCSI
+HWCfgFlags		EQU 		SCSIFlag				; (word) HW Configuration flags 
+; bit 15 - SCSI port present
+; bit 14 - New Clock Chip Present
+; bit 13 - Extra Parameter Ram Valid at boottime.
+
+BtDskRfn		EQU 		$B34					; (word) refnum for boot drive driver refnum
+BootTmp8		EQU 		$B36					; (8bytes) temp space needed by StartBoot
+T1Arbitrate 	EQU 		$B3F					; (byte) $FF if Timer T1 up for grabs.
+RMGRHiVars		EQU 		$B80					; $B80-$BFF are switched vars
+; RMGR vars extend $B80 through $B9F
+
+NewUnused		EQU 		$BC0					; (word) - used to be FlEvtMask
+FmtDefaults 	EQU 		52+$36A 				; ptr to formatting defs (TFSVars + 52) [long]
+
+; addresses of TE hooks installed in trap table
+
+TETrimMeasure	EQU 		(4*253+OSTable) 		; trimMeasure hook
+TEFindWord		EQU 		(4*254+OSTable) 		; findWord hook
+TEFindLine		EQU 		(4*255+OSTable) 		; findLine hook
+JBlockMove		EQU 		$4B8					; Special equate for OUR HeapGuts Jump Table
+JInsTime		EQU 		(600-512)*4+OSTable 	;
+JRmvTime		EQU 		(601-512)*4+OSTable 	;
+JPrimeTime		EQU 		(602-512)*4+OSTable 	;
+JLg2Phys		EQU 		(703-512)*4+OSTable 	;
+JFlushCache 	EQU 		(704-512)*4+OSTable 	;
+JGetBlock		EQU 		(705-512)*4+OSTable 	;
+JMarkBlock		EQU 		(706-512)*4+OSTable 	;
+JRelBlock		EQU 		(707-512)*4+OSTable 	;
+JTrashBlocks	EQU 		(708-512)*4+OSTable 	;
+JTrashVBlks 	EQU 		(709-512)*4+OSTable 	;
+JCacheWrIP		EQU 		(710-512)*4+OSTable 	;
+JCacheRdIP		EQU 		(711-512)*4+OSTable 	;
+
+
+JBasicIO		EQU 		(712-512)*4+OSTable 	;
+JRdBlocks		EQU 		(713-512)*4+OSTable 	;
+JWrBlocks		EQU 		(714-512)*4+OSTable 	;
+JSetUpTags		EQU 		(715-512)*4+OSTable 	;
+JBTClose		EQU 		(716-512)*4+OSTable 	;
+JBTDelete		EQU 		(717-512)*4+OSTable 	;
+JBTFlush		EQU 		(718-512)*4+OSTable 	;
+JBTGetRecord	EQU 		(719-512)*4+OSTable 	;
+JBTInsert		EQU 		(720-512)*4+OSTable 	;
+JBTOpen 		EQU 		(721-512)*4+OSTable 	;
+JBTSearch		EQU 		(722-512)*4+OSTable 	;
+JBTUpdate		EQU 		(723-512)*4+OSTable 	;
+JGetNode		EQU 		(724-512)*4+OSTable 	;
+JRelNode		EQU 		(725-512)*4+OSTable 	;
+JAllocNode		EQU 		(726-512)*4+OSTable 	;
+JFreeNode		EQU 		(727-512)*4+OSTable 	;
+JExtBTFile		EQU 		(728-512)*4+OSTable 	;
+JDeallocFile	EQU 		(729-512)*4+OSTable 	;
+JExtendFile 	EQU 		(730-512)*4+OSTable 	;
+JTruncateFile	EQU 		(731-512)*4+OSTable 	;
+JCMSetUp		EQU 		(732-512)*4+OSTable 	;
+JDtrmV1 		EQU 		(734-512)*4+OSTable 	;
+JBlkAlloc		EQU 		(735-512)*4+OSTable 	;
+JBlkDeAlloc 	EQU 		(736-512)*4+OSTable 	;
+JFileOpen		EQU 		(737-512)*4+OSTable 	;
+JPermssnChk 	EQU 		(738-512)*4+OSTable 	;
+JFndFilName 	EQU 		(739-512)*4+OSTable 	;
+JRfNCall		EQU 		(740-512)*4+OSTable 	;
+JAdjEOF 		EQU 		(741-512)*4+OSTable 	;
+
+
+JClkNoMem		EQU 		(595-512)*4+OSTable 	;vector for clock
+
+
+JSegStack		EQU 		(760-512)*4+OSTable 	;vector for segment loader
+
+; vectors for RMGR low levels routines
+JSuperLoad		EQU 		(761-512)*4+OSTable 	;
+JCmpFrm 		EQU 		(762-512)*4+OSTable 	;
+JNewMap 		EQU 		(763-512)*4+OSTable 	;
+JCheckLoad		EQU 		(764-512)*4+OSTable 	;
+
+
+;_______________________________________________________________________
+;
+; heap flags
+
+checking		EQU 		0						;check arguments and data structures
+statistics		EQU 		0						;gather statistics on usage 
+robust			EQU 		0						;enables super-robust internal checks
+countMPs		EQU 		0						;enables counting of master pointers
+dfltFlags		EQU 		0						;Checking is on when zone is init'd 
+nOSTable		EQU 		$0400					; 256 longs, up to $800
+JMtCheck		EQU 		($AF)*4+nOSTable		; ($A0AF) $0400 is n/OSTable
+JCheckReMount	EQU 		($B0)*4+nOSTable		; ($A0B0) $0400 is n/OSTable
+JDtrmV2 		EQU 		($B1)*4+nOSTable		; ($A0B1) $0400 is n/OSTable
+JFindDrive		EQU 		($B2)*4+nOSTable		; ($A0B2) $0400 is n/OSTable
+JFClose 		EQU 		($B3)*4+nOSTable		; ($A0B3) $0400 is n/OSTable
+JFlushMDB		EQU 		($B4)*4+nOSTable		; ($A0B4) $0400 is n/OSTable
+JGoDriver		EQU 		($B5)*4+nOSTable		; ($A0B5) $0400 is n/OSTable
+JWaitUntil		EQU 		($B6)*4+nOSTable		; ($A0B6) $0400 is n/OSTable
+JSyncWait		EQU 		($B7)*4+nOSTable		; ($A0B7) $0400 is n/OSTable
+JSoundDead		EQU 		($B8)*4+nOSTable		; ($A0B8) $0400 is n/OSTable
+JDisptch		EQU 		($B9)*4+nOSTable		; ($A0B9) $0400 is n/OSTable
+;JStartinit EQU ($B9)*4+nOSTable ; ($A0B9) $0400 is n/OSTable <C681><C811>
+JIAZInit		EQU 		($BA)*4+nOSTable		; ($A0BA) $0400 is n/OSTable
+JIAZPostInit	EQU 		($BB)*4+nOSTable		; ($A0BB) $0400 is n/OSTable
+JLaunchInit 	EQU 		($BC)*4+nOSTable		; ($A0BC) $0400 is n/OSTable
+JCacheFlush 	EQU 		($BD)*4+nOSTable		; ($A0BD) $0400 is n/OSTable
+
+;_______________________________________________________________________
+;
+; addresses of TE hooks installed in trap table for new color text edit <C144>
+
+JPixel2Char 	EQU 		(742-512)*4+nOSTable	; ($A0E6) $0400 is nOSTable 
+JChar2Pixel 	EQU 		(743-512)*4+nOSTable	; ($A0E7) $0400 is nOSTable 
+JHiliteText 	EQU 		(744-512)*4+nOSTable	; ($A0E8) $0400 is nOSTable 
+
+;_______________________________________________________________________
+;
+;tfs vectors <A281>
+
+JCkExtFS		EQU 		($EE)*4+nOSTable		; ($A0EE) $0400 is n/OSTable
+JDTrmV3 		EQU 		($EF)*4+nOSTable		; ($A0EF) $0400 is n/OSTable
+JBMChk			EQU 		($F0)*4+nOSTable		; ($A0F0) $0400 is n/OSTable
+JTstMod 		EQU 		($F1)*4+nOSTable		; ($A0F1) $0400 is n/OSTable
+JLocCRec		EQU 		($F2)*4+nOSTable		; ($A0F2) $0400 is n/OSTable
+JTreeSearch 	EQU 		($F3)*4+nOSTable		; ($A0F3) $0400 is n/OSTable
+JMapFBlock		EQU 		($F4)*4+nOSTable		; ($A0F4) $0400 is n/OSTable
+JXFSearch		EQU 		($F5)*4+nOSTable		; ($A0F5) $0400 is n/OSTable
+JReadBM 		EQU 		($F6)*4+nOSTable		; ($A0F6) $0400 is n/OSTable
+
+
+;_______________________________________________________________________
+;
+; FDB varibles (total of 192+112+52= 356 bytes)
+; Device table offset
+
+fDBDevTy		EQU 		$00 					; fDB device type (1 byte)
+fDBOAddr		EQU 		fDBDevTy+1				; Original fDB address of device (1 byte)
+fDBAddr 		EQU 		fDBOAddr+1				; fDB address (1 byte)
+fDBUnused		EQU 		fDBAddr+1				; unused (1 byte)
+fDBCRA			EQU 		fDBUnused+1 			; fDB completion routine address (4 bytes)
+fDBOpData		EQU 		fDBCRA+4				; fDB optional data buffer (4 bytes)
+fRecSize		EQU 		fDBOpData+4 			; record size
+
+; command queue offset
+
+fQCmd			EQU 		$00 					; fDB command (1 byte)
+fQUnused		EQU 		fQCmd+1 				; not used (1 byte)
+fQBuff			EQU 		fQUnused+1				; buffer address (4 bytes)
+fQComp			EQU 		fQBuff+4				; completion routine address (4 bytes)
+fQData			EQU 		fQComp+4				; optional data buffer (4 bytes)
+fQSize			EQU 		fQData+4				; record size
+fDBNumR 		EQU 		16						; number of fDB record
+startDevT		EQU 		$00 					; start of device table
+devTSize		EQU 		(fRecSize)*fDBNumR		; device table has 16 entries (192 bytes)
+startCQ 		EQU 		devTSize				; Command queue start at end of device table
+endCQ			EQU 		startCQ+((fQData+4)*8)	  ; 8 entries in command queue (112 bytes)
+fDBBuff 		EQU 		endCQ					; buffer address of last command (4 byte)
+fDBComp 		EQU 		fDBBuff+4				; completion routine address of last command (4 byte)
+fDBData 		EQU 		fDBComp+4				; optional data buffer of last command (4 bytes)
+fQBegPtr		EQU 		fDBData+4				; Command queue start pointer (4 bytes)
+fQEndPtr		EQU 		fQBegPtr+4				; command queue end pointer (4 bytes)
+fQHeadPtr		EQU 		fQEndPtr+4				; command queue head pointer (4 bytes)
+fQEntPtr		EQU 		fQHeadPtr+4 			; command queue entry pointer (4 bytes)
+hasDev			EQU 		fQEntPtr+4				; every bit corresponds to an device address
+; 1 = device is present in address (2 bytes)
+devMap			EQU 		hasDev+2				; device address map (2 bytes)
+pollComp		EQU 		devMap+2				; poll completion routine address(4 bytes)
+pollData		EQU 		pollComp+4				; optional data buffer (4 bytes)
+pollBuff		EQU 		pollData+4				; buffer address (4 bytes)
+fDBCmd			EQU 		pollBuff+4				; last fDB command (1 byte)
+fDBFlag 		EQU 		fDBCmd+1				; fDB Flags (1 byte)
+fDBAuFlag		EQU 		fDBFlag+1				; fDB Auxillary Flag (1 byte)
+fDBState		EQU 		fDBAuFlag+1 			; fDB transition state (1 byte)
+byteOffSet		EQU 		fDBState+1				; byte offset into the data buffer (1 byte)
+devTOffset		EQU 		byteOffSet+1			; offset into the Device table for polling (1 byte)
+fDBMvCnt		EQU 		devTOffset+1			; counter for moving address (1 byte)
+
+; fDBPBuff must be right after fDBCnt, they form a pascal string
+
+fDBCnt			EQU 		fDBMvCnt+1				; poll data count (1 byte)
+fDBPBuff		EQU 		fDBCnt+1				; interal poll data buffer (8 bytes)
+fDBByte0		EQU 		fDBPBuff				; byte0 of data buffer
+fDBByte1		EQU 		fDBPBuff+1				; byte1 of data buffer
+fDBByte2		EQU 		fDBPBuff+2				; byte2 of data buffer
+fDBByte3		EQU 		fDBPBuff+3				; byte3 of data buffer
+fDBByte4		EQU 		fDBPBuff+4				; byte4 of data buffer
+fDBByte5		EQU 		fDBPBuff+5				; byte5 of data buffer
+fDBByte6		EQU 		fDBPBuff+6				; byte6 of data buffer
+fDBByte7		EQU 		fDBPBuff+7				; byte7 of data buffer
+pollAddr		EQU 		fDBPBuff+8				; device address in poll (1 byte)
+newAddr 		EQU 		pollAddr+1				; new address (1 byte)
+pollCmd 		EQU 		newAddr+1				; poll command (1 byte)
+pollCnt 		EQU 		pollCmd+1				; poll data count (1 byte)
+kbdTalked		EQU 		pollCnt+1				; $FF after keyboard shifts something in (1 byte)
+; $00 set every 1/2 second by keyboard vbl task
+numeric 		EQU 		kbdTalked+1 			; $FF after numeric ESC char received (1 byte)
+; $00 after next code is processed
+fDBDSize		EQU 		numeric+1				; size of FDB data
+
+; flags in FDBFlag
+
+fDBBusy 		EQU 		$00 					; fDB busy flag, 1 = busy
+fDBQFull		EQU 		$01 					; fDB queue full flag, 1 = full
+fDBQEmpty		EQU 		$02 					; fDB queue empty flag, 1 = empty
+fDBSRQ			EQU 		$03 					; fDB SRQ signal, 1 = SRQ inserted
+fDBInt			EQU 		$04 					; used only in fDBop, 1 = timeout asserted
+fDBInit 		EQU 		$05 					; initialization flag
+
+; flags in FDBAuFlag
+
+fIntS0			EQU 		$00 					; timeout in First S0, 1 = timeout asserted
+fIntS1			EQU 		$01 					; timeout in First S1, 1 = timeout asserted
+fIntS2			EQU 		$02 					; timeout in First S2, 1 = timeout asserted
+fIntS3			EQU 		$03 					; timeout in First S3, 1 = timeout asserted
+fFirstS1		EQU 		$04 					; First S2 flag, 1 = first S2
+fFirstS2		EQU 		$05 					; First S2 flag, 1 = first S2
+fDBSPoll		EQU 		$06 					; SRQ Polling, 1 = in SRQ polling
+fDBAPoll		EQU 		$07 					; Auto Polling, 1 = in auto polling
+; flags in FDBStat
+pMgrADBinit 	EQU 		0						; Flag to tell power manager that init is underway
+noReply 		EQU 		4						; No reply from device
+
+; other equs
+
+talkCmd 		EQU 		$0C 					; Command for Talk R0
+listenCmd		EQU 		$08 					; Command for Listen R0 
+kbdAddr 		EQU 		$02 					; keyboard type device
+mouseAddr		EQU 		$03 					; mouse type device 
+numFDBAdr		EQU 		$10 					; number of avaiblae FDB address
+moveTime		EQU 		50						; number of times to move device
+bcMask			EQU 		$00FFFFFF				; Mask for the 24 bit Byte Count
+GrafBegin		EQU 		$800					; graf global area
+GrafEnd 		EQU 		$8F2					; end of graphics globals
+
+;Font Manager
+
+; additional private low memory globals
+
+SaveFondFlags	EQU 		$986					;important byte from current FOND flags
+FondState		EQU 		$903					;saved FOND purge state
+
+; additional private low memory globals for nuMac’s and later <C346>
+
+SynListHandle	EQU 		$0D32					;a handle to a list of synthesized fonts
+LastFore		EQU 		$0D36					;8 bytes: last foreground and background colors (FM)
+LastMode		EQU 		$0D3E					;word: last text mode (Font Manager)
+LastDepth		EQU 		$0D40					;word: last depth font prepared for
+FMExist 		EQU 		$0D42					;byte: clear if InitFonts has already been called
+SavedHilite 	EQU 		$0D43					;byte: used for state across Mac II QD patches
+
+
+;------------------
+; fields within patXMap
+
+patXRow 		EQU 		$00 					; [word] rowbytes of expanded pattern
+patXHMask		EQU 		$02 					; [word] horizontal mask
+patXVMask		EQU 		$04 					; [word] vertical mask
+LastCTable		EQU 		$06 					; [long] seed value for last color table
+LastOfst		EQU 		$0A 					; [word] last global-local offset
+LastInvert		EQU 		$0C 					; [long] last invert value
+LastAlign		EQU 		$10 					; [long] last horizontal align
+LastStretch 	EQU 		$14 					; [word] last stretch
+ppXInfo 		EQU 		$16 					; size of expanded data
+
+; Offsets into boot blocks
+
+bbID			EQU 		0						; (word) offset to boot blocks ID
+bbEntry 		EQU 		2						; (contains BRA.S) entrypoint to boot blocks
+bbVersion		EQU 		6						; (word) version number
+bbPageFlags 	EQU 		8						; (word) page 2 usage flags
+bbSysName		EQU 		$0A 					; system resource code file name (byte length + 0-15 chars)
+bbShellName 	EQU 		$1A 					; system shell file name ('Finder')
+bbDbg1Name		EQU 		$2A 					; debugger file name (first load)
+bbDbg2Name		EQU 		$3A 					; debugger file name (second load)
+bbScreenName	EQU 		$4A 					; boot screen file name
+bbHelloName 	EQU 		$5A 					; startup program file name
+bbScrapName 	EQU 		$6A 					; system scrap file name
+bbCntFCBs		EQU 		$7A 					; (word) # of FCBs to allocate (determines max open files)
+bbCntEvts		EQU 		$7C 					; (word) # of event queue elements to allocate
+bb128KSHeap 	EQU 		$7E 					; size of system heap on a 128K Mac (no longer used)
+bb256KSHeap 	EQU 		$82 					; size of system heap on a 256K Mac (no longer used)
+bb512KSHeap 	EQU 		$86 					; size of system heap on a 512K Mac
+bbSysHeapSize	EQU 		$86 					; (long) absolute size of the system heap (for all machines).
+; (word) unused - reserved
+bbSysHeapExtra	EQU 		$8C 					; (long) minimum additional system heap space required.
+bbSysHeapFract	EQU 		$90 					; (long) fraction of memory available to be used for sys heap.
+
+
+; The version number of the boot blocks affects the interpretation of the system heap size:
+;
+; if (BBVersion) <= BBOldVers then
+; System heap size becomes DefSysHeapSize (see HWEqu).
+;
+; if BBOldVers < (BBVersion) < BBNewVers then
+; if (BBVersion) = execBBvers then
+; Executes boot blocks starting at BBEntry.
+; System heap size becomes (BBSysHeapSize) (if it isn't already bigger).
+;
+; if BBNewBit is set in (BBVersion) then
+; if BBExecBit is set then
+; Executes boot blocks starting at BBEntry.
+; if BBRelBit is cleared then
+; System heap size becomes (BBSysHeapSize) (if it isn't already bigger)
+; if BBRelBit is set then
+; System heap is extended by BBSysHeapExtra + (BBSysHeapFract * (MemTop))
+
+; Values for boot blocks.
+bbOldVers		EQU 		$14 					; really old versions of boot blocks are <= this
+bbOldExecVers	EQU 		'D' 					; old version for executable boot blocks
+
+; Bits for new boot blocks:
+bbNewBit		EQU 		7						; set to indicate the use of the new format
+bbExecBit		EQU 		6						; set to indicate dispatchable boot blocks
+bbRelBit		EQU 		5						; set to indicate relative heap size specification
+; bits 4 through 0 are reserved for future use by Apple and must be cleared.
+
+; Corresponding values
+bbNewMask		EQU 		$80 					; new boot blocks use #'s >= this
+bbExecMask		EQU 		$40 					;
+bbRelMask		EQU 		$20 					;
+
+; inverse Table structure (shouldn't be a public structure, but is obvious) 
+iTabSeed		EQU 		$0						;[long] ID of owning color table
+iTabRes 		EQU 		$4						;[word] client ID
+iTTable 		EQU 		$6						;table of indices starts here
+iTabHidden		EQU 		$00 					;number of hidden entries (0 for balanced table)
+iTabReserved	EQU 		$02 					;space for a handle or pointer to other info
+iTabInfo		EQU 		$06
+iTExtraSize 	EQU 		$106					;1 byte per color at the moment
+;-----------------------------------------------------
+;
+; EQUATES FOR COLOR CURSOR SAVE AREA
+;
+; NOTE THAT THE FIRST FOUR FIELDS ARE PARALLEL TO THE FIRST FOUR FIELDS
+; OF A PATTERN SO THAT PATCONVERT CAN BE USED TO EXPAND A CURSOR
+;
+ccType			EQU 		0						;[WORD] CURSOR TYPE
+ccMap			EQU 		ccType+2				;[LONG] HANDLE TO CURSOR'S PIXMAP
+ccData			EQU 		ccMap+4 				;[LONG] HANDLE TO CURSOR'S COLOR DATA
+ccXData 		EQU 		ccData+4				;[LONG] HANDLE TO EXPANDED DATA
+ccXMask 		EQU 		ccXData+4				;[LONG] HANDLE TO EXPANDED MASK
+ccSave			EQU 		ccXMask+4				;[LONG] HANDLE TO SAVE BITS UNDER CURSOR
+ccLastCrsr		EQU 		ccSave+4				;[32 BYTES] DATA FOR LAST B/W CURSOR DRAWN
+ccID			EQU 		ccLastCrsr+32			;[LONG] ID FOR LAST COLOR CURSOR DRAWN
+ccDepth 		EQU 		ccID+4					;[WORD] DEPTH FOR LAST CURSOR DRAWN
+ccStateRegs 	EQU 		ccDepth+2				;[16 BYTES] STATE INFO OF SAVED DATA
+ccBytes 		EQU 		ccStateRegs+16			;[WORD] ROWBYTES OF EXPANDED DATA
+ccMaxDepth		EQU 		ccBytes+2				;[WORD] MAXIMUM SCREEN DEPTH
+ccSaveRec		EQU 		ccMaxDepth+2			;SIZE OF CURSOR SAVE AREA
+;----------------------------------------------
+;
+; Trap table equates used by QuickDraw:
+;
+JStdTbTbl		EQU 		$0E00
+JStdArc 		EQU 		JStdTbTbl+(4*$BD)
+JStdBits		EQU 		JStdTbTbl+(4*$EB)
+JStdComment 	EQU 		JStdTbTbl+(4*$F1)
+JStdGetPic		EQU 		JStdTbTbl+(4*$EE)
+JStdLine		EQU 		JStdTbTbl+(4*$90)
+JStdOval		EQU 		JStdTbTbl+(4*$B6)
+JStdPoly		EQU 		JStdTbTbl+(4*$C5)
+JStdPutPic		EQU 		JStdTbTbl+(4*$F0)
+JStdRect		EQU 		JStdTbTbl+(4*$A0)
+JStdRgn 		EQU 		JStdTbTbl+(4*$D1)
+JStdRRect		EQU 		JStdTbTbl+(4*$AF)
+JStdText		EQU 		JStdTbTbl+(4*$82)
+JStdTxMeas		EQU 		JStdTbTbl+(4*$ED)
+JStdOpcode		EQU 		JStdTbTbl+(4*$3F8)
+*NOTE			THAT		THIS CAN ONLY BE USED ON 68010 OR GREATER
+*MICROPROCESSORS  BECAUSE	OF THE RTD INSTRUCTION.
+*
+				MACRO
+				UNLINK
+.*--------------------------------------------------------------
+.*
+.*				UNLINK		A6, STRIP PARAMETERS, AND RETURN.
+.*
+.*				FIRST		PARAM IS NUMBER OF BYTES OF STACK BIAS.
+.*
+				UNLK		A6						;RELEASE LOCAL VARIABLES
+.*
+				IF			&Eval(&Syslst[1])=0 THEN  ;NO PARAMETERS ?
+				RTS 								;THEN JUST RTS
+.*
+				ELSE
+				RTD 		#&Syslst[1] 			;STRIP PARAMETERS AND RETURN
+				ENDIF
+.*
+				ENDM
+				MACRO
+				_StackAvail
+				MOVE.L		$400+4*$65,A0			;get address of stack space routine
+				JSR 		(A0)					;get stack space into D0 and return
+				ENDM
+				MACRO
+				_GetScreenBits						; it's in crsrcore!!
+				DC.W		($A833) 				;new trap number
+				ENDM
+; Power Manager Data Structures
+
+pmCommand		EQU 		0						; Power manager parameter block
+pmLength		EQU 		pmCommand+2 			;Power manager parameter block
+pmSBuffer		EQU 		pmLength+2				;Power manager parameter block
+pmRBuffer		EQU 		pmSBuffer+4 			;Power manager parameter block
+
+; Power Manager Commands
+
+powerCntl		EQU 		$10 					;Power Manager parameter block - Power/clock control
+pMgrADB 		EQU 		$20 					;Power Manager parameter block - Apple Desktop Bus
+readADB 		EQU 		$28 					;Power Manager parameter block - Apple Desktop Bus
+pMgrADBInt		EQU 		$2F 					;Power Manager parameter block - Apple Desktop Bus
+timeWrite		EQU 		$30 					;Power Manager parameter block - Clock/parameter ram
+pramWrite		EQU 		$31 					;Power Manager parameter block - Clock/parameter ram
+xPramWrite		EQU 		$32 					;Power Manager parameter block - Clock/parameter ram
+timeRead		EQU 		$38 					;Power Manager parameter block - Clock/parameter ram
+pramRead		EQU 		$39 					;Power Manager parameter block - Clock/parameter ram
+xPramRead		EQU 		$3A 					;Power Manager parameter block - Clock/parameter ram
+contrast		EQU 		$40 					;Power Manager parameter block - Screen contrast control
+modemSet		EQU 		$50 					;Power Manager parameter block - Internal modem setup
+batteryRead 	EQU 		$60 					;Power Manager parameter block - Battery/charger level and status
+sleepReq		EQU 		$7F 					;Power Manager parameter block - Sleep request
+readINT 		EQU 		$78 					;Power Manager parameter block - Read power manager interrupt flag register
+sleepAck		EQU 		$70 					;Power Manager parameter block - Sleep acknowledge
+
+;Power control/clock equates (command $10)
+iwmOn			EQU 		$81 					;Disk controller clock
+iwmOff			EQU 		$01 					;Disk controller clock
+sccOn			EQU 		$82 					;SCC chip clock
+sccOff			EQU 		$02 					;SCC chip clock
+serOn			EQU 		$90 					;Serial output drivers power
+serOFF			EQU 		$10 					;Serial output drivers power
+minus5on		EQU 		$C0 					;Minus 5 volts power
+minus5off		EQU 		$40 					;Minus 5 volts power
+ascOn			EQU 		$A0 					;Sound chip clock and analog power
+ascOff			EQU 		$20 					;Sound chip clock and analog power
+
+;Interrupt flag register usage (command $78)
+adbIntFlag		EQU 		0						;ADB data ready
+batIntFlag		EQU 		1						;Low BATtery power
+envIntFlag		EQU 		2						;ENVironmental problem
+;Power manager loopcounts
+wait8us 		EQU 		$40 					;For software loop, remove later
+; equates for dynamic menuList structure
+;
+;----- Part 1 -- regular menus
+mbResID 		EQU 		4						; menuBar variant offset in menuList [word]
+menu1Size		EQU 		mbResID + 2 			; Must be = 6 forever!!!
+
+;----- Part 2 -- hierarchical menus
+lastHMenu		EQU 		0						; offset in HMenu part of dynamic menuList [word]
+menuTitleSave	EQU 		lastHMenu + 2			; handle to saved bits behind title rectangle [handle]
+menu2Size		EQU 		menuTitleSave+4 		; size of HMenu entry
+menuHoH 		EQU 		0						; hierarchical menu [handle]
+
+;----- Size of menuList at InitMenus time -- no menus, no hierarchical menus
+initMListSize	EQU 		menu1Size + menu2Size
+; equates for mbarproc's save structure created when it receives Init Msg (Msg #3)
+;
+;----- Header
+lastMBSave		EQU 		0						; offset to last menu saved in structure [word]
+mbCustomStorage   EQU		lastMBSave + 2			; private storage for custom mbarproc's [handle]
+mbItemRect		EQU 		mbCustomStorage + 4 	; rect of currently chosen menu item [rect]
+mbMenuDelay 	EQU 		mbItemRect + 8			; get MenuDelay from paramram and store here [byte]
+mbMenuDrag		EQU 		mbMenuDelay + 1 		; get MenuDrag from paramram and store here [byte]
+mbUglyScroll	EQU 		mbMenuDrag + 1			; flag to tell whether HMenu has been brought [word]
+; before scrolling happens
+mbIconState 	EQU 		mbUglyScroll + 2		; Place to save NMgr icon state
+mbHeader		EQU 		mbIconState + 2 		; size of mb save header [$14]
+; !!!!! CAUTION: mbHeader MUST be smaller than mbEntrySize !!!!!
+
+;----- Entry
+mbRectSave		EQU 		0						; rectangle of menu on screen [8 bytes]
+mbBitsSave		EQU 		mbRectSave + 8			; handle to saved bits behind menu rectangle
+mbMenuDir		EQU 		mbBitsSave + 4			; direction menu was placed on screen,
+; to right or left of title (if first menu) 
+; or previous menu (if hierarchical menu)
+mbMLOffset		EQU 		mbMenuDir + 2			; 6 byte offset of menu in menuList [word]
+mbMLHandle		EQU 		mbMLOffset + 2			; handle of menu in menuList
+mbTopScroll 	EQU 		mbMLHandle + 4			; top scrolled to menu item, from global topMenuItem [word]
+mbBotScroll 	EQU 		mbTopScroll + 2 		; bottom scrolled to menu item, from global atMenuBottom [word]
+mbReserved		EQU 		mbBotScroll + 2 		; reserved field [long]
+mbEntrySize 	EQU 		mbReserved + 4
+mbSaveSize		EQU 		mbEntrySize*6			; x-byte header and 5 entries of x-bytes each
+firstAltMenuCmd   EQU		$1B
+altMenuCmd1 	EQU 		$1D 					; itemCmd == $1D ==> unused indicator reserved for future Apple use
+altMenuCmd2 	EQU 		$1E 					; itemCmd == $1E ==> unused indicator reserved for future Apple use
+altMenuCmd3 	EQU 		$1F 					; itemCmd == $1F ==> unused indicator reserved for future Apple use
+lastAltMenuCmd	EQU 		$1F
+mbRightDir		EQU 		0						; menu went to the right (direction)
+mbLeftDir		EQU 		1						; menu went to the left (direction)
+menuDelay		EQU 		$7E 					; param ram locations for user settable
+menuDrag		EQU 		$7F 					; hierarchical menu delay and drag ticks
+
+
+				IMPORT		BaseOfROM
+
+				MACRO
+				BigLea		&label,&reg
+				LEA 		(ROMStart+(&label-BaseOfROM)).L,&reg
+				ENDM
+
+				MACRO
+				BigJmp		&label
+				JMP 		(ROMStart+(&label-BaseOfROM)).L
+				ENDM
+
+				MACRO
+				BigJsr		&label
+				JSR 		(ROMStart+(&label-BaseOfROM)).L
+				ENDM
+
+
+;_________________________________
+;
+; RAM-less subroutine call macros
+;_________________________________
+
+
+				MACRO
+				BSR5		&label
+				LEA 		@1,A5
+				JMP 		&label
+@1
+				ENDM
+
+				MACRO
+				RTS5
+				JMP 		(A5)
+				ENDM
+
+				MACRO
+				BSR6		&label
+				LEA 		@1,A6
+				JMP 		&label
+@1
+				ENDM
+
+				MACRO
+				RTS6
+				JMP 		(A6)
+				ENDM
+
+				MACRO
+				_GetWaitFlags
+				MOVEA.W 	#2,A0
+				_InternalWait
+				ENDM
+
+				MACRO
+				_SetWaitFlags
+				MOVEA.W 	#3,A0
+				_InternalWait
+				ENDM
+
+				MACRO
+				_DisableDynWait
+				MOVEA.W 	#4,A0
+				_InternalWait
+				ENDM
+
+				MACRO
+				_EnableDynWait
+				MOVEA.W 	#5,A0
+				_InternalWait
+				ENDM
+
+				MACRO
+				_DisablePermWait
+				MOVEA.W 	#6,A0
+				_InternalWait
+				ENDM
+
+				MACRO
+				_EnablePermWait
+				MOVEA.W 	#7,A0
+				_InternalWait
+				ENDM
+
+; _AssumeEq Arg1, Arg2 -- macro to generate a compile-time error if two <01Oct85>
+; arguments are unequal. <01Oct85>
+
+				MACRO
+				_AssumeEq
+				IF			&EVAL(&SysList[1]) <> &EVAL(&SysList[2]) THEN
+				ERR 								; Invalid statement - will cause error
+				ENDIF
+				ENDM
+
+
+; Power Manager Local Storage
+
+SleepCount		EQU 		0						;  (00) Current countdown
+SleepTime		EQU 		SleepCount+2			; (02) Time out until sleep
+IdleCount		EQU 		SleepTime+4 			; (06) The target number of ticks to wait
+MyEventRec		EQU 		IdleCount+4 			;  (0A) Event record to call oseventavail
+ScreenPtr		EQU 		MyEventRec+16			;  (1A) Pointer to saved screen image
+SleepQHdr		EQU 		ScreenPtr+4 			;  (1E) sleep queue header
+SlpQFlags		EQU 		SleepQHdr				; (1E) Sleep queue flags
+SlpQHead		EQU 		SlpQFlags+2 			; (20) First sleep queue entry
+SlpQTail		EQU 		SlpQHead+4				; (24) last sleep queue entru
+Time2Sleep		EQU 		SlpQTail+4				; (28) Time to go to sleep in seconds
+Time2Idle		EQU 		Time2Sleep+4			; (2C) Time to go to idle in seconds
+; (2C)
+SleepCDwn		EQU 		Time2Idle+4 			; (30) sleep count down
+IdleCDwn		EQU 		SleepCDwn+4 			; (34) idle count down
+STimeTask		EQU 		IdleCDwn+4				; (38) Sleep time task queue
+STTaskqLink 	EQU 		STimeTask				; (38) sleep time task, next queue entry
+STTaskqType 	EQU 		STTaskqLink+4			; (3C) sleep time task, queue type
+STTasktmAddr	EQU 		STTaskqType+2			; (3E) Sleep time task, pointer to routine
+STTasktmCount	EQU 		STTasktmAddr+4			; (42) sleep time task. reserved
+NullECnt		EQU 		STTasktmCount+4 		; (46) null event count
+ActNullECnt 	EQU 		NullECnt+2				; (48) standard active mode null event count
+IdleNullECnt	EQU 		ActNullECnt+2			; (4A) standard idle mode null event count
+SaveSpeedo		EQU 		IdleNullECnt+2			; (4C) save the speedometer reading here
+SleepFlags		EQU 		SaveSpeedo+1			; (4D) status flag
+PmgrVarSize 	EQU 		SleepFlags+1			; (4E) power manager local variable size
+
+; Define fields in SleepFlags
+SiReset 		EQU 		0						; 1 = reset sleep/idle count down
+
+; sleep queue commands
+SleepRequest	EQU 		1						; sleep request
+SleepDemand 	EQU 		2						; Sleep Demand
+SleepWakeUp 	EQU 		3						; wake up
+
+; Structure of sleep queue record
+SleepqLink		EQU 		0						; qLink
+SleepqType		EQU 		SleepqLink+4			; qType
+SleepqProc		EQU 		SleepqType+2			; procPtr
+SleepqFlags 	EQU 		SleepqProc+4			; flags
+
+; Sleep Queue Flags - SleepqFlags
+NoCalls 		EQU 		1						; no need to call
+NoRequest		EQU 		2						; no need to send sleep request
+
+
+				ENDIF								;end exclusion of private information

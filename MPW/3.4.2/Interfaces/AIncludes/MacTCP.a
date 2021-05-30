@@ -1,0 +1,648 @@
+;
+;	File:		MacTCP.a
+;
+;	Contains:	TCP Manager Interfaces.
+;
+;	Version:	Technology:	MacTCP 2.0.6
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__MACTCP__') = 'UNDEFINED' THEN
+__MACTCP__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+	include 'AppleTalk.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;			include 'MixedMode.a'									;
+;			include 'Memory.a'										;
+;
+;Developer Notes:
+;		0. This MacTCP header replaces what used to be defined in the following header files
+;			MacTCPCommonTypes.h
+;			GetMyIPAddr.h
+;			MiscIPPB.h
+;			TCPPB.h
+;			UDPPB.h 
+;			
+;			When the various control calls are made to the ip driver, you must set up a 
+;			NewRoutineDescriptor for every non-nil completion routine and/or notifyProc parameter.  
+;			Otherwise, the 68K driver code, will not correctly call your routine.
+;		1. For ipctlGetAddr Control calls, use NewGetIPIOCompletionProc
+;			to set up a GetIPIOCompletionUPP universal procptr to pass as
+;			the ioCompletion parameter.
+;		2. For the ipctlEchoICMP and ipctlLAPStats Control calls, use 
+;			NewIPIOCompletion to set up a IPIOCompletionUPP universal procptr
+;			to pass in the ioCompletion field of the parameter block.
+;		3. For TCPCreatePB Control calls, use NewTCPNotifyProc to set up a
+;			TCPNotifyUPP universal procptr to pass in the notifyProc field
+;			of the parameter block
+;		4. For all of the TCP Control calls using the TCPiopb parameter block,
+;			use NewTCPIOCompletionProc to set up a TCPIOCompletionUPP
+;			universal procptr to pass in the ioCompletion field of the paramter
+;			block.
+;		5. For UDBCreatePB Control calls, use NewUDPNotifyProc to set up a
+;			UDPNotifyUPP universal procptr to pass in the notifyProc field
+;			of the parameter block
+;		6. For all of the UDP Control calls using the UDPiopb parameter block,
+;			use NewUDPIOCompletionProc to set up a UDPIOCompletionUPP
+;			universal procptr to pass in the ioCompletion field of the paramter
+;			block.
+;		7. For all calls implementing a notifyProc or ioCompletion routine
+;			which was set up using a NewTCPRoutineProc call, do not call
+;			DisposeRoutineSDescriptor on the universal procptr until
+;			after the completion or notify proc has completed.
+;
+; MacTCP return Codes in the range -23000 through -23049 
+
+inProgress						EQU		1					; I/O in progress 
+ipBadLapErr						EQU		-23000				; bad network configuration 
+ipBadCnfgErr					EQU		-23001				; bad IP configuration error 
+ipNoCnfgErr						EQU		-23002				; missing IP or LAP configuration error 
+ipLoadErr						EQU		-23003				; error in MacTCP load 
+ipBadAddr						EQU		-23004				; error in getting address 
+connectionClosing				EQU		-23005				; connection is closing 
+invalidLength					EQU		-23006
+connectionExists				EQU		-23007				; request conflicts with existing connection 
+connectionDoesntExist			EQU		-23008				; connection does not exist 
+insufficientResources			EQU		-23009				; insufficient resources to perform request 
+invalidStreamPtr				EQU		-23010
+streamAlreadyOpen				EQU		-23011
+connectionTerminated			EQU		-23012
+invalidBufPtr					EQU		-23013
+invalidRDS						EQU		-23014
+invalidWDS						EQU		-23014
+openFailed						EQU		-23015
+commandTimeout					EQU		-23016
+duplicateSocket					EQU		-23017
+
+; Error codes from internal IP functions 
+ipDontFragErr					EQU		-23032				; Packet too large to send w/o fragmenting 
+ipDestDeadErr					EQU		-23033				; destination not responding 
+icmpEchoTimeoutErr				EQU		-23035				; ICMP echo timed-out 
+ipNoFragMemErr					EQU		-23036				; no memory to send fragmented pkt 
+ipRouteErr						EQU		-23037				; can't route packet off-net 
+nameSyntaxErr					EQU		-23041
+cacheFault						EQU		-23042
+noResultProc					EQU		-23043
+noNameServer					EQU		-23044
+authNameErr						EQU		-23045
+noAnsErr						EQU		-23046
+dnrErr							EQU		-23047
+outOfMemory						EQU		-23048
+
+BYTES_16WORD					EQU		2					; bytes per = 16, bit ip word 
+BYTES_32WORD					EQU		4					; bytes per = 32, bit ip word 
+BYTES_64WORD					EQU		8					; bytes per = 64, bit ip word 
+
+; 8-bit quantity 
+; typedef UInt8 			b_8
+; 16-bit quantity 
+; typedef UInt16 			b_16
+; 32-bit quantity 
+; typedef UInt32 			b_32
+; IP address is 32-bits 
+; typedef b_32 				ip_addr
+ip_addrbytes 			RECORD	0
+addr					 ds.l   1		; offset: $0 (0)
+						 ORG 0
+byte					 ds.b   4		; offset: $0 (0)
+						 ORG 4
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ip_addrbytes  ip_addrbytes
+wdsEntry 				RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of buffer 
+ptr						 ds.l   1		; offset: $2 (2)		; pointer to buffer 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct wdsEntry 	wdsEntry
+rdsEntry 				RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of buffer 
+ptr						 ds.l   1		; offset: $2 (2)		; pointer to buffer 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct rdsEntry 	rdsEntry
+; typedef unsigned long 	BufferPtr
+; typedef unsigned long 	StreamPtr
+
+netUnreach						EQU		0
+hostUnreach						EQU		1
+protocolUnreach					EQU		2
+portUnreach						EQU		3
+fragReqd						EQU		4
+sourceRouteFailed				EQU		5
+timeExceeded					EQU		6
+parmProblem						EQU		7
+missingOption					EQU		8
+lastICMPMsgType					EQU		32767
+
+; typedef unsigned short 	ICMPMsgType
+; typedef b_16 				ip_port
+ICMPReport 				RECORD	0
+streamPtr				 ds.l   1		; offset: $0 (0)
+localHost				 ds.l   1		; offset: $4 (4)
+localPort				 ds.w   1		; offset: $8 (8)
+remoteHost				 ds.l   1		; offset: $A (10)
+remotePort				 ds.w   1		; offset: $E (14)
+reportType				 ds.w   1		; offset: $10 (16)
+optionalAddlInfo		 ds.w   1		; offset: $12 (18)
+optionalAddlInfoPtr		 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct ICMPReport  ICMPReport
+; csCode to get our IP address 
+
+ipctlGetAddr					EQU		15
+
+GetAddrParamBlock 		RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)		; standard I/O header 
+ourAddress				 ds.l   1		; offset: $1C (28)		; our IP address 
+ourNetMask				 ds.l   1		; offset: $20 (32)		; our IP net mask 
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct GetAddrParamBlock  GetAddrParamBlock
+; control codes 
+
+ipctlEchoICMP					EQU		17					; send icmp echo 
+ipctlLAPStats					EQU		19					; get lap stats 
+
+ICMPParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)		; standard I/O header 
+params					 ds.w   11		; offset: $1C (28)
+echoRequestOut			 ds.l   1		; offset: $32 (50)		; time in ticks of when the echo request went out 
+echoReplyIn				 ds.l   1		; offset: $36 (54)		; time in ticks of when the reply was received 
+echoedData				 ds     rdsEntry ; offset: $3A (58)		; data received in responce 
+options					 ds.l   1		; offset: $40 (64)
+userDataPtr				 ds.l   1		; offset: $44 (68)
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+IPParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)		; standard I/O header 
+dest					 ds.l   1		; offset: $1C (28)		; echo to IP address 
+data					 ds     wdsEntry ; offset: $20 (32)
+timeout					 ds.w   1		; offset: $26 (38)
+options					 ds.l   1		; offset: $28 (40)
+optLength				 ds.w   1		; offset: $2C (44)
+icmpCompletion			 ds.l   1		; offset: $2E (46)
+userDataPtr				 ds.l   1		; offset: $32 (50)
+						 ORG 28
+lapStatsPtr				 ds.l   1		; offset: $1C (28)
+						 ORG 54
+sizeof					 EQU *			; size:   $36 (54)
+						ENDR
+
+LAPStatsAddrXlation 	RECORD	0
+arp_table				 ds.l   1		; offset: $0 (0)
+						 ORG 0
+nbp_table				 ds.l   1		; offset: $0 (0)
+						 ORG 4
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+LAPStats 				RECORD	0
+ifType					 ds.w   1		; offset: $0 (0)
+ifString				 ds.l   1		; offset: $2 (2)
+ifMaxMTU				 ds.w   1		; offset: $6 (6)
+ifSpeed					 ds.l   1		; offset: $8 (8)
+ifPhyAddrLength			 ds.w   1		; offset: $C (12)
+ifPhysicalAddress		 ds.l   1		; offset: $E (14)
+AddrXlation				 ds.l   1		; offset: $12 (18)
+slotNumber				 ds.w   1		; offset: $16 (22)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct LAPStats 	LAPStats
+nbp_entry 				RECORD	0
+ip_address				 ds.l   1		; offset: $0 (0)		; IP address 
+at_address				 ds     AddrBlock ; offset: $4 (4)		; matching AppleTalk address 
+gateway					 ds.b   1		; offset: $8 (8)		; TRUE if entry for a gateway 
+valid					 ds.b   1		; offset: $9 (9)		; TRUE if LAP address is valid 
+probing					 ds.b   1		; offset: $A (10)		; TRUE if NBP lookup pending 
+afiller					 ds.b   1		; offset: $B (11)		; Filler for proper byte alignment	 
+age						 ds.l   1		; offset: $C (12)		; ticks since cache entry verified 
+access					 ds.l   1		; offset: $10 (16)		; ticks since last access 
+filler					 ds.b   116		; offset: $14 (20)		; for internal use only !!! 
+sizeof					 EQU *			; size:   $88 (136)
+						ENDR
+
+Enet_addr 				RECORD	0
+en_hi					 ds.w   1		; offset: $0 (0)
+en_lo					 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct Enet_addr 	Enet_addr
+arp_entry 				RECORD	0
+age						 ds.w   1		; offset: $0 (0)		; cache aging field 
+protocol				 ds.w   1		; offset: $2 (2)		; Protocol type 
+ip_address				 ds.l   1		; offset: $4 (4)		; IP address 
+en_address				 ds     Enet_addr ; offset: $8 (8)		; matching Ethernet address 
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct arp_entry 	arp_entry
+; number of ARP table entries 
+
+ARP_TABLE_SIZE					EQU		20
+
+NBP_TABLE_SIZE					EQU		20					; number of NBP table entries 
+NBP_MAX_NAME_SIZE				EQU		16 + 10 + 2
+
+; Command codes 
+TCPCreate						EQU		30
+TCPPassiveOpen					EQU		31
+TCPActiveOpen					EQU		32
+TCPSend							EQU		34
+TCPNoCopyRcv					EQU		35
+TCPRcvBfrReturn					EQU		36
+TCPRcv							EQU		37
+TCPClose						EQU		38
+TCPAbort						EQU		39
+TCPStatus						EQU		40
+TCPExtendedStat					EQU		41
+TCPRelease						EQU		42
+TCPGlobalInfo					EQU		43
+TCPCtlMax						EQU		49
+
+TCPClosing						EQU		1
+TCPULPTimeout					EQU		2
+TCPTerminate					EQU		3
+TCPDataArrival					EQU		4
+TCPUrgent						EQU		5
+TCPICMPReceived					EQU		6
+lastEvent						EQU		32767
+
+; typedef unsigned short 	TCPEventCode
+
+TCPRemoteAbort					EQU		2
+TCPNetworkFailure				EQU		3
+TCPSecPrecMismatch				EQU		4
+TCPULPTimeoutTerminate			EQU		5
+TCPULPAbort						EQU		6
+TCPULPClose						EQU		7
+TCPServiceError					EQU		8
+lastReason						EQU		32767
+
+; typedef unsigned short 	TCPTerminationReason
+; typedef unsigned short 	tcp_port
+; ValidityFlags 
+
+timeoutValue					EQU		$80
+timeoutAction					EQU		$40
+typeOfService					EQU		$20
+precedence						EQU		$10
+
+; TOSFlags 
+lowDelay						EQU		$01
+throughPut						EQU		$02
+reliability						EQU		$04
+
+TCPCreatePB 			RECORD	0
+rcvBuff					 ds.l   1		; offset: $0 (0)
+rcvBuffLen				 ds.l   1		; offset: $4 (4)
+notifyProc				 ds.l   1		; offset: $8 (8)
+userDataPtr				 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct TCPCreatePB  TCPCreatePB
+TCPOpenPB 				RECORD	0
+ulpTimeoutValue			 ds.b   1		; offset: $0 (0)
+ulpTimeoutAction		 ds.b   1		; offset: $1 (1)
+validityFlags			 ds.b   1		; offset: $2 (2)
+commandTimeoutValue		 ds.b   1		; offset: $3 (3)
+remoteHost				 ds.l   1		; offset: $4 (4)
+remotePort				 ds.w   1		; offset: $8 (8)
+localHost				 ds.l   1		; offset: $A (10)
+localPort				 ds.w   1		; offset: $E (14)
+tosFlags				 ds.b   1		; offset: $10 (16)
+precedence				 ds.b   1		; offset: $11 (17)
+dontFrag				 ds.b   1		; offset: $12 (18)
+timeToLive				 ds.b   1		; offset: $13 (19)
+security				 ds.b   1		; offset: $14 (20)
+optionCnt				 ds.b   1		; offset: $15 (21)
+options					 ds.b   40		; offset: $16 (22)
+userDataPtr				 ds.l   1		; offset: $3E (62)
+sizeof					 EQU *			; size:   $42 (66)
+						ENDR
+
+; typedef struct TCPOpenPB 	TCPOpenPB
+TCPSendPB 				RECORD	0
+ulpTimeoutValue			 ds.b   1		; offset: $0 (0)
+ulpTimeoutAction		 ds.b   1		; offset: $1 (1)
+validityFlags			 ds.b   1		; offset: $2 (2)
+pushFlag				 ds.b   1		; offset: $3 (3)
+urgentFlag				 ds.b   1		; offset: $4 (4)
+filler					 ds.b   1		; offset: $5 (5)		; Filler for proper byte alignment	 
+wdsPtr					 ds.l   1		; offset: $6 (6)
+sendFree				 ds.l   1		; offset: $A (10)
+sendLength				 ds.w   1		; offset: $E (14)
+userDataPtr				 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct TCPSendPB 	TCPSendPB
+; for receive and return rcv buff calls 
+;   Note: the filler in the following structure is in a different location than 
+;         that specified in the Programmer's Guide.  
+TCPReceivePB 			RECORD	0
+commandTimeoutValue		 ds.b   1		; offset: $0 (0)
+markFlag				 ds.b   1		; offset: $1 (1)
+urgentFlag				 ds.b   1		; offset: $2 (2)
+filler					 ds.b   1		; offset: $3 (3)		; Filler for proper byte alignment  
+rcvBuff					 ds.l   1		; offset: $4 (4)
+rcvBuffLen				 ds.w   1		; offset: $8 (8)
+rdsPtr					 ds.l   1		; offset: $A (10)
+rdsLength				 ds.w   1		; offset: $E (14)
+secondTimeStamp			 ds.w   1		; offset: $10 (16)
+userDataPtr				 ds.l   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+; typedef struct TCPReceivePB  TCPReceivePB
+TCPClosePB 				RECORD	0
+ulpTimeoutValue			 ds.b   1		; offset: $0 (0)
+ulpTimeoutAction		 ds.b   1		; offset: $1 (1)
+validityFlags			 ds.b   1		; offset: $2 (2)
+filler					 ds.b   1		; offset: $3 (3)		; Filler for proper byte alignment	 
+userDataPtr				 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct TCPClosePB  TCPClosePB
+HistoBucket 			RECORD	0
+value					 ds.w   1		; offset: $0 (0)
+counter					 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct HistoBucket  HistoBucket
+
+NumOfHistoBuckets				EQU		7
+
+TCPConnectionStats 		RECORD	0
+dataPktsRcvd			 ds.l   1		; offset: $0 (0)
+dataPktsSent			 ds.l   1		; offset: $4 (4)
+dataPktsResent			 ds.l   1		; offset: $8 (8)
+bytesRcvd				 ds.l   1		; offset: $C (12)
+bytesRcvdDup			 ds.l   1		; offset: $10 (16)
+bytesRcvdPastWindow		 ds.l   1		; offset: $14 (20)
+bytesSent				 ds.l   1		; offset: $18 (24)
+bytesResent				 ds.l   1		; offset: $1C (28)
+numHistoBuckets			 ds.w   1		; offset: $20 (32)
+sentSizeHisto			 ds.b   7 * HistoBucket.sizeof ; offset: $22 (34)
+lastRTT					 ds.w   1		; offset: $4C (76)
+tmrSRTT					 ds.w   1		; offset: $4E (78)
+rttVariance				 ds.w   1		; offset: $50 (80)
+tmrRTO					 ds.w   1		; offset: $52 (82)
+sendTries				 ds.b   1		; offset: $54 (84)
+sourchQuenchRcvd		 ds.b   1		; offset: $55 (85)
+sizeof					 EQU *			; size:   $56 (86)
+						ENDR
+
+; typedef struct TCPConnectionStats  TCPConnectionStats
+TCPStatusPB 			RECORD	0
+ulpTimeoutValue			 ds.b   1		; offset: $0 (0)
+ulpTimeoutAction		 ds.b   1		; offset: $1 (1)
+unused					 ds.l   1		; offset: $2 (2)
+remoteHost				 ds.l   1		; offset: $6 (6)
+remotePort				 ds.w   1		; offset: $A (10)
+localHost				 ds.l   1		; offset: $C (12)
+localPort				 ds.w   1		; offset: $10 (16)
+tosFlags				 ds.b   1		; offset: $12 (18)
+precedence				 ds.b   1		; offset: $13 (19)
+connectionState			 ds.b   1		; offset: $14 (20)
+filler					 ds.b   1		; offset: $15 (21)		; Filler for proper byte alignment	 
+sendWindow				 ds.w   1		; offset: $16 (22)
+rcvWindow				 ds.w   1		; offset: $18 (24)
+amtUnackedData			 ds.w   1		; offset: $1A (26)
+amtUnreadData			 ds.w   1		; offset: $1C (28)
+securityLevelPtr		 ds.l   1		; offset: $1E (30)
+sendUnacked				 ds.l   1		; offset: $22 (34)
+sendNext				 ds.l   1		; offset: $26 (38)
+congestionWindow		 ds.l   1		; offset: $2A (42)
+rcvNext					 ds.l   1		; offset: $2E (46)
+srtt					 ds.l   1		; offset: $32 (50)
+lastRTT					 ds.l   1		; offset: $36 (54)
+sendMaxSegSize			 ds.l   1		; offset: $3A (58)
+connStatPtr				 ds.l   1		; offset: $3E (62)
+userDataPtr				 ds.l   1		; offset: $42 (66)
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct TCPStatusPB  TCPStatusPB
+TCPAbortPB 				RECORD	0
+userDataPtr				 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct TCPAbortPB  TCPAbortPB
+TCPParam 				RECORD	0
+tcpRtoA					 ds.l   1		; offset: $0 (0)
+tcpRtoMin				 ds.l   1		; offset: $4 (4)
+tcpRtoMax				 ds.l   1		; offset: $8 (8)
+tcpMaxSegSize			 ds.l   1		; offset: $C (12)
+tcpMaxConn				 ds.l   1		; offset: $10 (16)
+tcpMaxWindow			 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct TCPParam 	TCPParam
+TCPStats 				RECORD	0
+tcpConnAttempts			 ds.l   1		; offset: $0 (0)
+tcpConnOpened			 ds.l   1		; offset: $4 (4)
+tcpConnAccepted			 ds.l   1		; offset: $8 (8)
+tcpConnClosed			 ds.l   1		; offset: $C (12)
+tcpConnAborted			 ds.l   1		; offset: $10 (16)
+tcpOctetsIn				 ds.l   1		; offset: $14 (20)
+tcpOctetsOut			 ds.l   1		; offset: $18 (24)
+tcpOctetsInDup			 ds.l   1		; offset: $1C (28)
+tcpOctetsRetrans		 ds.l   1		; offset: $20 (32)
+tcpInputPkts			 ds.l   1		; offset: $24 (36)
+tcpOutputPkts			 ds.l   1		; offset: $28 (40)
+tcpDupPkts				 ds.l   1		; offset: $2C (44)
+tcpRetransPkts			 ds.l   1		; offset: $30 (48)
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+; typedef struct TCPStats 	TCPStats
+; typedef StreamPtr 		*StreamPPtr
+TCPGlobalInfoPB 		RECORD	0
+tcpParamPtr				 ds.l   1		; offset: $0 (0)
+tcpStatsPtr				 ds.l   1		; offset: $4 (4)
+tcpCDBTable				 ds.l   1		; offset: $8 (8)
+userDataPtr				 ds.l   1		; offset: $C (12)
+maxTCPConnections		 ds.w   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct TCPGlobalInfoPB  TCPGlobalInfoPB
+TCPiopb 				RECORD	0
+fill12					 ds.b   12		; offset: $0 (0)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+tcpStream				 ds.l   1		; offset: $1C (28)
+create					 ds     TCPCreatePB ; offset: $20 (32)
+						 ORG 32
+open					 ds     TCPOpenPB ; offset: $20 (32)
+						 ORG 32
+send					 ds     TCPSendPB ; offset: $20 (32)
+						 ORG 32
+receive					 ds     TCPReceivePB ; offset: $20 (32)
+						 ORG 32
+close					 ds     TCPClosePB ; offset: $20 (32)
+						 ORG 32
+abort					 ds     TCPAbortPB ; offset: $20 (32)
+						 ORG 32
+status					 ds     TCPStatusPB ; offset: $20 (32)
+						 ORG 32
+globalInfo				 ds     TCPGlobalInfoPB ; offset: $20 (32)
+						 ORG 102
+sizeof					 EQU *			; size:   $66 (102)
+						ENDR
+
+; typedef struct TCPiopb 	TCPiopb
+
+UDPCreate						EQU		20
+UDPRead							EQU		21
+UDPBfrReturn					EQU		22
+UDPWrite						EQU		23
+UDPRelease						EQU		24
+UDPMaxMTUSize					EQU		25
+UDPStatus						EQU		26
+UDPMultiCreate					EQU		27
+UDPMultiSend					EQU		28
+UDPMultiRead					EQU		29
+UDPCtlMax						EQU		29
+
+UDPDataArrival					EQU		1
+UDPICMPReceived					EQU		2
+lastUDPEvent					EQU		32767
+
+; typedef unsigned short 	UDPEventCode
+; typedef unsigned short 	udp_port
+; for create and release calls 
+UDPCreatePB 			RECORD	0
+rcvBuff					 ds.l   1		; offset: $0 (0)
+rcvBuffLen				 ds.l   1		; offset: $4 (4)
+notifyProc				 ds.l   1		; offset: $8 (8)
+localPort				 ds.w   1		; offset: $C (12)
+userDataPtr				 ds.l   1		; offset: $E (14)
+endingPort				 ds.w   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct UDPCreatePB  UDPCreatePB
+UDPSendPB 				RECORD	0
+reserved				 ds.w   1		; offset: $0 (0)
+remoteHost				 ds.l   1		; offset: $2 (2)
+remotePort				 ds.w   1		; offset: $6 (6)
+wdsPtr					 ds.l   1		; offset: $8 (8)
+checkSum				 ds.b   1		; offset: $C (12)
+filler					 ds.b   1		; offset: $D (13)		; Filler for proper byte alignment	 
+sendLength				 ds.w   1		; offset: $E (14)
+userDataPtr				 ds.l   1		; offset: $10 (16)
+localPort				 ds.w   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+; typedef struct UDPSendPB 	UDPSendPB
+; for receive and buffer return calls 
+UDPReceivePB 			RECORD	0
+timeOut					 ds.w   1		; offset: $0 (0)
+remoteHost				 ds.l   1		; offset: $2 (2)
+remotePort				 ds.w   1		; offset: $6 (6)
+rcvBuff					 ds.l   1		; offset: $8 (8)
+rcvBuffLen				 ds.w   1		; offset: $C (12)
+secondTimeStamp			 ds.w   1		; offset: $E (14)
+userDataPtr				 ds.l   1		; offset: $10 (16)
+destHost				 ds.l   1		; offset: $14 (20)		; only for use with multi rcv 
+destPort				 ds.w   1		; offset: $18 (24)		; only for use with multi rcv 
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct UDPReceivePB  UDPReceivePB
+UDPMTUPB 				RECORD	0
+mtuSize					 ds.w   1		; offset: $0 (0)
+remoteHost				 ds.l   1		; offset: $2 (2)
+userDataPtr				 ds.l   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct UDPMTUPB 	UDPMTUPB
+UDPiopb 				RECORD	0
+fill12					 ds.b   12		; offset: $0 (0)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+ioNamePtr				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioCRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+udpStream				 ds.l   1		; offset: $1C (28)
+create					 ds     UDPCreatePB ; offset: $20 (32)
+						 ORG 32
+send					 ds     UDPSendPB ; offset: $20 (32)
+						 ORG 32
+receive					 ds     UDPReceivePB ; offset: $20 (32)
+						 ORG 32
+mtu						 ds     UDPMTUPB ; offset: $20 (32)
+						 ORG 58
+sizeof					 EQU *			; size:   $3A (58)
+						ENDR
+
+; typedef struct UDPiopb 	UDPiopb
+	ENDIF ; __MACTCP__

@@ -1,0 +1,895 @@
+;
+;    File:       SpeechSynthesis.a
+;
+;    Contains:   Speech Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1989-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SPEECHSYNTHESIS__') = 'UNDEFINED' THEN
+__SPEECHSYNTHESIS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+kTextToSpeechSynthType			EQU		'ttsc'
+kTextToSpeechVoiceType			EQU		'ttvd'
+kTextToSpeechVoiceFileType		EQU		'ttvf'
+kTextToSpeechVoiceBundleType	EQU		'ttvb'
+
+kNoEndingProsody				EQU		1
+kNoSpeechInterrupt				EQU		2
+kPreflightThenPause				EQU		4
+
+kImmediate						EQU		0
+kEndOfWord						EQU		1
+kEndOfSentence					EQU		2
+
+; ------------------------------------------
+;  GetSpeechInfo & SetSpeechInfo selectors  
+; ------------------------------------------
+
+soStatus						EQU		'stat'
+soErrors						EQU		'erro'
+soInputMode						EQU		'inpt'
+soCharacterMode					EQU		'char'
+soNumberMode					EQU		'nmbr'
+soRate							EQU		'rate'
+soPitchBase						EQU		'pbas'
+soPitchMod						EQU		'pmod'
+soVolume						EQU		'volm'
+soSynthType						EQU		'vers'
+soRecentSync					EQU		'sync'
+soPhonemeSymbols				EQU		'phsy'
+soCurrentVoice					EQU		'cvox'
+soCommandDelimiter				EQU		'dlim'
+soReset							EQU		'rset'
+soCurrentA5						EQU		'myA5'
+soRefCon						EQU		'refc'
+soTextDoneCallBack				EQU		'tdcb'				; use with SpeechTextDoneProcPtr
+soSpeechDoneCallBack			EQU		'sdcb'				; use with SpeechDoneProcPtr
+soSyncCallBack					EQU		'sycb'				; use with SpeechSyncProcPtr
+soErrorCallBack					EQU		'ercb'				; use with SpeechErrorProcPtr
+soPhonemeCallBack				EQU		'phcb'				; use with SpeechPhonemeProcPtr
+soWordCallBack					EQU		'wdcb'
+soSynthExtension				EQU		'xtnd'
+soSoundOutput					EQU		'sndo'
+
+; ------------------------------------------
+;  Speaking Mode Constants                  
+; ------------------------------------------
+
+modeText						EQU		'TEXT'				; input mode constants             
+modePhonemes					EQU		'PHON'
+modeNormal						EQU		'NORM'				; character mode and number mode constants 
+modeLiteral						EQU		'LTRL'
+
+
+soVoiceDescription				EQU		'info'
+soVoiceFile						EQU		'fref'
+
+
+
+
+VoiceSpec				RECORD 0
+creator					 ds.l	1				; offset: $0 (0)
+id						 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct VoiceSpec *			VoiceSpecPtr
+
+
+
+kNeuter							EQU		0
+kMale							EQU		1
+kFemale							EQU		2
+
+
+
+VoiceDescription		RECORD 0
+length					 ds.l	1				; offset: $0 (0)
+voice					 ds		VoiceSpec		; offset: $4 (4)
+version					 ds.l	1				; offset: $C (12)
+name					 ds		Str63			; offset: $10 (16)
+comment					 ds		Str255			; offset: $50 (80)
+gender					 ds.w	1				; offset: $150 (336)
+age						 ds.w	1				; offset: $152 (338)
+script					 ds.w	1				; offset: $154 (340)
+language				 ds.w	1				; offset: $156 (342)
+region					 ds.w	1				; offset: $158 (344)
+reserved				 ds.l	4				; offset: $15A (346)
+sizeof					 EQU *					; size:   $16A (362)
+						ENDR
+
+
+VoiceFileInfo			RECORD 0
+fileSpec				 ds		FSSpec			; offset: $0 (0)
+resID					 ds.w	1				; offset: $46 (70)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+SpeechStatusInfo		RECORD 0
+outputBusy				 ds.b	1				; offset: $0 (0)
+outputPaused			 ds.b	1				; offset: $1 (1)
+inputBytesLeft			 ds.l	1				; offset: $2 (2)
+phonemeCode				 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+SpeechErrorInfo			RECORD 0
+count					 ds.w	1				; offset: $0 (0)
+oldest					 ds.w	1				; offset: $2 (2)
+oldPos					 ds.l	1				; offset: $4 (4)
+newest					 ds.w	1				; offset: $8 (8)
+newPos					 ds.l	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+
+SpeechVersionInfo		RECORD 0
+synthType				 ds.l	1				; offset: $0 (0)
+synthSubType			 ds.l	1				; offset: $4 (4)
+synthManufacturer		 ds.l	1				; offset: $8 (8)
+synthFlags				 ds.l	1				; offset: $C (12)
+synthVersion			 ds		NumVersion		; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+
+PhonemeInfo				RECORD 0
+opcode					 ds.w	1				; offset: $0 (0)
+phStr					 ds		Str15			; offset: $2 (2)
+exampleStr				 ds		Str31			; offset: $12 (18)
+hiliteStart				 ds.w	1				; offset: $32 (50)
+hiliteEnd				 ds.w	1				; offset: $34 (52)
+sizeof					 EQU *					; size:   $36 (54)
+						ENDR
+
+PhonemeDescriptor		RECORD 0
+phonemeCount			 ds.w	1				; offset: $0 (0)
+thePhonemes				 ds		PhonemeInfo		; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+SpeechXtndData			RECORD 0
+synthCreator			 ds.l	1				; offset: $0 (0)
+synthData				 ds.b	2				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+DelimiterInfo			RECORD 0
+startDelimiter			 ds.b	2				; offset: $0 (0)
+endDelimiter			 ds.b	2				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+
+; *  NewSpeechTextDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSpeechDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSpeechSyncUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSpeechErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSpeechPhonemeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewSpeechWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechTextDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechSyncUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechPhonemeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSpeechWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechTextDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechDoneUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechSyncUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechErrorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechPhonemeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSpeechWordUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  SpeechManagerVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NumVersion SpeechManagerVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeechManagerVersion
+			move.l              #$0000000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeechManagerVersion
+	ENDIF
+
+
+; *  MakeVoiceSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr MakeVoiceSpec(OSType creator, OSType id, VoiceSpec *voice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_MakeVoiceSpec
+			move.l              #$0604000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MakeVoiceSpec
+	ENDIF
+
+
+; *  CountVoices()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr CountVoices(short *numVoices)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CountVoices
+			move.l              #$0108000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountVoices
+	ENDIF
+
+
+; *  GetIndVoice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetIndVoice(short index, VoiceSpec *voice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetIndVoice
+			move.l              #$030C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIndVoice
+	ENDIF
+
+
+; *  GetVoiceDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetVoiceDescription(const VoiceSpec *voice, VoiceDescription *info, long infoLength)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetVoiceDescription
+			move.l              #$0610000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetVoiceDescription
+	ENDIF
+
+
+; *  GetVoiceInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetVoiceInfo(const VoiceSpec *voice, OSType selector, void *voiceInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetVoiceInfo
+			move.l              #$0614000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetVoiceInfo
+	ENDIF
+
+
+; *  NewSpeechChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NewSpeechChannel(VoiceSpec *voice, SpeechChannel *chan)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NewSpeechChannel
+			move.l              #$0418000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewSpeechChannel
+	ENDIF
+
+
+; *  DisposeSpeechChannel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DisposeSpeechChannel(SpeechChannel chan)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisposeSpeechChannel
+			move.l              #$021C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeSpeechChannel
+	ENDIF
+
+
+; *  SpeakString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SpeakString(ConstStr255Param textToBeSpoken)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeakString
+			move.l              #$0220000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeakString
+	ENDIF
+
+
+; *  SpeakText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SpeakText(SpeechChannel chan, const void *textBuf, unsigned long textBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeakText
+			move.l              #$0624000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeakText
+	ENDIF
+
+
+; *  SpeakBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SpeakBuffer(SpeechChannel chan, const void *textBuf, unsigned long textBytes, long controlFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeakBuffer
+			move.l              #$0828000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeakBuffer
+	ENDIF
+
+
+; *  StopSpeech()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr StopSpeech(SpeechChannel chan)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StopSpeech
+			move.l              #$022C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StopSpeech
+	ENDIF
+
+
+; *  StopSpeechAt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr StopSpeechAt(SpeechChannel chan, long whereToStop)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_StopSpeechAt
+			move.l              #$0430000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StopSpeechAt
+	ENDIF
+
+
+; *  PauseSpeechAt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PauseSpeechAt(SpeechChannel chan, long whereToPause)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_PauseSpeechAt
+			move.l              #$0434000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PauseSpeechAt
+	ENDIF
+
+
+; *  ContinueSpeech()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ContinueSpeech(SpeechChannel chan)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ContinueSpeech
+			move.l              #$0238000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ContinueSpeech
+	ENDIF
+
+
+; *  SpeechBusy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short SpeechBusy(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeechBusy
+			move.l              #$003C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeechBusy
+	ENDIF
+
+
+; *  SpeechBusySystemWide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short SpeechBusySystemWide(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpeechBusySystemWide
+			move.l              #$0040000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpeechBusySystemWide
+	ENDIF
+
+
+; *  SetSpeechRate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSpeechRate(SpeechChannel chan, Fixed rate)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSpeechRate
+			move.l              #$0444000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSpeechRate
+	ENDIF
+
+
+; *  GetSpeechRate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSpeechRate(SpeechChannel chan, Fixed *rate)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSpeechRate
+			move.l              #$0448000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSpeechRate
+	ENDIF
+
+
+; *  SetSpeechPitch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSpeechPitch(SpeechChannel chan, Fixed pitch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSpeechPitch
+			move.l              #$044C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSpeechPitch
+	ENDIF
+
+
+; *  GetSpeechPitch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSpeechPitch(SpeechChannel chan, Fixed *pitch)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSpeechPitch
+			move.l              #$0450000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSpeechPitch
+	ENDIF
+
+
+; *  SetSpeechInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSpeechInfo(SpeechChannel chan, OSType selector, const void *speechInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetSpeechInfo
+			move.l              #$0654000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSpeechInfo
+	ENDIF
+
+
+; *  GetSpeechInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSpeechInfo(SpeechChannel chan, OSType selector, void *speechInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetSpeechInfo
+			move.l              #$0658000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSpeechInfo
+	ENDIF
+
+
+; *  TextToPhonemes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr TextToPhonemes(SpeechChannel chan, const void *textBuf, unsigned long textBytes, Handle phonemeBuf, long *phonemeBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_TextToPhonemes
+			move.l              #$0A5C000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TextToPhonemes
+	ENDIF
+
+
+; *  UseDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SpeechLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr UseDictionary(SpeechChannel chan, Handle dictionary)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UseDictionary
+			move.l              #$0460000C,D0
+			dc.w            	$A800
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UseDictionary
+	ENDIF
+
+
+
+	ENDIF ; __SPEECHSYNTHESIS__ 
+

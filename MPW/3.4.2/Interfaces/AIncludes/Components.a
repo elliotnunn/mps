@@ -1,0 +1,597 @@
+;
+;	File:		Components.a
+;
+;	Contains:	Component Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+__COMPONENTS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+kAppleManufacturer				EQU		'appl'				; Apple supplied components 
+kComponentResourceType			EQU		'thng'
+
+kAnyComponentType				EQU		0
+kAnyComponentSubType			EQU		0
+kAnyComponentManufacturer		EQU		0
+kAnyComponentFlagsMask			EQU		0
+
+cmpWantsRegisterMessage			EQU		1 << 31
+
+kComponentOpenSelect			EQU		-1					; ComponentInstance for this open 
+kComponentCloseSelect			EQU		-2					; ComponentInstance for this close 
+kComponentCanDoSelect			EQU		-3					; selector # being queried 
+kComponentVersionSelect			EQU		-4					; no params 
+kComponentRegisterSelect		EQU		-5					; no params 
+kComponentTargetSelect			EQU		-6					; ComponentInstance for top of call chain 
+kComponentUnregisterSelect		EQU		-7					; no params 
+
+; Component Resource Extension flags 
+componentDoAutoVersion			EQU		(1 << 0)
+componentWantsUnregister		EQU		(1 << 1)
+componentAutoVersionIncludeFlags EQU		(1 << 2)
+componentHasMultiplePlatforms	EQU		(1 << 3)
+
+; Set Default Component flags 
+defaultComponentIdentical		EQU		0
+defaultComponentAnyFlags		EQU		1
+defaultComponentAnyManufacturer	EQU		2
+defaultComponentAnySubType		EQU		4
+defaultComponentAnyFlagsAnyManufacturer EQU		(defaultComponentAnyFlags + defaultComponentAnyManufacturer)
+defaultComponentAnyFlagsAnyManufacturerAnySubType EQU		(defaultComponentAnyFlags + defaultComponentAnyManufacturer + defaultComponentAnySubType)
+
+; RegisterComponentResource flags 
+registerComponentGlobal			EQU		1
+registerComponentNoDuplicates	EQU		2
+registerComponentAfterExisting	EQU		4
+
+ComponentDescription 	RECORD	0
+componentType			 ds.l   1		; offset: $0 (0)		; A unique 4-byte code indentifying the command set 
+componentSubType		 ds.l   1		; offset: $4 (4)		; Particular flavor of this instance 
+componentManufacturer	 ds.l   1		; offset: $8 (8)		; Vendor indentification 
+componentFlags			 ds.l   1		; offset: $C (12)		; 8 each for Component,Type,SubType,Manuf/revision 
+componentFlagsMask		 ds.l   1		; offset: $10 (16)		; Mask for specifying which flags to consider in search, zero during registration 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct ComponentDescription  ComponentDescription
+ResourceSpec 			RECORD	0
+resType					 ds.l   1		; offset: $0 (0)		; 4-byte code  
+resID					 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct ResourceSpec  ResourceSpec
+ComponentResource 		RECORD	0
+cd						 ds     ComponentDescription ; offset: $0 (0) ; Registration parameters 
+component				 ds     ResourceSpec ; offset: $14 (20)	; resource where Component code is found 
+componentName			 ds     ResourceSpec ; offset: $1A (26)	; name string resource 
+componentInfo			 ds     ResourceSpec ; offset: $20 (32)	; info string resource 
+componentIcon			 ds     ResourceSpec ; offset: $26 (38)	; icon resource 
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct ComponentResource  ComponentResource
+; typedef ComponentResource  *ComponentResourcePtr, **ComponentResourceHandle
+ComponentPlatformInfo 	RECORD	0
+componentFlags			 ds.l   1		; offset: $0 (0)		; flags of Component 
+component				 ds     ResourceSpec ; offset: $4 (4)	; resource where Component code is found 
+platformType			 ds.w   1		; offset: $A (10)		; gestaltSysArchitecture result 
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct ComponentPlatformInfo  ComponentPlatformInfo
+ComponentResourceExtension RECORD	0
+componentVersion		 ds.l   1		; offset: $0 (0)		; version of Component 
+componentRegisterFlags	 ds.l   1		; offset: $4 (4)		; flags for registration 
+componentIconFamily		 ds.w   1		; offset: $8 (8)		; resource id of Icon Family 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct ComponentResourceExtension  ComponentResourceExtension
+ComponentPlatformInfoArray RECORD	0
+count					 ds.l   1		; offset: $0 (0)
+platformArray			 ds     ComponentPlatformInfo ; offset: $4 (4)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct ComponentPlatformInfoArray  ComponentPlatformInfoArray
+ExtComponentResource 	RECORD	0
+cd						 ds     ComponentDescription ; offset: $0 (0) ; registration parameters 
+component				 ds     ResourceSpec ; offset: $14 (20)	; resource where Component code is found 
+componentName			 ds     ResourceSpec ; offset: $1A (26)	; name string resource 
+componentInfo			 ds     ResourceSpec ; offset: $20 (32)	; info string resource 
+componentIcon			 ds     ResourceSpec ; offset: $26 (38)	; icon resource 
+componentVersion		 ds.l   1		; offset: $2C (44)		; version of Component 
+componentRegisterFlags	 ds.l   1		; offset: $30 (48)		; flags for registration 
+componentIconFamily		 ds.w   1		; offset: $34 (52)		; resource id of Icon Family 
+count					 ds.l   1		; offset: $36 (54)		; elements in platformArray 
+platformArray			 ds     ComponentPlatformInfo ; offset: $3A (58)
+sizeof					 EQU *			; size:   $46 (70)
+						ENDR
+
+; typedef struct ExtComponentResource  ExtComponentResource
+ComponentParameters 	RECORD	0
+flags					 ds.b   1		; offset: $0 (0)		; call modifiers: sync/async, deferred, immed, etc 
+paramSize				 ds.b   1		; offset: $1 (1)		; size in bytes of actual parameters passed to this call 
+what					 ds.w   1		; offset: $2 (2)		; routine selector, negative for Component management calls 
+params					 ds.l   1		; offset: $4 (4)		; actual parameters for the indicated routine 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ComponentParameters  ComponentParameters
+ComponentRecord 		RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ComponentRecord  ComponentRecord
+; typedef ComponentRecord 	*Component
+ComponentInstanceRecord RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ComponentInstanceRecord  ComponentInstanceRecord
+; typedef ComponentInstanceRecord  *ComponentInstance
+; typedef long 				ComponentResult
+; typedef ComponentRoutineProcPtr  ComponentRoutine
+;
+;	The parameter list for each ComponentFunction is unique. It is 
+;	therefore up to users to create the appropriate procInfo for their 
+;	own ComponentFunctions where necessary.
+;
+; typedef UniversalProcPtr 	ComponentFunctionUPP
+;
+; pascal Component RegisterComponent(ComponentDescription *cd, ComponentRoutineUPP componentEntryPoint, short global, Handle componentName, Handle componentInfo, Handle componentIcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RegisterComponent
+			moveq	#1,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RegisterComponent
+	ENDIF
+
+;
+; pascal Component RegisterComponentResource(ComponentResourceHandle tr, short global)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RegisterComponentResource
+			moveq	#18,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RegisterComponentResource
+	ENDIF
+
+;
+; pascal OSErr UnregisterComponent(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UnregisterComponent
+			moveq	#2,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UnregisterComponent
+	ENDIF
+
+;
+; pascal Component FindNextComponent(Component aComponent, ComponentDescription *looking)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindNextComponent
+			moveq	#4,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindNextComponent
+	ENDIF
+
+;
+; pascal long CountComponents(ComponentDescription *looking)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountComponents
+			moveq	#3,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountComponents
+	ENDIF
+
+;
+; pascal OSErr GetComponentInfo(Component aComponent, ComponentDescription *cd, Handle componentName, Handle componentInfo, Handle componentIcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentInfo
+			moveq	#5,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentInfo
+	ENDIF
+
+;
+; pascal long GetComponentListModSeed(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentListModSeed
+			moveq	#6,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentListModSeed
+	ENDIF
+
+; Component Instance Allocation and dispatch routines 
+;
+; pascal ComponentInstance OpenComponent(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenComponent
+			moveq	#7,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenComponent
+	ENDIF
+
+;
+; pascal OSErr CloseComponent(ComponentInstance aComponentInstance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseComponent
+			moveq	#8,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseComponent
+	ENDIF
+
+;
+; pascal OSErr GetComponentInstanceError(ComponentInstance aComponentInstance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentInstanceError
+			moveq	#10,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentInstanceError
+	ENDIF
+
+; Direct calls to the Components 
+;
+; pascal long ComponentFunctionImplemented(ComponentInstance ci, short ftnNumber)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ComponentFunctionImplemented
+			dc.w 	$2F3C
+			dc.w 	$0002
+			dc.w 	$FFFD
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ComponentFunctionImplemented
+	ENDIF
+
+;
+; pascal long GetComponentVersion(ComponentInstance ci)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentVersion
+			dc.w 	$2F3C
+			dc.w 	$0000
+			dc.w 	$FFFC
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentVersion
+	ENDIF
+
+;
+; pascal long ComponentSetTarget(ComponentInstance ci, ComponentInstance target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ComponentSetTarget
+			dc.w 	$2F3C
+			dc.w 	$0004
+			dc.w 	$FFFA
+			moveq	#0,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ComponentSetTarget
+	ENDIF
+
+; Component Management routines 
+;
+; pascal void SetComponentInstanceError(ComponentInstance aComponentInstance, OSErr theError)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetComponentInstanceError
+			moveq	#11,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetComponentInstanceError
+	ENDIF
+
+;
+; pascal long GetComponentRefcon(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentRefcon
+			moveq	#16,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentRefcon
+	ENDIF
+
+;
+; pascal void SetComponentRefcon(Component aComponent, long theRefcon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetComponentRefcon
+			moveq	#17,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetComponentRefcon
+	ENDIF
+
+;
+; pascal short OpenComponentResFile(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenComponentResFile
+			moveq	#21,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenComponentResFile
+	ENDIF
+
+;
+; pascal OSErr CloseComponentResFile(short refnum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseComponentResFile
+			moveq	#24,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseComponentResFile
+	ENDIF
+
+; Component Instance Management routines 
+;
+; pascal Handle GetComponentInstanceStorage(ComponentInstance aComponentInstance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentInstanceStorage
+			moveq	#12,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentInstanceStorage
+	ENDIF
+
+;
+; pascal void SetComponentInstanceStorage(ComponentInstance aComponentInstance, Handle theStorage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetComponentInstanceStorage
+			moveq	#13,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetComponentInstanceStorage
+	ENDIF
+
+;
+; pascal long GetComponentInstanceA5(ComponentInstance aComponentInstance)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentInstanceA5
+			moveq	#14,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentInstanceA5
+	ENDIF
+
+;
+; pascal void SetComponentInstanceA5(ComponentInstance aComponentInstance, long theA5)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetComponentInstanceA5
+			moveq	#15,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetComponentInstanceA5
+	ENDIF
+
+;
+; pascal long CountComponentInstances(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountComponentInstances
+			moveq	#19,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountComponentInstances
+	ENDIF
+
+; Useful helper routines for convenient method dispatching 
+;
+; pascal long CallComponentFunction(ComponentParameters *params, ComponentFunctionUPP func)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CallComponentFunction
+			dc.w 	$70FF
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CallComponentFunction
+	ENDIF
+
+;
+; pascal long CallComponentFunctionWithStorage(Handle storage, ComponentParameters *params, ComponentFunctionUPP func)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CallComponentFunctionWithStorage
+			dc.w 	$70FF
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CallComponentFunctionWithStorage
+	ENDIF
+
+;
+; pascal long DelegateComponentCall(ComponentParameters *originalParams, ComponentInstance ci)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DelegateComponentCall
+			moveq	#36,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DelegateComponentCall
+	ENDIF
+
+;
+; pascal OSErr SetDefaultComponent(Component aComponent, short flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDefaultComponent
+			moveq	#30,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDefaultComponent
+	ENDIF
+
+;
+; pascal ComponentInstance OpenDefaultComponent(OSType componentType, OSType componentSubType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_OpenDefaultComponent
+			moveq	#33,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	OpenDefaultComponent
+	ENDIF
+
+;
+; pascal Component CaptureComponent(Component capturedComponent, Component capturingComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CaptureComponent
+			moveq	#28,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CaptureComponent
+	ENDIF
+
+;
+; pascal OSErr UncaptureComponent(Component aComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UncaptureComponent
+			moveq	#29,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UncaptureComponent
+	ENDIF
+
+;
+; pascal long RegisterComponentResourceFile(short resRefNum, short global)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RegisterComponentResourceFile
+			moveq	#20,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RegisterComponentResourceFile
+	ENDIF
+
+;
+; pascal OSErr GetComponentIconSuite(Component aComponent, Handle *iconSuite)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetComponentIconSuite
+			moveq	#41,d0
+			dc.w 	$A82A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetComponentIconSuite
+	ENDIF
+
+	ENDIF ; __COMPONENTS__

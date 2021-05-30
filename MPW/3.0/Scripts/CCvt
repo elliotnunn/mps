@@ -1,0 +1,163 @@
+#
+#		CCvt - convert C programs using MPW 2.0 and earlier headers to
+#	using MPW 3.0 headers.
+#
+#	Usage:
+#		CCvt [-p] [ -c | -y ] filename
+#
+#		CCvt changes the function names that use Points or Str255 to
+#	match the case sense introduced in MPW 2.1. Functions that use glue
+#	to convert C strings or points passed by reference will be changed
+#	from their original mixed case spellings to all lower case. Equivalent
+#	functions introduced in MPW 2.0 which accept Pascal strings or points
+#	passed by value (and therefore need no glue), are converted from their
+#	all upper case spelling to mixed case to match "Inside Macintosh".
+#
+#		The -p option allows you to see the progress of CCvt as it converts
+#	programs.
+#
+#		The -c option allows confirmation of each file before it is 
+#	processed by CCvt. It brings up a dialog box with Yes, No, and Cancel
+#	buttons enabled.
+#
+#		The -y option was originally meant as an automatic override. It is
+#	now the default condition. -c will take precidence over this option.
+#
+#		When a filename or list of filenames is specified, CCvt will accept
+#	only those filenames that end with .c or .h. This is to make sure that
+#	only C source code is affected.
+#
+#		If no filename is specified, this command will bring up a dialog
+#	box to allow you to select one file for conversion. The selected filename
+#	is not checked for .c or .h extension, so this is a mechanism to convert
+#	any other files which may need it.
+#
+#		As a backup, CCvt will keep a copy of the original file in a file
+#	named "filename.orig".
+#
+#		CCvt uses Canon and the specialized dictionaries, CCvtUMx.dict and
+#	CCvtMxL.dict, to convert function names in the new file. CCvt does check
+#	that these resources are available before beginning execution.
+#
+#		The dictionaries must exist in MPW:Tools.
+#
+#
+#	Copyright Apple Computer, Inc.	1987-1988
+#	All rights reserved.
+#
+
+Set exit 0
+Unset confirmPlease
+Unset showProgress
+Unset yaSure
+Unset sources
+Unset myError
+
+# Parse the command line.
+
+For i in {"Parameters"}
+	If "{i}" =~ /≈.[ch]/
+		Set sources "{sources}'{i}' "
+	Else If "{i}" == "-c" || "{i}" == "-check"
+		Set confirmPlease 1
+	Else If "{i}" == "-p"
+		Set showProgress 1
+	Else If "{i}" == "-y"
+		Set yaSure 1
+	End
+End
+
+#	In order to successfully convert C sources, we must make sure
+# that all the necessary tools are available, else quit.
+
+If Not "`Exists -f "{MPW}Tools:Canon"`"
+	Echo "### Canon must be in MPW:Tools to use CCvt" > Dev:StdErr
+	Set myError 1
+End
+If Not "`Exists -f "{MPW}Tools:CCvtUMx.dict"`"
+	Echo "### CCvtUMx.dict must be in MPW:Tools to use CCvt" > Dev:StdErr
+	Set myError `Evaluate {myError} + 2`
+End
+If Not "`Exists -f "{MPW}Tools:CCvtMxL.dict"`"
+	Echo "### CCvtMxL.dict must be in MPW:Tools to use CCvt" > Dev:StdErr
+	Set myError `Evaluate {myError} + 4`
+End
+
+If {myError}
+	Exit {myError}
+End
+
+#	If no source file has been specified, give them another chance:
+
+If "{sources}" == ""
+	Set sources "`GetFileName -m "Select file to convert." -t "TEXT" -b "CCvt"`"
+	Unset confirmPlease				# We just chose it, that's confirmation enough!
+End
+
+# If still no source file selected, quit!
+
+If "{sources}" == ""
+	Echo "### No source file selected." > Dev:StdErr
+	Exit 16
+End
+
+#	Now we have our parameters and a list of files to convert. Start by
+# telling user what file we are converting.
+
+For file in {sources}
+	If {showProgress}
+		Echo "# Converting {file}..." -n
+	End
+
+#	Give the user a chance to change his mind if he used -c option
+
+	If {confirmPlease}
+		Confirm -t "Do you wish to convert {file} to using MPW 3.0 headers?"
+		Set saveStatus {status}				# first test will reset status to 0
+		If {saveStatus} == 4				# No
+			If {showProgress}
+				Echo "not selected."
+			End
+			Continue
+		End
+		If {saveStatus} == 5				# Cancel
+			If {showProgress}
+				Echo "cancelled."
+			Else
+				Echo "### User aborted CCvt!" > Dev:StdErr
+			End
+			Break
+		End
+	End
+
+#	Don't allow the accidental overwriting of an original file, if CCvt is
+# called a second time for the same file.
+
+	If "`Exists -f "{file}.orig"`"
+		If {showProgress}
+			Echo "already converted!"
+		Else
+			Echo "### {file} previously converted!" > Dev:StdErr
+		End
+		Continue
+	Else
+
+#	This is the heart of our conversion process. We convert old, mixed case, glue-
+# using calls to all lower case spellings. The second pass converts the all upper
+# case calls introduced with MPW 2.0 into standard "Inside Mac", mixed case spellings.
+#	We set exit to 1 so that OS errors during the conversion process will stop.
+
+		Set exit 1							# stop for OS errors
+		Canon -s "{MPW}Tools:CCvtMxL.dict" "{file}" > "{file}.pass1"
+		Canon -s "{MPW}Tools:CCvtUMx.dict" "{file}.pass1" > "{file}.pass2"
+		Delete -y "{file}.pass1"			# it was only a temp file
+		Rename "{file}" "{file}.orig"
+		Rename "{file}.pass2" "{file}"
+		Duplicate -r -y "{file}.orig" "{file}"	# preserve font & marker resources
+		Set exit 0
+		If {showProgress}
+			Echo "done."
+		End
+	End
+End
+

@@ -1,0 +1,717 @@
+;
+;    File:       KeychainCore.a
+;
+;    Contains:   Keychain low-level Interfaces
+;
+;    Version:    Technology: Keychain 3.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 2000-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__KEYCHAINCORE__') = 'UNDEFINED' THEN
+__KEYCHAINCORE__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+	include 'Aliases.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+;  Data structures and types 
+
+
+
+
+
+
+; typedef OSType 						SecKeychainAttrType
+
+; typedef UInt32 						SecKeychainStatus
+
+SecKeychainAttribute	RECORD 0
+tag						 ds.l	1				; offset: $0 (0)		;  4-byte attribute tag 
+length					 ds.l	1				; offset: $4 (4)		;  Length of attribute data 
+data					 ds.l	1				; offset: $8 (8)		;  Pointer to attribute data 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct SecKeychainAttribute *	SecKeychainAttributePtr
+
+SecKeychainAttributeList RECORD 0
+count					 ds.l	1				; offset: $0 (0)		;  How many attributes in the array 
+attr					 ds.l	1				; offset: $4 (4)		;  Pointer to first attribute in array 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef SecKeychainRef 				KCRef
+
+; typedef SecKeychainItemRef 			KCItemRef
+
+; typedef SecKeychainSearchRef 			KCSearchRef
+
+KCAttribute				RECORD 0
+f						 ds		SecKeychainAttribute
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+KCAttributeList			RECORD 0
+f						 ds		SecKeychainAttributeList
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+; typedef SecKeychainAttrType 			KCAttrType
+
+; typedef SecKeychainStatus 			KCStatus
+
+
+; typedef UInt16						KCEvent
+kIdleKCEvent					EQU		0					; null event 
+kLockKCEvent					EQU		1					; a keychain was locked 
+kUnlockKCEvent					EQU		2					; a keychain was unlocked 
+kAddKCEvent						EQU		3					; an item was added to a keychain 
+kDeleteKCEvent					EQU		4					; an item was deleted from a keychain 
+kUpdateKCEvent					EQU		5					; an item was updated 
+kPasswordChangedKCEvent			EQU		6					; the keychain identity was changed 
+kSystemKCEvent					EQU		8					; the keychain client can process events 
+kDefaultChangedKCEvent			EQU		9					; the default keychain was changed 
+kDataAccessKCEvent				EQU		10					; a process has accessed a keychain item's data 
+kKeychainListChangedKCEvent		EQU		11					; the list of keychains has changed 
+
+; typedef UInt16						KCEventMask
+kIdleKCEventMask				EQU		$01
+kLockKCEventMask				EQU		$02
+kUnlockKCEventMask				EQU		$04
+kAddKCEventMask					EQU		$08
+kDeleteKCEventMask				EQU		$10
+kUpdateKCEventMask				EQU		$20
+kPasswordChangedKCEventMask		EQU		$40
+kSystemEventKCEventMask			EQU		$0100
+kDefaultChangedKCEventMask		EQU		$0200
+kDataAccessKCEventMask			EQU		$0400
+kEveryKCEventMask				EQU		$FFFF				; all of the above
+AFPServerSignature		RECORD 0
+elements				 ds.b	16
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+KCPublicKeyHash			RECORD 0
+elements				 ds.b	20
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+
+KCCallbackInfo			RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+item					 ds.l	1				; offset: $4 (4)
+processID				 ds		ProcessSerialNumber ; offset: $8 (8)
+event					 ds		EventRecord		; offset: $10 (16)
+keychain				 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+
+kUnlockStateKCStatus			EQU		1
+kRdPermKCStatus					EQU		2
+kWrPermKCStatus					EQU		4
+
+
+kCertificateKCItemClass			EQU		'cert'				; Certificate 
+kAppleSharePasswordKCItemClass	EQU		'ashp'				; Appleshare password 
+kInternetPasswordKCItemClass	EQU		'inet'				; Internet password 
+kGenericPasswordKCItemClass		EQU		'genp'				; Generic password 
+; typedef FourCharCode 					KCItemClass
+
+
+															; Common attributes 
+kClassKCItemAttr				EQU		'clas'				; Item class (KCItemClass) 
+kCreationDateKCItemAttr			EQU		'cdat'				; Date the item was created (UInt32) 
+kModDateKCItemAttr				EQU		'mdat'				; Last time the item was updated (UInt32) 
+kDescriptionKCItemAttr			EQU		'desc'				; User-visible description string (string) 
+kCommentKCItemAttr				EQU		'icmt'				; User's comment about the item (string) 
+kCreatorKCItemAttr				EQU		'crtr'				; Item's creator (OSType) 
+kTypeKCItemAttr					EQU		'type'				; Item's type (OSType) 
+kScriptCodeKCItemAttr			EQU		'scrp'				; Script code for all strings (ScriptCode) 
+kLabelKCItemAttr				EQU		'labl'				; Item label (string) 
+kInvisibleKCItemAttr			EQU		'invi'				; Invisible (boolean) 
+kNegativeKCItemAttr				EQU		'nega'				; Negative (boolean) 
+kCustomIconKCItemAttr			EQU		'cusi'				; Custom icon (boolean) 
+kAccountKCItemAttr				EQU		'acct'				; User account (string) 
+															; Unique Generic password attributes 
+kServiceKCItemAttr				EQU		'svce'				; Service (string) 
+kGenericKCItemAttr				EQU		'gena'				; User-defined attribute (untyped bytes) 
+															; Unique Internet password attributes 
+kSecurityDomainKCItemAttr		EQU		'sdmn'				; Security domain (string) 
+kServerKCItemAttr				EQU		'srvr'				; Server's domain name or IP address (string) 
+kAuthTypeKCItemAttr				EQU		'atyp'				; Authentication Type (KCAuthType) 
+kPortKCItemAttr					EQU		'port'				; Port (UInt16) 
+kPathKCItemAttr					EQU		'path'				; Path (string) 
+															; Unique Appleshare password attributes 
+kVolumeKCItemAttr				EQU		'vlme'				; Volume (string) 
+kAddressKCItemAttr				EQU		'addr'				; Server address (IP or domain name) or zone name (string) 
+kSignatureKCItemAttr			EQU		'ssig'				; Server signature block (AFPServerSignature) 
+															; Unique AppleShare and Internet attributes 
+kProtocolKCItemAttr				EQU		'ptcl'				; Protocol (KCProtocolType) 
+															; Certificate attributes 
+kSubjectKCItemAttr				EQU		'subj'				; Subject distinguished name (DER-encoded data) 
+kCommonNameKCItemAttr			EQU		'cn  '				; Common Name (UTF8-encoded string) 
+kIssuerKCItemAttr				EQU		'issu'				; Issuer distinguished name (DER-encoded data) 
+kSerialNumberKCItemAttr			EQU		'snbr'				; Certificate serial number (DER-encoded data) 
+kEMailKCItemAttr				EQU		'mail'				; E-mail address (ASCII-encoded string) 
+kPublicKeyHashKCItemAttr		EQU		'hpky'				; Hash of public key (KCPublicKeyHash), 20 bytes max. 
+kIssuerURLKCItemAttr			EQU		'iurl'				; URL of the certificate issuer (ASCII-encoded string) 
+															; Shared by keys and certificates 
+kEncryptKCItemAttr				EQU		'encr'				; Encrypt (Boolean) 
+kDecryptKCItemAttr				EQU		'decr'				; Decrypt (Boolean) 
+kSignKCItemAttr					EQU		'sign'				; Sign (Boolean) 
+kVerifyKCItemAttr				EQU		'veri'				; Verify (Boolean) 
+kWrapKCItemAttr					EQU		'wrap'				; Wrap (Boolean) 
+kUnwrapKCItemAttr				EQU		'unwr'				; Unwrap (Boolean) 
+kStartDateKCItemAttr			EQU		'sdat'				; Start Date (UInt32) 
+kEndDateKCItemAttr				EQU		'edat'				; End Date (UInt32) 
+; typedef FourCharCode 					KCItemAttr
+
+
+kKCAuthTypeNTLM					EQU		'ntlm'
+kKCAuthTypeMSN					EQU		'msna'
+kKCAuthTypeDPA					EQU		'dpaa'
+kKCAuthTypeRPA					EQU		'rpaa'
+kKCAuthTypeHTTPDigest			EQU		'httd'
+kKCAuthTypeDefault				EQU		'dflt'
+; typedef FourCharCode 					KCAuthType
+
+
+kKCProtocolTypeFTP				EQU		'ftp '
+kKCProtocolTypeFTPAccount		EQU		'ftpa'
+kKCProtocolTypeHTTP				EQU		'http'
+kKCProtocolTypeIRC				EQU		'irc '
+kKCProtocolTypeNNTP				EQU		'nntp'
+kKCProtocolTypePOP3				EQU		'pop3'
+kKCProtocolTypeSMTP				EQU		'smtp'
+kKCProtocolTypeSOCKS			EQU		'sox '
+kKCProtocolTypeIMAP				EQU		'imap'
+kKCProtocolTypeLDAP				EQU		'ldap'
+kKCProtocolTypeAppleTalk		EQU		'atlk'
+kKCProtocolTypeAFP				EQU		'afp '
+kKCProtocolTypeTelnet			EQU		'teln'
+; typedef FourCharCode 					KCProtocolType
+
+
+; typedef UInt32						KCCertAddOptions
+kSecOptionReserved				EQU		$000000FF			; First byte reserved for SecOptions flags 
+kCertUsageShift					EQU		8					; start at bit 8 
+kCertUsageSigningAdd			EQU		$0100
+kCertUsageSigningAskAndAdd		EQU		$0200
+kCertUsageVerifyAdd				EQU		$0400
+kCertUsageVerifyAskAndAdd		EQU		$0800
+kCertUsageEncryptAdd			EQU		$1000
+kCertUsageEncryptAskAndAdd		EQU		$2000
+kCertUsageDecryptAdd			EQU		$4000
+kCertUsageDecryptAskAndAdd		EQU		$8000
+kCertUsageKeyExchAdd			EQU		$00010000
+kCertUsageKeyExchAskAndAdd		EQU		$00020000
+kCertUsageRootAdd				EQU		$00040000
+kCertUsageRootAskAndAdd			EQU		$00080000
+kCertUsageSSLAdd				EQU		$00100000
+kCertUsageSSLAskAndAdd			EQU		$00200000
+kCertUsageAllAdd				EQU		$7FFFFF00
+
+; typedef UInt16						KCVerifyStopOn
+kPolicyKCStopOn					EQU		0
+kNoneKCStopOn					EQU		1
+kFirstPassKCStopOn				EQU		2
+kFirstFailKCStopOn				EQU		3
+
+; typedef UInt32						KCCertSearchOptions
+kCertSearchShift				EQU		0					; start at bit 0 
+kCertSearchSigningIgnored		EQU		0
+kCertSearchSigningAllowed		EQU		$01
+kCertSearchSigningDisallowed	EQU		$02
+kCertSearchSigningMask			EQU		$03
+kCertSearchVerifyIgnored		EQU		0
+kCertSearchVerifyAllowed		EQU		$04
+kCertSearchVerifyDisallowed		EQU		$08
+kCertSearchVerifyMask			EQU		$0C
+kCertSearchEncryptIgnored		EQU		0
+kCertSearchEncryptAllowed		EQU		$10
+kCertSearchEncryptDisallowed	EQU		$20
+kCertSearchEncryptMask			EQU		$30
+kCertSearchDecryptIgnored		EQU		0
+kCertSearchDecryptAllowed		EQU		$40
+kCertSearchDecryptDisallowed	EQU		$80
+kCertSearchDecryptMask			EQU		$C0
+kCertSearchWrapIgnored			EQU		0
+kCertSearchWrapAllowed			EQU		$0100
+kCertSearchWrapDisallowed		EQU		$0200
+kCertSearchWrapMask				EQU		$0300
+kCertSearchUnwrapIgnored		EQU		0
+kCertSearchUnwrapAllowed		EQU		$0400
+kCertSearchUnwrapDisallowed		EQU		$0800
+kCertSearchUnwrapMask			EQU		$0C00
+kCertSearchPrivKeyRequired		EQU		$1000
+kCertSearchAny					EQU		0
+;  Other constants 
+
+kAnyPort						EQU		0
+
+kAnyProtocol					EQU		0
+kAnyAuthType					EQU		0
+;  Opening and getting information about the Keychain Manager 
+
+; *  KCGetKeychainManagerVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus KCGetKeychainManagerVersion(UInt32 *returnVers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetKeychainManagerVersion
+	ENDIF
+
+	IF TARGET_RT_MAC_CFM THEN
+; 
+;        KeychainManagerAvailable() is a macro/inline available only in C/C++.  
+;        To get the same functionality from pascal or assembly, you need
+;        to test if KCGetKeychainManagerVersion function is not NULL.  For instance:
+;        
+;            gKeychainManagerAvailable = FALSE;
+;            IF @KCGetKeychainManagerVersion <> kUnresolvedCFragSymbolAddress THEN
+;                gKeychainManagerAvailable = TRUE;
+;            END
+;    
+;    
+
+	ELSEIF TARGET_RT_MAC_MACHO THEN
+	ENDIF	; 
+;  Creating references to keychains 
+
+; *  KCMakeKCRefFromFSSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCMakeKCRefFromFSSpec(FSSpec *keychainFSSpec, KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCMakeKCRefFromFSSpec
+	ENDIF
+
+
+; *  KCMakeKCRefFromAlias()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCMakeKCRefFromAlias(AliasHandle keychainAlias, KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCMakeKCRefFromAlias
+	ENDIF
+
+
+; *  KCMakeAliasFromKCRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCMakeAliasFromKCRef(KCRef keychain, AliasHandle *keychainAlias)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCMakeAliasFromKCRef
+	ENDIF
+
+
+; *  KCReleaseKeychain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCReleaseKeychain(KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCReleaseKeychain
+	ENDIF
+
+;  Specifying the default keychain 
+
+; *  KCGetDefaultKeychain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetDefaultKeychain(KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetDefaultKeychain
+	ENDIF
+
+
+; *  KCSetDefaultKeychain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCSetDefaultKeychain(KCRef keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCSetDefaultKeychain
+	ENDIF
+
+;  Getting information about a keychain 
+
+; *  KCGetStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetStatus(KCRef keychain, UInt32 *keychainStatus)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetStatus
+	ENDIF
+
+
+; *  KCGetKeychain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetKeychain(KCItemRef item, KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetKeychain
+	ENDIF
+
+
+; *  KCGetKeychainName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetKeychainName(KCRef keychain, StringPtr keychainName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetKeychainName
+	ENDIF
+
+;  Enumerating available keychains 
+
+; *  KCCountKeychains()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt16 KCCountKeychains(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCCountKeychains
+	ENDIF
+
+
+; *  KCGetIndKeychain()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetIndKeychain(UInt16 index, KCRef *keychain)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetIndKeychain
+	ENDIF
+
+
+; *  NewKCCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeKCCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeKCCallbackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  Keychain Manager callbacks 
+
+; *  KCAddCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCAddCallback(KCCallbackUPP callbackProc, KCEventMask eventMask, void *userContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCAddCallback
+	ENDIF
+
+
+; *  KCRemoveCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCRemoveCallback(KCCallbackUPP callbackProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCRemoveCallback
+	ENDIF
+
+
+;  Creating and editing a keychain item 
+
+; *  KCNewItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCNewItem(KCItemClass itemClass, OSType itemCreator, UInt32 length, const void *data, KCItemRef *item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCNewItem
+	ENDIF
+
+
+; *  KCSetAttribute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCSetAttribute(KCItemRef item, KCAttribute *attr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCSetAttribute
+	ENDIF
+
+
+; *  KCGetAttribute()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCGetAttribute(KCItemRef item, KCAttribute *attr, UInt32 *actualLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCGetAttribute
+	ENDIF
+
+
+; *  KCSetData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCSetData(KCItemRef item, UInt32 length, const void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCSetData
+	ENDIF
+
+;  Managing keychain items 
+
+; *  KCUpdateItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCUpdateItem(KCItemRef item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCUpdateItem
+	ENDIF
+
+
+; *  KCReleaseItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCReleaseItem(KCItemRef *item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCReleaseItem
+	ENDIF
+
+
+; *  KCCopyItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCCopyItem(KCItemRef item, KCRef destKeychain, KCItemRef *copy)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCCopyItem
+	ENDIF
+
+;  Searching and enumerating keychain items 
+
+; *  KCFindFirstItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCFindFirstItem(KCRef keychain, const KCAttributeList *attrList, KCSearchRef *search, KCItemRef *item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCFindFirstItem
+	ENDIF
+
+
+; *  KCFindNextItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCFindNextItem(KCSearchRef search, KCItemRef *item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCFindNextItem
+	ENDIF
+
+
+; *  KCReleaseSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in KeychainLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus KCReleaseSearch(KCSearchRef *search)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION KCReleaseSearch
+	ENDIF
+
+
+	ENDIF ; __KEYCHAINCORE__ 
+

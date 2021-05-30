@@ -1,0 +1,264 @@
+;
+;	File:		Types.a
+;
+;	Contains:	Basic Macintosh data types.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+__TYPES__ SET 1
+
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+noErr							EQU		0
+
+; typedef unsigned char 	Byte
+; typedef signed char 		SignedByte
+; typedef Byte 				UInt8
+; typedef SignedByte 		SInt8
+; typedef unsigned short 	UInt16
+; typedef signed short 		SInt16
+; typedef unsigned long 	UInt32
+; typedef signed long 		SInt32
+; typedef UInt16 			UniChar
+; typedef SignedByte 		*Ptr
+; typedef Ptr 				*Handle
+; typedef long 				Fixed
+; typedef Fixed 			*FixedPtr
+; typedef long 				Fract
+; typedef Fract 			*FractPtr
+_extended80 			RECORD	0
+exp						 ds.w   1		; offset: $0 (0)
+man						 ds.w   4		; offset: $2 (2)
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+_extended96 			RECORD	0
+exp						 ds.w   2		; offset: $0 (0)
+man						 ds.w   4		; offset: $4 (4)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+	IF GENERATING68K  THEN
+	ENDIF
+;
+;Note: float_t and double_t are "natural" computational types
+;      (i.e.the compiler/processor can most easily do floating point
+;	  operations with that type.) 
+;
+	IF GENERATINGPOWERPC  THEN
+; on PowerPC, double = 64-bit which is fastest.  float = 32-bit 
+; typedef float 			float_t
+; typedef double 			double_t
+	ELSE
+; on 68K, long double (a.k.a. extended) is always the fastest.  It is 80 or 96-bits 
+	ENDIF
+wide 					RECORD	0
+hi						 ds.l   1		; offset: $0 (0)
+lo						 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct wide 		wide, *WidePtr
+UnsignedWide 			RECORD	0
+hi						 ds.l   1		; offset: $0 (0)
+lo						 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct UnsignedWide  UnsignedWide, *UnsignedWidePtr
+
+false							EQU		0
+true							EQU		1
+
+; typedef unsigned char 	Boolean
+; typedef ProcPtr 			*ProcHandle
+; typedef unsigned char 	Str255[256], Str63[64], Str32[33], Str31[32], Str27[28], Str15[16]
+; typedef short 			OSErr
+; typedef short 			ScriptCode
+; typedef short 			LangCode
+; typedef unsigned long 	FourCharCode
+
+normal							EQU		0
+bold							EQU		1
+italic							EQU		2
+underline						EQU		4
+outline							EQU		8
+shadow							EQU		$10
+condense						EQU		$20
+extend							EQU		$40
+
+; typedef unsigned char 	Style
+; typedef FourCharCode 		OSType
+; typedef FourCharCode 		ResType
+; typedef OSType 			*OSTypePtr
+; typedef ResType 			*ResTypePtr
+Point 					RECORD	0
+v						 ds.w   1		; offset: $0 (0)
+h						 ds.w   1		; offset: $2 (2)
+						 ORG 0
+vh						 ds.w   2		; offset: $0 (0)
+						 ORG 4
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct Point 		Point
+; typedef Point 			*PointPtr
+Rect 					RECORD	0
+top						 ds.w   1		; offset: $0 (0)
+left					 ds.w   1		; offset: $2 (2)
+bottom					 ds.w   1		; offset: $4 (4)
+right					 ds.w   1		; offset: $6 (6)
+						 ORG 0
+topLeft					 ds     Point	; offset: $0 (0)
+botRight				 ds     Point	; offset: $4 (4)
+						 ORG 8
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct Rect 		Rect
+; typedef Rect 				*RectPtr
+;
+;	kVariableLengthArray is used in array bounds to specify a variable length array.
+;	It is ususally used in variable length structs when the last field is an array
+;	of any size.  Before ANSI C, we used zero as the bounds of variable length 
+;	array, but that is illegal in ANSI C.  Example:
+;	
+;		struct FooList 
+;		{
+;			short 	listLength;
+;			Foo		elements[kVariableLengthArray];
+;		};
+;
+
+kVariableLengthArray			EQU		1
+
+; Numeric version part of 'vers' resource 
+NumVersion 				RECORD	0
+majorRev				 ds.b   1		; offset: $0 (0)		;1st part of version number in BCD
+minorAndBugRev			 ds.b   1		; offset: $1 (1)		;2nd & 3rd part of version number share a byte
+stage					 ds.b   1		; offset: $2 (2)		;stage code: dev, alpha, beta, final
+nonRelRev				 ds.b   1		; offset: $3 (3)		;revision level of non-released version
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct NumVersion  NumVersion
+; 'vers' resource format 
+VersRec 				RECORD	0
+numericVersion			 ds     NumVersion ; offset: $0 (0)		;encoded version number
+countryCode				 ds.w   1		; offset: $4 (4)		;country code from intl utilities
+shortVersion			 ds.l   64		; offset: $6 (6)		;version number string - worst case
+reserved				 ds.l   64		; offset: $106 (262)	;longMessage string packed after shortVersion
+sizeof					 EQU *			; size:   $206 (518)
+						ENDR
+
+; typedef struct VersRec 	VersRec
+; typedef VersRec 			*VersRecPtr, **VersRecHndl
+; typedef SInt32 			OSStatus
+; typedef void 				*LogicalAddress
+;
+;	Who implements what debugger functions:
+;	
+;	Name			MacsBug				SADE		Macintosh Debugger
+;	----------		-----------			-------		-----------------------------
+;	Debugger		yes					no			InterfaceLib maps to DebugStr
+;	DebugStr		yes					no			yes
+;	Debugger68k		yes					no			InterfaceLib maps to DebugStr
+;	DebugStr68k		yes					no			InterfaceLib maps to DebugStr
+;	debugstr		yes					no			InterfaceLib maps to DebugStr
+;	SysBreak		no, for SADE		yes			InterfaceLib maps to SysError
+;	SysBreakStr		no, for SADE		yes			InterfaceLib maps to SysError
+;	SysBreakFunc	no, for SADE		yes			InterfaceLib maps to SysError
+;
+;
+;
+; pascal void Debugger(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Debugger:	OPWORD	$A9FF
+	ELSE
+		IMPORT_CFM_FUNCTION	Debugger
+	ENDIF
+
+;
+; pascal void DebugStr(ConstStr255Param debuggerMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DebugStr:	OPWORD	$ABFF
+	ELSE
+		IMPORT_CFM_FUNCTION	DebugStr
+	ENDIF
+
+;
+; pascal void Debugger68k(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_Debugger68k:	OPWORD	$A9FF
+	ELSE
+		IMPORT_CFM_FUNCTION	Debugger68k
+	ENDIF
+
+;
+; pascal void DebugStr68k(ConstStr255Param debuggerMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		_DebugStr68k:	OPWORD	$ABFF
+	ELSE
+		IMPORT_CFM_FUNCTION	DebugStr68k
+	ENDIF
+
+;
+; pascal void SysBreak(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SysBreak
+			move.w	#$FE16,d0
+			dc.w 	$A9C9
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SysBreak
+	ENDIF
+
+;
+; pascal void SysBreakStr(ConstStr255Param debuggerMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SysBreakStr
+			move.w	#$FE15,d0
+			dc.w 	$A9C9
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SysBreakStr
+	ENDIF
+
+;
+; pascal void SysBreakFunc(ConstStr255Param debuggerMsg)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SysBreakFunc
+			move.w	#$FE14,d0
+			dc.w 	$A9C9
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SysBreakFunc
+	ENDIF
+
+	ENDIF ; __TYPES__

@@ -1,0 +1,570 @@
+;
+;	File:		Speech.a
+;
+;	Contains:	Speech Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SPEECH__') = 'UNDEFINED' THEN
+__SPEECH__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;		include 'Finder.a'											;
+
+kTextToSpeechSynthType			EQU		'ttsc'
+kTextToSpeechVoiceType			EQU		'ttvd'
+kTextToSpeechVoiceFileType		EQU		'ttvf'
+kTextToSpeechVoiceBundleType	EQU		'ttvb'
+
+kNoEndingProsody				EQU		1
+kNoSpeechInterrupt				EQU		2
+kPreflightThenPause				EQU		4
+
+kImmediate						EQU		0
+kEndOfWord						EQU		1
+kEndOfSentence					EQU		2
+
+;------------------------------------------
+; GetSpeechInfo & SetSpeechInfo selectors	
+;------------------------------------------
+soStatus						EQU		'stat'
+soErrors						EQU		'erro'
+soInputMode						EQU		'inpt'
+soCharacterMode					EQU		'char'
+soNumberMode					EQU		'nmbr'
+soRate							EQU		'rate'
+soPitchBase						EQU		'pbas'
+soPitchMod						EQU		'pmod'
+soVolume						EQU		'volm'
+soSynthType						EQU		'vers'
+soRecentSync					EQU		'sync'
+soPhonemeSymbols				EQU		'phsy'
+soCurrentVoice					EQU		'cvox'
+soCommandDelimiter				EQU		'dlim'
+soReset							EQU		'rset'
+soCurrentA5						EQU		'myA5'
+soRefCon						EQU		'refc'
+soTextDoneCallBack				EQU		'tdcb'
+soSpeechDoneCallBack			EQU		'sdcb'
+soSyncCallBack					EQU		'sycb'
+soErrorCallBack					EQU		'ercb'
+soPhonemeCallBack				EQU		'phcb'
+soWordCallBack					EQU		'wdcb'
+soSynthExtension				EQU		'xtnd'
+soSoundOutput					EQU		'sndo'
+
+;------------------------------------------
+; Speaking Mode Constants 					
+;------------------------------------------
+modeText						EQU		'TEXT'				; input mode constants 					
+modePhonemes					EQU		'PHON'
+modeNormal						EQU		'NORM'				; character mode and number mode constants 
+modeLiteral						EQU		'LTRL'
+
+soVoiceDescription				EQU		'info'
+soVoiceFile						EQU		'fref'
+
+SpeechChannelRecord 	RECORD	0
+data					 ds.l   1		; offset: $0 (0)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct SpeechChannelRecord  SpeechChannelRecord
+; typedef SpeechChannelRecord  *SpeechChannel
+VoiceSpec 				RECORD	0
+creator					 ds.l   1		; offset: $0 (0)
+id						 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct VoiceSpec 	VoiceSpec
+
+kNeuter							EQU		0
+kMale							EQU		1
+kFemale							EQU		2
+
+VoiceDescription 		RECORD	0
+length					 ds.l   1		; offset: $0 (0)
+voice					 ds     VoiceSpec ; offset: $4 (4)
+version					 ds.l   1		; offset: $C (12)
+name					 ds.l   16		; offset: $10 (16)
+comment					 ds.l   64		; offset: $50 (80)
+gender					 ds.w   1		; offset: $150 (336)
+age						 ds.w   1		; offset: $152 (338)
+script					 ds.w   1		; offset: $154 (340)
+language				 ds.w   1		; offset: $156 (342)
+region					 ds.w   1		; offset: $158 (344)
+reserved				 ds.l   4		; offset: $15A (346)
+sizeof					 EQU *			; size:   $16A (362)
+						ENDR
+
+; typedef struct VoiceDescription  VoiceDescription
+VoiceFileInfo 			RECORD	0
+fileSpec				 ds     FSSpec	; offset: $0 (0)
+resID					 ds.w   1		; offset: $46 (70)
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct VoiceFileInfo  VoiceFileInfo
+SpeechStatusInfo 		RECORD	0
+outputBusy				 ds.b   1		; offset: $0 (0)
+outputPaused			 ds.b   1		; offset: $1 (1)
+inputBytesLeft			 ds.l   1		; offset: $2 (2)
+phonemeCode				 ds.w   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct SpeechStatusInfo  SpeechStatusInfo
+SpeechErrorInfo 		RECORD	0
+count					 ds.w   1		; offset: $0 (0)
+oldest					 ds.w   1		; offset: $2 (2)
+oldPos					 ds.l   1		; offset: $4 (4)
+newest					 ds.w   1		; offset: $8 (8)
+newPos					 ds.l   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct SpeechErrorInfo  SpeechErrorInfo
+SpeechVersionInfo 		RECORD	0
+synthType				 ds.l   1		; offset: $0 (0)
+synthSubType			 ds.l   1		; offset: $4 (4)
+synthManufacturer		 ds.l   1		; offset: $8 (8)
+synthFlags				 ds.l   1		; offset: $C (12)
+synthVersion			 ds     NumVersion ; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct SpeechVersionInfo  SpeechVersionInfo
+PhonemeInfo 			RECORD	0
+opcode					 ds.w   1		; offset: $0 (0)
+phStr					 ds.l   4		; offset: $2 (2)
+exampleStr				 ds.l   8		; offset: $12 (18)
+hiliteStart				 ds.w   1		; offset: $32 (50)
+hiliteEnd				 ds.w   1		; offset: $34 (52)
+sizeof					 EQU *			; size:   $36 (54)
+						ENDR
+
+; typedef struct PhonemeInfo  PhonemeInfo
+PhonemeDescriptor 		RECORD	0
+phonemeCount			 ds.w   1		; offset: $0 (0)
+thePhonemes				 ds     PhonemeInfo ; offset: $2 (2)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct PhonemeDescriptor  PhonemeDescriptor
+SpeechXtndData 			RECORD	0
+synthCreator			 ds.l   1		; offset: $0 (0)
+synthData				 ds.b   2		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct SpeechXtndData  SpeechXtndData
+DelimiterInfo 			RECORD	0
+startDelimiter			 ds.b   2		; offset: $0 (0)
+endDelimiter			 ds.b   2		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct DelimiterInfo  DelimiterInfo
+;
+; pascal NumVersion SpeechManagerVersion(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeechManagerVersion
+			dc.w 	$203C
+			dc.w 	$0000
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeechManagerVersion
+	ENDIF
+
+;
+; pascal OSErr MakeVoiceSpec(OSType creator, OSType id, VoiceSpec *voice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MakeVoiceSpec
+			dc.w 	$203C
+			dc.w 	$0604
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeVoiceSpec
+	ENDIF
+
+;
+; pascal OSErr CountVoices(short *numVoices)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountVoices
+			dc.w 	$203C
+			dc.w 	$0108
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountVoices
+	ENDIF
+
+;
+; pascal OSErr GetIndVoice(short index, VoiceSpec *voice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetIndVoice
+			dc.w 	$203C
+			dc.w 	$030C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetIndVoice
+	ENDIF
+
+;
+; pascal OSErr GetVoiceDescription(VoiceSpec *voice, VoiceDescription *info, long infoLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetVoiceDescription
+			dc.w 	$203C
+			dc.w 	$0610
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetVoiceDescription
+	ENDIF
+
+;
+; pascal OSErr GetVoiceInfo(VoiceSpec *voice, OSType selector, void *voiceInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetVoiceInfo
+			dc.w 	$203C
+			dc.w 	$0614
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetVoiceInfo
+	ENDIF
+
+;
+; pascal OSErr NewSpeechChannel(VoiceSpec *voice, SpeechChannel *chan)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewSpeechChannel
+			dc.w 	$203C
+			dc.w 	$0418
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewSpeechChannel
+	ENDIF
+
+;
+; pascal OSErr DisposeSpeechChannel(SpeechChannel chan)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeSpeechChannel
+			dc.w 	$203C
+			dc.w 	$021C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeSpeechChannel
+	ENDIF
+
+;
+; pascal OSErr SpeakString(StringPtr s)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeakString
+			dc.w 	$203C
+			dc.w 	$0220
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeakString
+	ENDIF
+
+;
+; pascal OSErr SpeakText(SpeechChannel chan, Ptr textBuf, long textBytes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeakText
+			dc.w 	$203C
+			dc.w 	$0624
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeakText
+	ENDIF
+
+;
+; pascal OSErr SpeakBuffer(SpeechChannel chan, Ptr textBuf, long textBytes, long controlFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeakBuffer
+			dc.w 	$203C
+			dc.w 	$0828
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeakBuffer
+	ENDIF
+
+;
+; pascal OSErr StopSpeech(SpeechChannel chan)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StopSpeech
+			dc.w 	$203C
+			dc.w 	$022C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StopSpeech
+	ENDIF
+
+;
+; pascal OSErr StopSpeechAt(SpeechChannel chan, long whereToStop)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StopSpeechAt
+			dc.w 	$203C
+			dc.w 	$0430
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StopSpeechAt
+	ENDIF
+
+;
+; pascal OSErr PauseSpeechAt(SpeechChannel chan, long whereToPause)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PauseSpeechAt
+			dc.w 	$203C
+			dc.w 	$0434
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PauseSpeechAt
+	ENDIF
+
+;
+; pascal OSErr ContinueSpeech(SpeechChannel chan)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ContinueSpeech
+			dc.w 	$203C
+			dc.w 	$0238
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ContinueSpeech
+	ENDIF
+
+;
+; pascal short SpeechBusy(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeechBusy
+			dc.w 	$203C
+			dc.w 	$003C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeechBusy
+	ENDIF
+
+;
+; pascal short SpeechBusySystemWide(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SpeechBusySystemWide
+			dc.w 	$203C
+			dc.w 	$0040
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SpeechBusySystemWide
+	ENDIF
+
+;
+; pascal OSErr SetSpeechRate(SpeechChannel chan, Fixed rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSpeechRate
+			dc.w 	$203C
+			dc.w 	$0444
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSpeechRate
+	ENDIF
+
+;
+; pascal OSErr GetSpeechRate(SpeechChannel chan, Fixed *rate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSpeechRate
+			dc.w 	$203C
+			dc.w 	$0448
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSpeechRate
+	ENDIF
+
+;
+; pascal OSErr SetSpeechPitch(SpeechChannel chan, Fixed pitch)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSpeechPitch
+			dc.w 	$203C
+			dc.w 	$044C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSpeechPitch
+	ENDIF
+
+;
+; pascal OSErr GetSpeechPitch(SpeechChannel chan, Fixed *pitch)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSpeechPitch
+			dc.w 	$203C
+			dc.w 	$0450
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSpeechPitch
+	ENDIF
+
+;
+; pascal OSErr SetSpeechInfo(SpeechChannel chan, OSType selector, void *speechInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSpeechInfo
+			dc.w 	$203C
+			dc.w 	$0654
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSpeechInfo
+	ENDIF
+
+;
+; pascal OSErr GetSpeechInfo(SpeechChannel chan, OSType selector, void *speechInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSpeechInfo
+			dc.w 	$203C
+			dc.w 	$0658
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSpeechInfo
+	ENDIF
+
+;
+; pascal OSErr TextToPhonemes(SpeechChannel chan, Ptr textBuf, long textBytes, Handle phonemeBuf, long *phonemeBytes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TextToPhonemes
+			dc.w 	$203C
+			dc.w 	$0A5C
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TextToPhonemes
+	ENDIF
+
+;
+; pascal OSErr UseDictionary(SpeechChannel chan, Handle dictionary)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UseDictionary
+			dc.w 	$203C
+			dc.w 	$0460
+			dc.w 	$000C
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UseDictionary
+	ENDIF
+
+	ENDIF ; __SPEECH__

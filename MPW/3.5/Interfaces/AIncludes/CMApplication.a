@@ -1,0 +1,3211 @@
+;
+;    File:       CMApplication.a
+;
+;    Contains:   Color Matching Interfaces
+;
+;    Version:    Technology: ColorSync 3.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1992-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+__CMAPPLICATION__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__CMICCPROFILE__') = 'UNDEFINED' THEN
+	include 'CMICCProfile.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__CMTYPES__') = 'UNDEFINED' THEN
+	include 'CMTypes.a'
+	ENDIF
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+	include 'CFString.a'
+	ENDIF
+	IF &TYPE('__CFDICTIONARY__') = 'UNDEFINED' THEN
+	include 'CFDictionary.a'
+	ENDIF
+
+
+	_DECLARE_CS_QD_API_: SET 1
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF TARGET_API_MAC_OS8 THEN
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+	include 'Printing.a'
+	ENDIF
+	ENDIF	; TARGET_API_MAC_OS8
+
+kDefaultCMMSignature			EQU		'appl'
+;  Macintosh 68K trap word 
+
+cmTrap							EQU		$ABEE
+
+;  PicComment IDs 
+
+cmBeginProfile					EQU		220
+cmEndProfile					EQU		221
+cmEnableMatching				EQU		222
+cmDisableMatching				EQU		223
+cmComment						EQU		224
+;  PicComment selectors for cmComment 
+
+cmBeginProfileSel				EQU		0
+cmContinueProfileSel			EQU		1
+cmEndProfileSel					EQU		2
+cmProfileIdentifierSel			EQU		3
+
+;  Defines for version 1.0 CMProfileSearchRecord.fieldMask 
+
+cmMatchCMMType					EQU		$00000001
+cmMatchApplProfileVersion		EQU		$00000002
+cmMatchDataType					EQU		$00000004
+cmMatchDeviceType				EQU		$00000008
+cmMatchDeviceManufacturer		EQU		$00000010
+cmMatchDeviceModel				EQU		$00000020
+cmMatchDeviceAttributes			EQU		$00000040
+cmMatchFlags					EQU		$00000080
+cmMatchOptions					EQU		$00000100
+cmMatchWhite					EQU		$00000200
+cmMatchBlack					EQU		$00000400
+;  Defines for version 2.0 CMSearchRecord.searchMask 
+
+cmMatchAnyProfile				EQU		$00000000
+cmMatchProfileCMMType			EQU		$00000001
+cmMatchProfileClass				EQU		$00000002
+cmMatchDataColorSpace			EQU		$00000004
+cmMatchProfileConnectionSpace	EQU		$00000008
+cmMatchManufacturer				EQU		$00000010
+cmMatchModel					EQU		$00000020
+cmMatchAttributes				EQU		$00000040
+cmMatchProfileFlags				EQU		$00000080
+
+;  Flags for PostScript-related functions 
+
+cmPS7bit						EQU		1
+cmPS8bit						EQU		2
+;  Flags for profile embedding functions 
+
+cmEmbedWholeProfile				EQU		$00000000
+cmEmbedProfileIdentifier		EQU		$00000001
+;  Commands for CMFlattenUPP() 
+
+cmOpenReadSpool					EQU		1
+cmOpenWriteSpool				EQU		2
+cmReadSpool						EQU		3
+cmWriteSpool					EQU		4
+cmCloseSpool					EQU		5
+;  Commands for CMAccessUPP() 
+
+cmOpenReadAccess				EQU		1
+cmOpenWriteAccess				EQU		2
+cmReadAccess					EQU		3
+cmWriteAccess					EQU		4
+cmCloseAccess					EQU		5
+cmCreateNewAccess				EQU		6
+cmAbortWriteAccess				EQU		7
+cmBeginAccess					EQU		8
+cmEndAccess						EQU		9
+
+;  Use types for CMGet/SetDefaultProfileByUse() 
+
+cmInputUse						EQU		'inpt'
+cmOutputUse						EQU		'outp'
+cmDisplayUse					EQU		'dply'
+cmProofUse						EQU		'pruf'
+
+;  Union of 1.0 and 2.0 profile header variants 
+CMAppleProfileHeader	RECORD 0
+cm1						 ds		CMHeader		; offset: $0 (0)
+						 ORG 0
+cm2						 ds		CM2Header		; offset: $0 (0)
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+;  CWConcatColorWorld() definitions 
+CMConcatProfileSet		RECORD 0
+keyIndex				 ds.w	1				; offset: $0 (0)		;  Zero-based 
+count					 ds.w	1				; offset: $2 (2)		;  Min 1 
+profileSet				 ds.l	1				; offset: $4 (4) <-- really an array of length one ;  Variable. Ordered from Source -> Dest 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  NCWConcatColorWorld() definitions 
+NCMConcatProfileSpec	RECORD 0
+renderingIntent			 ds.l	1				; offset: $0 (0)		;  renderingIntent override 
+transformTag			 ds.l	1				; offset: $4 (4)		;  transform enumerations defined below 
+profile					 ds.l	1				; offset: $8 (8)		;  profile 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+NCMConcatProfileSet		RECORD 0
+cmm						 ds.l	1				; offset: $0 (0)		;  e.g. 'KCMS', 'appl', ...  uniquely ids the cmm, or 0000 
+flags					 ds.l	1				; offset: $4 (4)		;  specify quality, lookup only, no gamut checking ... 
+flagsMask				 ds.l	1				; offset: $8 (8)		;  which bits of 'flags' to use to override profile 
+profileCount			 ds.l	1				; offset: $C (12)		;  how many ProfileSpecs in the following set 
+profileSpecs			 ds		NCMConcatProfileSpec ; offset: $10 (16) <-- really an array of length one ;  Variable. Ordered from Source -> Dest 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+kNoTransform					EQU		0					; Not used 
+kUseAtoB						EQU		1					; Use 'A2B*' tag from this profile or equivalent 
+kUseBtoA						EQU		2					; Use 'B2A*' tag from this profile or equivalent 
+kUseBtoB						EQU		3					; Use 'pre*' tag from this profile or equivalent 
+															; For typical device profiles the following synonyms may be useful 
+kDeviceToPCS					EQU		1					; Device Dependent to Device Independent 
+kPCSToDevice					EQU		2					; Device Independent to Device Dependent 
+kPCSToPCS						EQU		3					; Independent, through device's gamut 
+kUseProfileIntent				EQU		$FFFFFFFF			; For renderingIntent in NCMConcatProfileSpec    
+
+;  ColorSync color data types 
+CMRGBColor				RECORD 0
+red						 ds.w	1				; offset: $0 (0)		;  0..65535 
+green					 ds.w	1				; offset: $2 (2)
+blue					 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMCMYKColor				RECORD 0
+cyan					 ds.w	1				; offset: $0 (0)		;  0..65535 
+magenta					 ds.w	1				; offset: $2 (2)
+yellow					 ds.w	1				; offset: $4 (4)
+black					 ds.w	1				; offset: $6 (6)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMCMYColor				RECORD 0
+cyan					 ds.w	1				; offset: $0 (0)		;  0..65535 
+magenta					 ds.w	1				; offset: $2 (2)
+yellow					 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMHLSColor				RECORD 0
+hue						 ds.w	1				; offset: $0 (0)		;  0..65535. Fraction of circle. Red at 0 
+lightness				 ds.w	1				; offset: $2 (2)		;  0..65535 
+saturation				 ds.w	1				; offset: $4 (4)		;  0..65535 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMHSVColor				RECORD 0
+hue						 ds.w	1				; offset: $0 (0)		;  0..65535. Fraction of circle. Red at 0 
+saturation				 ds.w	1				; offset: $2 (2)		;  0..65535 
+value					 ds.w	1				; offset: $4 (4)		;  0..65535 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMLabColor				RECORD 0
+L						 ds.w	1				; offset: $0 (0)		;  0..65535 maps to 0..100 
+a						 ds.w	1				; offset: $2 (2)		;  0..65535 maps to -128..127.996 
+b						 ds.w	1				; offset: $4 (4)		;  0..65535 maps to -128..127.996 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMLuvColor				RECORD 0
+L						 ds.w	1				; offset: $0 (0)		;  0..65535 maps to 0..100 
+u						 ds.w	1				; offset: $2 (2)		;  0..65535 maps to -128..127.996 
+v						 ds.w	1				; offset: $4 (4)		;  0..65535 maps to -128..127.996 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMYxyColor				RECORD 0
+capY					 ds.w	1				; offset: $0 (0)		;  0..65535 maps to 0..1 
+x						 ds.w	1				; offset: $2 (2)		;  0..65535 maps to 0..1 
+y						 ds.w	1				; offset: $4 (4)		;  0..65535 maps to 0..1 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMGrayColor				RECORD 0
+gray					 ds.w	1				; offset: $0 (0)		;  0..65535 
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+CMMultichannel5Color	RECORD 0
+components				 ds.b	5				; offset: $0 (0)		;  0..255 
+						 ORG 6
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMMultichannel6Color	RECORD 0
+components				 ds.b	6				; offset: $0 (0)		;  0..255 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+CMMultichannel7Color	RECORD 0
+components				 ds.b	7				; offset: $0 (0)		;  0..255 
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMMultichannel8Color	RECORD 0
+components				 ds.b	8				; offset: $0 (0)		;  0..255 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMNamedColor			RECORD 0
+namedColorIndex			 ds.l	1				; offset: $0 (0)		;  0..a lot 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CMColor					RECORD 0
+rgb						 ds		CMRGBColor		; offset: $0 (0)
+						 ORG 0
+hsv						 ds		CMHSVColor		; offset: $0 (0)
+						 ORG 0
+hls						 ds		CMHLSColor		; offset: $0 (0)
+						 ORG 0
+XYZ						 ds		CMXYZColor		; offset: $0 (0)
+						 ORG 0
+Lab						 ds		CMLabColor		; offset: $0 (0)
+						 ORG 0
+Luv						 ds		CMLuvColor		; offset: $0 (0)
+						 ORG 0
+Yxy						 ds		CMYxyColor		; offset: $0 (0)
+						 ORG 0
+cmyk					 ds		CMCMYKColor		; offset: $0 (0)
+						 ORG 0
+cmy						 ds		CMCMYColor		; offset: $0 (0)
+						 ORG 0
+gray					 ds		CMGrayColor		; offset: $0 (0)
+						 ORG 0
+mc5						 ds		CMMultichannel5Color ; offset: $0 (0)
+						 ORG 0
+mc6						 ds		CMMultichannel6Color ; offset: $0 (0)
+						 ORG 0
+mc7						 ds		CMMultichannel7Color ; offset: $0 (0)
+						 ORG 0
+mc8						 ds		CMMultichannel8Color ; offset: $0 (0)
+						 ORG 0
+namedColor				 ds		CMNamedColor	; offset: $0 (0)
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  GetIndexedProfile() search definition 
+CMProfileSearchRecord	RECORD 0
+header					 ds		CMHeader		; offset: $0 (0)
+fieldMask				 ds.l	1				; offset: $40 (64)
+reserved				 ds.l	2				; offset: $44 (68)
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+; typedef struct CMProfileSearchRecord * CMProfileSearchRecordPtr
+
+; typedef CMProfileSearchRecordPtr *	CMProfileSearchRecordHandle
+
+;  CMNewProfileSearch() search definition 
+CMSearchRecord			RECORD 0
+CMMType					 ds.l	1				; offset: $0 (0)
+profileClass			 ds.l	1				; offset: $4 (4)
+dataColorSpace			 ds.l	1				; offset: $8 (8)
+profileConnectionSpace	 ds.l	1				; offset: $C (12)
+deviceManufacturer		 ds.l	1				; offset: $10 (16)
+deviceModel				 ds.l	1				; offset: $14 (20)
+deviceAttributes		 ds.l	2				; offset: $18 (24)
+profileFlags			 ds.l	1				; offset: $20 (32)
+searchMask				 ds.l	1				; offset: $24 (36)
+filter					 ds.l	1				; offset: $28 (40)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+;  CMMIterateUPP() structure 
+CMMInfo					RECORD 0
+dataSize				 ds.l	1				; offset: $0 (0)		;  Size of this structure - compatibility
+CMMType					 ds.l	1				; offset: $4 (4)		;  Signature, e.g. 'appl', 'HDM ' or 'KCMS'
+CMMMfr					 ds.l	1				; offset: $8 (8)		;  Vendor, e.g. 'appl'
+CMMVersion				 ds.l	1				; offset: $C (12)		;  CMM version number
+ASCIIName				 ds.b	32				; offset: $10 (16)		;  pascal string - name
+ASCIIDesc				 ds.b	256				; offset: $30 (48)		;  pascal string - description or copyright
+UniCodeNameCount		 ds.l	1				; offset: $130 (304)	;  count of UniChars in following array
+UniCodeName				 ds.w	32				; offset: $134 (308)	;  the name in UniCode chars
+UniCodeDescCount		 ds.l	1				; offset: $174 (372)	;  count of UniChars in following array
+UniCodeDesc				 ds.w	256				; offset: $178 (376)	;  the description in UniCode chars
+sizeof					 EQU *					; size:   $378 (888)
+						ENDR
+;  GetCWInfo() structures 
+CMMInfoRecord			RECORD 0
+CMMType					 ds.l	1				; offset: $0 (0)
+CMMVersion				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMCWInfoRecord			RECORD 0
+cmmCount				 ds.l	1				; offset: $0 (0)
+cmmInfo					 ds.b	2 * CMMInfoRecord.sizeof ; offset: $4 (4)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  profile identifier structures 
+CMProfileIdentifier		RECORD 0
+profileHeader			 ds		CM2Header		; offset: $0 (0)
+calibrationDate			 ds		CMDateTime		; offset: $80 (128)
+ASCIIProfileDescriptionLen  ds.l 1				; offset: $8C (140)
+ASCIIProfileDescription	 ds.b	1				; offset: $90 (144) <-- really an array of length one ;  variable length 
+						 ORG 146
+sizeof					 EQU *					; size:   $92 (146)
+						ENDR
+; typedef struct CMProfileIdentifier *	CMProfileIdentifierPtr
+
+;  colorspace masks 
+
+cmColorSpaceSpaceMask			EQU		$0000003F
+cmColorSpacePremulAlphaMask		EQU		$00000040
+cmColorSpaceAlphaMask			EQU		$00000080
+cmColorSpaceSpaceAndAlphaMask	EQU		$000000FF
+cmColorSpacePackingMask			EQU		$0000FF00
+cmColorSpaceEncodingMask		EQU		$000F0000
+cmColorSpaceReservedMask		EQU		$FFF00000
+;  packing formats 
+
+cmNoColorPacking				EQU		$0000
+cmWord5ColorPacking				EQU		$0500
+cmWord565ColorPacking			EQU		$0600
+cmLong8ColorPacking				EQU		$0800
+cmLong10ColorPacking			EQU		$0A00
+cmAlphaFirstPacking				EQU		$1000
+cmOneBitDirectPacking			EQU		$0B00
+cmAlphaLastPacking				EQU		$0000
+cm8_8ColorPacking				EQU		$2800
+cm16_8ColorPacking				EQU		$2000
+cm24_8ColorPacking				EQU		$2100
+cm32_8ColorPacking				EQU		$0800
+cm40_8ColorPacking				EQU		$2200
+cm48_8ColorPacking				EQU		$2300
+cm56_8ColorPacking				EQU		$2400
+cm64_8ColorPacking				EQU		$2500
+cm32_16ColorPacking				EQU		$2600
+cm48_16ColorPacking				EQU		$2900
+cm64_16ColorPacking				EQU		$2A00
+cm32_32ColorPacking				EQU		$2700
+cmLittleEndianPacking			EQU		$4000
+cmReverseChannelPacking			EQU		$8000
+;  channel encoding format 
+
+cmSRGB16ChannelEncoding			EQU		$00010000			; used for sRGB64 encoding ( ±3.12 format)
+;  general colorspaces 
+
+cmNoSpace						EQU		$0000
+cmRGBSpace						EQU		$0001
+cmCMYKSpace						EQU		$0002
+cmHSVSpace						EQU		$0003
+cmHLSSpace						EQU		$0004
+cmYXYSpace						EQU		$0005
+cmXYZSpace						EQU		$0006
+cmLUVSpace						EQU		$0007
+cmLABSpace						EQU		$0008
+cmReservedSpace1				EQU		$0009
+cmGraySpace						EQU		$000A
+cmReservedSpace2				EQU		$000B
+cmGamutResultSpace				EQU		$000C
+cmNamedIndexedSpace				EQU		$0010
+cmMCFiveSpace					EQU		$0011
+cmMCSixSpace					EQU		$0012
+cmMCSevenSpace					EQU		$0013
+cmMCEightSpace					EQU		$0014
+cmAlphaPmulSpace				EQU		$0040
+cmAlphaSpace					EQU		$0080
+cmRGBASpace						EQU		$0081
+cmGrayASpace					EQU		$008A
+cmRGBAPmulSpace					EQU		$00C1
+cmGrayAPmulSpace				EQU		$00CA
+;  supported CMBitmapColorSpaces - Each of the following is a 
+;  combination of a general colospace and a packing formats. 
+;  Each can also be or'd with cmReverseChannelPacking. 
+
+cmGray8Space					EQU		$280A
+cmGray16Space					EQU		$000A
+cmGray16LSpace					EQU		$400A
+cmGrayA16Space					EQU		$208A
+cmGrayA32Space					EQU		$008A
+cmGrayA32LSpace					EQU		$408A
+cmGrayA16PmulSpace				EQU		$20CA
+cmGrayA32PmulSpace				EQU		$00CA
+cmGrayA32LPmulSpace				EQU		$40CA
+cmRGB16Space					EQU		$0501
+cmRGB16LSpace					EQU		$4501
+cmRGB565Space					EQU		$0601
+cmRGB565LSpace					EQU		$4601
+cmRGB24Space					EQU		$2101
+cmRGB32Space					EQU		$0801
+cmRGB48Space					EQU		$2901
+cmRGB48LSpace					EQU		$6901
+cmARGB32Space					EQU		$1881
+cmARGB64Space					EQU		$3A81
+cmARGB64LSpace					EQU		$7A81
+cmRGBA32Space					EQU		$0881
+cmRGBA64Space					EQU		$2A81
+cmRGBA64LSpace					EQU		$6A81
+cmARGB32PmulSpace				EQU		$18C1
+cmARGB64PmulSpace				EQU		$3AC1
+cmARGB64LPmulSpace				EQU		$7AC1
+cmRGBA32PmulSpace				EQU		$08C1
+cmRGBA64PmulSpace				EQU		$2AC1
+cmRGBA64LPmulSpace				EQU		$6AC1
+cmCMYK32Space					EQU		$0802
+cmCMYK64Space					EQU		$2A02
+cmCMYK64LSpace					EQU		$6A02
+cmHSV32Space					EQU		$0A03
+cmHLS32Space					EQU		$0A04
+cmYXY32Space					EQU		$0A05
+cmXYZ24Space					EQU		$2106
+cmXYZ32Space					EQU		$0A06
+cmXYZ48Space					EQU		$2906
+cmXYZ48LSpace					EQU		$6906
+cmLUV32Space					EQU		$0A07
+cmLAB24Space					EQU		$2108
+cmLAB32Space					EQU		$0A08
+cmLAB48Space					EQU		$2908
+cmLAB48LSpace					EQU		$6908
+cmGamutResult1Space				EQU		$0B0C
+cmNamedIndexed32Space			EQU		$2710
+cmNamedIndexed32LSpace			EQU		$6710
+cmMCFive8Space					EQU		$2211
+cmMCSix8Space					EQU		$2312
+cmMCSeven8Space					EQU		$2413
+cmMCEight8Space					EQU		$2514
+
+; typedef UInt32 						CMBitmapColorSpace
+
+CMBitmap				RECORD 0
+image					 ds.l	1				; offset: $0 (0)
+width					 ds.l	1				; offset: $4 (4)
+height					 ds.l	1				; offset: $8 (8)
+rowBytes				 ds.l	1				; offset: $C (12)
+pixelSize				 ds.l	1				; offset: $10 (16)
+space					 ds.l	1				; offset: $14 (20)
+user1					 ds.l	1				; offset: $18 (24)
+user2					 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  CMConvertXYZToXYZ() definitions 
+; typedef UInt32 						CMChromaticAdaptation
+
+
+cmUseDefaultChromaticAdaptation	EQU		0
+cmLinearChromaticAdaptation		EQU		1
+cmVonKriesChromaticAdaptation	EQU		2
+cmBradfordChromaticAdaptation	EQU		3
+
+;  Profile Locations 
+
+CS_MAX_PATH						EQU		256
+
+cmNoProfileBase					EQU		0
+cmFileBasedProfile				EQU		1
+cmHandleBasedProfile			EQU		2
+cmPtrBasedProfile				EQU		3
+cmProcedureBasedProfile			EQU		4
+cmPathBasedProfile				EQU		5
+cmBufferBasedProfile			EQU		6
+CMFileLocation			RECORD 0
+spec					 ds		FSSpec			; offset: $0 (0)
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+CMHandleLocation		RECORD 0
+h						 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CMPtrLocation			RECORD 0
+p						 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+CMProcedureLocation		RECORD 0
+proc					 ds.l	1				; offset: $0 (0)
+refCon					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMPathLocation			RECORD 0
+path					 ds.b	256				; offset: $0 (0)
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+CMBufferLocation		RECORD 0
+buffer					 ds.l	1				; offset: $0 (0)
+size					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+CMProfLoc				RECORD 0
+fileLoc					 ds		CMFileLocation ; offset: $0 (0)
+						 ORG 0
+handleLoc				 ds		CMHandleLocation ; offset: $0 (0)
+						 ORG 0
+ptrLoc					 ds		CMPtrLocation	; offset: $0 (0)
+						 ORG 0
+procLoc					 ds		CMProcedureLocation ; offset: $0 (0)
+						 ORG 0
+pathLoc					 ds		CMPathLocation ; offset: $0 (0)
+						 ORG 0
+bufferLoc				 ds		CMBufferLocation ; offset: $0 (0)
+						 ORG 256
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+CMProfileLocation		RECORD 0
+locType					 ds.w	1				; offset: $0 (0)
+u						 ds		CMProfLoc		; offset: $2 (2)
+sizeof					 EQU *					; size:   $102 (258)
+						ENDR
+	IF TARGET_OS_MAC THEN
+
+cmOriginalProfileLocationSize	EQU		72
+cmCurrentProfileLocationSize	EQU		258
+	ELSE
+
+cmOriginalProfileLocationSize	EQU		258
+cmCurrentProfileLocationSize	EQU		258
+	ENDIF	; TARGET_OS_MAC
+;  Typedef for Profile MD5 message digest 
+CMProfileMD5			RECORD 0
+elements				 ds.b	16
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+; typedef CMProfileMD5 *				CMProfileMD5Ptr
+
+;  Struct and enums used for Profile iteration 
+
+cmProfileIterateDataVersion1	EQU		$00010000
+cmProfileIterateDataVersion2	EQU		$00020000			; Added makeAndModel
+cmProfileIterateDataVersion3	EQU		$00030000			; Added MD5 digest
+CMProfileIterateData	RECORD 0
+dataVersion				 ds.l	1				; offset: $0 (0)		;  cmProfileIterateDataVersion2 
+header					 ds		CM2Header		; offset: $4 (4)
+code					 ds.w	1				; offset: $84 (132)
+name					 ds		Str255			; offset: $86 (134)
+location				 ds		CMProfileLocation ; offset: $186 (390)
+uniCodeNameCount		 ds.l	1				; offset: $288 (648)
+uniCodeName				 ds.l	1				; offset: $28C (652)
+asciiName				 ds.l	1				; offset: $290 (656)
+makeAndModel			 ds.l	1				; offset: $294 (660)
+digest					 ds.l	1				; offset: $298 (664)
+sizeof					 EQU *					; size:   $29C (668)
+						ENDR
+;  Caller-supplied callback function for Profile & CMM iteration 
+
+; *  NewCMProfileIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+
+; *  NewCMMIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+
+; *  DisposeCMProfileIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+
+; *  DisposeCMMIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+
+; *  InvokeCMProfileIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+
+; *  InvokeCMMIterateUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;  Profile file and element access 
+
+; *  CMNewProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMNewProfile(CMProfileRef *prof, const CMProfileLocation *theProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMNewProfile
+			move.l              #$0008001B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMNewProfile
+	ENDIF
+
+
+; *  CMOpenProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMOpenProfile(CMProfileRef *prof, const CMProfileLocation *theProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMOpenProfile
+			move.l              #$0008001C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMOpenProfile
+	ENDIF
+
+
+; *  CMCloseProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMCloseProfile(CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMCloseProfile
+			move.l              #$0004001D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCloseProfile
+	ENDIF
+
+
+; *  CMUpdateProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMUpdateProfile(CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMUpdateProfile
+			move.l              #$00040034,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMUpdateProfile
+	ENDIF
+
+
+; *  CMCopyProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMCopyProfile(CMProfileRef *targetProf, const CMProfileLocation *targetLocation, CMProfileRef srcProf)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMCopyProfile
+			move.l              #$000C0025,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCopyProfile
+	ENDIF
+
+
+; *  CMValidateProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMValidateProfile(CMProfileRef prof, Boolean *valid, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMValidateProfile
+			move.l              #$000C0026,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMValidateProfile
+	ENDIF
+
+
+; *  CMGetProfileLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileLocation(CMProfileRef prof, CMProfileLocation *theProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileLocation
+			move.l              #$0008003C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileLocation
+	ENDIF
+
+
+; *  NCMGetProfileLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCMGetProfileLocation(CMProfileRef prof, CMProfileLocation *theProfile, UInt32 *locationSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMGetProfileLocation
+			move.l              #$000C0059,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMGetProfileLocation
+	ENDIF
+
+
+; *  CMFlattenProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMFlattenProfile(CMProfileRef prof, UInt32 flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMFlattenProfile
+			move.l              #$00140031,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMFlattenProfile
+	ENDIF
+
+	IF TARGET_OS_MAC THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMUnflattenProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMUnflattenProfile(FSSpec *resultFileSpec, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMUnflattenProfile
+			move.l              #$00100032,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMUnflattenProfile
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_OS_MAC
+
+; *  CMGetProfileHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileHeader(CMProfileRef prof, CMAppleProfileHeader *header)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileHeader
+			move.l              #$00080039,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileHeader
+	ENDIF
+
+
+; *  CMSetProfileHeader()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileHeader(CMProfileRef prof, const CMAppleProfileHeader *header)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileHeader
+			move.l              #$0008003A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileHeader
+	ENDIF
+
+
+; *  CMProfileElementExists()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMProfileElementExists(CMProfileRef prof, OSType tag, Boolean *found)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMProfileElementExists
+			move.l              #$000C001E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMProfileElementExists
+	ENDIF
+
+
+; *  CMCountProfileElements()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMCountProfileElements(CMProfileRef prof, UInt32 *elementCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMCountProfileElements
+			move.l              #$0008001F,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCountProfileElements
+	ENDIF
+
+
+; *  CMGetProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileElement(CMProfileRef prof, OSType tag, UInt32 *elementSize, void *elementData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileElement
+			move.l              #$00100020,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileElement
+	ENDIF
+
+
+; *  CMSetProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileElement(CMProfileRef prof, OSType tag, UInt32 elementSize, const void *elementData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileElement
+			move.l              #$00100023,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileElement
+	ENDIF
+
+
+; *  CMSetProfileElementSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileElementSize(CMProfileRef prof, OSType tag, UInt32 elementSize)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileElementSize
+			move.l              #$000C0038,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileElementSize
+	ENDIF
+
+
+; *  CMSetProfileElementReference()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileElementReference(CMProfileRef prof, OSType elementTag, OSType referenceTag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileElementReference
+			move.l              #$000C0035,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileElementReference
+	ENDIF
+
+
+; *  CMGetPartialProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPartialProfileElement(CMProfileRef prof, OSType tag, UInt32 offset, UInt32 *byteCount, void *elementData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPartialProfileElement
+			move.l              #$00140036,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPartialProfileElement
+	ENDIF
+
+
+; *  CMSetPartialProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetPartialProfileElement(CMProfileRef prof, OSType tag, UInt32 offset, UInt32 byteCount, const void *elementData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetPartialProfileElement
+			move.l              #$00140037,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetPartialProfileElement
+	ENDIF
+
+
+; *  CMGetIndProfileElementInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetIndProfileElementInfo(CMProfileRef prof, UInt32 index, OSType *tag, UInt32 *elementSize, Boolean *refs)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetIndProfileElementInfo
+			move.l              #$00140021,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetIndProfileElementInfo
+	ENDIF
+
+
+; *  CMGetIndProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetIndProfileElement(CMProfileRef prof, UInt32 index, UInt32 *elementSize, void *elementData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetIndProfileElement
+			move.l              #$00100022,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetIndProfileElement
+	ENDIF
+
+
+; *  CMRemoveProfileElement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMRemoveProfileElement(CMProfileRef prof, OSType tag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMRemoveProfileElement
+			move.l              #$00080024,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMRemoveProfileElement
+	ENDIF
+
+
+; *  CMGetScriptProfileDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetScriptProfileDescription(CMProfileRef prof, Str255 name, ScriptCode *code)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetScriptProfileDescription
+			move.l              #$000C003E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetScriptProfileDescription
+	ENDIF
+
+
+; *  CMGetProfileDescriptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileDescriptions(CMProfileRef prof, char *aName, UInt32 *aCount, Str255 mName, ScriptCode *mCode, UniChar *uName, UniCharCount *uCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileDescriptions
+			move.l              #$001A0067,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileDescriptions
+	ENDIF
+
+
+; *  CMSetProfileDescriptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileDescriptions(CMProfileRef prof, const char *aName, UInt32 aCount, ConstStr255Param mName, ScriptCode mCode, const UniChar *uName, UniCharCount uCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileDescriptions
+			move.l              #$001A0068,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileDescriptions
+	ENDIF
+
+
+; *  CMCopyProfileLocalizedStringDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMCopyProfileLocalizedStringDictionary(CMProfileRef prof, OSType tag, CFDictionaryRef *theDict)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCopyProfileLocalizedStringDictionary
+	ENDIF
+
+
+; *  CMSetProfileLocalizedStringDictionary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMSetProfileLocalizedStringDictionary(CMProfileRef prof, OSType tag, CFDictionaryRef theDict)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileLocalizedStringDictionary
+	ENDIF
+
+
+; *  CMCopyProfileLocalizedString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMCopyProfileLocalizedString(CMProfileRef prof, OSType tag, CFStringRef reqLocale, CFStringRef *locale, CFStringRef *str)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCopyProfileLocalizedString
+	ENDIF
+
+
+; *  CMCloneProfileRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMCloneProfileRef(CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMCloneProfileRef
+			move.l              #$00040042,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCloneProfileRef
+	ENDIF
+
+
+; *  CMGetProfileRefCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileRefCount(CMProfileRef prof, long *count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileRefCount
+			move.l              #$00080043,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileRefCount
+	ENDIF
+
+
+; *  CMProfileModified()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMProfileModified(CMProfileRef prof, Boolean *modified)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMProfileModified
+			move.l              #$00080044,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMProfileModified
+	ENDIF
+
+
+; *  CMGetProfileMD5()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMGetProfileMD5(CMProfileRef prof, CMProfileMD5 digest)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileMD5
+	ENDIF
+
+
+;  named Color access functions 
+
+; *  CMGetNamedColorInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetNamedColorInfo(CMProfileRef prof, UInt32 *deviceChannels, OSType *deviceColorSpace, OSType *PCSColorSpace, UInt32 *count, StringPtr prefix, StringPtr suffix)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetNamedColorInfo
+			move.l              #$001C0046,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetNamedColorInfo
+	ENDIF
+
+
+; *  CMGetNamedColorValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetNamedColorValue(CMProfileRef prof, StringPtr name, CMColor *deviceColor, CMColor *PCSColor)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetNamedColorValue
+			move.l              #$00100047,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetNamedColorValue
+	ENDIF
+
+
+; *  CMGetIndNamedColorValue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetIndNamedColorValue(CMProfileRef prof, UInt32 index, CMColor *deviceColor, CMColor *PCSColor)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetIndNamedColorValue
+			move.l              #$00100048,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetIndNamedColorValue
+	ENDIF
+
+
+; *  CMGetNamedColorIndex()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetNamedColorIndex(CMProfileRef prof, StringPtr name, UInt32 *index)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetNamedColorIndex
+			move.l              #$000C0049,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetNamedColorIndex
+	ENDIF
+
+
+; *  CMGetNamedColorName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetNamedColorName(CMProfileRef prof, UInt32 index, StringPtr name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetNamedColorName
+			move.l              #$000C004A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetNamedColorName
+	ENDIF
+
+
+;  General-purpose matching functions 
+
+; *  NCWNewColorWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCWNewColorWorld(CMWorldRef *cw, CMProfileRef src, CMProfileRef dst)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCWNewColorWorld
+			move.l              #$000C0014,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCWNewColorWorld
+	ENDIF
+
+
+; *  CWConcatColorWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWConcatColorWorld(CMWorldRef *cw, CMConcatProfileSet *profileSet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWConcatColorWorld
+			move.l              #$00080015,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWConcatColorWorld
+	ENDIF
+
+
+; *  CWNewLinkProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWNewLinkProfile(CMProfileRef *prof, const CMProfileLocation *targetLocation, CMConcatProfileSet *profileSet)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWNewLinkProfile
+			move.l              #$000C0033,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWNewLinkProfile
+	ENDIF
+
+
+; *  NCWConcatColorWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCWConcatColorWorld(CMWorldRef *cw, NCMConcatProfileSet *profileSet, CMConcatCallBackUPP proc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCWConcatColorWorld
+			move.l              #$00080061,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCWConcatColorWorld
+	ENDIF
+
+
+; *  NCWNewLinkProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCWNewLinkProfile(CMProfileRef *prof, const CMProfileLocation *targetLocation, NCMConcatProfileSet *profileSet, CMConcatCallBackUPP proc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCWNewLinkProfile
+			move.l              #$000C0062,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCWNewLinkProfile
+	ENDIF
+
+
+; *  CWDisposeColorWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal void CWDisposeColorWorld(CMWorldRef cw)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWDisposeColorWorld
+			move.l              #$00040001,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWDisposeColorWorld
+	ENDIF
+
+
+; *  CWMatchColors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWMatchColors(CMWorldRef cw, CMColor *myColors, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWMatchColors
+			move.l              #$000C0002,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWMatchColors
+	ENDIF
+
+
+; *  CWCheckColors()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWCheckColors(CMWorldRef cw, CMColor *myColors, UInt32 count, UInt32 *result)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWCheckColors
+			move.l              #$00100003,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWCheckColors
+	ENDIF
+
+
+; *  CWMatchBitmap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWMatchBitmap(CMWorldRef cw, CMBitmap *bitmap, CMBitmapCallBackUPP progressProc, void *refCon, CMBitmap *matchedBitmap)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWMatchBitmap
+			move.l              #$0010002C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWMatchBitmap
+	ENDIF
+
+
+; *  CWCheckBitmap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CWCheckBitmap(CMWorldRef cw, const CMBitmap *bitmap, CMBitmapCallBackUPP progressProc, void *refCon, CMBitmap *resultBitmap)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWCheckBitmap
+			move.l              #$0014002D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWCheckBitmap
+	ENDIF
+
+;  Quickdraw-specific matching 
+	IF TARGET_OS_MAC ** _DECLARE_CS_QD_API_ THEN
+
+; *  CWMatchPixMap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CWMatchPixMap(CMWorldRef cw, PixMap *myPixMap, CMBitmapCallBackUPP progressProc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWMatchPixMap
+			move.l              #$00100004,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWMatchPixMap
+	ENDIF
+
+
+; *  CWCheckPixMap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CWCheckPixMap(CMWorldRef cw, PixMap *myPixMap, CMBitmapCallBackUPP progressProc, void *refCon, BitMap *resultBitMap)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWCheckPixMap
+			move.l              #$00140007,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWCheckPixMap
+	ENDIF
+
+
+; *  NCMBeginMatching()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError NCMBeginMatching(CMProfileRef src, CMProfileRef dst, CMMatchRef *myRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMBeginMatching
+			move.l              #$000C0016,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMBeginMatching
+	ENDIF
+
+
+; *  CMEndMatching()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMEndMatching(CMMatchRef myRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMEndMatching
+			move.l              #$0004000B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMEndMatching
+	ENDIF
+
+
+; *  NCMDrawMatchedPicture()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void NCMDrawMatchedPicture(PicHandle myPicture, CMProfileRef dst, Rect *myRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMDrawMatchedPicture
+			move.l              #$000C0017,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMDrawMatchedPicture
+	ENDIF
+
+
+; *  CMEnableMatchingComment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMEnableMatchingComment(Boolean enableIt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMEnableMatchingComment
+			move.l              #$0002000D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMEnableMatchingComment
+	ENDIF
+
+
+; *  NCMUseProfileComment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError NCMUseProfileComment(CMProfileRef prof, UInt32 flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMUseProfileComment
+			move.l              #$0008003B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMUseProfileComment
+	ENDIF
+
+	ENDIF
+	IF TARGET_OS_WIN32 THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CWMatchHBITMAP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CWMatchHBITMAP(CMWorldRef cw, HBITMAP hBitmap, CMBitmapCallBackUPP progressProc, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWMatchHBITMAP
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_OS_WIN32
+
+; *  CMCreateProfileIdentifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMCreateProfileIdentifier(CMProfileRef prof, CMProfileIdentifierPtr ident, UInt32 *size)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMCreateProfileIdentifier
+			move.l              #$000C0041,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMCreateProfileIdentifier
+	ENDIF
+
+
+;  System Profile access 
+
+; *  CMGetSystemProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetSystemProfile(CMProfileRef *prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetSystemProfile
+			move.l              #$00040018,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetSystemProfile
+	ENDIF
+
+
+; *  CMSetSystemProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetSystemProfile(const FSSpec *profileFileSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetSystemProfile
+			move.l              #$00040019,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetSystemProfile
+	ENDIF
+
+
+; *  NCMSetSystemProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCMSetSystemProfile(const CMProfileLocation *profLoc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMSetSystemProfile
+			move.l              #$00040064,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMSetSystemProfile
+	ENDIF
+
+
+; *  CMGetDefaultProfileBySpace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetDefaultProfileBySpace(OSType dataColorSpace, CMProfileRef *prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetDefaultProfileBySpace
+			move.l              #$0008005A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDefaultProfileBySpace
+	ENDIF
+
+
+; *  CMSetDefaultProfileBySpace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetDefaultProfileBySpace(OSType dataColorSpace, CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetDefaultProfileBySpace
+			move.l              #$0008005B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDefaultProfileBySpace
+	ENDIF
+
+	IF TARGET_OS_MAC THEN
+
+; *  CMGetProfileByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetProfileByAVID(CMDisplayIDType theID, CMProfileRef *prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileByAVID
+			move.l              #$0008005C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileByAVID
+	ENDIF
+
+
+; *  CMSetProfileByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetProfileByAVID(CMDisplayIDType theID, CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetProfileByAVID
+			move.l              #$0008005D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetProfileByAVID
+	ENDIF
+
+
+; *  CMGetGammaByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetGammaByAVID(CMDisplayIDType theID, CMVideoCardGamma *gamma, UInt32 *size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetGammaByAVID
+	ENDIF
+
+
+; *  CMSetGammaByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetGammaByAVID(CMDisplayIDType theID, CMVideoCardGamma *gamma)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetGammaByAVID
+	ENDIF
+
+	ENDIF	; TARGET_OS_MAC
+;  Profile access by Use 
+
+; *  CMGetDefaultProfileByUse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetDefaultProfileByUse(OSType use, CMProfileRef *prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetDefaultProfileByUse
+			move.l              #$00080069,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetDefaultProfileByUse
+	ENDIF
+
+
+; *  CMSetDefaultProfileByUse()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSetDefaultProfileByUse(OSType use, CMProfileRef prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSetDefaultProfileByUse
+			move.l              #$00080079,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetDefaultProfileByUse
+	ENDIF
+
+;  Profile Management 
+
+; *  CMNewProfileSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMNewProfileSearch(CMSearchRecord *searchSpec, void *refCon, UInt32 *count, CMProfileSearchRef *searchResult)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMNewProfileSearch
+			move.l              #$00100027,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMNewProfileSearch
+	ENDIF
+
+
+; *  CMUpdateProfileSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMUpdateProfileSearch(CMProfileSearchRef search, void *refCon, UInt32 *count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMUpdateProfileSearch
+			move.l              #$000C0028,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMUpdateProfileSearch
+	ENDIF
+
+
+; *  CMDisposeProfileSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal void CMDisposeProfileSearch(CMProfileSearchRef search)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMDisposeProfileSearch
+			move.l              #$00040029,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMDisposeProfileSearch
+	ENDIF
+
+
+; *  CMSearchGetIndProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSearchGetIndProfile(CMProfileSearchRef search, UInt32 index, CMProfileRef *prof)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSearchGetIndProfile
+			move.l              #$000C002A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSearchGetIndProfile
+	ENDIF
+
+
+; *  CMSearchGetIndProfileFileSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMSearchGetIndProfileFileSpec(CMProfileSearchRef search, UInt32 index, FSSpec *profileFile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMSearchGetIndProfileFileSpec
+			move.l              #$000C002B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSearchGetIndProfileFileSpec
+	ENDIF
+
+
+; *  CMProfileIdentifierFolderSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMProfileIdentifierFolderSearch(CMProfileIdentifierPtr ident, UInt32 *matchedCount, CMProfileSearchRef *searchResult)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMProfileIdentifierFolderSearch
+			move.l              #$000C003F,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMProfileIdentifierFolderSearch
+	ENDIF
+
+
+; *  CMProfileIdentifierListSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMProfileIdentifierListSearch(CMProfileIdentifierPtr ident, CMProfileRef *profileList, UInt32 listSize, UInt32 *matchedCount, CMProfileRef *matchedList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMProfileIdentifierListSearch
+			move.l              #$00140040,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMProfileIdentifierListSearch
+	ENDIF
+
+
+; *  CMIterateColorSyncFolder()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMIterateColorSyncFolder(CMProfileIterateUPP proc, UInt32 *seed, UInt32 *count, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMIterateColorSyncFolder
+			move.l              #$00100058,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIterateColorSyncFolder
+	ENDIF
+
+
+; *  NCMUnflattenProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError NCMUnflattenProfile(CMProfileLocation *targetLocation, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_NCMUnflattenProfile
+			move.l              #$00100065,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NCMUnflattenProfile
+	ENDIF
+
+;  Utilities 
+	IF TARGET_OS_MAC THEN
+
+; *  CMGetColorSyncFolderSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetColorSyncFolderSpec(short vRefNum, Boolean createFolder, short *foundVRefNum, long *foundDirID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetColorSyncFolderSpec
+			move.l              #$000C0011,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetColorSyncFolderSpec
+	ENDIF
+
+	ENDIF	; TARGET_OS_MAC
+	IF TARGET_OS_WIN32 ++ TARGET_OS_UNIX THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMGetColorSyncFolderPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMGetColorSyncFolderPath(Boolean createFolder, char *lpBuffer, UInt32 uSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetColorSyncFolderPath
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+; *  CMGetCWInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetCWInfo(CMWorldRef cw, CMCWInfoRecord *info)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetCWInfo
+			move.l              #$0008001A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetCWInfo
+	ENDIF
+
+	IF TARGET_API_MAC_OS8 THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMConvertProfile2to1()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMConvertProfile2to1(CMProfileRef profv2, CMProfileHandle *profv1)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertProfile2to1
+			move.l              #$00080045,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertProfile2to1
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TARGET_API_MAC_OS8
+
+; *  CMGetPreferredCMM()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPreferredCMM(OSType *cmmType, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPreferredCMM
+			move.l              #$0008005E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPreferredCMM
+	ENDIF
+
+
+; *  CMIterateCMMInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMIterateCMMInfo(CMMIterateUPP proc, UInt32 *count, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMIterateCMMInfo
+			move.l              #$000C0063,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIterateCMMInfo
+	ENDIF
+
+
+; *  CMGetColorSyncVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.6 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetColorSyncVersion(UInt32 *version)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetColorSyncVersion
+			move.l              #$00040066,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetColorSyncVersion
+	ENDIF
+
+
+; *  CMLaunchControlPanel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMLaunchControlPanel(UInt32 flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMLaunchControlPanel
+	ENDIF
+
+;  ColorSpace conversion functions 
+
+; *  CMConvertXYZToLab()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertXYZToLab(const CMColor *src, const CMXYZColor *white, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertXYZToLab
+			move.l              #$0010004B,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertXYZToLab
+	ENDIF
+
+
+; *  CMConvertLabToXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertLabToXYZ(const CMColor *src, const CMXYZColor *white, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertLabToXYZ
+			move.l              #$0010004C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertLabToXYZ
+	ENDIF
+
+
+; *  CMConvertXYZToLuv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertXYZToLuv(const CMColor *src, const CMXYZColor *white, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertXYZToLuv
+			move.l              #$0010004D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertXYZToLuv
+	ENDIF
+
+
+; *  CMConvertLuvToXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertLuvToXYZ(const CMColor *src, const CMXYZColor *white, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertLuvToXYZ
+			move.l              #$0010004E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertLuvToXYZ
+	ENDIF
+
+
+; *  CMConvertXYZToYxy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertXYZToYxy(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertXYZToYxy
+			move.l              #$000C004F,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertXYZToYxy
+	ENDIF
+
+
+; *  CMConvertYxyToXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertYxyToXYZ(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertYxyToXYZ
+			move.l              #$000C0050,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertYxyToXYZ
+	ENDIF
+
+
+; *  CMConvertRGBToHLS()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertRGBToHLS(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertRGBToHLS
+			move.l              #$000C0051,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertRGBToHLS
+	ENDIF
+
+
+; *  CMConvertHLSToRGB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertHLSToRGB(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertHLSToRGB
+			move.l              #$000C0052,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertHLSToRGB
+	ENDIF
+
+
+; *  CMConvertRGBToHSV()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertRGBToHSV(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertRGBToHSV
+			move.l              #$000C0053,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertRGBToHSV
+	ENDIF
+
+
+; *  CMConvertHSVToRGB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertHSVToRGB(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertHSVToRGB
+			move.l              #$000C0054,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertHSVToRGB
+	ENDIF
+
+
+; *  CMConvertRGBToGray()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertRGBToGray(const CMColor *src, CMColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertRGBToGray
+			move.l              #$000C0055,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertRGBToGray
+	ENDIF
+
+
+; *  CMConvertXYZToFixedXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertXYZToFixedXYZ(const CMXYZColor *src, CMFixedXYZColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertXYZToFixedXYZ
+			move.l              #$000C0056,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertXYZToFixedXYZ
+	ENDIF
+
+
+; *  CMConvertFixedXYZToXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMConvertFixedXYZToXYZ(const CMFixedXYZColor *src, CMXYZColor *dst, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMConvertFixedXYZToXYZ
+			move.l              #$000C0057,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertFixedXYZToXYZ
+	ENDIF
+
+
+; *  CMConvertXYZToXYZ()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         in 3.1 and later
+; 
+
+;
+; pascal CMError CMConvertXYZToXYZ(const CMColor *src, const CMXYZColor *srcIlluminant, CMColor *dst, const CMXYZColor *dstIlluminant, CMChromaticAdaptation method, UInt32 count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMConvertXYZToXYZ
+	ENDIF
+
+
+;  PS-related 
+
+; *  CMGetPS2ColorSpace()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPS2ColorSpace(CMProfileRef srcProf, UInt32 flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPS2ColorSpace
+			move.l              #$0014002E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPS2ColorSpace
+	ENDIF
+
+
+; *  CMGetPS2ColorRenderingIntent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPS2ColorRenderingIntent(CMProfileRef srcProf, UInt32 flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPS2ColorRenderingIntent
+			move.l              #$0014002F,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPS2ColorRenderingIntent
+	ENDIF
+
+
+; *  CMGetPS2ColorRendering()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPS2ColorRendering(CMProfileRef srcProf, CMProfileRef dstProf, UInt32 flags, CMFlattenUPP proc, void *refCon, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPS2ColorRendering
+			move.l              #$00180030,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPS2ColorRendering
+	ENDIF
+
+
+; *  CMGetPS2ColorRenderingVMSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in 3.0 and later
+; 
+
+;
+; pascal CMError CMGetPS2ColorRenderingVMSize(CMProfileRef srcProf, CMProfileRef dstProf, UInt32 *vmSize, Boolean *preferredCMMnotfound)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetPS2ColorRenderingVMSize
+			move.l              #$0010003D,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetPS2ColorRenderingVMSize
+	ENDIF
+
+
+;  ColorSync 1.0 functions which have parallel 2.0 counterparts 
+	IF TARGET_API_MAC_OS8 THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CWNewColorWorld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CWNewColorWorld(CMWorldRef *cw, CMProfileHandle src, CMProfileHandle dst)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CWNewColorWorld
+			move.l              #$000C0000,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CWNewColorWorld
+	ENDIF
+
+
+; *  ConcatenateProfiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError ConcatenateProfiles(CMProfileHandle thru, CMProfileHandle dst, CMProfileHandle *newDst)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ConcatenateProfiles
+			move.l              #$000C000C,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConcatenateProfiles
+	ENDIF
+
+
+; *  CMBeginMatching()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMBeginMatching(CMProfileHandle src, CMProfileHandle dst, CMMatchRef *myRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMBeginMatching
+			move.l              #$000C000A,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMBeginMatching
+	ENDIF
+
+
+; *  CMDrawMatchedPicture()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMDrawMatchedPicture(PicHandle myPicture, CMProfileHandle dst, Rect *myRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMDrawMatchedPicture
+			move.l              #$000C0009,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMDrawMatchedPicture
+	ENDIF
+
+
+; *  CMUseProfileComment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMUseProfileComment(CMProfileHandle profile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMUseProfileComment
+			move.l              #$00040008,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMUseProfileComment
+	ENDIF
+
+
+; *  CMGetProfileName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMGetProfileName(CMProfileHandle myProfile, CMIString *IStringResult)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileName
+			move.l              #$0008000E,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileName
+	ENDIF
+
+
+; *  CMGetProfileAdditionalDataOffset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long CMGetProfileAdditionalDataOffset(CMProfileHandle myProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMGetProfileAdditionalDataOffset
+			move.l              #$0004000F,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProfileAdditionalDataOffset
+	ENDIF
+
+
+;  ProfileResponder definitions 
+	ENDIF	; CALL_NOT_IN_CARBON
+
+cmSystemDevice					EQU		'sys '
+cmGDevice						EQU		'gdev'
+;  ProfileResponder functions 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError GetProfile(OSType deviceType, long refNum, CMProfileHandle aProfile, CMProfileHandle *returnedProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetProfile
+			move.l              #$00100005,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetProfile
+	ENDIF
+
+
+; *  SetProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError SetProfile(OSType deviceType, long refNum, CMProfileHandle newProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetProfile
+			move.l              #$000C0006,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetProfile
+	ENDIF
+
+
+; *  SetProfileDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError SetProfileDescription(OSType deviceType, long refNum, long deviceData, CMProfileHandle hProfile)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetProfileDescription
+			move.l              #$00100010,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetProfileDescription
+	ENDIF
+
+
+; *  GetIndexedProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError GetIndexedProfile(OSType deviceType, long refNum, CMProfileSearchRecordHandle search, CMProfileHandle *returnProfile, long *index)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetIndexedProfile
+			move.l              #$00140012,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIndexedProfile
+	ENDIF
+
+
+; *  DeleteDeviceProfile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ColorSyncLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError DeleteDeviceProfile(OSType deviceType, long refNum, CMProfileHandle deleteMe)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DeleteDeviceProfile
+			move.l              #$000C0013,D0
+			dc.w            	$ABEE
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DeleteDeviceProfile
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OLDROUTINENAMES THEN
+;  old constants 
+; typedef CMFlattenProcPtr 				CMFlattenProc
+
+; typedef CMBitmapCallBackProcPtr 		CMBitmapCallBackProc
+
+; typedef CMProfileFilterProcPtr 		CMProfileFilterProc
+
+
+qdSystemDevice					EQU		'sys '
+qdGDevice						EQU		'gdev'
+
+
+kMatchCMMType					EQU		$00000001
+kMatchApplProfileVersion		EQU		$00000002
+kMatchDataType					EQU		$00000004
+kMatchDeviceType				EQU		$00000008
+kMatchDeviceManufacturer		EQU		$00000010
+kMatchDeviceModel				EQU		$00000020
+kMatchDeviceAttributes			EQU		$00000040
+kMatchFlags						EQU		$00000080
+kMatchOptions					EQU		$00000100
+kMatchWhite						EQU		$00000200
+kMatchBlack						EQU		$00000400
+;  old types 
+CMYKColor				RECORD 0
+f						 ds		CMCMYKColor
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+; typedef CMWorldRef 					CWorld
+
+; typedef long *						CMGamutResult
+
+;  old functions 
+	ENDIF	; OLDROUTINENAMES
+;  Deprecated stuff
+;  PrGeneral parameter blocks 
+
+enableColorMatchingOp			EQU		12
+registerProfileOp				EQU		13
+TEnableColorMatchingBlk	RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+hPrint					 ds.l	1				; offset: $8 (8)
+fEnableIt				 ds.b	1				; offset: $C (12)
+filler					 ds.b	1				; offset: $D (13)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+TRegisterProfileBlk		RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)
+iError					 ds.w	1				; offset: $2 (2)
+lReserved				 ds.l	1				; offset: $4 (4)
+hPrint					 ds.l	1				; offset: $8 (8)
+fRegisterIt				 ds.b	1				; offset: $C (12)
+filler					 ds.b	1				; offset: $D (13)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+	ENDIF	; TARGET_API_MAC_OS8
+	ENDIF ; __CMAPPLICATION__ 
+

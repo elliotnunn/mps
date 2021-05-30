@@ -1,0 +1,4918 @@
+;
+;    File:       OpenTransportProtocol.a
+;
+;    Contains:   Definitions likely to be used by low-level protocol stack implementation.
+;
+;    Version:    Technology: 2.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc. and Mentat Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__OPENTRANSPORTPROTOCOL__') = 'UNDEFINED' THEN
+__OPENTRANSPORTPROTOCOL__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF &TYPE('__OPENTRANSPORT__') = 'UNDEFINED' THEN
+	include 'OpenTransport.a'
+	ENDIF
+
+
+;  ***** Setup Default Compiler Variables *****
+
+
+;   OTKERNEL is used to indicate whether the code is being built
+;   for the kernel environment.  It defaults to 0.  If you include
+;   "OpenTransportKernel.h" before including this file,
+;   it will be 1 and you will only be able to see stuff available
+;   to kernel code.
+;   As we've included "OpenTransport.h" and it defaults this variable
+;   to 0 if it's not already been defined, it should always be defined
+;   by the time we get here.  So we just assert that.  Assertions in
+;   header files!  Cool (-:
+
+
+
+	IF &TYPE('OTKERNEL') = 'UNDEFINED' THEN
+	ENDIF
+;  ***** Shared Client Memory *****
+	IF ¬ OTKERNEL THEN
+
+;   These allocators allocate memory in the shared client pool,
+;   which is shared between all clients and is not disposed when
+;   a particular client goes away.  See DTS Technote •••
+;   "Understanding Open Transport Memory Management" for details.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTAllocSharedClientMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTAllocSharedClientMem(OTByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAllocSharedClientMem
+	ENDIF
+
+
+; *  OTFreeSharedClientMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTFreeSharedClientMem(void *mem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFreeSharedClientMem
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** UNIX Types *****
+	IF CALL_NOT_IN_CARBON THEN
+
+;   On UNIX, uid_t and gid_t are defined to be big enough
+;   to hold a user ID and group ID respectively.  As Mac OS
+;   has no such concepts, we just define them as UInt32 place
+;   holders.
+
+
+; typedef UInt32 						uid_t
+
+; typedef UInt32 						gid_t
+
+;  Similarly, dev_t is a UNIX type for denoting a device number.
+; typedef UInt32 						dev_t
+
+;  ***** From the Mentat "strstat.h" *****
+
+;  module statistics structure 
+module_stat				RECORD 0
+ms_pcnt					 ds.l	1				; offset: $0 (0)		;  count of calls to put proc 
+ms_scnt					 ds.l	1				; offset: $4 (4)		;  count of calls to service proc 
+ms_ocnt					 ds.l	1				; offset: $8 (8)		;  count of calls to open proc 
+ms_ccnt					 ds.l	1				; offset: $C (12)		;  count of calls to close proc 
+ms_acnt					 ds.l	1				; offset: $10 (16)		;  count of calls to admin proc 
+ms_xptr					 ds.l	1				; offset: $14 (20)		;  pointer to private statistics 
+ms_xsize				 ds.w	1				; offset: $18 (24)		;  length of private statistics buffer 
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+;  ***** From the Mentat "cred.h" *****
+
+cred					RECORD 0
+cr_ref					 ds.w	1				; offset: $0 (0)		;  reference count on processes using cred structures 
+cr_ngroups				 ds.w	1				; offset: $2 (2)		;  number of groups in cr_groups 
+cr_uid					 ds.l	1				; offset: $4 (4)		;  effective user id 
+cr_gid					 ds.l	1				; offset: $8 (8)		;  effective group id 
+cr_ruid					 ds.l	1				; offset: $C (12)		;  real user id 
+cr_rgid					 ds.l	1				; offset: $10 (16)		;  real group id 
+cr_suid					 ds.l	1				; offset: $14 (20)		;  user id saved by exec 
+cr_sgid					 ds.l	1				; offset: $18 (24)		;  group id saved by exec 
+cr_groups				 ds.l	1				; offset: $1C (28) <-- really an array of length one ;  supplementary groups list 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+cred_t					RECORD 0
+f						 ds		cred
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+;  Free return structure for esballoc 
+free_rtn				RECORD 0
+free_func				 ds.l	1				; offset: $0 (0)		;  Routine to call to free buffer 
+free_arg				 ds.l	1				; offset: $4 (4)		;  Parameter to free_func 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+frtn_t					RECORD 0
+f						 ds		free_rtn
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+;  data descriptor 
+
+
+datab_db_f				RECORD 0
+freep					 ds.l	1				; offset: $0 (0)
+						 ORG 0
+frtnp					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+datab					RECORD 0
+db_f					 ds		datab_db_f		; offset: $0 (0)
+db_base					 ds.l	1				; offset: $4 (4)		;  first byte of buffer 
+db_lim					 ds.l	1				; offset: $8 (8)		;  last byte+1 of buffer 
+db_ref					 ds.b	1				; offset: $C (12)		;  count of messages pointing to block
+db_type					 ds.b	1				; offset: $D (13)		;  message type 
+db_iswhat				 ds.b	1				; offset: $E (14)		;  message status 
+db_filler2				 ds.b	1				; offset: $F (15)		;  for spacing 
+db_size					 ds.l	1				; offset: $10 (16)		;  used internally 
+db_msgaddr				 ds.l	1				; offset: $14 (20)		;  used internally 
+db_filler				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+dblk_t					RECORD 0
+f						 ds		datab
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+
+
+;  message block 
+msgb					RECORD 0
+b_next					 ds.l	1				; offset: $0 (0)		;  next message on queue 
+b_prev					 ds.l	1				; offset: $4 (4)		;  previous message on queue 
+b_cont					 ds.l	1				; offset: $8 (8)		;  next message block of message 
+b_rptr					 ds.l	1				; offset: $C (12)		;  first unread data byte in buffer 
+b_wptr					 ds.l	1				; offset: $10 (16)		;  first unwritten data byte 
+b_datap					 ds.l	1				; offset: $14 (20)		;  data block 
+b_band					 ds.b	1				; offset: $18 (24)		;  message priority 
+b_pad1					 ds.b	1				; offset: $19 (25)
+b_flag					 ds.w	1				; offset: $1A (26)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+mblk_t					RECORD 0
+f						 ds		msgb
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+
+;  mblk flags 
+
+MSGMARK							EQU		$01					; last byte of message is tagged 
+MSGNOLOOP						EQU		$02					; don't pass message to write-side of stream 
+MSGDELIM						EQU		$04					; message is delimited 
+MSGNOGET						EQU		$08
+;  STREAMS environments are expected to define these constants in a public header file.
+
+
+STRCTLSZ						EQU		256					; Maximum Control buffer size for messages   
+STRMSGSZ						EQU		8192				; Maximum # data bytes for messages   
+;  Message types 
+
+QNORM							EQU		0
+M_DATA							EQU		0					; Ordinary data 
+M_PROTO							EQU		1					; Internal control info and data 
+M_BREAK							EQU		$08					; Request a driver to send a break 
+M_PASSFP						EQU		$09					; Used to pass a file pointer 
+M_SIG							EQU		$0B					; Requests a signal to be sent 
+M_DELAY							EQU		$0C					; Request a real-time delay 
+M_CTL							EQU		$0D					; For inter-module communication 
+M_IOCTL							EQU		$0E					; Used internally for I_STR requests 
+M_SETOPTS						EQU		$10					; Alters characteristics of Stream head 
+M_RSE							EQU		$11					; Reserved for internal use 
+;  MPS private type 
+
+M_MI							EQU		$40
+M_MI_READ_RESET					EQU		1
+M_MI_READ_SEEK					EQU		2
+M_MI_READ_END					EQU		4
+;  Priority messages types 
+
+QPCTL							EQU		$80
+M_IOCACK						EQU		$81					; Positive ack of previous M_IOCTL 
+M_IOCNAK						EQU		$82					; Previous M_IOCTL failed 
+M_PCPROTO						EQU		$83					; Same as M_PROTO except for priority 
+M_PCSIG							EQU		$84					; Priority signal 
+M_FLUSH							EQU		$86					; Requests modules to flush queues 
+M_STOP							EQU		$87					; Request drivers to stop output 
+M_START							EQU		$88					; Request drivers to start output 
+M_HANGUP						EQU		$89					; Driver can no longer produce data 
+M_ERROR							EQU		$8A					; Reports downstream error condition 
+M_READ							EQU		$8B					; Reports client read at Stream head 
+M_COPYIN						EQU		$8C					; Requests the Stream to copy data in for a module 
+M_COPYOUT						EQU		$8D					; Requests the Stream to copy data out for a module 
+M_IOCDATA						EQU		$8E					; Status from M_COPYIN/M_COPYOUT message 
+M_PCRSE							EQU		$90					; Reserved for internal use 
+M_STOPI							EQU		$91					; Request drivers to stop input 
+M_STARTI						EQU		$92					; Request drivers to start input 
+M_HPDATA						EQU		$93					; MPS-private type; high priority data 
+;  Defines for flush messages 
+
+FLUSHALL						EQU		1
+FLUSHDATA						EQU		0
+
+
+NOERROR							EQU		-1					; used in M_ERROR messages 
+sth_s					RECORD 0
+dummy					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+sqh_s					RECORD 0
+dummy					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+q_xtra					RECORD 0
+dummy					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+	IF OTKERNEL THEN
+
+;   module_info is aligned differently on 68K than
+;   on PowerPC.  Yucky.  I can't defined a conditionalised
+;   pad field because a) you can't conditionalise specific
+;   fields in the interface definition language used to
+;   create Universal Interfaces, and b) lots of code 
+;   assigns C structured constants to global variables
+;   of this type, and these assignments break if you
+;   add an extra field to the type.  Instead, I
+;   set the alignment appropriately before defining the 
+;   structure.  The problem with doing that is that
+;   the interface definition language doesn't allow
+;   my to set the alignment in the middle of a file,
+;   so I have to do this via "pass throughs".  This
+;   works fine for the well known languages (C, Pascal),
+;   but may cause problems for other languages (Java,
+;   Asm).
+
+
+module_info				RECORD 0
+mi_idnum				 ds.w	1				; offset: $0 (0)		;  module ID number 
+mi_idname				 ds.l	1				; offset: $2 (2)		;  module name 
+mi_minpsz				 ds.l	1				; offset: $6 (6)		;  min pkt size, for developer use 
+mi_maxpsz				 ds.l	1				; offset: $A (10)		;  max pkt size, for developer use 
+mi_hiwat				 ds.l	1				; offset: $E (14)		;  hi-water mark, for flow control 
+mi_lowat				 ds.l	1				; offset: $12 (18)		;  lo-water mark, for flow control 
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+; typedef struct module_info *			module_infoPtr
+
+
+
+
+
+qinit					RECORD 0
+qi_putp					 ds.l	1				; offset: $0 (0)		;  put procedure 
+qi_srvp					 ds.l	1				; offset: $4 (4)		;  service procedure 
+qi_qopen				 ds.l	1				; offset: $8 (8)		;  called on each open or a push 
+qi_qclose				 ds.l	1				; offset: $C (12)		;  called on last close or a pop 
+qi_qadmin				 ds.l	1				; offset: $10 (16)		;  reserved for future use 
+qi_minfo				 ds.l	1				; offset: $14 (20)		;  information structure 
+qi_mstat				 ds.l	1				; offset: $18 (24)		;  statistics structure - optional 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  defines module or driver 
+streamtab				RECORD 0
+st_rdinit				 ds.l	1				; offset: $0 (0)		;  defines read QUEUE 
+st_wrinit				 ds.l	1				; offset: $4 (4)		;  defines write QUEUE 
+st_muxrinit				 ds.l	1				; offset: $8 (8)		;  for multiplexing drivers only 
+st_muxwinit				 ds.l	1				; offset: $C (12)		;  ditto 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+qband					RECORD 0
+qb_next					 ds.l	1				; offset: $0 (0)		;  next band for this queue 
+qb_count				 ds.l	1				; offset: $4 (4)		;  weighted count of characters in this band 
+qb_first				 ds.l	1				; offset: $8 (8)		;  head of message queue 
+qb_last					 ds.l	1				; offset: $C (12)		;  tail of message queue 
+qb_hiwat				 ds.l	1				; offset: $10 (16)		;  high water mark 
+qb_lowat				 ds.l	1				; offset: $14 (20)		;  low water mark 
+qb_flag					 ds.w	1				; offset: $18 (24)		;  ••• state 
+qb_pad1					 ds.w	1				; offset: $1A (26)		;  ••• reserved 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+qband_t					RECORD 0
+f						 ds		qband
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+
+queue_q_u				RECORD 0
+q_u_link				 ds.l	1				; offset: $0 (0)		;  link to scheduling queue 
+						 ORG 0
+q_u_sqh_parent			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+queue					RECORD 0
+q_qinfo					 ds.l	1				; offset: $0 (0)		;  procedures and limits for queue 
+q_first					 ds.l	1				; offset: $4 (4)		;  head of message queue 
+q_last					 ds.l	1				; offset: $8 (8)		;  tail of message queue 
+q_next					 ds.l	1				; offset: $C (12)		;  next queue in Stream 
+q_u						 ds		queue_q_u		; offset: $10 (16)
+q_ptr					 ds.l	1				; offset: $14 (20)		;  to private data structure 
+q_count					 ds.l	1				; offset: $18 (24)		;  weighted count of characters on q 
+q_minpsz				 ds.l	1				; offset: $1C (28)		;  min packet size accepted 
+q_maxpsz				 ds.l	1				; offset: $20 (32)		;  max packet size accepted 
+q_hiwat					 ds.l	1				; offset: $24 (36)		;  high water mark, for flow control 
+q_lowat					 ds.l	1				; offset: $28 (40)		;  low water mark 
+q_bandp					 ds.l	1				; offset: $2C (44)		;  band information 
+q_flag					 ds.w	1				; offset: $30 (48)		;  ••• queue state 
+q_nband					 ds.b	1				; offset: $32 (50)		;  ••• number of bands 
+q_pad1					 ds.b	1				; offset: $33 (51) <-- really an array of length one ;  ••• reserved 
+q_osx					 ds.l	1				; offset: $34 (52)		;  Pointer to OS-dependent extra stuff 
+q_ffcp					 ds.l	1				; offset: $38 (56)		;  Forward flow control pointer 
+q_bfcp					 ds.l	1				; offset: $3C (60)		;  Backward flow control pointer 
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+; typedef struct queue *				queuePtr
+
+queue_t					RECORD 0
+f						 ds		queue
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+
+
+
+;  queue_t flag defines 
+
+QREADR							EQU		$01					; This queue is a read queue 
+QNOENB							EQU		$02					; Don't enable in putq 
+QFULL							EQU		$04					; The queue is full 
+QWANTR							EQU		$08					; The queue should be scheduled in the next putq 
+QWANTW							EQU		$10					; The stream should be back enabled when this queue drains 
+QUSE							EQU		$20					; The queue is allocated and ready for use 
+QENAB							EQU		$40					; The queue is scheduled (on the run queue) 
+QBACK							EQU		$80					; The queue has been back enabled 
+QOLD							EQU		$0100				; Module supports old style opens and closes 
+QHLIST							EQU		$0200				; The Stream head is doing something with this queue (Not supported by MPS) 
+QWELDED							EQU		$0400				; Mentat flag for welded queues 
+QUNWELDING						EQU		$0800				; Queue is scheduled to be unwelded 
+QPROTECTED						EQU		$1000				; Mentat flag for unsafe q access 
+QEXCOPENCLOSE					EQU		$2000				; Queue wants exclusive open/close calls 
+;  qband_t flag defines 
+
+QB_FULL							EQU		$01					; The band is full 
+QB_WANTW						EQU		$02					; The stream should be back enabled when this band/queue drains 
+QB_BACK							EQU		$04					; The queue has been back enabled 
+	ELSE
+
+;   Client code views a queue_t as a simple cookie.
+;   The real definition lives above and is only available
+;   to kernel code.
+
+
+; typedef SInt32 						queue_t
+
+	ENDIF	; OTKERNEL
+;  structure contained in M_COPYIN/M_COPYOUT messages 
+; typedef char *						caddr_t
+
+copyreq					RECORD 0
+cq_cmd					 ds.l	1				; offset: $0 (0)		;  ioctl command (from ioc_cmd) 
+cq_cr					 ds.l	1				; offset: $4 (4)		;  pointer to full credentials 
+cq_id					 ds.l	1				; offset: $8 (8)		;  ioctl id (from ioc_id) 
+cq_addr					 ds.l	1				; offset: $C (12)		;  address to copy data to/from 
+cq_size					 ds.l	1				; offset: $10 (16)		;  number of bytes to copy 
+cq_flag					 ds.l	1				; offset: $14 (20)		;  state 
+cq_private				 ds.l	1				; offset: $18 (24)		;  private state information 
+cq_filler				 ds.l	4				; offset: $1C (28)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+
+
+;  copyreq defines 
+
+STRCANON						EQU		$01					; b_cont data block contains canonical format specifier 
+RECOPY							EQU		$02					; perform I_STR copyin again this time using canonical format specifier 
+;  structure contained in M_IOCDATA message block 
+copyresp				RECORD 0
+cp_cmd					 ds.l	1				; offset: $0 (0)		;  ioctl command (from ioc_cmd) 
+cp_cr					 ds.l	1				; offset: $4 (4)		;  pointer to full credentials 
+cp_id					 ds.l	1				; offset: $8 (8)		;  ioctl id (from ioc_id) 
+cp_rval					 ds.l	1				; offset: $C (12)		;  status of request; 0 for success; error value for failure 
+cp_pad1					 ds.l	1				; offset: $10 (16)
+cp_pad2					 ds.l	1				; offset: $14 (20)
+cp_private				 ds.l	1				; offset: $18 (24)		;  private state information 
+cp_filler				 ds.l	4				; offset: $1C (28)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+
+;  structure contained in an M_IOCTL message block 
+iocblk					RECORD 0
+ioc_cmd					 ds.l	1				; offset: $0 (0)		;  ioctl command type 
+ioc_cr					 ds.l	1				; offset: $4 (4)		;  pointer to full credentials 
+ioc_id					 ds.l	1				; offset: $8 (8)		;  ioctl id 
+ioc_count				 ds.l	1				; offset: $C (12)		;  count of bytes in data field 
+ioc_error				 ds.l	1				; offset: $10 (16)		;  error code 
+ioc_rval				 ds.l	1				; offset: $14 (20)		;  return value 
+ioc_filler				 ds.l	4				; offset: $18 (24)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+
+
+
+
+kOTTRANSPARENT					EQU		$FFFFFFFF
+;  Used in M_IOCTL mblks to muxes (ioc_cmd I_LINK) 
+linkblk					RECORD 0
+l_qtop					 ds.l	1				; offset: $0 (0)		;  lowest level write queue of upper stream 
+l_qbot					 ds.l	1				; offset: $4 (4)		;  highest level write queue of lower stream 
+l_index					 ds.l	1				; offset: $8 (8)		;  system-unique index for lower stream 
+l_pad					 ds.l	5				; offset: $C (12)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  structure contained in an M_PASSFP message block 
+strpfp					RECORD 0
+pass_file_cookie		 ds.l	1				; offset: $0 (0)		;  file 'pointer' 
+pass_uid				 ds.w	1				; offset: $4 (4)		;  user id of sending stream 
+pass_gid				 ds.w	1				; offset: $6 (6)
+pass_sth				 ds.l	1				; offset: $8 (8)		;  Stream head pointer of passed stream 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  structure contained in an M_SETOPTS message block 
+stroptions				RECORD 0
+so_flags				 ds.l	1				; offset: $0 (0)		;  options to set 
+so_readopt				 ds.w	1				; offset: $4 (4)		;  read option 
+so_wroff				 ds.w	1				; offset: $6 (6)		;  write offset 
+so_minpsz				 ds.l	1				; offset: $8 (8)		;  minimum read packet size 
+so_maxpsz				 ds.l	1				; offset: $C (12)		;  maximum read packet size 
+so_hiwat				 ds.l	1				; offset: $10 (16)		;  read queue high-water mark 
+so_lowat				 ds.l	1				; offset: $14 (20)		;  read queue low-water mark 
+so_band					 ds.b	1				; offset: $18 (24)		;  band for water marks 
+so_filler				 ds.b	3				; offset: $19 (25)		;  added for alignment 
+so_poll_set				 ds.l	1				; offset: $1C (28)		;  poll events to set 
+so_poll_clr				 ds.l	1				; offset: $20 (32)		;  poll events to clear 
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+;  definitions for so_flags field 
+
+SO_ALL							EQU		$7FFF				; Update all options 
+SO_READOPT						EQU		$0001				; Set the read mode 
+SO_WROFF						EQU		$0002				; Insert an offset in write M_DATA mblks 
+SO_MINPSZ						EQU		$0004				; Change the min packet size on sth rq 
+SO_MAXPSZ						EQU		$0008				; Change the max packet size on sth rq 
+SO_HIWAT						EQU		$0010				; Change the high water mark on sth rq 
+SO_LOWAT						EQU		$0020				; Change the low water mark 
+SO_MREADON						EQU		$0040				; Request M_READ messages 
+SO_MREADOFF						EQU		$0080				; Don't gen M_READ messages 
+SO_NDELON						EQU		$0100				; old TTY semantics for O_NDELAY reads and writes 
+SO_NDELOFF						EQU		$0200				; STREAMS semantics for O_NDELAY reads and writes 
+SO_ISTTY						EQU		$0400				; Become a controlling tty 
+SO_ISNTTY						EQU		$0800				; No longer a controlling tty 
+SO_TOSTOP						EQU		$1000				; Stop on background writes 
+SO_TONSTOP						EQU		$2000				; Don't stop on background writes 
+SO_BAND							EQU		$4000				; Water marks are for a band 
+SO_POLL_SET						EQU		$8000				; Set events to poll 
+SO_POLL_CLR						EQU		$00010000			; Clear events to poll 
+;  Buffer Allocation Priority 
+
+BPRI_LO							EQU		1
+BPRI_MED						EQU		2
+BPRI_HI							EQU		3
+
+INFPSZ							EQU		-1
+
+
+
+CLONEOPEN						EQU		$02
+MODOPEN							EQU		$01
+OPENFAIL						EQU		-1
+
+;  Enumeration values for strqget and strqset 
+
+; typedef SInt32						qfields
+QHIWAT							EQU		0
+QLOWAT							EQU		1
+QMAXPSZ							EQU		2
+QMINPSZ							EQU		3
+QCOUNT							EQU		4
+QFIRST							EQU		5
+QLAST							EQU		6
+QFLAG							EQU		7
+QBAD							EQU		8
+; typedef qfields 						qfields_t
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ***** From the Mentat "stropts.h" *****
+
+
+
+I_NREAD							EQU		$4101				; return the number of bytes in 1st msg 
+I_PUSH							EQU		$4102				; push module just below stream head 
+I_POP							EQU		$4103				; pop module below stream head 
+I_LOOK							EQU		$4104				; retrieve name of first stream module 
+I_FLUSH							EQU		$4105				; flush all input and/or output queues 
+I_SRDOPT						EQU		$4106				; set the read mode 
+I_GRDOPT						EQU		$4107				; get the current read mode 
+I_STR							EQU		$4108				; create an internal ioctl message      
+I_SETSIG						EQU		$4109				; request SIGPOLL signal on events 
+I_GETSIG						EQU		$410A				; query the registered events 
+I_FIND							EQU		$410B				; check for module in stream          
+I_LINK							EQU		$410C				; connect stream under mux fd 
+I_UNLINK						EQU		$410D				; disconnect two streams 
+I_PEEK							EQU		$410F				; peek at data on read queue 
+I_FDINSERT						EQU		$4110				; create a message and send downstream 
+I_SENDFD						EQU		$4111				; send an fd to a connected pipe stream 
+I_RECVFD						EQU		$4112				; retrieve a file descriptor 
+I_FLUSHBAND						EQU		$4113				; flush a particular input and/or output band 
+I_SWROPT						EQU		$4114				; set the write mode 
+I_GWROPT						EQU		$4115				; get the current write mode 
+I_LIST							EQU		$4116				; get a list of all modules on a stream  
+I_ATMARK						EQU		$4117				; check to see if the next message is "marked" 
+I_CKBAND						EQU		$4118				; check for a message of a particular band 
+I_GETBAND						EQU		$4119				; get the band of the next message to be read 
+I_CANPUT						EQU		$411A				; check to see if a message may be passed on a stream 
+I_SETCLTIME						EQU		$411B				; set the close timeout wait 
+I_GETCLTIME						EQU		$411C				; get the current close timeout wait 
+I_PLINK							EQU		$411D				; permanently connect a stream under a mux 
+I_PUNLINK						EQU		$411E				; disconnect a permanent link 
+I_GETMSG						EQU		$4128				; getmsg() system call 
+I_PUTMSG						EQU		$4129				; putmsg() system call 
+I_POLL							EQU		$412A				; poll() system call 
+I_SETDELAY						EQU		$412B				; set blocking status 
+I_GETDELAY						EQU		$412C				; get blocking status 
+I_RUN_QUEUES					EQU		$412D				; sacrifice for the greater good 
+I_GETPMSG						EQU		$412E				; getpmsg() system call 
+I_PUTPMSG						EQU		$412F				; putpmsg() system call 
+I_AUTOPUSH						EQU		$4130				; for systems that cannot do the autopush in open 
+I_PIPE							EQU		$4131				; for pipe library call 
+I_HEAP_REPORT					EQU		$4132				; get heap statistics 
+I_FIFO							EQU		$4133				; for fifo library call 
+;  priority message request on putmsg() or strpeek 
+
+RS_HIPRI						EQU		$01
+;  flags for getpmsg and putpmsg 
+
+MSG_HIPRI						EQU		$01
+MSG_BAND						EQU		$02					; Retrieve a message from a particular band 
+MSG_ANY							EQU		$04					; Retrieve a message from any band 
+;  return values from getmsg(), 0 indicates all ok 
+
+MORECTL							EQU		$01					; more control info available 
+MOREDATA						EQU		$02					; more data available 
+
+
+FMNAMESZ						EQU		31					; maximum length of a module or device name 
+
+;  Infinite poll wait time 
+
+INFTIM							EQU		$FFFFFFFF
+;  flush requests 
+
+FLUSHR							EQU		$01					; Flush the read queue 
+FLUSHW							EQU		$02					; Flush the write queue 
+FLUSHRW							EQU		$03					; Flush both 
+
+;   FLUSHBAND conflicts with flushband in "OpenTransportKernel.h"
+;   in case-sensitive languages, so we define kOTFLUSHBAND instead.
+
+
+
+kOTFLUSHBAND					EQU		$40					; Flush a particular band 
+;  I_FLUSHBAND 
+bandinfo				RECORD 0
+bi_pri					 ds.b	1				; offset: $0 (0)		;  Band to flush 
+pad1					 ds.b	1				; offset: $1 (1)
+bi_flag					 ds.l	1				; offset: $2 (2)		;  One of the above flush requests 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  flags for I_ATMARK 
+
+ANYMARK							EQU		$01					; Check if message is marked 
+LASTMARK						EQU		$02					; Check if this is the only message marked 
+;  signal event masks 
+
+S_INPUT							EQU		$01					; A non-M_PCPROTO message has arrived 
+S_HIPRI							EQU		$02					; A priority (M_PCPROTO) message is available 
+S_OUTPUT						EQU		$04					; The write queue is no longer full 
+S_MSG							EQU		$08					; A signal message has reached the front of read queue 
+S_RDNORM						EQU		$10					; A non-priority message is available 
+S_RDBAND						EQU		$20					; A banded messsage is available 
+S_WRNORM						EQU		$40					; Same as S_OUTPUT 
+S_WRBAND						EQU		$80					; A priority band exists and is writable 
+S_ERROR							EQU		$0100				; Error message has arrived 
+S_HANGUP						EQU		$0200				; Hangup message has arrived 
+S_BANDURG						EQU		$0400				; Use SIGURG instead of SIGPOLL on S_RDBAND signals 
+;  read mode bits for I_S|GRDOPT; choose one of the following 
+
+RNORM							EQU		$01					; byte-stream mode, default 
+RMSGD							EQU		$02					; message-discard mode 
+RMSGN							EQU		$04					; message-nondiscard mode 
+RFILL							EQU		$08					; fill read buffer mode (PSE private) 
+;  More read modes, these are bitwise or'ed with the modes above 
+
+RPROTNORM						EQU		$10					; Normal handling of M_PROTO/M_PCPROTO messages, default 
+RPROTDIS						EQU		$20					; Discard M_PROTO/M_PCPROTO message blocks 
+RPROTDAT						EQU		$40					; Convert M_PROTO/M_PCPROTO message blocks into M_DATA 
+;  write modes for I_S|GWROPT 
+
+SNDZERO							EQU		$01					; Send a zero-length message downstream on a write of zero bytes 
+
+MUXID_ALL						EQU		-1					; Unlink all lower streams for I_UNLINK and I_PUNLINK 
+
+;   strbuf is moved to "OpenTransport.h" because that header file
+;   exports provider routines that take it as a parameter.
+
+
+
+;  structure of ioctl data on I_FDINSERT 
+strfdinsert				RECORD 0
+ctlbuf					 ds		strbuf			; offset: $0 (0)
+databuf					 ds		strbuf			; offset: $C (12)
+flags					 ds.l	1				; offset: $18 (24)		;  type of message, 0 or RS_HIPRI 
+fildes					 ds.l	1				; offset: $1C (28)		;  fd of other stream (FDCELL) 
+offset					 ds.l	1				; offset: $20 (32)		;  where to put other stream read qp 
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+;  I_LIST structures 
+str_mlist				RECORD 0
+l_name					 ds.b	32				; offset: $0 (0)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+str_list				RECORD 0
+sl_nmods				 ds.l	1				; offset: $0 (0)		;  number of modules in sl_modlist array 
+sl_modlist				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  I_PEEK structure 
+strpeek					RECORD 0
+ctlbuf					 ds		strbuf			; offset: $0 (0)
+databuf					 ds		strbuf			; offset: $C (12)
+flags					 ds.l	1				; offset: $18 (24)		;  if RS_HIPRI, get priority messages only 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  structure for getpmsg and putpmsg 
+strpmsg					RECORD 0
+ctlbuf					 ds		strbuf			; offset: $0 (0)
+databuf					 ds		strbuf			; offset: $C (12)
+band					 ds.l	1				; offset: $18 (24)
+flags					 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  structure of ioctl data on I_RECVFD 
+strrecvfd				RECORD 0
+fd						 ds.l	1				; offset: $0 (0)		;  new file descriptor (FDCELL) 
+uid						 ds.w	1				; offset: $4 (4)		;  user id of sending stream 
+gid						 ds.w	1				; offset: $6 (6)
+fill					 ds.b	8				; offset: $8 (8)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  structure of ioctl data on I_STR 
+strioctl				RECORD 0
+ic_cmd					 ds.l	1				; offset: $0 (0)		;  downstream command 
+ic_timout				 ds.l	1				; offset: $4 (4)		;  ACK/NAK timeout 
+ic_len					 ds.l	1				; offset: $8 (8)		;  length of data arg 
+ic_dp					 ds.l	1				; offset: $C (12)		;  ptr to data arg 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  ***** From the Mentat "strlog.h" *****
+
+log_ctl					RECORD 0
+mid						 ds.w	1				; offset: $0 (0)
+sid						 ds.w	1				; offset: $2 (2)
+level					 ds.b	1				; offset: $4 (4)
+pad1					 ds.b	1				; offset: $5 (5)
+flags					 ds.w	1				; offset: $6 (6)
+ltime					 ds.l	1				; offset: $8 (8)
+ttime					 ds.l	1				; offset: $C (12)
+seq_no					 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+SL_FATAL						EQU		$01					; Fatal error 
+SL_NOTIFY						EQU		$02					; Notify the system administrator 
+SL_ERROR						EQU		$04					; Pass message to error logger 
+SL_TRACE						EQU		$08					; Pass message to tracer 
+SL_CONSOLE						EQU		$00					; Console messages are disabled 
+SL_WARN							EQU		$20					; Warning 
+SL_NOTE							EQU		$40					; Notice this message 
+trace_ids				RECORD 0
+ti_mid					 ds.w	1				; offset: $0 (0)
+ti_sid					 ds.w	1				; offset: $2 (2)
+ti_level				 ds.b	1				; offset: $4 (4)
+						 ORG 6
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+I_TRCLOG						EQU		$6201
+I_ERRLOG						EQU		$6202
+
+LOGMSGSZ						EQU		128
+;  ***** From the Mentat "tihdr.h" *****
+
+	IF CALL_NOT_IN_CARBON THEN
+
+;  TPI Primitives
+
+
+
+kOTT_BIND_REQ					EQU		101
+kOTT_CONN_REQ					EQU		102					; connection request 
+kOTT_CONN_RES					EQU		103					; respond to connection indication 
+kOTT_DATA_REQ					EQU		104
+kOTT_DISCON_REQ					EQU		105
+kOTT_EXDATA_REQ					EQU		106
+kOTT_INFO_REQ					EQU		107
+kOTT_OPTMGMT_REQ				EQU		108
+kOTT_ORDREL_REQ					EQU		109
+kOTT_UNBIND_REQ					EQU		110
+kOTT_UNITDATA_REQ				EQU		111
+kOTT_ADDR_REQ					EQU		112					; Get address request          
+kOTT_UREQUEST_REQ				EQU		113					; UnitRequest (transaction) req  
+kOTT_REQUEST_REQ				EQU		114					; Request (CO transaction) req     
+kOTT_UREPLY_REQ					EQU		115					; UnitRequest (transaction) req  
+kOTT_REPLY_REQ					EQU		116					; REPLY (CO transaction) req     
+kOTT_CANCELREQUEST_REQ			EQU		117					; Cancel outgoing request         
+kOTT_CANCELREPLY_REQ			EQU		118					; Cancel incoming request         
+kOTT_REGNAME_REQ				EQU		119					; Request name registration      
+kOTT_DELNAME_REQ				EQU		120					; Request delete name registration 
+kOTT_LKUPNAME_REQ				EQU		121					; Request name lookup            
+kOTT_BIND_ACK					EQU		122
+kOTT_CONN_CON					EQU		123					; connection confirmation       
+kOTT_CONN_IND					EQU		124					; incoming connection indication     
+kOTT_DATA_IND					EQU		125
+kOTT_DISCON_IND					EQU		126
+kOTT_ERROR_ACK					EQU		127
+kOTT_EXDATA_IND					EQU		128
+kOTT_INFO_ACK					EQU		129
+kOTT_OK_ACK						EQU		130
+kOTT_OPTMGMT_ACK				EQU		131
+kOTT_ORDREL_IND					EQU		132
+kOTT_UNITDATA_IND				EQU		133
+kOTT_UDERROR_IND				EQU		134
+kOTT_ADDR_ACK					EQU		135					; Get address ack              
+kOTT_UREQUEST_IND				EQU		136					; UnitRequest (transaction) ind  
+kOTT_REQUEST_IND				EQU		137					; Request (CO transaction) ind   
+kOTT_UREPLY_IND					EQU		138					; Incoming unit reply          
+kOTT_REPLY_IND					EQU		139					; Incoming reply           
+kOTT_UREPLY_ACK					EQU		140					; outgoing Unit Reply is complete    
+kOTT_REPLY_ACK					EQU		141					; outgoing Reply is complete     
+kOTT_RESOLVEADDR_REQ			EQU		142
+kOTT_RESOLVEADDR_ACK			EQU		143
+kOTT_LKUPNAME_CON				EQU		146					; Results of name lookup         
+kOTT_LKUPNAME_RES				EQU		147					; Partial results of name lookup 
+kOTT_REGNAME_ACK				EQU		148					; Request name registration      
+kOTT_SEQUENCED_ACK				EQU		149					; Sequenced version of OK or ERROR ACK 
+kOTT_EVENT_IND					EQU		160					; Miscellaneous event Indication     
+;  State values 
+
+TS_UNBND						EQU		1
+TS_WACK_BREQ					EQU		2
+TS_WACK_UREQ					EQU		3
+TS_IDLE							EQU		4
+TS_WACK_OPTREQ					EQU		5
+TS_WACK_CREQ					EQU		6
+TS_WCON_CREQ					EQU		7
+TS_WRES_CIND					EQU		8
+TS_WACK_CRES					EQU		9
+TS_DATA_XFER					EQU		10
+TS_WIND_ORDREL					EQU		11
+TS_WREQ_ORDREL					EQU		12
+TS_WACK_DREQ6					EQU		13
+TS_WACK_DREQ7					EQU		14
+TS_WACK_DREQ9					EQU		15
+TS_WACK_DREQ10					EQU		16
+TS_WACK_DREQ11					EQU		17
+TS_WACK_ORDREL					EQU		18
+TS_NOSTATES						EQU		19
+TS_BAD_STATE					EQU		19
+;  Transport events 
+
+TE_OPENED						EQU		1
+TE_BIND							EQU		2
+TE_OPTMGMT						EQU		3
+TE_UNBIND						EQU		4
+TE_CLOSED						EQU		5
+TE_CONNECT1						EQU		6
+TE_CONNECT2						EQU		7
+TE_ACCEPT1						EQU		8
+TE_ACCEPT2						EQU		9
+TE_ACCEPT3						EQU		10
+TE_SND							EQU		11
+TE_SNDDIS1						EQU		12
+TE_SNDDIS2						EQU		13
+TE_SNDREL						EQU		14
+TE_SNDUDATA						EQU		15
+TE_LISTEN						EQU		16
+TE_RCVCONNECT					EQU		17
+TE_RCV							EQU		18
+TE_RCVDIS1						EQU		19
+TE_RCVDIS2						EQU		20
+TE_RCVDIS3						EQU		21
+TE_RCVREL						EQU		22
+TE_RCVUDATA						EQU		23
+TE_RCVUDERR						EQU		24
+TE_PASS_CONN					EQU		25
+TE_BAD_EVENT					EQU		26
+T_addr_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_ADDR_ACK 
+LOCADDR_length			 ds.l	1				; offset: $4 (4)
+LOCADDR_offset			 ds.l	1				; offset: $8 (8)
+REMADDR_length			 ds.l	1				; offset: $C (12)
+REMADDR_offset			 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_addr_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_ADDR_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+T_bind_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_BIND_ACK 
+ADDR_length				 ds.l	1				; offset: $4 (4)
+ADDR_offset				 ds.l	1				; offset: $8 (8)
+CONIND_number			 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_bind_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_BIND_REQ 
+ADDR_length				 ds.l	1				; offset: $4 (4)
+ADDR_offset				 ds.l	1				; offset: $8 (8)
+CONIND_number			 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_conn_con				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_CONN_CON 
+RES_length				 ds.l	1				; offset: $4 (4)		;  responding address length 
+RES_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_conn_ind				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_CONN_IND 
+SRC_length				 ds.l	1				; offset: $4 (4)
+SRC_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+SEQ_number				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+T_conn_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_CONN_REQ 
+DEST_length				 ds.l	1				; offset: $4 (4)
+DEST_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_conn_res				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_CONN_RES 
+QUEUE_ptr				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+SEQ_number				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_data_ind				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_DATA_IND 
+MORE_flag				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_data_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_DATA_REQ 
+MORE_flag				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_discon_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_DISCON_IND 
+DISCON_reason			 ds.l	1				; offset: $4 (4)
+SEQ_number				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+T_discon_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_DISCON_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_exdata_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_EXDATA_IND 
+MORE_flag				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_exdata_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_EXDATA_REQ 
+MORE_flag				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_error_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_ERROR_ACK 
+ERROR_prim				 ds.l	1				; offset: $4 (4)		;  primitive in error 
+TLI_error				 ds.l	1				; offset: $8 (8)
+UNIX_error				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_info_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_INFO_ACK 
+TSDU_size				 ds.l	1				; offset: $4 (4)		;  max TSDU size 
+ETSDU_size				 ds.l	1				; offset: $8 (8)		;  max ETSDU size 
+CDATA_size				 ds.l	1				; offset: $C (12)		;  connect data size 
+DDATA_size				 ds.l	1				; offset: $10 (16)		;  disconnect data size 
+ADDR_size				 ds.l	1				; offset: $14 (20)		;  TSAP size 
+OPT_size				 ds.l	1				; offset: $18 (24)		;  options size 
+TIDU_size				 ds.l	1				; offset: $1C (28)		;  TIDU size 
+SERV_type				 ds.l	1				; offset: $20 (32)		;  service type 
+CURRENT_state			 ds.l	1				; offset: $24 (36)		;  current state 
+PROVIDER_flag			 ds.l	1				; offset: $28 (40)		;  provider flags (see xti.h for defines) 
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+;  Provider flags 
+
+SENDZERO						EQU		$0001				; supports 0-length TSDU's 
+XPG4_1							EQU		$0002				; provider supports recent stuff 
+T_info_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_INFO_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+T_ok_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_OK_ACK 
+CORRECT_prim			 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_optmgmt_ack			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_OPTMGMT_ACK 
+OPT_length				 ds.l	1				; offset: $4 (4)
+OPT_offset				 ds.l	1				; offset: $8 (8)
+MGMT_flags				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_optmgmt_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_OPTMGMT_REQ 
+OPT_length				 ds.l	1				; offset: $4 (4)
+OPT_offset				 ds.l	1				; offset: $8 (8)
+MGMT_flags				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_ordrel_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_ORDREL_IND 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+T_ordrel_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_ORDREL_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+T_unbind_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_UNBIND_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+T_uderror_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_UDERROR_IND 
+DEST_length				 ds.l	1				; offset: $4 (4)
+DEST_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+ERROR_type				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+T_unitdata_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_UNITDATA_IND 
+SRC_length				 ds.l	1				; offset: $4 (4)
+SRC_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_unitdata_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_UNITDATA_REQ 
+DEST_length				 ds.l	1				; offset: $4 (4)
+DEST_offset				 ds.l	1				; offset: $8 (8)
+OPT_length				 ds.l	1				; offset: $C (12)
+OPT_offset				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_resolveaddr_ack		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_RESOLVEADDR_ACK 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+ADDR_length				 ds.l	1				; offset: $8 (8)
+ADDR_offset				 ds.l	1				; offset: $C (12)
+ORIG_client				 ds.l	1				; offset: $10 (16)
+ORIG_data				 ds.l	1				; offset: $14 (20)
+TLI_error				 ds.l	1				; offset: $18 (24)
+UNIX_error				 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+T_resolveaddr_req		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_RESOLVEADDR_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+ADDR_length				 ds.l	1				; offset: $8 (8)
+ADDR_offset				 ds.l	1				; offset: $C (12)
+ORIG_client				 ds.l	1				; offset: $10 (16)
+ORIG_data				 ds.l	1				; offset: $14 (20)
+MAX_milliseconds		 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_unitreply_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_UREPLY_IND 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REP_flags				 ds.l	1				; offset: $10 (16)
+TLI_error				 ds.l	1				; offset: $14 (20)
+UNIX_error				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_unitrequest_ind		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_UREQUEST_IND 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+SRC_length				 ds.l	1				; offset: $8 (8)
+SRC_offset				 ds.l	1				; offset: $C (12)
+OPT_length				 ds.l	1				; offset: $10 (16)
+OPT_offset				 ds.l	1				; offset: $14 (20)
+REQ_flags				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_unitrequest_req		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_UREQUEST_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+DEST_length				 ds.l	1				; offset: $8 (8)
+DEST_offset				 ds.l	1				; offset: $C (12)
+OPT_length				 ds.l	1				; offset: $10 (16)
+OPT_offset				 ds.l	1				; offset: $14 (20)
+REQ_flags				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_unitreply_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_UREPLY_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REP_flags				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_unitreply_ack			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_UREPLY_ACK 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+TLI_error				 ds.l	1				; offset: $8 (8)
+UNIX_error				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_cancelrequest_req		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_CANCELREQUEST_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_cancelreply_req		RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_CANCELREPLY_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+T_reply_ind				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REPLY_IND 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REP_flags				 ds.l	1				; offset: $10 (16)
+TLI_error				 ds.l	1				; offset: $14 (20)
+UNIX_error				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_request_ind			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REQUEST_IND 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REQ_flags				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_request_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REQUEST_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REQ_flags				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_reply_req				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REPLY_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+OPT_length				 ds.l	1				; offset: $8 (8)
+OPT_offset				 ds.l	1				; offset: $C (12)
+REP_flags				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_reply_ack				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REPLY_ACK 
+SEQ_number				 ds.l	1				; offset: $4 (4)
+TLI_error				 ds.l	1				; offset: $8 (8)
+UNIX_error				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_regname_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_REGNAME_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)		;  Reply is sequence ack 
+NAME_length				 ds.l	1				; offset: $8 (8)
+NAME_offset				 ds.l	1				; offset: $C (12)
+ADDR_length				 ds.l	1				; offset: $10 (16)
+ADDR_offset				 ds.l	1				; offset: $14 (20)
+REQ_flags				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+T_regname_ack			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_REGNAME_ACK     
+SEQ_number				 ds.l	1				; offset: $4 (4)
+REG_id					 ds.l	1				; offset: $8 (8)
+ADDR_length				 ds.l	1				; offset: $C (12)
+ADDR_offset				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_delname_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_DELNAME_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)		;  Reply is sequence ack 
+NAME_length				 ds.l	1				; offset: $8 (8)
+NAME_offset				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+T_lkupname_req			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Always T_LKUPNAME_REQ 
+SEQ_number				 ds.l	1				; offset: $4 (4)		;  Reply is sequence ack 
+NAME_length				 ds.l	1				; offset: $8 (8)		;  ... or T_LKUPNAME_CON 
+NAME_offset				 ds.l	1				; offset: $C (12)
+ADDR_length				 ds.l	1				; offset: $10 (16)
+ADDR_offset				 ds.l	1				; offset: $14 (20)
+MAX_number				 ds.l	1				; offset: $18 (24)
+MAX_milliseconds		 ds.l	1				; offset: $1C (28)
+REQ_flags				 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+T_lkupname_con			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  Either T_LKUPNAME_CON 
+SEQ_number				 ds.l	1				; offset: $4 (4)		;  Or T_LKUPNAME_RES 
+NAME_length				 ds.l	1				; offset: $8 (8)
+NAME_offset				 ds.l	1				; offset: $C (12)
+RSP_count				 ds.l	1				; offset: $10 (16)
+RSP_cumcount			 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+T_sequence_ack			RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_SEQUENCED_ACK     
+ORIG_prim				 ds.l	1				; offset: $4 (4)		;  original primitive        
+SEQ_number				 ds.l	1				; offset: $8 (8)
+TLI_error				 ds.l	1				; offset: $C (12)
+UNIX_error				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+T_event_ind				RECORD 0
+PRIM_type				 ds.l	1				; offset: $0 (0)		;  always T_EVENT_IND        
+EVENT_code				 ds.l	1				; offset: $4 (4)
+EVENT_cookie			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+T_primitives			RECORD 0
+primType				 ds.l	1				; offset: $0 (0)
+						 ORG 0
+taddrack				 ds		T_addr_ack		; offset: $0 (0)
+						 ORG 0
+tbindack				 ds		T_bind_ack		; offset: $0 (0)
+						 ORG 0
+tbindreq				 ds		T_bind_req		; offset: $0 (0)
+						 ORG 0
+tconncon				 ds		T_conn_con		; offset: $0 (0)
+						 ORG 0
+tconnind				 ds		T_conn_ind		; offset: $0 (0)
+						 ORG 0
+tconnreq				 ds		T_conn_req		; offset: $0 (0)
+						 ORG 0
+tconnres				 ds		T_conn_res		; offset: $0 (0)
+						 ORG 0
+tdataind				 ds		T_data_ind		; offset: $0 (0)
+						 ORG 0
+tdatareq				 ds		T_data_req		; offset: $0 (0)
+						 ORG 0
+tdisconind				 ds		T_discon_ind	; offset: $0 (0)
+						 ORG 0
+tdisconreq				 ds		T_discon_req	; offset: $0 (0)
+						 ORG 0
+texdataind				 ds		T_exdata_ind	; offset: $0 (0)
+						 ORG 0
+texdatareq				 ds		T_exdata_req	; offset: $0 (0)
+						 ORG 0
+terrorack				 ds		T_error_ack		; offset: $0 (0)
+						 ORG 0
+tinfoack				 ds		T_info_ack		; offset: $0 (0)
+						 ORG 0
+tinforeq				 ds		T_info_req		; offset: $0 (0)
+						 ORG 0
+tokack					 ds		T_ok_ack		; offset: $0 (0)
+						 ORG 0
+toptmgmtack				 ds		T_optmgmt_ack	; offset: $0 (0)
+						 ORG 0
+toptmgmtreq				 ds		T_optmgmt_req	; offset: $0 (0)
+						 ORG 0
+tordrelind				 ds		T_ordrel_ind	; offset: $0 (0)
+						 ORG 0
+tordrelreq				 ds		T_ordrel_req	; offset: $0 (0)
+						 ORG 0
+tunbindreq				 ds		T_unbind_req	; offset: $0 (0)
+						 ORG 0
+tuderrorind				 ds		T_uderror_ind	; offset: $0 (0)
+						 ORG 0
+tunitdataind			 ds		T_unitdata_ind ; offset: $0 (0)
+						 ORG 0
+tunitdatareq			 ds		T_unitdata_req ; offset: $0 (0)
+						 ORG 0
+tunitreplyind			 ds		T_unitreply_ind ; offset: $0 (0)
+						 ORG 0
+tunitrequestind			 ds		T_unitrequest_ind ; offset: $0 (0)
+						 ORG 0
+tunitrequestreq			 ds		T_unitrequest_req ; offset: $0 (0)
+						 ORG 0
+tunitreplyreq			 ds		T_unitreply_req ; offset: $0 (0)
+						 ORG 0
+tunitreplyack			 ds		T_unitreply_ack ; offset: $0 (0)
+						 ORG 0
+treplyind				 ds		T_reply_ind		; offset: $0 (0)
+						 ORG 0
+trequestind				 ds		T_request_ind	; offset: $0 (0)
+						 ORG 0
+trequestreq				 ds		T_request_req	; offset: $0 (0)
+						 ORG 0
+treplyreq				 ds		T_reply_req		; offset: $0 (0)
+						 ORG 0
+treplyack				 ds		T_reply_ack		; offset: $0 (0)
+						 ORG 0
+tcancelreqreq			 ds		T_cancelrequest_req ; offset: $0 (0)
+						 ORG 0
+tresolvereq				 ds		T_resolveaddr_req ; offset: $0 (0)
+						 ORG 0
+tresolveack				 ds		T_resolveaddr_ack ; offset: $0 (0)
+						 ORG 0
+tregnamereq				 ds		T_regname_req	; offset: $0 (0)
+						 ORG 0
+tregnameack				 ds		T_regname_ack	; offset: $0 (0)
+						 ORG 0
+tdelnamereq				 ds		T_delname_req	; offset: $0 (0)
+						 ORG 0
+tlkupnamereq			 ds		T_lkupname_req ; offset: $0 (0)
+						 ORG 0
+tlkupnamecon			 ds		T_lkupname_con ; offset: $0 (0)
+						 ORG 0
+tsequenceack			 ds		T_sequence_ack ; offset: $0 (0)
+						 ORG 0
+teventind				 ds		T_event_ind		; offset: $0 (0)
+						 ORG 44
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+;  ***** From the Mentat "dlpi.h" *****
+
+
+;   This header file has encoded the values so an existing driver
+;   or user which was written with the Logical Link Interface(LLI)
+;   can migrate to the DLPI interface in a binary compatible manner.
+;   Any fields which require a specific format or value are flagged
+;   with a comment containing the message LLI compatibility.
+
+
+
+;  DLPI revision definition history
+
+
+DL_CURRENT_VERSION				EQU		$02					; current version of dlpi 
+DL_VERSION_2					EQU		$02					; version of dlpi March 12,1991 
+
+
+DL_INFO_REQ						EQU		$00					; Information Req, LLI compatibility 
+DL_INFO_ACK						EQU		$03					; Information Ack, LLI compatibility 
+DL_ATTACH_REQ					EQU		$0B					; Attach a PPA 
+DL_DETACH_REQ					EQU		$0C					; Detach a PPA 
+DL_BIND_REQ						EQU		$01					; Bind dlsap address, LLI compatibility 
+DL_BIND_ACK						EQU		$04					; Dlsap address bound, LLI compatibility 
+DL_UNBIND_REQ					EQU		$02					; Unbind dlsap address, LLI compatibility 
+DL_OK_ACK						EQU		$06					; Success acknowledgment, LLI compatibility 
+DL_ERROR_ACK					EQU		$05					; Error acknowledgment, LLI compatibility 
+DL_SUBS_BIND_REQ				EQU		$1B					; Bind Subsequent DLSAP address 
+DL_SUBS_BIND_ACK				EQU		$1C					; Subsequent DLSAP address bound 
+DL_SUBS_UNBIND_REQ				EQU		$15					; Subsequent unbind 
+DL_ENABMULTI_REQ				EQU		$1D					; Enable multicast addresses 
+DL_DISABMULTI_REQ				EQU		$1E					; Disable multicast addresses 
+DL_PROMISCON_REQ				EQU		$1F					; Turn on promiscuous mode 
+DL_PROMISCOFF_REQ				EQU		$20					; Turn off promiscuous mode 
+DL_UNITDATA_REQ					EQU		$07					; datagram send request, LLI compatibility 
+DL_UNITDATA_IND					EQU		$08					; datagram receive indication, LLI compatibility 
+DL_UDERROR_IND					EQU		$09					; datagram error indication, LLI compatibility 
+DL_UDQOS_REQ					EQU		$0A					; set QOS for subsequent datagram transmissions 
+DL_CONNECT_REQ					EQU		$0D					; Connect request 
+DL_CONNECT_IND					EQU		$0E					; Incoming connect indication 
+DL_CONNECT_RES					EQU		$0F					; Accept previous connect indication 
+DL_CONNECT_CON					EQU		$10					; Connection established 
+DL_TOKEN_REQ					EQU		$11					; Passoff token request 
+DL_TOKEN_ACK					EQU		$12					; Passoff token ack 
+DL_DISCONNECT_REQ				EQU		$13					; Disconnect request 
+DL_DISCONNECT_IND				EQU		$14					; Disconnect indication 
+DL_RESET_REQ					EQU		$17					; Reset service request 
+DL_RESET_IND					EQU		$18					; Incoming reset indication 
+DL_RESET_RES					EQU		$19					; Complete reset processing 
+DL_RESET_CON					EQU		$1A					; Reset processing complete 
+DL_DATA_ACK_REQ					EQU		$21					; data unit transmission request 
+DL_DATA_ACK_IND					EQU		$22					; Arrival of a command PDU 
+DL_DATA_ACK_STATUS_IND			EQU		$23					; Status indication of DATA_ACK_REQ
+DL_REPLY_REQ					EQU		$24					; Request a DLSDU from the remote 
+DL_REPLY_IND					EQU		$25					; Arrival of a command PDU 
+DL_REPLY_STATUS_IND				EQU		$26					; Status indication of REPLY_REQ 
+DL_REPLY_UPDATE_REQ				EQU		$27					; Hold a DLSDU for transmission 
+DL_REPLY_UPDATE_STATUS_IND		EQU		$28					; Status of REPLY_UPDATE req 
+DL_XID_REQ						EQU		$29					; Request to send an XID PDU 
+DL_XID_IND						EQU		$2A					; Arrival of an XID PDU 
+DL_XID_RES						EQU		$2B					; request to send a response XID PDU
+DL_XID_CON						EQU		$2C					; Arrival of a response XID PDU 
+DL_TEST_REQ						EQU		$2D					; TEST command request 
+DL_TEST_IND						EQU		$2E					; TEST response indication 
+DL_TEST_RES						EQU		$2F					; TEST response 
+DL_TEST_CON						EQU		$30					; TEST Confirmation 
+DL_PHYS_ADDR_REQ				EQU		$31					; Request to get physical addr 
+DL_PHYS_ADDR_ACK				EQU		$32					; Return physical addr 
+DL_SET_PHYS_ADDR_REQ			EQU		$33					; set physical addr 
+DL_GET_STATISTICS_REQ			EQU		$34					; Request to get statistics 
+DL_GET_STATISTICS_ACK			EQU		$35					; Return statistics 
+;  DLPI interface states
+
+DL_UNATTACHED					EQU		$04					; PPA not attached 
+DL_ATTACH_PENDING				EQU		$05					; Waiting ack of DL_ATTACH_REQ 
+DL_DETACH_PENDING				EQU		$06					; Waiting ack of DL_DETACH_REQ 
+DL_UNBOUND						EQU		$00					; PPA attached, LLI compatibility 
+DL_BIND_PENDING					EQU		$01					; Waiting ack of DL_BIND_REQ, LLI compatibility 
+DL_UNBIND_PENDING				EQU		$02					; Waiting ack of DL_UNBIND_REQ, LLI compatibility 
+DL_IDLE							EQU		$03					; dlsap bound, awaiting use, LLI compatibility 
+DL_UDQOS_PENDING				EQU		$07					; Waiting ack of DL_UDQOS_REQ 
+DL_OUTCON_PENDING				EQU		$08					; outgoing connection, awaiting DL_CONN_CON 
+DL_INCON_PENDING				EQU		$09					; incoming connection, awaiting DL_CONN_RES 
+DL_CONN_RES_PENDING				EQU		$0A					; Waiting ack of DL_CONNECT_RES 
+DL_DATAXFER						EQU		$0B					; connection-oriented data transfer 
+DL_USER_RESET_PENDING			EQU		$0C					; user initiated reset, awaiting DL_RESET_CON 
+DL_PROV_RESET_PENDING			EQU		$0D					; provider initiated reset, awaiting DL_RESET_RES 
+DL_RESET_RES_PENDING			EQU		$0E					; Waiting ack of DL_RESET_RES 
+DL_DISCON8_PENDING				EQU		$0F					; Waiting ack of DL_DISC_REQ when in DL_OUTCON_PENDING 
+DL_DISCON9_PENDING				EQU		$10					; Waiting ack of DL_DISC_REQ when in DL_INCON_PENDING 
+DL_DISCON11_PENDING				EQU		$11					; Waiting ack of DL_DISC_REQ when in DL_DATAXFER 
+DL_DISCON12_PENDING				EQU		$12					; Waiting ack of DL_DISC_REQ when in DL_USER_RESET_PENDING 
+DL_DISCON13_PENDING				EQU		$13					; Waiting ack of DL_DISC_REQ when in DL_DL_PROV_RESET_PENDING 
+DL_SUBS_BIND_PND				EQU		$14					; Waiting ack of DL_SUBS_BIND_REQ 
+DL_SUBS_UNBIND_PND				EQU		$15					; Waiting ack of DL_SUBS_UNBIND_REQ 
+;  DL_ERROR_ACK error return values
+
+
+DL_ACCESS						EQU		$02					; Improper permissions for request, LLI compatibility 
+DL_BADADDR						EQU		$01					; DLSAP address in improper format or invalid 
+DL_BADCORR						EQU		$05					; Sequence number not from outstanding DL_CONN_IND 
+DL_BADDATA						EQU		$06					; User data exceeded provider limit 
+DL_BADPPA						EQU		$08					; Specified PPA was invalid 
+DL_BADPRIM						EQU		$09					; Primitive received is not known by DLS provider 
+DL_BADQOSPARAM					EQU		$0A					; QOS parameters contained invalid values 
+DL_BADQOSTYPE					EQU		$0B					; QOS structure type is unknown or unsupported 
+DL_BADSAP						EQU		$00					; Bad LSAP selector, LLI compatibility 
+DL_BADTOKEN						EQU		$0C					; Token used not associated with an active stream 
+DL_BOUND						EQU		$0D					; Attempted second bind with dl_max_conind or    
+															;    dl_conn_mgmt > 0 on same DLSAP or PPA 
+DL_INITFAILED					EQU		$0E					; Physical Link initialization failed 
+DL_NOADDR						EQU		$0F					; Provider couldn't allocate alternate address 
+DL_NOTINIT						EQU		$10					; Physical Link not initialized 
+DL_OUTSTATE						EQU		$03					; Primitive issued in improper state, LLI compatibility 
+DL_SYSERR						EQU		$04					; UNIX system error occurred, LLI compatibility 
+DL_UNSUPPORTED					EQU		$07					; Requested service not supplied by provider 
+DL_UNDELIVERABLE				EQU		$11					; Previous data unit could not be delivered 
+DL_NOTSUPPORTED					EQU		$12					; Primitive is known but not supported by DLS provider 
+DL_TOOMANY						EQU		$13					; limit exceeded 
+DL_NOTENAB						EQU		$14					; Promiscuous mode not enabled 
+DL_BUSY							EQU		$15					; Other streams for a particular PPA in the post-attached state 
+DL_NOAUTO						EQU		$16					; Automatic handling of XID & TEST responses not supported 
+DL_NOXIDAUTO					EQU		$17					; Automatic handling of XID not supported 
+DL_NOTESTAUTO					EQU		$18					; Automatic handling of TEST not supported 
+DL_XIDAUTO						EQU		$19					; Automatic handling of XID response 
+DL_TESTAUTO						EQU		$1A					; AUtomatic handling of TEST response
+DL_PENDING						EQU		$1B					; pending outstanding connect indications 
+;  DLPI media types supported
+
+
+DL_CSMACD						EQU		$00					; IEEE 802.3 CSMA/CD network, LLI Compatibility 
+DL_TPB							EQU		$01					; IEEE 802.4 Token Passing Bus, LLI Compatibility 
+DL_TPR							EQU		$02					; IEEE 802.5 Token Passing Ring, LLI Compatibility 
+DL_METRO						EQU		$03					; IEEE 802.6 Metro Net, LLI Compatibility 
+DL_ETHER						EQU		$04					; Ethernet Bus, LLI Compatibility 
+DL_HDLC							EQU		$05					; ISO HDLC protocol support, bit synchronous 
+DL_CHAR							EQU		$06					; Character Synchronous protocol support, eg BISYNC 
+DL_CTCA							EQU		$07					; IBM Channel-to-Channel Adapter 
+DL_FDDI							EQU		$08					; Fiber Distributed data interface 
+DL_OTHER						EQU		$09					; Any other medium not listed above 
+
+;   DLPI provider service supported.
+;   These must be allowed to be bitwise-OR for dl_service_mode in
+;   DL_INFO_ACK.
+
+
+
+DL_CODLS						EQU		$01					; support connection-oriented service 
+DL_CLDLS						EQU		$02					; support connectionless data link service 
+DL_ACLDLS						EQU		$04					; support acknowledged connectionless service
+
+;   DLPI provider style.
+;   The DLPI provider style which determines whether a provider
+;   requires a DL_ATTACH_REQ to inform the provider which PPA
+;   user messages should be sent/received on.
+
+
+
+
+DL_STYLE1						EQU		$0500				; PPA is implicitly bound by open(2) 
+DL_STYLE2						EQU		$0501				; PPA must be explicitly bound via DL_ATTACH_REQ 
+;  DLPI Originator for Disconnect and Resets
+
+
+DL_PROVIDER						EQU		$0700
+DL_USER							EQU		$0701
+;  DLPI Disconnect Reasons
+
+
+DL_CONREJ_DEST_UNKNOWN			EQU		$0800
+DL_CONREJ_DEST_UNREACH_PERMANENT EQU	$0801
+DL_CONREJ_DEST_UNREACH_TRANSIENT EQU	$0802
+DL_CONREJ_QOS_UNAVAIL_PERMANENT	EQU		$0803
+DL_CONREJ_QOS_UNAVAIL_TRANSIENT	EQU		$0804
+DL_CONREJ_PERMANENT_COND		EQU		$0805
+DL_CONREJ_TRANSIENT_COND		EQU		$0806
+DL_DISC_ABNORMAL_CONDITION		EQU		$0807
+DL_DISC_NORMAL_CONDITION		EQU		$0808
+DL_DISC_PERMANENT_CONDITION		EQU		$0809
+DL_DISC_TRANSIENT_CONDITION		EQU		$080A
+DL_DISC_UNSPECIFIED				EQU		$080B
+;  DLPI Reset Reasons
+
+
+DL_RESET_FLOW_CONTROL			EQU		$0900
+DL_RESET_LINK_ERROR				EQU		$0901
+DL_RESET_RESYNCH				EQU		$0902
+;  DLPI status values for acknowledged connectionless data transfer
+
+
+DL_CMD_MASK						EQU		$0F					; mask for command portion of status 
+DL_CMD_OK						EQU		$00					; Command Accepted 
+DL_CMD_RS						EQU		$01					; Unimplemented or inactivated service 
+DL_CMD_UE						EQU		$05					; Data Link User interface error 
+DL_CMD_PE						EQU		$06					; Protocol error 
+DL_CMD_IP						EQU		$07					; Permanent implementation dependent error
+DL_CMD_UN						EQU		$09					; Resources temporarily unavailable 
+DL_CMD_IT						EQU		$0F					; Temporary implementation dependent error 
+DL_RSP_MASK						EQU		$F0					; mask for response portion of status 
+DL_RSP_OK						EQU		$00					; Response DLSDU present 
+DL_RSP_RS						EQU		$10					; Unimplemented or inactivated service 
+DL_RSP_NE						EQU		$30					; Response DLSDU never submitted 
+DL_RSP_NR						EQU		$40					; Response DLSDU not requested 
+DL_RSP_UE						EQU		$50					; Data Link User interface error 
+DL_RSP_IP						EQU		$70					; Permanent implementation dependent error 
+DL_RSP_UN						EQU		$90					; Resources temporarily unavailable 
+DL_RSP_IT						EQU		$F0					; Temporary implementation dependent error 
+;  Service Class values for acknowledged connectionless data transfer
+
+
+DL_RQST_RSP						EQU		$01					; Use acknowledge capability in MAC sublayer
+DL_RQST_NORSP					EQU		$02					; No acknowledgement service requested 
+;  DLPI address type definition
+
+
+DL_FACT_PHYS_ADDR				EQU		$01					; factory physical address 
+DL_CURR_PHYS_ADDR				EQU		$02					; current physical address 
+;  DLPI flag definitions
+
+
+DL_POLL_FINAL					EQU		$01					; if set,indicates poll/final bit set
+;  XID and TEST responses supported by the provider
+
+
+DL_AUTO_XID						EQU		$01					; provider will respond to XID 
+DL_AUTO_TEST					EQU		$02					; provider will respond to TEST 
+;  Subsequent bind type
+
+
+DL_PEER_BIND					EQU		$01					; subsequent bind on a peer addr 
+DL_HIERARCHICAL_BIND			EQU		$02					; subs_bind on a hierarchical addr
+;  DLPI promiscuous mode definitions
+
+
+DL_PROMISC_PHYS					EQU		$01					; promiscuous mode at phys level 
+DL_PROMISC_SAP					EQU		$02					; promiscous mode at sap level 
+DL_PROMISC_MULTI				EQU		$03					; promiscuous mode for multicast 
+
+;   DLPI Quality Of Service definition for use in QOS structure definitions.
+;   The QOS structures are used in connection establishment, DL_INFO_ACK,
+;   and setting connectionless QOS values.
+
+
+
+
+;   Throughput
+;   
+;   This parameter is specified for both directions.
+
+
+
+dl_through_t			RECORD 0
+dl_target_value			 ds.l	1				; offset: $0 (0)		;  desired bits/second desired 
+dl_accept_value			 ds.l	1				; offset: $4 (4)		;  min. acceptable bits/second 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   transit delay specification
+;   
+;   This parameter is specified for both directions.
+;   expressed in milliseconds assuming a DLSDU size of 128 octets.
+;   The scaling of the value to the current DLSDU size is provider dependent.
+
+
+dl_transdelay_t			RECORD 0
+dl_target_value			 ds.l	1				; offset: $0 (0)		;  desired value of service 
+dl_accept_value			 ds.l	1				; offset: $4 (4)		;  min. acceptable value of service 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   priority specification
+;   priority range is 0-100, with 0 being highest value.
+
+
+
+dl_priority_t			RECORD 0
+dl_min					 ds.l	1				; offset: $0 (0)
+dl_max					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  protection specification
+
+DL_NONE							EQU		$0B01				; no protection supplied 
+DL_MONITOR						EQU		$0B02				; protection against passive monitoring 
+DL_MAXIMUM						EQU		$0B03				; protection against modification, replay, addition, or deletion 
+dl_protect_t			RECORD 0
+dl_min					 ds.l	1				; offset: $0 (0)
+dl_max					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   Resilience specification
+;   probabilities are scaled by a factor of 10,000 with a time interval
+;   of 10,000 seconds.
+
+
+dl_resilience_t			RECORD 0
+dl_disc_prob			 ds.l	1				; offset: $0 (0)		;  probability of provider init DISC 
+dl_reset_prob			 ds.l	1				; offset: $4 (4)		;  probability of provider init RESET 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; 
+;    QOS type definition to be used for negotiation with the
+;    remote end of a connection, or a connectionless unitdata request.
+;    There are two type definitions to handle the negotiation 
+;    process at connection establishment. The typedef dl_qos_range_t
+;    is used to present a range for parameters. This is used
+;    in the DL_CONNECT_REQ and DL_CONNECT_IND messages. The typedef
+;    dl_qos_sel_t is used to select a specific value for the QOS
+;    parameters. This is used in the DL_CONNECT_RES, DL_CONNECT_CON,
+;    and DL_INFO_ACK messages to define the selected QOS parameters
+;    for a connection.
+;
+;    NOTE
+;    A DataLink provider which has unknown values for any of the fields
+;    will use a value of DL_UNKNOWN for all values in the fields.
+;
+;    NOTE
+;    A QOS parameter value of DL_QOS_DONT_CARE informs the DLS
+;    provider the user requesting this value doesn't care 
+;    what the QOS parameter is set to. This value becomes the
+;    least possible value in the range of QOS parameters.
+;    The order of the QOS parameter range is then:
+;
+;        DL_QOS_DONT_CARE < 0 < MAXIMUM QOS VALUE
+;
+
+
+DL_UNKNOWN						EQU		-1
+DL_QOS_DONT_CARE				EQU		-2
+; 
+;    Every QOS structure has the first 4 bytes containing a type
+;    field, denoting the definition of the rest of the structure.
+;    This is used in the same manner has the dl_primitive variable
+;    is in messages.
+;
+;    The following list is the defined QOS structure type values and structures.
+;
+
+
+DL_QOS_CO_RANGE1				EQU		$0101				; QOS range struct. for Connection modeservice 
+DL_QOS_CO_SEL1					EQU		$0102				; QOS selection structure 
+DL_QOS_CL_RANGE1				EQU		$0103				; QOS range struct. for connectionless
+DL_QOS_CL_SEL1					EQU		$0104				; QOS selection for connectionless mode
+dl_qos_co_range1_t		RECORD 0
+dl_qos_type				 ds.l	1				; offset: $0 (0)
+dl_rcv_throughput		 ds		dl_through_t	; offset: $4 (4)		;  desired and acceptable
+dl_rcv_trans_delay		 ds		dl_transdelay_t ; offset: $C (12)		;  desired and acceptable
+dl_xmt_throughput		 ds		dl_through_t	; offset: $14 (20)
+dl_xmt_trans_delay		 ds		dl_transdelay_t ; offset: $1C (28)
+dl_priority				 ds		dl_priority_t	; offset: $24 (36)		;  min and max values 
+dl_protection			 ds		dl_protect_t	; offset: $2C (44)		;  min and max values 
+dl_residual_error		 ds.l	1				; offset: $34 (52)
+dl_resilience			 ds		dl_resilience_t ; offset: $38 (56)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+dl_qos_co_sel1_t		RECORD 0
+dl_qos_type				 ds.l	1				; offset: $0 (0)
+dl_rcv_throughput		 ds.l	1				; offset: $4 (4)
+dl_rcv_trans_delay		 ds.l	1				; offset: $8 (8)
+dl_xmt_throughput		 ds.l	1				; offset: $C (12)
+dl_xmt_trans_delay		 ds.l	1				; offset: $10 (16)
+dl_priority				 ds.l	1				; offset: $14 (20)
+dl_protection			 ds.l	1				; offset: $18 (24)
+dl_residual_error		 ds.l	1				; offset: $1C (28)
+dl_resilience			 ds		dl_resilience_t ; offset: $20 (32)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+dl_qos_cl_range1_t		RECORD 0
+dl_qos_type				 ds.l	1				; offset: $0 (0)
+dl_trans_delay			 ds		dl_transdelay_t ; offset: $4 (4)
+dl_priority				 ds		dl_priority_t	; offset: $C (12)
+dl_protection			 ds		dl_protect_t	; offset: $14 (20)
+dl_residual_error		 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+dl_qos_cl_sel1_t		RECORD 0
+dl_qos_type				 ds.l	1				; offset: $0 (0)
+dl_trans_delay			 ds.l	1				; offset: $4 (4)
+dl_priority				 ds.l	1				; offset: $8 (8)
+dl_protection			 ds.l	1				; offset: $C (12)
+dl_residual_error		 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; 
+;    DLPI interface primitive definitions.
+;
+;    Each primitive is sent as a stream message. It is possible that
+;    the messages may be viewed as a sequence of bytes that have the
+;    following form without any padding. The structure definition
+;    of the following messages may have to change depending on the
+;    underlying hardware architecture and crossing of a hardware
+;    boundary with a different hardware architecture.
+;
+;    Fields in the primitives having a name of the form
+;    dl_reserved cannot be used and have the value of
+;    binary zero, no bits turned on.
+;
+;    Each message has the name defined followed by the
+;    stream message type (M_PROTO, M_PCPROTO, M_DATA)
+; 
+
+;  LOCAL MANAGEMENT SERVICE PRIMITIVES
+
+;  DL_INFO_REQ, M_PCPROTO type
+
+dl_info_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  set to DL_INFO_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_INFO_ACK, M_PCPROTO type
+dl_info_ack_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  set to DL_INFO_ACK 
+dl_max_sdu				 ds.l	1				; offset: $4 (4)		;  Max bytes in a DLSDU 
+dl_min_sdu				 ds.l	1				; offset: $8 (8)		;  Min bytes in a DLSDU 
+dl_addr_length			 ds.l	1				; offset: $C (12)		;  length of DLSAP address 
+dl_mac_type				 ds.l	1				; offset: $10 (16)		;  type of medium supported
+dl_reserved				 ds.l	1				; offset: $14 (20)		;  value set to zero 
+dl_current_state		 ds.l	1				; offset: $18 (24)		;  state of DLPI interface 
+dl_sap_length			 ds.l	1				; offset: $1C (28)		;  current length of SAP part of dlsap address 
+dl_service_mode			 ds.l	1				; offset: $20 (32)		;  CO, CL or ACL 
+dl_qos_length			 ds.l	1				; offset: $24 (36)		;  length of qos values 
+dl_qos_offset			 ds.l	1				; offset: $28 (40)		;  offset from beg. of block
+dl_qos_range_length		 ds.l	1				; offset: $2C (44)		;  available range of qos 
+dl_qos_range_offset		 ds.l	1				; offset: $30 (48)		;  offset from beg. of block
+dl_provider_style		 ds.l	1				; offset: $34 (52)		;  style1 or style2 
+dl_addr_offset			 ds.l	1				; offset: $38 (56)		;  offset of the dlsap addr 
+dl_version				 ds.l	1				; offset: $3C (60)		;  version number 
+dl_brdcst_addr_length	 ds.l	1				; offset: $40 (64)		;  length of broadcast addr 
+dl_brdcst_addr_offset	 ds.l	1				; offset: $44 (68)		;  offset from beg. of block
+dl_growth				 ds.l	1				; offset: $48 (72)		;  set to zero 
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+;  DL_ATTACH_REQ, M_PROTO type
+dl_attach_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  set to DL_ATTACH_REQ
+dl_ppa					 ds.l	1				; offset: $4 (4)		;  id of the PPA 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  DL_DETACH_REQ, M_PROTO type
+dl_detach_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  set to DL_DETACH_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_BIND_REQ, M_PROTO type
+dl_bind_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  set to DL_BIND_REQ 
+dl_sap					 ds.l	1				; offset: $4 (4)		;  info to identify dlsap addr
+dl_max_conind			 ds.l	1				; offset: $8 (8)		;  max # of outstanding con_ind
+dl_service_mode			 ds.w	1				; offset: $C (12)		;  CO, CL or ACL 
+dl_conn_mgmt			 ds.w	1				; offset: $E (14)		;  if non-zero, is con-mgmt stream
+dl_xidtest_flg			 ds.l	1				; offset: $10 (16)		;  if set to 1 indicates automatic initiation of test and xid frames 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  DL_BIND_ACK, M_PCPROTO type
+dl_bind_ack_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_BIND_ACK 
+dl_sap					 ds.l	1				; offset: $4 (4)		;  DLSAP addr info 
+dl_addr_length			 ds.l	1				; offset: $8 (8)		;  length of complete DLSAP addr 
+dl_addr_offset			 ds.l	1				; offset: $C (12)		;  offset from beginning of M_PCPROTO
+dl_max_conind			 ds.l	1				; offset: $10 (16)		;  allowed max. # of con-ind 
+dl_xidtest_flg			 ds.l	1				; offset: $14 (20)		;  responses supported by provider
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_SUBS_BIND_REQ, M_PROTO type
+dl_subs_bind_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_SUBS_BIND_REQ 
+dl_subs_sap_offset		 ds.l	1				; offset: $4 (4)		;  offset of subs_sap 
+dl_subs_sap_length		 ds.l	1				; offset: $8 (8)		;  length of subs_sap 
+dl_subs_bind_class		 ds.l	1				; offset: $C (12)		;  peer or hierarchical 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_SUBS_BIND_ACK, M_PCPROTO type
+dl_subs_bind_ack_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_SUBS_BIND_ACK 
+dl_subs_sap_offset		 ds.l	1				; offset: $4 (4)		;  offset of subs_sap 
+dl_subs_sap_length		 ds.l	1				; offset: $8 (8)		;  length of subs_sap 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_UNBIND_REQ, M_PROTO type
+dl_unbind_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_UNBIND_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_SUBS_UNBIND_REQ, M_PROTO type
+dl_subs_unbind_req_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_SUBS_UNBIND_REQ 
+dl_subs_sap_offset		 ds.l	1				; offset: $4 (4)		;  offset of subs_sap 
+dl_subs_sap_length		 ds.l	1				; offset: $8 (8)		;  length of subs_sap 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_OK_ACK, M_PCPROTO type
+dl_ok_ack_t				RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_OK_ACK 
+dl_correct_primitive	 ds.l	1				; offset: $4 (4)		;  primitive being acknowledged 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  DL_ERROR_ACK, M_PCPROTO type
+dl_error_ack_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_ERROR_ACK 
+dl_error_primitive		 ds.l	1				; offset: $4 (4)		;  primitive in error 
+dl_errno				 ds.l	1				; offset: $8 (8)		;  DLPI error code 
+dl_unix_errno			 ds.l	1				; offset: $C (12)		;  UNIX system error code 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_ENABMULTI_REQ, M_PROTO type
+dl_enabmulti_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_ENABMULTI_REQ 
+dl_addr_length			 ds.l	1				; offset: $4 (4)		;  length of multicast address 
+dl_addr_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of M_PROTO block
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_DISABMULTI_REQ, M_PROTO type
+dl_disabmulti_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DISABMULTI_REQ 
+dl_addr_length			 ds.l	1				; offset: $4 (4)		;  length of multicast address 
+dl_addr_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of M_PROTO block
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_PROMISCON_REQ, M_PROTO type
+dl_promiscon_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_PROMISCON_REQ 
+dl_level				 ds.l	1				; offset: $4 (4)		;  physical,SAP level or ALL multicast
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  DL_PROMISCOFF_REQ, M_PROTO type
+dl_promiscoff_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_PROMISCOFF_REQ 
+dl_level				 ds.l	1				; offset: $4 (4)		;  Physical,SAP level or ALL multicast
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Primitives to get and set the Physical address
+;  DL_PHYS_ADDR_REQ, M_PROTO type
+
+dl_phys_addr_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_PHYS_ADDR_REQ 
+dl_addr_type			 ds.l	1				; offset: $4 (4)		;  factory or current physical addr 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  DL_PHYS_ADDR_ACK, M_PCPROTO type
+dl_phys_addr_ack_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_PHYS_ADDR_ACK 
+dl_addr_length			 ds.l	1				; offset: $4 (4)		;  length of the physical addr 
+dl_addr_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_SET_PHYS_ADDR_REQ, M_PROTO type
+dl_set_phys_addr_req_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_SET_PHYS_ADDR_REQ 
+dl_addr_length			 ds.l	1				; offset: $4 (4)		;  length of physical addr 
+dl_addr_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  Primitives to get statistics
+;  DL_GET_STATISTICS_REQ, M_PROTO type
+
+dl_get_statistics_req_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_GET_STATISTICS_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_GET_STATISTICS_ACK, M_PCPROTO type
+dl_get_statistics_ack_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_GET_STATISTICS_ACK 
+dl_stat_length			 ds.l	1				; offset: $4 (4)		;  length of statistics structure
+dl_stat_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  CONNECTION-ORIENTED SERVICE PRIMITIVES
+
+;  DL_CONNECT_REQ, M_PROTO type
+
+dl_connect_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_CONNECT_REQ 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  len. of dlsap addr
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset 
+dl_qos_length			 ds.l	1				; offset: $C (12)		;  len. of QOS parm val
+dl_qos_offset			 ds.l	1				; offset: $10 (16)		;  offset 
+dl_growth				 ds.l	1				; offset: $14 (20)		;  set to zero 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_CONNECT_IND, M_PROTO type
+dl_connect_ind_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_CONNECT_IND 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  provider's correlation token
+dl_called_addr_length	 ds.l	1				; offset: $8 (8)		;  length of called address 
+dl_called_addr_offset	 ds.l	1				; offset: $C (12)		;  offset from beginning of block 
+dl_calling_addr_length	 ds.l	1				; offset: $10 (16)		;  length of calling address 
+dl_calling_addr_offset	 ds.l	1				; offset: $14 (20)		;  offset from beginning of block 
+dl_qos_length			 ds.l	1				; offset: $18 (24)		;  length of qos structure 
+dl_qos_offset			 ds.l	1				; offset: $1C (28)		;  offset from beginning of block 
+dl_growth				 ds.l	1				; offset: $20 (32)		;  set to zero 
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+;  DL_CONNECT_RES, M_PROTO type
+dl_connect_res_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_CONNECT_RES 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  provider's correlation token 
+dl_resp_token			 ds.l	1				; offset: $8 (8)		;  token associated with responding stream 
+dl_qos_length			 ds.l	1				; offset: $C (12)		;  length of qos structure 
+dl_qos_offset			 ds.l	1				; offset: $10 (16)		;  offset from beginning of block 
+dl_growth				 ds.l	1				; offset: $14 (20)		;  set to zero 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_CONNECT_CON, M_PROTO type
+dl_connect_con_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_CONNECT_CON
+dl_resp_addr_length		 ds.l	1				; offset: $4 (4)		;  length of responder's address 
+dl_resp_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset from beginning of block
+dl_qos_length			 ds.l	1				; offset: $C (12)		;  length of qos structure 
+dl_qos_offset			 ds.l	1				; offset: $10 (16)		;  offset from beginning of block
+dl_growth				 ds.l	1				; offset: $14 (20)		;  set to zero 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_TOKEN_REQ, M_PCPROTO type
+dl_token_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TOKEN_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_TOKEN_ACK, M_PCPROTO type
+dl_token_ack_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TOKEN_ACK 
+dl_token				 ds.l	1				; offset: $4 (4)		;  Connection response token associated with the stream 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  DL_DISCONNECT_REQ, M_PROTO type
+dl_disconnect_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DISCONNECT_REQ 
+dl_reason				 ds.l	1				; offset: $4 (4)		; normal, abnormal, perm. or transient
+dl_correlation			 ds.l	1				; offset: $8 (8)		;  association with connect_ind 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_DISCONNECT_IND, M_PROTO type
+dl_disconnect_ind_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DISCONNECT_IND 
+dl_originator			 ds.l	1				; offset: $4 (4)		;  USER or PROVIDER 
+dl_reason				 ds.l	1				; offset: $8 (8)		;  permanent or transient 
+dl_correlation			 ds.l	1				; offset: $C (12)		;  association with connect_ind 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_RESET_REQ, M_PROTO type
+dl_reset_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_RESET_REQ 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_RESET_IND, M_PROTO type
+dl_reset_ind_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_RESET_IND 
+dl_originator			 ds.l	1				; offset: $4 (4)		;  Provider or User 
+dl_reason				 ds.l	1				; offset: $8 (8)		;  flow control, link error or resynch
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_RESET_RES, M_PROTO type
+dl_reset_res_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_RESET_RES 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  DL_RESET_CON, M_PROTO type
+dl_reset_con_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_RESET_CON 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  CONNECTIONLESS SERVICE PRIMITIVES
+;  DL_UNITDATA_REQ, M_PROTO type, with M_DATA block(s)
+
+dl_unitdata_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_UNITDATA_REQ 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  DLSAP length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+dl_priority				 ds		dl_priority_t	; offset: $C (12)		;  priority value 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  DL_UNITDATA_IND, M_PROTO type, with M_DATA block(s)
+dl_unitdata_ind_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_UNITDATA_IND 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  DLSAP length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+dl_src_addr_length		 ds.l	1				; offset: $C (12)		;  DLSAP addr length of sending user
+dl_src_addr_offset		 ds.l	1				; offset: $10 (16)		;  offset from beg. of block 
+dl_group_address		 ds.l	1				; offset: $14 (20)		;  set to one if multicast/broadcast
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+;   DL_UDERROR_IND, M_PROTO type
+;   (or M_PCPROTO type if LLI-based provider)
+
+
+dl_uderror_ind_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_UDERROR_IND 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  Destination DLSAP 
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  Offset from beg. of block 
+dl_unix_errno			 ds.l	1				; offset: $C (12)		;  unix system error code
+dl_errno				 ds.l	1				; offset: $10 (16)		;  DLPI error code 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  DL_UDQOS_REQ, M_PROTO type
+dl_udqos_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_UDQOS_REQ 
+dl_qos_length			 ds.l	1				; offset: $4 (4)		;  length in bytes of requested qos
+dl_qos_offset			 ds.l	1				; offset: $8 (8)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  Primitives to handle XID and TEST operations
+;  DL_TEST_REQ, M_PROTO type
+
+dl_test_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TEST_REQ 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  DLSAP length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_TEST_IND, M_PROTO type
+dl_test_ind_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TEST_IND 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  dlsap length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  dlsap length of source user 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_TEST_RES, M_PROTO type
+dl_test_res_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TEST_RES 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  DLSAP length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_TEST_CON, M_PROTO type
+dl_test_con_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_TEST_CON 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  dlsap length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  dlsap length of source user 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_XID_REQ, M_PROTO type
+dl_xid_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_XID_REQ 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  dlsap length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_XID_IND, M_PROTO type
+dl_xid_ind_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_XID_IND 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  dlsap length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  dlsap length of source user 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  DL_XID_RES, M_PROTO type
+dl_xid_res_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_XID_RES 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  DLSAP length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_XID_CON, M_PROTO type
+dl_xid_con_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_XID_CON 
+dl_flag					 ds.l	1				; offset: $4 (4)		;  poll/final 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  dlsap length of dest. user 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beg. of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  dlsap length of source user 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beg. of block 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  ACKNOWLEDGED CONNECTIONLESS SERVICE PRIMITIVES
+
+;  DL_DATA_ACK_REQ, M_PROTO type
+
+dl_data_ack_req_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DATA_ACK_REQ 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  User's correlation token 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  length of destination addr 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beginning of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  length of source address 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beginning of block 
+dl_priority				 ds.l	1				; offset: $18 (24)		;  priority 
+dl_service_class		 ds.l	1				; offset: $1C (28)		;  DL_RQST_RSP or DL_RQST_NORSP 
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  DL_DATA_ACK_IND, M_PROTO type
+dl_data_ack_ind_t		RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DATA_ACK_IND 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  length of destination addr 
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset from beginning of block 
+dl_src_addr_length		 ds.l	1				; offset: $C (12)		;  length of source address 
+dl_src_addr_offset		 ds.l	1				; offset: $10 (16)		;  offset from beginning of block 
+dl_priority				 ds.l	1				; offset: $14 (20)		;  priority for data unit transm. 
+dl_service_class		 ds.l	1				; offset: $18 (24)		;  DL_RQST_RSP or DL_RQST_NORSP 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  DL_DATA_ACK_STATUS_IND, M_PROTO type
+dl_data_ack_status_ind_t RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_DATA_ACK_STATUS_IND 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  User's correlation token 
+dl_status				 ds.l	1				; offset: $8 (8)		;  success or failure of previous req
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_REPLY_REQ, M_PROTO type
+dl_reply_req_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_REPLY_REQ 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  User's correlation token 
+dl_dest_addr_length		 ds.l	1				; offset: $8 (8)		;  length of destination address 
+dl_dest_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beginning of block 
+dl_src_addr_length		 ds.l	1				; offset: $10 (16)		;  source address length 
+dl_src_addr_offset		 ds.l	1				; offset: $14 (20)		;  offset from beginning of block 
+dl_priority				 ds.l	1				; offset: $18 (24)		;  priority for data unit transmission
+dl_service_class		 ds.l	1				; offset: $1C (28)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+;  DL_REPLY_IND, M_PROTO type
+dl_reply_ind_t			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_REPLY_IND 
+dl_dest_addr_length		 ds.l	1				; offset: $4 (4)		;  length of destination address 
+dl_dest_addr_offset		 ds.l	1				; offset: $8 (8)		;  offset from beginning of block
+dl_src_addr_length		 ds.l	1				; offset: $C (12)		;  length of source address 
+dl_src_addr_offset		 ds.l	1				; offset: $10 (16)		;  offset from beginning of block 
+dl_priority				 ds.l	1				; offset: $14 (20)		;  priority for data unit transmission
+dl_service_class		 ds.l	1				; offset: $18 (24)		;  DL_RQST_RSP or DL_RQST_NORSP 
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  DL_REPLY_STATUS_IND, M_PROTO type
+dl_reply_status_ind_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_REPLY_STATUS_IND 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  User's correlation token 
+dl_status				 ds.l	1				; offset: $8 (8)		;  success or failure of previous req
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  DL_REPLY_UPDATE_REQ, M_PROTO type
+dl_reply_update_req_t	RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_REPLY_UPDATE_REQ 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  user's correlation token 
+dl_src_addr_length		 ds.l	1				; offset: $8 (8)		;  length of source address 
+dl_src_addr_offset		 ds.l	1				; offset: $C (12)		;  offset from beginning of block 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  DL_REPLY_UPDATE_STATUS_IND, M_PROTO type
+dl_reply_update_status_ind_t RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)		;  DL_REPLY_UPDATE_STATUS_IND 
+dl_correlation			 ds.l	1				; offset: $4 (4)		;  User's correlation token 
+dl_status				 ds.l	1				; offset: $8 (8)		;  success or failure of previous req
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+DL_primitives			RECORD 0
+dl_primitive			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+info_req				 ds		dl_info_req_t	; offset: $0 (0)
+						 ORG 0
+info_ack				 ds		dl_info_ack_t	; offset: $0 (0)
+						 ORG 0
+attach_req				 ds		dl_attach_req_t ; offset: $0 (0)
+						 ORG 0
+detach_req				 ds		dl_detach_req_t ; offset: $0 (0)
+						 ORG 0
+bind_req				 ds		dl_bind_req_t	; offset: $0 (0)
+						 ORG 0
+bind_ack				 ds		dl_bind_ack_t	; offset: $0 (0)
+						 ORG 0
+unbind_req				 ds		dl_unbind_req_t ; offset: $0 (0)
+						 ORG 0
+subs_bind_req			 ds		dl_subs_bind_req_t ; offset: $0 (0)
+						 ORG 0
+subs_bind_ack			 ds		dl_subs_bind_ack_t ; offset: $0 (0)
+						 ORG 0
+subs_unbind_req			 ds		dl_subs_unbind_req_t ; offset: $0 (0)
+						 ORG 0
+ok_ack					 ds		dl_ok_ack_t		; offset: $0 (0)
+						 ORG 0
+error_ack				 ds		dl_error_ack_t ; offset: $0 (0)
+						 ORG 0
+connect_req				 ds		dl_connect_req_t ; offset: $0 (0)
+						 ORG 0
+connect_ind				 ds		dl_connect_ind_t ; offset: $0 (0)
+						 ORG 0
+connect_res				 ds		dl_connect_res_t ; offset: $0 (0)
+						 ORG 0
+connect_con				 ds		dl_connect_con_t ; offset: $0 (0)
+						 ORG 0
+token_req				 ds		dl_token_req_t ; offset: $0 (0)
+						 ORG 0
+token_ack				 ds		dl_token_ack_t ; offset: $0 (0)
+						 ORG 0
+disconnect_req			 ds		dl_disconnect_req_t ; offset: $0 (0)
+						 ORG 0
+disconnect_ind			 ds		dl_disconnect_ind_t ; offset: $0 (0)
+						 ORG 0
+reset_req				 ds		dl_reset_req_t ; offset: $0 (0)
+						 ORG 0
+reset_ind				 ds		dl_reset_ind_t ; offset: $0 (0)
+						 ORG 0
+reset_res				 ds		dl_reset_res_t ; offset: $0 (0)
+						 ORG 0
+reset_con				 ds		dl_reset_con_t ; offset: $0 (0)
+						 ORG 0
+unitdata_req			 ds		dl_unitdata_req_t ; offset: $0 (0)
+						 ORG 0
+unitdata_ind			 ds		dl_unitdata_ind_t ; offset: $0 (0)
+						 ORG 0
+uderror_ind				 ds		dl_uderror_ind_t ; offset: $0 (0)
+						 ORG 0
+udqos_req				 ds		dl_udqos_req_t ; offset: $0 (0)
+						 ORG 0
+enabmulti_req			 ds		dl_enabmulti_req_t ; offset: $0 (0)
+						 ORG 0
+disabmulti_req			 ds		dl_disabmulti_req_t ; offset: $0 (0)
+						 ORG 0
+promiscon_req			 ds		dl_promiscon_req_t ; offset: $0 (0)
+						 ORG 0
+promiscoff_req			 ds		dl_promiscoff_req_t ; offset: $0 (0)
+						 ORG 0
+physaddr_req			 ds		dl_phys_addr_req_t ; offset: $0 (0)
+						 ORG 0
+physaddr_ack			 ds		dl_phys_addr_ack_t ; offset: $0 (0)
+						 ORG 0
+set_physaddr_req		 ds		dl_set_phys_addr_req_t ; offset: $0 (0)
+						 ORG 0
+get_statistics_req		 ds		dl_get_statistics_req_t ; offset: $0 (0)
+						 ORG 0
+get_statistics_ack		 ds		dl_get_statistics_ack_t ; offset: $0 (0)
+						 ORG 0
+test_req				 ds		dl_test_req_t	; offset: $0 (0)
+						 ORG 0
+test_ind				 ds		dl_test_ind_t	; offset: $0 (0)
+						 ORG 0
+test_res				 ds		dl_test_res_t	; offset: $0 (0)
+						 ORG 0
+test_con				 ds		dl_test_con_t	; offset: $0 (0)
+						 ORG 0
+xid_req					 ds		dl_xid_req_t	; offset: $0 (0)
+						 ORG 0
+xid_ind					 ds		dl_xid_ind_t	; offset: $0 (0)
+						 ORG 0
+xid_res					 ds		dl_xid_res_t	; offset: $0 (0)
+						 ORG 0
+xid_con					 ds		dl_xid_con_t	; offset: $0 (0)
+						 ORG 0
+data_ack_req			 ds		dl_data_ack_req_t ; offset: $0 (0)
+						 ORG 0
+data_ack_ind			 ds		dl_data_ack_ind_t ; offset: $0 (0)
+						 ORG 0
+data_ack_status_ind		 ds		dl_data_ack_status_ind_t ; offset: $0 (0)
+						 ORG 0
+reply_req				 ds		dl_reply_req_t ; offset: $0 (0)
+						 ORG 0
+reply_ind				 ds		dl_reply_ind_t ; offset: $0 (0)
+						 ORG 0
+reply_status_ind		 ds		dl_reply_status_ind_t ; offset: $0 (0)
+						 ORG 0
+reply_update_req		 ds		dl_reply_update_req_t ; offset: $0 (0)
+						 ORG 0
+reply_update_status_ind	 ds		dl_reply_update_status_ind_t ; offset: $0 (0)
+						 ORG 76
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+
+DL_INFO_REQ_SIZE				EQU		4
+DL_INFO_ACK_SIZE				EQU		76
+DL_ATTACH_REQ_SIZE				EQU		8
+DL_DETACH_REQ_SIZE				EQU		4
+DL_BIND_REQ_SIZE				EQU		20
+DL_BIND_ACK_SIZE				EQU		24
+DL_UNBIND_REQ_SIZE				EQU		4
+DL_SUBS_BIND_REQ_SIZE			EQU		16
+DL_SUBS_BIND_ACK_SIZE			EQU		12
+DL_SUBS_UNBIND_REQ_SIZE			EQU		12
+DL_OK_ACK_SIZE					EQU		8
+DL_ERROR_ACK_SIZE				EQU		16
+DL_CONNECT_REQ_SIZE				EQU		24
+DL_CONNECT_IND_SIZE				EQU		36
+DL_CONNECT_RES_SIZE				EQU		24
+DL_CONNECT_CON_SIZE				EQU		24
+DL_TOKEN_REQ_SIZE				EQU		4
+DL_TOKEN_ACK_SIZE				EQU		8
+DL_DISCONNECT_REQ_SIZE			EQU		12
+DL_DISCONNECT_IND_SIZE			EQU		16
+DL_RESET_REQ_SIZE				EQU		4
+DL_RESET_IND_SIZE				EQU		12
+DL_RESET_RES_SIZE				EQU		4
+DL_RESET_CON_SIZE				EQU		4
+DL_UNITDATA_REQ_SIZE			EQU		20
+DL_UNITDATA_IND_SIZE			EQU		24
+DL_UDERROR_IND_SIZE				EQU		20
+DL_UDQOS_REQ_SIZE				EQU		12
+DL_ENABMULTI_REQ_SIZE			EQU		12
+DL_DISABMULTI_REQ_SIZE			EQU		12
+DL_PROMISCON_REQ_SIZE			EQU		8
+DL_PROMISCOFF_REQ_SIZE			EQU		8
+DL_PHYS_ADDR_REQ_SIZE			EQU		8
+DL_PHYS_ADDR_ACK_SIZE			EQU		12
+DL_SET_PHYS_ADDR_REQ_SIZE		EQU		12
+DL_GET_STATISTICS_REQ_SIZE		EQU		4
+DL_GET_STATISTICS_ACK_SIZE		EQU		12
+DL_XID_REQ_SIZE					EQU		16
+DL_XID_IND_SIZE					EQU		24
+DL_XID_RES_SIZE					EQU		16
+DL_XID_CON_SIZE					EQU		24
+DL_TEST_REQ_SIZE				EQU		16
+DL_TEST_IND_SIZE				EQU		24
+DL_TEST_RES_SIZE				EQU		16
+DL_TEST_CON_SIZE				EQU		24
+DL_DATA_ACK_REQ_SIZE			EQU		32
+DL_DATA_ACK_IND_SIZE			EQU		28
+DL_DATA_ACK_STATUS_IND_SIZE		EQU		12
+DL_REPLY_REQ_SIZE				EQU		32
+DL_REPLY_IND_SIZE				EQU		28
+DL_REPLY_STATUS_IND_SIZE		EQU		12
+DL_REPLY_UPDATE_REQ_SIZE		EQU		16
+DL_REPLY_UPDATE_STATUS_IND_SIZE	EQU		12
+
+DL_IOC_HDR_INFO					EQU		$6C0A				; Fast path request 
+;  ***** From the Mentat "modnames.h" *****
+
+
+;  ***** Raw Streams *****
+
+
+
+;   Flags used in the fType field of OTReadInfo for functions.
+;   I've removed the terse and confusing comments in this header
+;   file.  For a full description, read "Open Transport Advanced
+;   Client Programming".
+
+
+
+
+kOTNoMessagesAvailable			EQU		$FFFFFFFF
+kOTAnyMsgType					EQU		$FFFFFFFE
+kOTDataMsgTypes					EQU		$FFFFFFFC
+kOTMProtoMsgTypes				EQU		$FFFFFFFB
+kOTOnlyMProtoMsgTypes			EQU		$FFFFFFFA
+	IF ¬ OTKERNEL THEN
+;  StreamRef is an opaque reference to a raw stream.
+
+
+
+
+kOTInvalidStreamRef				EQU		0
+;  PollRef structure is used with the OTStreamPoll function.
+PollRef					RECORD 0
+filler					 ds.l	1				; offset: $0 (0)		;  holds a file descriptor an a UNIX system, replaced by ref (at end of structure) under OT
+events					 ds.w	1				; offset: $4 (4)
+revents					 ds.w	1				; offset: $6 (6)
+ref						 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  OTReadInfo structure is used with the various functions that read and peek at the stream head.
+OTReadInfo				RECORD 0
+fType					 ds.l	1				; offset: $0 (0)
+fCommand				 ds.l	1				; offset: $4 (4)
+fFiller					 ds.l	1				; offset: $8 (8)		;  For compatibility with OT 1.0 and 1.1 
+fBytes					 ds.l	1				; offset: $C (12)
+fError					 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  Opening and closing raw streams
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTStreamOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal StreamRef OTStreamOpen(const char *name, OTOpenFlags oFlags, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamOpen
+	ENDIF
+
+
+; *  OTAsyncStreamOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTAsyncStreamOpen(const char *name, OTOpenFlags oFlags, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncStreamOpen
+	ENDIF
+
+
+; *  OTCreateStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal StreamRef OTCreateStream(OTConfigurationRef cfig, OTOpenFlags oFlags, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateStream
+	ENDIF
+
+
+; *  OTAsyncCreateStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTAsyncCreateStream(OTConfigurationRef cfig, OTOpenFlags oFlags, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncCreateStream
+	ENDIF
+
+
+; *  OTStreamClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTStreamClose(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamClose
+	ENDIF
+
+;  Polling a stream for activity
+
+
+; *  OTStreamPoll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamPoll(PollRef *fds, UInt32 nfds, OTTimeout timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamPoll
+	ENDIF
+
+
+; *  OTAsyncStreamPoll()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTAsyncStreamPoll(PollRef *fds, UInt32 nfds, OTTimeout timeout, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncStreamPoll
+	ENDIF
+
+;  Classic UNIX file descriptor operations
+
+
+; *  OTStreamRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamRead(StreamRef strm, void *buf, OTByteCount len)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamRead
+	ENDIF
+
+
+; *  OTStreamWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamWrite(StreamRef strm, void *buf, OTByteCount len)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamWrite
+	ENDIF
+
+
+; *  OTStreamIoctl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamIoctl(StreamRef strm, UInt32 cmd, void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamIoctl
+	ENDIF
+
+
+; *  OTStreamPipe()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamPipe(StreamRef streamsToPipe[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamPipe
+	ENDIF
+
+;  there can be only 2!
+;  Notifiers and modes of operation
+
+; *  OTStreamInstallNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTStreamInstallNotifier(StreamRef strm, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamInstallNotifier
+	ENDIF
+
+
+; *  OTStreamRemoveNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamRemoveNotifier(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamRemoveNotifier
+	ENDIF
+
+
+; *  OTStreamUseSyncIdleEvents()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTStreamUseSyncIdleEvents(StreamRef strm, Boolean useEvents)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamUseSyncIdleEvents
+	ENDIF
+
+
+; *  OTStreamSetBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamSetBlocking(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamSetBlocking
+	ENDIF
+
+
+; *  OTStreamSetNonBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamSetNonBlocking(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamSetNonBlocking
+	ENDIF
+
+
+; *  OTStreamIsBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTStreamIsBlocking(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamIsBlocking
+	ENDIF
+
+
+; *  OTStreamSetSynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamSetSynchronous(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamSetSynchronous
+	ENDIF
+
+
+; *  OTStreamSetAsynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamSetAsynchronous(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamSetAsynchronous
+	ENDIF
+
+
+; *  OTStreamIsSynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTStreamIsSynchronous(StreamRef strm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamIsSynchronous
+	ENDIF
+
+;  STREAMS primitives
+
+
+; *  OTStreamGetMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamGetMessage(StreamRef strm, strbuf *ctlbuf, strbuf *databuf, OTFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamGetMessage
+	ENDIF
+
+
+; *  OTStreamGetPriorityMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTStreamGetPriorityMessage(StreamRef strm, strbuf *ctlbuf, strbuf *databuf, OTBand *band, OTFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamGetPriorityMessage
+	ENDIF
+
+
+; *  OTStreamPutMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTStreamPutMessage(StreamRef strm, const strbuf *ctlbuf, const strbuf *databuf, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamPutMessage
+	ENDIF
+
+
+; *  OTStreamPutPriorityMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTStreamPutPriorityMessage(StreamRef strm, const strbuf *ctlbuf, const strbuf *databuf, OTBand band, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamPutPriorityMessage
+	ENDIF
+
+;  Miscellaneous stuff
+
+
+; *  OTStreamSetControlMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTStreamSetControlMask(StreamRef strm, UInt32 mask, Boolean setClear)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStreamSetControlMask
+	ENDIF
+
+
+;   Opening endpoints and mappers on a Stream - these calls are synchronous, and may
+;   only be used at System Task time. Once the stream has been installed into a provider
+;   or endpoint, you should not continue to use STREAMS APIs on it
+
+
+
+
+; *  OTOpenProviderOnStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ProviderRef OTOpenProviderOnStream(StreamRef strm, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenProviderOnStream
+	ENDIF
+
+
+; *  OTOpenEndpointOnStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal EndpointRef OTOpenEndpointOnStream(StreamRef strm, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenEndpointOnStream
+	ENDIF
+
+
+;   To quote an earlier version of this header file:
+;   
+;        Some functions that should only be used if
+;        you really know what you're doing.
+
+
+
+
+; *  OTRemoveStreamFromProvider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal StreamRef OTRemoveStreamFromProvider(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveStreamFromProvider
+	ENDIF
+
+
+; *  OTPeekMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTPeekMessage(StreamRef strm, OTReadInfo *readInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTPeekMessage
+	ENDIF
+
+
+; *  OTReadMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTBuffer *OTReadMessage(StreamRef strm, OTReadInfo *readInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTReadMessage
+	ENDIF
+
+
+; *  OTPutBackBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTPutBackBuffer(StreamRef strm, OTBuffer *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTPutBackBuffer
+	ENDIF
+
+
+; *  OTPutBackPartialBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTPutBackPartialBuffer(StreamRef strm, OTBufferInfo *readInfo, OTBuffer *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTPutBackPartialBuffer
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ***** Port Utilities *****
+	IF ¬ OTKERNEL THEN
+
+;   These types and routines are used during sophisticated
+;   port management.  High-level clients may get involved
+;   for things like request a port to be yielding, but typically
+;   this stuff is used by protocol infrastructure.
+
+
+
+;   OTPortCloseStruct is used when processing the kOTClosePortRequest
+;   and kOTYieldPortRequest events.
+
+
+
+OTPortCloseStruct		RECORD 0
+fPortRef				 ds.l	1				; offset: $0 (0)		;  The port requested to be closed.
+fTheProvider			 ds.l	1				; offset: $4 (4)		;  The provider using the port.
+fDenyReason				 ds.l	1				; offset: $8 (8)		;  Set to a negative number to deny the request
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  OTClientList structure is used with the OTYieldPortRequest function.
+OTClientList			RECORD 0
+fNumClients				 ds.l	1				; offset: $0 (0)
+fBuffer					 ds.b	4				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   Returns a buffer containing all of the clients that refused to yield the port.
+;   "size" is the total number of bytes @ buffer, including the fNumClients field.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTYieldPortRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTYieldPortRequest(ProviderRef ref, OTPortRef portRef, OTClientList *buffer, OTByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTYieldPortRequest
+	ENDIF
+
+;  Send a notification to all Open Transport registered clients
+
+; *  OTNotifyAllClients()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTNotifyAllClients(OTEventCode code, OTResult result, void *cookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTNotifyAllClients
+	ENDIF
+
+;  Determine if "child" is a child port of "parent"
+
+; *  OTIsDependentPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTIsDependentPort(OTPortRef parent, OTPortRef child)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsDependentPort
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** Timers ***** 
+
+;   STREAMS plug-ins code should not use these timers, instead
+;   they should use timer messages, ie mi_timer etc.
+
+
+
+	IF ¬ OTKERNEL THEN
+; typedef long 							OTTimerTask
+
+
+;   Under Carbon, OTCreateTimerTask takes a client context pointer.  Applications may pass NULL
+;   after calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  OTCreateTimerTaskInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long OTCreateTimerTaskInContext(OTProcessUPP upp, void *arg, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateTimerTaskInContext
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCreateTimerTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTTimerTask OTCreateTimerTask(OTProcessUPP proc, void *arg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateTimerTask
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTCancelTimerTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTCancelTimerTask(OTTimerTask timerTask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelTimerTask
+	ENDIF
+
+
+; *  OTDestroyTimerTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTDestroyTimerTask(OTTimerTask timerTask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDestroyTimerTask
+	ENDIF
+
+
+; *  OTScheduleTimerTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTScheduleTimerTask(OTTimerTask timerTask, OTTimeout milliSeconds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTScheduleTimerTask
+	ENDIF
+
+	IF OTCARBONAPPLICATION THEN
+;  The following macro may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+	ENDIF
+;  ***** Miscellaneous Helpful Functions *****
+
+	IF ¬ OTKERNEL THEN
+
+;   These routines allow you to manipulate OT's buffer structures.
+;   If you use no-copy receives (described in "OpenTransport.h")
+;   you will need some of these routines, and may choose to use others.
+;   See "Open Tranport Advanced Client Programming" for documentation.
+
+
+
+; *  OTBufferDataSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTByteCount OTBufferDataSize(OTBuffer *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTBufferDataSize
+	ENDIF
+
+
+; *  OTReadBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTReadBuffer(OTBufferInfo *buffer, void *dest, OTByteCount *len)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTReadBuffer
+	ENDIF
+
+
+; *  OTReleaseBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTReleaseBuffer(OTBuffer *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTReleaseBuffer
+	ENDIF
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  StoreIntoNetbuf()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean StoreIntoNetbuf(TNetbuf *netBuf, void *source, SInt32 len)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StoreIntoNetbuf
+	ENDIF
+
+
+; *  StoreMsgIntoNetbuf()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean StoreMsgIntoNetbuf(TNetbuf *netBuf, OTBuffer *buffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StoreMsgIntoNetbuf
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** OTConfiguration *****
+	IF CALL_NOT_IN_CARBON THEN
+	IF ¬ OTKERNEL THEN
+
+;   As promised in "OpenTransport.h", here are the routines
+;   for advanced operations on configurations.
+
+
+;  Manipulating a configuration
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfigNewConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigNewConfiguration(const char *path)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigNewConfiguration
+	ENDIF
+
+
+; *  OTCfigDeleteConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCfigDeleteConfiguration(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigDeleteConfiguration
+	ENDIF
+
+
+; *  OTCfigCloneConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigCloneConfiguration(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigCloneConfiguration
+	ENDIF
+
+
+; *  OTCfigPushNewSingleChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigPushNewSingleChild(OTConfigurationRef cfig, const char *path, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigPushNewSingleChild
+	ENDIF
+
+
+; *  OTCfigPushParent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigPushParent(OTConfigurationRef cfig, const char *path, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigPushParent
+	ENDIF
+
+
+; *  OTCfigPushChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigPushChild(OTConfigurationRef cfig, OTItemCount index, const char *path, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigPushChild
+	ENDIF
+
+
+; *  OTCfigPopChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTCfigPopChild(OTConfigurationRef cfig, OTItemCount index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigPopChild
+	ENDIF
+
+
+; *  OTCfigGetChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigGetChild(OTConfigurationRef cfig, OTItemCount index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetChild
+	ENDIF
+
+
+; *  OTCfigSetPath()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTCfigSetPath(OTConfigurationRef cfig, const char *path)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigSetPath
+	ENDIF
+
+
+; *  OTCfigNewChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigNewChild(OTConfigurationRef cfig, const char *path, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigNewChild
+	ENDIF
+
+
+; *  OTCfigAddChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTCfigAddChild(OTConfigurationRef cfig, OTConfigurationRef child)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigAddChild
+	ENDIF
+
+
+; *  OTCfigRemoveChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigRemoveChild(OTConfigurationRef cfig, OTItemCount index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigRemoveChild
+	ENDIF
+
+
+; *  OTCfigSetPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCfigSetPortRef(OTConfigurationRef cfig, OTPortRef portRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigSetPortRef
+	ENDIF
+
+
+; *  OTCfigChangeProviderName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCfigChangeProviderName(OTConfigurationRef cfig, const char *name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigChangeProviderName
+	ENDIF
+
+;  Query a configuration
+
+
+; *  OTCfigNumberOfChildren()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt16 OTCfigNumberOfChildren(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigNumberOfChildren
+	ENDIF
+
+
+; *  OTCfigGetParent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTConfigurationRef OTCfigGetParent(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetParent
+	ENDIF
+
+
+; *  OTCfigGetOptionNetbuf()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TNetbuf *OTCfigGetOptionNetbuf(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetOptionNetbuf
+	ENDIF
+
+
+; *  OTCfigGetPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTPortRef OTCfigGetPortRef(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetPortRef
+	ENDIF
+
+
+; *  OTCfigGetInstallFlags()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 OTCfigGetInstallFlags(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetInstallFlags
+	ENDIF
+
+
+; *  OTCfigGetProviderName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern const char *OTCfigGetProviderName(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigGetProviderName
+	ENDIF
+
+
+; *  OTCfigIsPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTCfigIsPort(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfigIsPort
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** Configurators *****
+
+;   The kOTConfiguratorInterfaceID define is what you need to add to your
+;   export file for the "interfaceID = " clause to export a configurator
+;   for ASLM.  Similarly, kOTConfiguratorCFMTag is used for CFM-based
+;   configurators.
+
+
+
+
+
+	IF ¬ OTKERNEL THEN
+
+
+
+;   Typedef for the OTCanConfigure function, and the enum for which pass we're doing.
+;   The first (kOTSpecificConfigPass) is to give configurators a shot at the configuration
+;   before we start allowing the generic configurators to get into the act.
+
+
+
+kOTSpecificConfigPass			EQU		0
+kOTGenericConfigPass			EQU		1
+;  Typedef for the function to create and return a configurator object
+
+;   Typedef for the "OTSetupConfigurator" function that your configurator library must export.
+;   The enum is for the type of configurator that it is.
+
+
+
+kOTDefaultConfigurator			EQU		0
+kOTProtocolFamilyConfigurator	EQU		1
+kOTLinkDriverConfigurator		EQU		2
+
+;   Procedure pointer definitions for the three key callbacks associated
+;   with a configurator, as established by OTNewConfigurator.
+
+
+
+;   Determine if this instance of your configurator is the "master"
+;   (the one that can create and destroy control streams)
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTIsMasterConfigurator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTIsMasterConfigurator(TOTConfiguratorRef cfigor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsMasterConfigurator
+	ENDIF
+
+;  Get back the userData you passed in to OTNewConfigurator
+
+; *  OTGetConfiguratorUserData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTGetConfiguratorUserData(TOTConfiguratorRef cfigor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetConfiguratorUserData
+	ENDIF
+
+;  Create a configurator object for use by Open Transport
+
+; *  OTNewConfigurator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TOTConfiguratorRef OTNewConfigurator(void *userData, OTCFConfigureProcPtr configure, OTCFCreateStreamProcPtr createStream, OTCFHandleSystemEventProcPtr handleEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTNewConfigurator
+	ENDIF
+
+;  Delete a configurator object created by OTNewConfigurator
+
+; *  OTDeleteConfigurator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTDeleteConfigurator(TOTConfiguratorRef cfigor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDeleteConfigurator
+	ENDIF
+
+
+;   A utility function to send notifications to the user - it takes care of calls
+;   from deferred tasks
+
+
+
+; *  OTNotifyUser()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTNotifyUser(FSSpec *theFile, SInt32 rsrcID, OTItemCount index, char *parm1, char *parm2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTNotifyUser
+	ENDIF
+
+;  Call when the configurator unloads from memory
+
+; *  OTConfiguratorUnloaded()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTConfiguratorUnloaded(TOTConfiguratorRef cfigor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTConfiguratorUnloaded
+	ENDIF
+
+
+;   Call to create your control stream if you're not the master
+;   configurator.  You can also use the state machine function
+;   OTSMCreateControlStream(OTStateMachine*, OTConfigurationRef, TOTConfiguratorRef cfigor).
+
+
+
+; *  OTCreateControlStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTCreateControlStream(OTConfigurationRef cfig, TOTConfiguratorRef cfigor, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateControlStream
+	ENDIF
+
+
+;   A helpful function for the configurators to
+;   be able to recursively configure the children.
+
+
+
+; *  OTConfigureChildren()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTConfigureChildren(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTConfigureChildren
+	ENDIF
+
+;  Allocate a bit in the system-wide control mask for streams.
+
+; *  OTNewControlMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 OTNewControlMask(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTNewControlMask
+	ENDIF
+
+;  Warning: These 2 APIs is going away
+
+; *  OTCloseProvidersByUseCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCloseProvidersByUseCount(SInt32 *useCount, OTResult reason, OTBooleanParam doneDeal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloseProvidersByUseCount
+	ENDIF
+
+
+; *  OTCloseProvidersByPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCloseProvidersByPortRef(OTPortRef ref, OTResult reason, OTBooleanParam doneDeal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloseProvidersByPortRef
+	ENDIF
+
+;  These are the "real" APIs
+
+; *  OTCloseProviderByStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCloseProviderByStream(StreamRef ref, OTResult reason, OTBooleanParam doneDeal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloseProviderByStream
+	ENDIF
+
+
+; *  OTCloseMatchingProviders()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTCloseMatchingProviders(UInt32 mask, OTPortRef port, OTResult reason, OTBooleanParam doneDeal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloseMatchingProviders
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ***** OTStateMachine *****
+	IF CALL_NOT_IN_CARBON THEN
+
+;   This utility set allows you to write an asynchronous chain of code that looks 
+;   somewhat like it is synchronous.  This is primarily used for plumbing 
+;   streams asynchronously, especially in configurators
+
+
+	IF ¬ OTKERNEL THEN
+;  Alas, the state machine is only available to client code.  Sorry.
+
+
+;   There are 12 or 8 bytes of reserved space at the front of
+;   the OTStateMachine structure, depending on whether you're
+;   building PowerPC or 68K code..  The OTStateMachineDataPad
+;   type compensates for this.
+
+
+
+	IF TARGET_CPU_PPC THEN
+OTStateMachineDataPad	RECORD 0
+elements				 ds.b	12
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+	ELSE
+OTStateMachineDataPad	RECORD 0
+elements				 ds.b	8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+	ENDIF	; TARGET_CPU_PPC
+
+;   Forward define OTStateMachine so that OTStateProcPtr has
+;   access to it.
+
+
+
+
+
+;   This type is is the required prototype of a state machine
+;   entry point.
+
+
+
+;   This type defines a routine that the state machine will
+;   call when the top level completes.
+
+
+;  And now for the state machine structure itself.
+OTStateMachine			RECORD 0
+fData					 ds		OTStateMachineDataPad ; offset: $0 (0)
+fCookie					 ds.l	1				; offset: $C (12)
+fCode					 ds.l	1				; offset: $10 (16)
+fResult					 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+;   For structSize, pass the size of your structure that you want associated with
+;   the state machine.  It can later be obtained by calling OTSMGetClientData.
+;   For bufSize, use the kOTSMBufferSize macro, plus the size of your structure
+;   to create a buffer on the stack. For synchronous calls, the stack buffer will
+;   be used (unless you pass in NULL).  The callDepth is the depth level of nested
+;   calls using OTSMCallStateProc.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCreateStateMachine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTStateMachine *OTCreateStateMachine(void *buf, OTByteCount bufSize, OTByteCount structSize, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateStateMachine
+	ENDIF
+
+
+; *  OTDestroyStateMachine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTDestroyStateMachine(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDestroyStateMachine
+	ENDIF
+
+
+;   OTSMCallStateProc used to take a parameter of type UInt16_p,
+;   which was defined to be the same as UInt32.  In an attempt
+;   to reduce the number of wacky types defined by the OT
+;   interfaces, we've changed these routines to just take a
+;   straight UInt32.  You should be warned that the current
+;   implementation does not support values outside of the
+;   range 0..32767.  The same applies to OTSMSetState.
+
+
+
+
+; *  OTSMCallStateProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMCallStateProc(OTStateMachine *sm, OTStateProcPtr proc, UInt32 state)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMCallStateProc
+	ENDIF
+
+
+; *  OTSMGetState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt16 OTSMGetState(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMGetState
+	ENDIF
+
+
+; *  OTSMSetState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTSMSetState(OTStateMachine *sm, UInt32 state)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMSetState
+	ENDIF
+
+;  Fill out the fCookie, fCode, and fResult fields before calling!
+
+; *  OTSMComplete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTSMComplete(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMComplete
+	ENDIF
+
+
+; *  OTSMPopCallback()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTSMPopCallback(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMPopCallback
+	ENDIF
+
+
+; *  OTSMWaitForComplete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMWaitForComplete(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMWaitForComplete
+	ENDIF
+
+
+; *  OTSMCreateStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMCreateStream(OTStateMachine *sm, OTConfigurationRef cfig, OTOpenFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMCreateStream
+	ENDIF
+
+
+; *  OTSMOpenStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMOpenStream(OTStateMachine *sm, const char *name, OTOpenFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMOpenStream
+	ENDIF
+
+
+; *  OTSMIoctl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMIoctl(OTStateMachine *sm, StreamRef strm, UInt32 cmd, long data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMIoctl
+	ENDIF
+
+
+; *  OTSMPutMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMPutMessage(OTStateMachine *sm, StreamRef strm, strbuf *ctlbuf, strbuf *databuf, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMPutMessage
+	ENDIF
+
+
+; *  OTSMGetMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMGetMessage(OTStateMachine *sm, StreamRef strm, strbuf *ctlbuf, strbuf *databuf, OTFlags *flagsPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMGetMessage
+	ENDIF
+
+
+; *  OTSMReturnToCaller()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTSMReturnToCaller(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMReturnToCaller
+	ENDIF
+
+
+; *  OTSMGetClientData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTSMGetClientData(OTStateMachine *sm)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMGetClientData
+	ENDIF
+
+
+; *  OTSMInstallCompletionProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTSMInstallCompletionProc(OTStateMachine *sm, OTSMCompleteProcPtr completeProc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMInstallCompletionProc
+	ENDIF
+
+
+; *  OTSMCreateControlStream()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTSMCreateControlStream(OTStateMachine *sm, OTConfigurationRef cfig, TOTConfiguratorRef cfigor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSMCreateControlStream
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** Autopush Definitions *****
+
+;   The autopush functionality for Open Transport is based on the names of
+;   devices and modules, rather than on the major number information like 
+;   SVR4.  This is so that autopush information can be set up for modules
+;   that are not yet loaded.
+
+
+
+
+;  Autopush ioctls.
+
+I_SAD_SAP						EQU		$6701				; Set autopush information     
+I_SAD_GAP						EQU		$6702				; Get autopush information     
+I_SAD_VML						EQU		$6703				; Validate a list of modules (uses str_list structure) 
+;  Maximum number of modules autopushed on a driver.
+
+
+kOTAutopushMax					EQU		8
+
+;  ioctl structure used for SAD_SAP and SAD_GAP commands.
+
+OTAutopushInfo			RECORD 0
+sap_cmd					 ds.l	1				; offset: $0 (0)
+sap_device_name			 ds.b	32				; offset: $4 (4)
+sap_minor				 ds.l	1				; offset: $24 (36)
+sap_lastminor			 ds.l	1				; offset: $28 (40)
+sap_npush				 ds.l	1				; offset: $2C (44)
+sap_list				 ds.b	8 * 32			; offset: $30 (48)
+sizeof					 EQU *					; size:   $130 (304)
+						ENDR
+;  Command values for sap_cmd field of the above.
+
+kSAP_ONE						EQU		1					; Configure a single minor device         
+kSAP_RANGE						EQU		2					; Configure a range of minor devices     
+kSAP_ALL						EQU		3					; Configure all minor devices          
+kSAP_CLEAR						EQU		4					; Clear autopush information          
+
+;  ***** Configuration Helpers *****
+
+
+;   These definitions are used by device driver and port scanner
+;   developers to provide a library giving client-side information about
+;   the registered ports, such as a user-visible name or an icon.
+
+
+
+;  Configuration helper library prefix
+
+
+;   This prefix is prepended to the string found in the "fResourceInfo"
+;   field of the OTPortRecord to build the actual library name of the
+;   configuration helper library.
+
+
+
+
+;  Get user visible port name entry point.
+
+
+;   This entry point returns the user visible name of the port.  If includeSlot
+;   is true, a slot distinguishing suffix (eg "slot X") should be added.  If
+;   includePort is true, a port distinguishing suffix (eg " port X") should be added for
+;   multiport cards.
+
+
+
+;  Get icon entry point.
+
+;   This entry point returns the location of the icon for the port.  Return false if no
+;   icon is provided.
+
+
+
+OTResourceLocator		RECORD 0
+fFile					 ds		FSSpec			; offset: $0 (0)
+fResID					 ds.w	1				; offset: $46 (70)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+;  ***** Application Access to Configuration Helpers *****
+
+	IF ¬ OTKERNEL THEN
+
+;   These routines are used by clients to get information about ports.
+;   The canonical user of these routines is the OT control panel(s),
+;   but applications may want to use them as well (to display the list
+;   of available Ethernet cards, for example).
+
+
+;   Returns a user friendly name for a port.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTGetUserPortNameFromPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTGetUserPortNameFromPortRef(OTPortRef ref, Str255 friendlyName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetUserPortNameFromPortRef
+	ENDIF
+
+
+;    Returns the location for the icon familly representing the port.
+;    Returns false if the port has no icon.
+
+
+
+; *  OTGetPortIconFromPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTGetPortIconFromPortRef(OTPortRef ref, OTResourceLocator *iconLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetPortIconFromPortRef
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  Returns true if the port can be used with the specified protocol.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTIsPortCompatibleWith()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTIsPortCompatibleWith(const OTPortRecord *port, char *protocolName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsPortCompatibleWith
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ***** Common Utilities *****
+
+;   The utilities defined in this section are available to both client
+;   and kernel code.  Cool huh?  These utilities differ from those
+;   provided in "OpenTransport.h" in that they are only available to native
+;   architecture clients.
+
+
+
+;  Bitmap functions
+
+;  These functions atomically deal with a bitmap that is multiple-bytes long
+
+
+;   Set the first clear bit in "bitMap", starting with bit "startBit",
+;   giving up after "numBits".  Returns the bit # that was set, or
+;   a kOTNotFoundErr if there was no clear bit available
+
+
+
+; *  OTSetFirstClearBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTResult OTSetFirstClearBit(UInt8 *bitMap, OTByteCount startBit, OTByteCount numBits)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetFirstClearBit
+	ENDIF
+
+;  Standard clear, set and test bit functions
+
+; *  OTClearBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTClearBit(UInt8 *bitMap, OTByteCount bitNo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTClearBit
+	ENDIF
+
+
+; *  OTSetBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTSetBit(UInt8 *bitMap, OTByteCount bitNo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetBit
+	ENDIF
+
+
+; *  OTTestBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTTestBit(UInt8 *bitMap, OTByteCount bitNo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTTestBit
+	ENDIF
+
+;  OTHashList
+
+
+;   This implements a simple, but efficient hash list.  It is not
+;   thread-safe.
+
+
+
+OTHashList				RECORD 0
+fHashProc				 ds.l	1				; offset: $0 (0)
+fHashTableSize			 ds.l	1				; offset: $4 (4)
+fHashBuckets			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+;   Return the number of bytes of memory needed to create a hash list
+;   of at least "numEntries" entries.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCalculateHashListMemoryNeeds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTByteCount OTCalculateHashListMemoryNeeds(OTItemCount numEntries)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCalculateHashListMemoryNeeds
+	ENDIF
+
+
+;   Create an OTHashList from "memory".  Return an error if it
+;   couldn't be done.
+
+
+
+; *  OTInitHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTResult OTInitHashList(void *memory, OTByteCount numBytes, OTHashProcPtr hashProc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTInitHashList
+	ENDIF
+
+
+; *  OTAddToHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTAddToHashList(OTHashList *hashList, OTLink *linkToAdd)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAddToHashList
+	ENDIF
+
+
+; *  OTRemoveLinkFromHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTRemoveLinkFromHashList(OTHashList *hashList, OTLink *linkToRemove)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveLinkFromHashList
+	ENDIF
+
+
+; *  OTIsInHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTIsInHashList(OTHashList *hashList, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsInHashList
+	ENDIF
+
+
+; *  OTFindInHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTLink *OTFindInHashList(OTHashList *hashList, OTHashSearchProcPtr searchProc, const void *refPtr, UInt32 hashValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindInHashList
+	ENDIF
+
+
+; *  OTRemoveFromHashList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OTLink *OTRemoveFromHashList(OTHashList *hashList, OTHashSearchProcPtr searchProc, const void *refPtr, UInt32 hashValue)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveFromHashList
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  Random functions
+
+
+;   These implement a very simple random number generator, suitable
+;   for protocol implementations but not "cryptographically" random.
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTGetRandomSeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 OTGetRandomSeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetRandomSeed
+	ENDIF
+
+
+; *  OTGetRandomNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt32 OTGetRandomNumber(UInt32 *seed, UInt32 lo, UInt32 hi)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetRandomNumber
+	ENDIF
+
+;  Concurrency Control
+
+
+;   OTGate implements a cool concurrency control primitive.
+;   You're not going to understand it without reading the documentation!
+;   See "Open Transport Advanced Client Programming" for details.
+;   WARNING:
+;   This structure must be on a 4-byte boundary.
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+OTGate					RECORD 0
+fLIFO					 ds		OTLIFO			; offset: $0 (0)
+fList					 ds		OTList			; offset: $4 (4)
+fProc					 ds.l	1				; offset: $8 (8)
+fNumQueued				 ds.l	1				; offset: $C (12)
+fInside					 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTInitGate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTInitGate(OTGate *gate, OTGateProcPtr proc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTInitGate
+	ENDIF
+
+
+; *  OTEnterGate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTEnterGate(OTGate *gate, OTLink *withLink)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTEnterGate
+	ENDIF
+
+
+; *  OTLeaveGate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTLeaveGate(OTGate *gate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLeaveGate
+	ENDIF
+
+;  ***** Shared Library Bonus Extras *****
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+;   These routines provide addition shared library support beyond
+;   that provided by the base shared library mechanism.
+
+
+
+;   Some flags which can be passed to the "loadFlags" parameter of the
+;   various CFM routines.  Not all flags can be used with all routines.
+;   See "Open Transport Advanced Client Programming" for details.
+
+
+
+
+kOTGetDataSymbol				EQU		0
+kOTGetCodeSymbol				EQU		1
+kOTLoadNewCopy					EQU		2
+kOTLoadACopy					EQU		4
+kOTFindACopy					EQU		8
+kOTLibMask						EQU		14
+kOTLoadLibResident				EQU		$20
+;  Finding all matching CFM libraries.
+
+
+;   The routine OTFindCFMLibraries allows you to find all CFM libraries
+;   that match specific criteria.  The result is placed in a list
+;   of CFMLibraryInfo structures.  OT allocates those structures using
+;   a routine of type OTAllocMemProcPtr that you pass to OTFindCFMLibraries.
+
+
+
+
+;   A list of CFMLibraryInfo structures is returned by the OTFindCFMLibraries routine.
+;   The list is created out of the data that is passed to the function.
+;   
+;   IMPORTANT:
+;   Only the first 3 fields are valid when using OT 1.2 and older.
+
+
+
+CFMLibraryInfo			RECORD 0
+link					 ds		OTLink			; offset: $0 (0)		;  To link them all up on a list            
+libName					 ds.l	1				; offset: $4 (4)		;  "C" String which is fragment name          
+intlName				 ds.l	1				; offset: $8 (8)		;  Pascal String which is internationalized name  
+fileSpec				 ds.l	1				; offset: $C (12)		;  location of fragment's file 
+pstring2				 ds.l	1				; offset: $10 (16)		;  Secondary string from extended cfrg          
+pstring3				 ds.l	1				; offset: $14 (20)		;  Extra info from extended cfrg            
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+;   You must pass a routine of type OTAllocMemProcPtr to OTFindCFMLibraries
+;   which it calls to allocate memory for the CFMLibraryInfo structures.
+
+
+;  Find CFM libraries of the specified kind and type
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTFindCFMLibraries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTFindCFMLibraries(OSType libKind, const char *libType, OTList *theList, OTAllocMemProcPtr allocator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindCFMLibraries
+	ENDIF
+
+;  Loading libraries and connecting to symbols.
+
+;  Load a CFM library by name
+
+; *  OTLoadCFMLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTLoadCFMLibrary(const char *libName, UInt32 *connID, UInt32 loadFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLoadCFMLibrary
+	ENDIF
+
+;  Load a CFM library and get a named pointer from it
+
+; *  OTGetCFMPointer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTGetCFMPointer(const char *libName, const char *entryName, UInt32 *connID, UInt32 loadFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetCFMPointer
+	ENDIF
+
+;  Get a named pointer from a CFM library that's already loaded
+
+; *  OTGetCFMSymbol()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTGetCFMSymbol(const char *entryName, UInt32 connID, UInt32 loadFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetCFMSymbol
+	ENDIF
+
+;  Release a connection to a CFM library
+
+; *  OTReleaseCFMConnection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTReleaseCFMConnection(UInt32 *connID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTReleaseCFMConnection
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF ¬ TARGET_CPU_68K THEN
+
+;   You can call these routines in your CFM initialisation and termination
+;   routines to hold or unhold your libraries sections.
+
+
+
+;   Used in a CFM InitProc, will hold the executable code, if applicable.
+;   This can also be the InitProc of the library
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTHoldThisCFMLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTHoldThisCFMLibrary(const CFragInitBlock *initBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTHoldThisCFMLibrary
+	ENDIF
+
+
+;   Used in a CFM terminate proc, will unhold the executable code, if applicable.
+;   This can also be the terminate proc of the library
+
+
+
+; *  OTUnholdThisCFMLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTUnholdThisCFMLibrary(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnholdThisCFMLibrary
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ASLM Utilities
+;  Load an ASLM library
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTLoadASLMLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTLoadASLMLibrary(const char *libName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLoadASLMLibrary
+	ENDIF
+
+;  Unload an ASLM library
+
+; *  OTUnloadASLMLibrary()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void OTUnloadASLMLibrary(const char *libName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnloadASLMLibrary
+	ENDIF
+
+
+;   This is an ASLM utility routine.  You can get it by including
+;   "LibraryManagerUtilities.h", but since we only use a few ASLM utilities,
+;   we put the prototype here for convenience.
+
+
+
+
+; *  UnloadUnusedLibraries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void UnloadUnusedLibraries(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UnloadUnusedLibraries
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF ¬ OTKERNEL THEN
+	ENDIF
+	ENDIF	; CALL_NOT_IN_CARBON
+
+	ENDIF ; __OPENTRANSPORTPROTOCOL__ 
+

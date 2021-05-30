@@ -1,0 +1,480 @@
+;
+;	File:		SoundInput.a
+;
+;	Contains:	Sound Input Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.1
+;
+;	Copyright:	© 1984-1996 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SOUNDINPUT__') = 'UNDEFINED' THEN
+__SOUNDINPUT__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'OSUtils.a'											;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'TextEdit.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__SOUND__') = 'UNDEFINED' THEN
+	include 'Sound.a'
+	ENDIF
+;		include 'Components.a'										;
+
+;
+;						* * *  N O T E  * * *
+;
+;	This file has been updated to include Sound Input Manager 1.1 interfaces.
+;
+;	Some of the Sound Input Manager 1.1 interfaces were not put into the InterfaceLib
+;	that originally shipped with the PowerMacs. These missing functions and the
+;	new 1.1 interfaces have been released in the SoundLib library for PowerPC
+;	developers to link with. The runtime library for these functions are
+;	installed by Sound Manager 3.2. The following functions are found in SoundLib.
+;
+;		ParseAIFFHeader(), ParseSndHeader()
+;
+;
+
+siDeviceIsConnected				EQU		1					;input device is connected and ready for input
+siDeviceNotConnected			EQU		0					;input device is not connected
+siDontKnowIfConnected			EQU		-1					;can't tell if input device is connected
+siReadPermission				EQU		0					;permission passed to SPBOpenDevice
+siWritePermission				EQU		1					;permission passed to SPBOpenDevice
+
+;Info Selectors for Sound Input Drivers
+siActiveChannels				EQU		'chac'				;active channels
+siActiveLevels					EQU		'lmac'				;active meter levels
+siAGCOnOff						EQU		'agc '				;automatic gain control state
+siAsync							EQU		'asyn'				;asynchronous capability
+siChannelAvailable				EQU		'chav'				;number of channels available
+siCompressionAvailable			EQU		'cmav'				;compression types available
+siCompressionFactor				EQU		'cmfa'				;current compression factor
+siCompressionHeader				EQU		'cmhd'				;return compression header
+siCompressionNames				EQU		'cnam'				;compression type names available
+siCompressionType				EQU		'comp'				;current compression type
+siContinuous					EQU		'cont'				;continous recording
+siDeviceBufferInfo				EQU		'dbin'				;size of interrupt buffer
+siDeviceConnected				EQU		'dcon'				;input device connection status
+siDeviceIcon					EQU		'icon'				;input device icon
+siDeviceName					EQU		'name'				;input device name
+siHardwareBusy					EQU		'hwbs'				;sound hardware is in use
+siInputGain						EQU		'gain'				;input gain
+siInputSource					EQU		'sour'				;input source selector
+siInputSourceNames				EQU		'snam'				;input source names
+siLevelMeterOnOff				EQU		'lmet'				;level meter state
+siModemGain						EQU		'mgai'				;modem input gain
+siNumberChannels				EQU		'chan'				;current number of channels
+siOptionsDialog					EQU		'optd'				;display options dialog
+siPlayThruOnOff					EQU		'plth'				;playthrough state
+siRecordingQuality				EQU		'qual'				;recording quality
+siSampleRate					EQU		'srat'				;current sample rate
+siSampleRateAvailable			EQU		'srav'				;sample rates available
+siSampleSize					EQU		'ssiz'				;current sample size
+siSampleSizeAvailable			EQU		'ssav'				;sample sizes available
+siSetupCDAudio					EQU		'sucd'				;setup sound hardware for CD audio
+siSetupModemAudio				EQU		'sumd'				;setup sound hardware for modem audio
+siStereoInputGain				EQU		'sgai'				;stereo input gain
+siTwosComplementOnOff			EQU		'twos'				;two's complement state
+siVoxRecordInfo					EQU		'voxr'				;VOX record parameters
+siVoxStopInfo					EQU		'voxs'				;VOX stop parameters
+siCloseDriver					EQU		'clos'				;reserved for internal use only
+siInitializeDriver				EQU		'init'				;reserved for internal use only
+siPauseRecording				EQU		'paus'				;reserved for internal use only
+siUserInterruptProc				EQU		'user'				;reserved for internal use only
+;Qualities
+siCDQuality						EQU		'cd  '				;44.1kHz, stereo, 16 bit
+siBestQuality					EQU		'best'				;22kHz, mono, 8 bit
+siBetterQuality					EQU		'betr'				;22kHz, mono, MACE 3:1
+siGoodQuality					EQU		'good'				;22kHz, mono, MACE 6:1
+
+; typedef struct SPB 		SPB, *SPBPtr
+;user procedures called by sound input routines
+SPB 					RECORD	0
+inRefNum				 ds.l   1		; offset: $0 (0)		;reference number of sound input device
+count					 ds.l   1		; offset: $4 (4)		;number of bytes to record
+milliseconds			 ds.l   1		; offset: $8 (8)		;number of milliseconds to record
+bufferLength			 ds.l   1		; offset: $C (12)		;length of buffer in bytes
+bufferPtr				 ds.l   1		; offset: $10 (16)		;buffer to store sound data in
+completionRoutine		 ds.l   1		; offset: $14 (20)		;completion routine
+interruptRoutine		 ds.l   1		; offset: $18 (24)		;interrupt routine
+userLong				 ds.l   1		; offset: $1C (28)		;user-defined field
+error					 ds.w   1		; offset: $20 (32)		;error
+unused1					 ds.l   1		; offset: $22 (34)		;reserved - must be zero
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+;
+; pascal NumVersion SPBVersion(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBVersion
+			dc.w 	$203C
+			dc.w 	$0000
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBVersion
+	ENDIF
+
+;
+; pascal OSErr SndRecord(ModalFilterUPP filterProc, Point corner, OSType quality, SndListHandle *sndHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndRecord
+			dc.w 	$203C
+			dc.w 	$0804
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndRecord
+	ENDIF
+
+;
+; pascal OSErr SndRecordToFile(ModalFilterUPP filterProc, Point corner, OSType quality, short fRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndRecordToFile
+			dc.w 	$203C
+			dc.w 	$0708
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndRecordToFile
+	ENDIF
+
+;
+; pascal OSErr SPBSignInDevice(short deviceRefNum, ConstStr255Param deviceName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBSignInDevice
+			dc.w 	$203C
+			dc.w 	$030C
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBSignInDevice
+	ENDIF
+
+;
+; pascal OSErr SPBSignOutDevice(short deviceRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBSignOutDevice
+			dc.w 	$203C
+			dc.w 	$0110
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBSignOutDevice
+	ENDIF
+
+;
+; pascal OSErr SPBGetIndexedDevice(short count, Str255 deviceName, Handle *deviceIconHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBGetIndexedDevice
+			dc.w 	$203C
+			dc.w 	$0514
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBGetIndexedDevice
+	ENDIF
+
+;
+; pascal OSErr SPBOpenDevice(ConstStr255Param deviceName, short permission, long *inRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBOpenDevice
+			dc.w 	$203C
+			dc.w 	$0518
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBOpenDevice
+	ENDIF
+
+;
+; pascal OSErr SPBCloseDevice(long inRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBCloseDevice
+			dc.w 	$203C
+			dc.w 	$021C
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBCloseDevice
+	ENDIF
+
+;
+; pascal OSErr SPBRecord(SPBPtr inParamPtr, Boolean asynchFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBRecord
+			dc.w 	$203C
+			dc.w 	$0320
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBRecord
+	ENDIF
+
+;
+; pascal OSErr SPBRecordToFile(short fRefNum, SPBPtr inParamPtr, Boolean asynchFlag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBRecordToFile
+			dc.w 	$203C
+			dc.w 	$0424
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBRecordToFile
+	ENDIF
+
+;
+; pascal OSErr SPBPauseRecording(long inRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBPauseRecording
+			dc.w 	$203C
+			dc.w 	$0228
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBPauseRecording
+	ENDIF
+
+;
+; pascal OSErr SPBResumeRecording(long inRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBResumeRecording
+			dc.w 	$203C
+			dc.w 	$022C
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBResumeRecording
+	ENDIF
+
+;
+; pascal OSErr SPBStopRecording(long inRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBStopRecording
+			dc.w 	$203C
+			dc.w 	$0230
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBStopRecording
+	ENDIF
+
+;
+; pascal OSErr SPBGetRecordingStatus(long inRefNum, short *recordingStatus, short *meterLevel, unsigned long *totalSamplesToRecord, unsigned long *numberOfSamplesRecorded, unsigned long *totalMsecsToRecord, unsigned long *numberOfMsecsRecorded)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBGetRecordingStatus
+			dc.w 	$203C
+			dc.w 	$0E34
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBGetRecordingStatus
+	ENDIF
+
+;
+; pascal OSErr SPBGetDeviceInfo(long inRefNum, OSType infoType, void *infoData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBGetDeviceInfo
+			dc.w 	$203C
+			dc.w 	$0638
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBGetDeviceInfo
+	ENDIF
+
+;
+; pascal OSErr SPBSetDeviceInfo(long inRefNum, OSType infoType, void *infoData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBSetDeviceInfo
+			dc.w 	$203C
+			dc.w 	$063C
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBSetDeviceInfo
+	ENDIF
+
+;
+; pascal OSErr SPBMillisecondsToBytes(long inRefNum, long *milliseconds)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBMillisecondsToBytes
+			dc.w 	$203C
+			dc.w 	$0440
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBMillisecondsToBytes
+	ENDIF
+
+;
+; pascal OSErr SPBBytesToMilliseconds(long inRefNum, long *byteCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SPBBytesToMilliseconds
+			dc.w 	$203C
+			dc.w 	$0444
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SPBBytesToMilliseconds
+	ENDIF
+
+;
+; pascal OSErr SetupSndHeader(SndListHandle sndHandle, short numChannels, UnsignedFixed sampleRate, short sampleSize, OSType compressionType, short baseNote, unsigned long numBytes, short *headerLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetupSndHeader
+			dc.w 	$203C
+			dc.w 	$0D48
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetupSndHeader
+	ENDIF
+
+;
+; pascal OSErr SetupAIFFHeader(short fRefNum, short numChannels, UnsignedFixed sampleRate, short sampleSize, OSType compressionType, unsigned long numBytes, unsigned long numFrames)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetupAIFFHeader
+			dc.w 	$203C
+			dc.w 	$0B4C
+			dc.w 	$0014
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetupAIFFHeader
+	ENDIF
+
+;  Sound Input Manager 1.1 and later calls 
+;
+; pascal OSErr ParseAIFFHeader(short fRefNum, SoundComponentData *sndInfo, unsigned long *numFrames, unsigned long *dataOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ParseAIFFHeader
+			dc.w 	$203C
+			dc.w 	$0758
+			dc.w 	$0014
+			dc.w    $A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ParseAIFFHeader
+	ENDIF
+
+;
+; pascal OSErr ParseSndHeader(SndListHandle sndHandle, SoundComponentData *sndInfo, unsigned long *numFrames, unsigned long *dataOffset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ParseSndHeader
+			dc.w 	$203C
+			dc.w 	$085C
+			dc.w 	$0014
+			dc.w    $A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ParseSndHeader
+	ENDIF
+	ENDIF ; __SOUNDINPUT__

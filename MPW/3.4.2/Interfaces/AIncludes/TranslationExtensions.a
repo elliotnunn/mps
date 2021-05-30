@@ -1,0 +1,167 @@
+;
+;	File:		TranslationExtensions.a
+;
+;	Contains:	Macintosh Easy Open Translation Extension Interfaces.
+;
+;	Version:	Technology:	Macintosh Easy Open 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__TRANSLATIONEXTENSIONS__') = 'UNDEFINED' THEN
+__TRANSLATIONEXTENSIONS__ SET 1
+
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'OSUtils.a'										;
+;		include 'Finder.a'											;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+kSupportsFileTranslation		EQU		1
+kSupportsScrapTranslation		EQU		2
+kTranslatorCanGenerateFilename	EQU		4
+
+; typedef OSType 			FileType
+; typedef ResType 			ScrapType
+; typedef unsigned long 	TranslationAttributes
+
+taDstDocNeedsResourceFork		EQU		1
+taDstIsAppTranslation			EQU		2
+
+FileTypeSpec 			RECORD	0
+format					 ds.l   1		; offset: $0 (0)
+hint					 ds.l   1		; offset: $4 (4)
+flags					 ds.l   1		; offset: $8 (8)		; taDstDocNeedsResourceFork, taDstIsAppTranslation
+catInfoType				 ds.l   1		; offset: $C (12)
+catInfoCreator			 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct FileTypeSpec  FileTypeSpec
+FileTranslationList 	RECORD	0
+modDate					 ds.l   1		; offset: $0 (0)
+groupCount				 ds.l   1		; offset: $4 (4)
+; 	unsigned long	group1SrcCount;
+; 	unsigned long	group1SrcEntrySize = sizeof(FileTypeSpec);
+;  FileTypeSpec	group1SrcTypes[group1SrcCount]
+;  unsigned long	group1DstCount;
+;  unsigned long	group1DstEntrySize = sizeof(FileTypeSpec);
+;  FileTypeSpec	group1DstTypes[group1DstCount]
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct FileTranslationList  FileTranslationList
+; typedef FileTranslationList  *FileTranslationListPtr, **FileTranslationListHandle
+ScrapTypeSpec 			RECORD	0
+format					 ds.l   1		; offset: $0 (0)
+hint					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ScrapTypeSpec  ScrapTypeSpec
+ScrapTranslationList 	RECORD	0
+modDate					 ds.l   1		; offset: $0 (0)
+groupCount				 ds.l   1		; offset: $4 (4)
+; 	unsigned long		group1SrcCount;
+; 	unsigned long		group1SrcEntrySize = sizeof(ScrapTypeSpec);
+;  ScrapTypeSpec		group1SrcTypes[group1SrcCount]
+;  unsigned long		group1DstCount;
+; 	unsigned long		group1DstEntrySize = sizeof(ScrapTypeSpec);
+;  ScrapTypeSpec		group1DstTypes[group1DstCount]
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ScrapTranslationList  ScrapTranslationList
+; typedef ScrapTranslationList  *ScrapTranslationListPtr, **ScrapTranslationListHandle
+; definition of callbacks to update progress dialog
+; typedef long 				TranslationRefNum
+;****************************************************************************************
+;*
+;* This routine sets the advertisement in the top half of the progress dialog.
+;* It is called once at the beginning of your DoTranslateFile routine.
+;*
+;* Enter:	refNum			Translation reference supplied to DoTranslateFile.
+;*			advertisement	A handle to the picture to display.  This must be non-purgable.
+;*							Before returning from DoTranslateFile, you should dispose
+;*							of the memory.  (Normally, it is in the temp translation heap
+;*							so it is cleaned up for you.)
+;*
+;* Exit:	returns			noErr, paramErr, or memFullErr
+;
+;
+; pascal OSErr SetTranslationAdvertisement(TranslationRefNum refNum, PicHandle advertisement)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetTranslationAdvertisement
+			moveq	#2,d0
+			dc.w 	$ABFC
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetTranslationAdvertisement
+	ENDIF
+
+;****************************************************************************************
+;*
+;* This routine updates the progress bar in the progress dialog.
+;* It is called repeatedly from within your DoTranslateFile routine.
+;* It should be called often, so that the user will get feedback if he tries to cancel.
+;*
+;* Enter:	refNum		translation reference supplied to DoTranslateFile.
+;*			progress	percent complete (0-100)
+;*
+;* Exit:		canceled	TRUE if the user clicked the Cancel button, FALSE otherwise
+;*			returns		noErr, paramErr, or memFullErr
+;
+;
+; pascal OSErr UpdateTranslationProgress(TranslationRefNum refNum, short percentDone, Boolean *canceled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UpdateTranslationProgress
+			moveq	#1,d0
+			dc.w 	$ABFC
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UpdateTranslationProgress
+	ENDIF
+
+; ComponentMgr selectors for routines
+
+kTranslateGetFileTranslationList EQU		0					; component selectors
+kTranslateIdentifyFile			EQU		1
+kTranslateTranslateFile			EQU		2
+kTranslateGetTranslatedFilename	EQU		3
+kTranslateGetScrapTranslationList EQU		10				; skip to scrap routines
+kTranslateIdentifyScrap			EQU		11
+kTranslateTranslateScrap		EQU		12
+
+; Routines to implment in a file translation extension
+; Routine to implement in a scrap translation extension
+	ENDIF ; __TRANSLATIONEXTENSIONS__

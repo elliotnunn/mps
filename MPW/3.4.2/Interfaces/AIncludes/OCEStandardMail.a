@@ -1,0 +1,1072 @@
+;
+;	File:		OCEStandardMail.a
+;
+;	Contains:	Apple Open Collaboration Environment Standard Mail Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OCESTANDARDMAIL__') = 'UNDEFINED' THEN
+__OCESTANDARDMAIL__ SET 1
+
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Quickdraw.a'										;
+;			include 'MixedMode.a'									;
+;			include 'QuickdrawText.a'								;
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__CONTROLS__') = 'UNDEFINED' THEN
+	include 'Controls.a'
+	ENDIF
+;		include 'Menus.a'											;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Windows.a'										;
+;		include 'TextEdit.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+
+	IF &TYPE('__OCEAUTHDIR__') = 'UNDEFINED' THEN
+	include 'OCEAuthDir.a'
+	ENDIF
+;		include 'OCE.a'											;
+;			include 'Aliases.a'									;
+;			include 'Script.a'										;
+;				include 'IntlResources.a'							;
+
+	IF &TYPE('__OCEMAIL__') = 'UNDEFINED' THEN
+	include 'OCEMail.a'
+	ENDIF
+;		include 'DigitalSignature.a'								;
+;		include 'OCEMessaging.a'									;
+
+kSMPVersion						EQU		1
+gestaltSMPMailerVersion			EQU		'malr'
+gestaltSMPSPSendLetterVersion	EQU		'spsl'
+kSMPNativeFormatName			EQU		'natv'
+
+LetterSpec 				RECORD	0
+spec					 ds.l   3		; offset: $0 (0)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct LetterSpec  LetterSpec
+
+typeLetterSpec					EQU		'lttr'
+
+;	Wildcard used for filtering letter types. 
+FilterAnyLetter					EQU		'ltr*'
+FilterAppleLetterContent		EQU		'ltc*'
+FilterImageContent				EQU		'lti*'
+
+LetterDescriptor 		RECORD	0
+onDisk					 ds.b   1		; offset: $0 (0)
+filler1					 ds.b   1		; offset: $1 (1)
+fileSpec				 ds     FSSpec	; offset: $2 (2)
+						 ORG 2
+mailboxSpec				 ds.l   3		; offset: $2 (2)
+						 ORG 72
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct LetterDescriptor  LetterDescriptor
+;
+;SMPPSendAs values.  You may add the following values together to determine how the
+;file is sent, but you may not set both kSMPSendAsEnclosureMask and kSMPSendFileOnlyMask.  This
+;will allow you to send the letter as an image so that it will work with fax gateways
+;and send as an enclosure as well.
+;
+
+kSMPSendAsEnclosureBit			EQU		0					; Appears as letter with enclosures 
+kSMPSendFileOnlyBit				EQU		1					; Appears as a file in mailbox. 
+kSMPSendAsImageBit				EQU		2					; Content imaged in letter 
+
+; Values of SMPPSendAs 
+kSMPSendAsEnclosureMask			EQU		1
+kSMPSendFileOnlyMask			EQU		2
+kSMPSendAsImageMask				EQU		4
+
+; typedef Byte 				SMPPSendAs
+SMPRecipientDescriptor 	RECORD	0
+next					 ds.l   1		; offset: $0 (0)		;  Q-Link. 
+result					 ds.w   1		; offset: $4 (4)		;  result code when using the object. 
+recipient				 ds.l   1		; offset: $6 (6)		;  Pointer to a Packed Address. 
+size					 ds.l   1		; offset: $A (10)		;  length of recipient in bytes. 
+theAddress				 ds.w   7		; offset: $E (14)		;  structure points into recipient and theRID. 
+theRID					 ds.l   5		; offset: $1C (28)		;  structure points into recipient. 
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct SMPRecipientDescriptor  SMPRecipientDescriptor
+; typedef SMPRecipientDescriptor  *SMPRecipientDescriptorPtr
+SMPEnclosureDescriptor 	RECORD	0
+next					 ds.l   1		; offset: $0 (0)
+result					 ds.w   1		; offset: $4 (4)
+fileSpec				 ds     FSSpec	; offset: $6 (6)
+fileCreator				 ds.l   1		; offset: $4C (76)		;  Creator of this enclosure. 
+fileType				 ds.l   1		; offset: $50 (80)		;  File Type of this enclosure. 
+sizeof					 EQU *			; size:   $54 (84)
+						ENDR
+
+; typedef struct SMPEnclosureDescriptor  SMPEnclosureDescriptor
+; typedef SMPEnclosureDescriptor  *SMPEnclosureDescriptorPtr
+SMPLetterPB 			RECORD	0
+result					 ds.w   1		; offset: $0 (0)		; result of operation 
+subject					 ds.l   1		; offset: $2 (2)		; RString 
+senderIdentity			 ds.l   1		; offset: $6 (6)		; Letter is sent from this Identity 
+toList					 ds.l   1		; offset: $A (10)		; Pointer to linked list 
+ccList					 ds.l   1		; offset: $E (14)		; Pointer to linked list 
+bccList					 ds.l   1		; offset: $12 (18)		; Pointer to linked list 
+script					 ds.w   1		; offset: $16 (22)		; Identifier for language 
+textSize				 ds.l   1		; offset: $18 (24)		; length of body data 
+textBuffer				 ds.l   1		; offset: $1C (28)		; body of the letter 
+sendAs					 ds.b   1		; offset: $20 (32)		; Send as Letter,Enclosure,Image 
+padByte					 ds.b   1		; offset: $21 (33)
+enclosures				 ds.l   1		; offset: $22 (34)		; files to be enclosed 
+drawImageProc			 ds.l   1		; offset: $26 (38)		; For imaging 
+imageRefCon				 ds.l   1		; offset: $2A (42)		; For imaging 
+supportsColor			 ds.b   1		; offset: $2E (46)		; For imaging - set to true if you application supports color imaging 
+filler1					 ds.b   1		; offset: $2F (47)
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct SMPLetterPB  SMPLetterPB
+; typedef SMPLetterPB 		*SMPLetterPBPtr
+
+kSMPAppMustHandleEventBit		EQU		0
+kSMPAppShouldIgnoreEventBit		EQU		1
+kSMPContractedBit				EQU		2
+kSMPExpandedBit					EQU		3
+kSMPMailerBecomesTargetBit		EQU		4
+kSMPAppBecomesTargetBit			EQU		5
+kSMPCursorOverMailerBit			EQU		6
+kSMPCreateCopyWindowBit			EQU		7
+kSMPDisposeCopyWindowBit		EQU		8
+
+; Values of SMPMailerResult 
+kSMPAppMustHandleEventMask		EQU		1 << kSMPAppMustHandleEventBit
+kSMPAppShouldIgnoreEventMask	EQU		1 << kSMPAppShouldIgnoreEventBit
+kSMPContractedMask				EQU		1 << kSMPContractedBit
+kSMPExpandedMask				EQU		1 << kSMPExpandedBit
+kSMPMailerBecomesTargetMask		EQU		1 << kSMPMailerBecomesTargetBit
+kSMPAppBecomesTargetMask		EQU		1 << kSMPAppBecomesTargetBit
+kSMPCursorOverMailerMask		EQU		1 << kSMPCursorOverMailerBit
+kSMPCreateCopyWindowMask		EQU		1 << kSMPCreateCopyWindowBit
+kSMPDisposeCopyWindowMask		EQU		1 << kSMPDisposeCopyWindowBit
+
+; typedef unsigned long 	SMPMailerResult
+; Values of SMPMailerComponent
+
+kSMPOther						EQU		-1
+kSMPFrom						EQU		32
+kSMPTo							EQU		20
+kSMPRegarding					EQU		22
+kSMPSendDateTime				EQU		29
+kSMPAttachments					EQU		26
+kSMPAddressOMatic				EQU		16
+
+; typedef unsigned long 	SMPMailerComponent
+
+kSMPToAddress					EQU		kMailToBit
+kSMPCCAddress					EQU		kMailCcBit
+kSMPBCCAddress					EQU		kMailBccBit
+
+; typedef MailAttributeID 	SMPAddressType
+
+kSMPUndoCommand					EQU		0
+kSMPCutCommand					EQU		1
+kSMPCopyCommand					EQU		2
+kSMPPasteCommand				EQU		3
+kSMPClearCommand				EQU		4
+kSMPSelectAllCommand			EQU		5
+
+; typedef unsigned short 	SMPEditCommand
+
+kSMPUndoDisabled				EQU		0
+kSMPAppMayUndo					EQU		1
+kSMPMailerUndo					EQU		2
+
+; typedef unsigned short 	SMPUndoState
+;
+;SMPSendFormatMask:
+;
+;Bitfield indicating which combinations of formats are included in,
+;should be included or, or can be included in a letter.
+;
+
+kSMPNativeBit					EQU		0
+kSMPImageBit					EQU		1
+kSMPStandardInterchangeBit		EQU		2
+
+; Values of SMPSendFormatMask 
+kSMPNativeMask					EQU		1
+kSMPImageMask					EQU		2
+kSMPStandardInterchangeMask		EQU		4
+
+; typedef unsigned long 	SMPSendFormatMask
+;
+;	Pseudo-events passed to the clients filter proc for initialization and cleanup.
+;
+
+kSMPSendOptionsStart			EQU		-1
+kSMPSendOptionsEnd				EQU		-2
+
+;
+;SMPSendFormatMask:
+;
+;Structure describing the format of a letter.  If kSMPNativeMask bit is set, the whichNativeFormat field indicates which of the client-defined formats to use.
+;
+SMPSendFormat 			RECORD	0
+whichFormats			 ds.l   1		; offset: $0 (0)
+whichNativeFormat		 ds.w   1		; offset: $4 (4)		; 0 based 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct SMPSendFormat  SMPSendFormat
+SMPLetterInfo 			RECORD	0
+letterCreator			 ds.l   1		; offset: $0 (0)
+letterType				 ds.l   1		; offset: $4 (4)
+subject					 ds.l   9		; offset: $8 (8)
+sender					 ds.l   9		; offset: $2C (44)
+sizeof					 EQU *			; size:   $50 (80)
+						ENDR
+
+; typedef struct SMPLetterInfo  SMPLetterInfo
+
+kSMPSave						EQU		0
+kSMPSaveAs						EQU		1
+kSMPSaveACopy					EQU		2
+
+; typedef unsigned short 	SMPSaveType
+SMPMailerState 			RECORD	0
+mailerCount				 ds.w   1		; offset: $0 (0)
+currentMailer			 ds.w   1		; offset: $2 (2)
+upperLeft				 ds     Point	; offset: $4 (4)
+hasBeenReceived			 ds.b   1		; offset: $8 (8)
+isTarget				 ds.b   1		; offset: $9 (9)
+isExpanded				 ds.b   1		; offset: $A (10)
+canMoveToTrash			 ds.b   1		; offset: $B (11)
+canTag					 ds.b   1		; offset: $C (12)
+padByte2				 ds.b   1		; offset: $D (13)
+changeCount				 ds.l   1		; offset: $E (14)
+targetComponent			 ds.l   1		; offset: $12 (18)
+canCut					 ds.b   1		; offset: $16 (22)
+canCopy					 ds.b   1		; offset: $17 (23)
+canPaste				 ds.b   1		; offset: $18 (24)
+canClear				 ds.b   1		; offset: $19 (25)
+canSelectAll			 ds.b   1		; offset: $1A (26)
+padByte3				 ds.b   1		; offset: $1B (27)
+undoState				 ds.w   1		; offset: $1C (28)
+undoWhat				 ds.l   16		; offset: $1E (30)
+sizeof					 EQU *			; size:   $5E (94)
+						ENDR
+
+; typedef struct SMPMailerState  SMPMailerState
+SMPSendOptions 			RECORD	0
+signWhenSent			 ds.b   1		; offset: $0 (0)
+priority				 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct SMPSendOptions  SMPSendOptions
+; typedef SMPSendOptions 	*SMPSendOptionsPtr, **SMPSendOptionsHandle
+SMPCloseOptions 		RECORD	0
+moveToTrash				 ds.b   1		; offset: $0 (0)
+addTag					 ds.b   1		; offset: $1 (1)
+tag						 ds.l   9		; offset: $2 (2)
+sizeof					 EQU *			; size:   $26 (38)
+						ENDR
+
+; typedef struct SMPCloseOptions  SMPCloseOptions
+; typedef SMPCloseOptions 	*SMPCloseOptionsPtr
+;----------------------------------------------------------------------------------------
+;	Send Package Routines
+;----------------------------------------------------------------------------------------
+;
+; pascal OSErr SMPSendLetter(SMPLetterPBPtr theLetter)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPSendLetter
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$01F4
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPSendLetter
+	ENDIF
+
+;
+; pascal OSErr SMPNewPage(OpenCPicParams *newHeader)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPNewPage
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0834
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPNewPage
+	ENDIF
+
+;
+; pascal OSErr SMPImageErr(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPImageErr
+			dc.w 	$203C
+			dc.w 	$0000
+			dc.w 	$0835
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPImageErr
+	ENDIF
+
+;
+; pascal OSErr SMPResolveToRecipient(PackedDSSpecPtr dsSpec, SMPRecipientDescriptorPtr *recipientList, AuthIdentity identity)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPResolveToRecipient
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$044C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPResolveToRecipient
+	ENDIF
+
+;
+; pascal OSErr SMPInitMailer(long mailerVersion)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPInitMailer
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1285
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPInitMailer
+	ENDIF
+
+;
+; pascal OSErr SMPGetDimensions(short *width, short *contractedHeight, short *expandedHeight)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetDimensions
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$125C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetDimensions
+	ENDIF
+
+;
+; pascal OSErr SMPGetTabInfo(SMPMailerComponent *firstTab, SMPMailerComponent *lastTab)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetTabInfo
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1274
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetTabInfo
+	ENDIF
+
+;
+; pascal OSErr SMPNewMailer(WindowPtr window, Point upperLeft, Boolean canContract, Boolean initiallyExpanded, AuthIdentity identity, PrepareMailerForDrawingUPP prepareMailerForDrawingCB, long clientData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPNewMailer
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$125D
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPNewMailer
+	ENDIF
+
+;
+; pascal OSErr SMPPrepareToClose(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPPrepareToClose
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1287
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPPrepareToClose
+	ENDIF
+
+;
+; pascal OSErr SMPCloseOptionsDialog(WindowPtr window, SMPCloseOptionsPtr closeOptions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPCloseOptionsDialog
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1288
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPCloseOptionsDialog
+	ENDIF
+
+;
+; pascal OSErr SMPTagDialog(WindowPtr window, RString32 *theTag)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPTagDialog
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$128B
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPTagDialog
+	ENDIF
+
+;
+; pascal OSErr SMPDisposeMailer(WindowPtr window, SMPCloseOptionsPtr closeOptions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPDisposeMailer
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$125E
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPDisposeMailer
+	ENDIF
+
+;
+; pascal OSErr SMPMailerEvent(const EventRecord *event, SMPMailerResult *whatHappened, FrontWindowUPP frontWindowCB, long clientData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPMailerEvent
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$125F
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPMailerEvent
+	ENDIF
+
+;
+; pascal OSErr SMPClearUndo(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPClearUndo
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1275
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPClearUndo
+	ENDIF
+
+;
+; pascal OSErr SMPMailerEditCommand(WindowPtr window, SMPEditCommand command, SMPMailerResult *whatHappened)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPMailerEditCommand
+			dc.w 	$203C
+			dc.w 	$0005
+			dc.w 	$1260
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPMailerEditCommand
+	ENDIF
+
+;
+; pascal OSErr SMPMailerForward(WindowPtr window, AuthIdentity from)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPMailerForward
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1261
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPMailerForward
+	ENDIF
+
+;
+; pascal OSErr SMPMailerReply(WindowPtr originalLetter, WindowPtr newLetter, Boolean replyToAll, Point upperLeft, Boolean canContract, Boolean initiallyExpanded, AuthIdentity identity, PrepareMailerForDrawingUPP prepareMailerForDrawingCB, long clientData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPMailerReply
+			dc.w 	$203C
+			dc.w 	$000F
+			dc.w 	$1262
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPMailerReply
+	ENDIF
+
+;
+; pascal OSErr SMPGetMailerState(WindowPtr window, SMPMailerState *itsState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetMailerState
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1263
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetMailerState
+	ENDIF
+
+;
+; pascal OSErr SMPPrepareCoverPages(WindowPtr window, short *pageCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPPrepareCoverPages
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1264
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPPrepareCoverPages
+	ENDIF
+
+;
+; pascal OSErr SMPDrawNthCoverPage(WindowPtr window, short pageNumber, Boolean doneDrawingCoverPages)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPDrawNthCoverPage
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$1265
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPDrawNthCoverPage
+	ENDIF
+
+;
+; pascal OSErr SMPPrepareToChange(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPPrepareToChange
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1289
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPPrepareToChange
+	ENDIF
+
+;
+; pascal OSErr SMPContentChanged(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPContentChanged
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$126F
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPContentChanged
+	ENDIF
+
+;
+; pascal OSErr SMPBeginSave(WindowPtr window, const FSSpec *diskLetter, OSType creator, OSType fileType, SMPSaveType saveType, Boolean *mustAddContent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPBeginSave
+			dc.w 	$203C
+			dc.w 	$000B
+			dc.w 	$1266
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPBeginSave
+	ENDIF
+
+;
+; pascal OSErr SMPEndSave(WindowPtr window, Boolean okToSave)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPEndSave
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$1270
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPEndSave
+	ENDIF
+
+;
+; pascal OSErr SMPBeginSend(WindowPtr window, OSType creator, OSType fileType, SMPSendOptionsPtr sendOptions, Boolean *mustAddContent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPBeginSend
+			dc.w 	$203C
+			dc.w 	$000A
+			dc.w 	$1267
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPBeginSend
+	ENDIF
+
+;
+; pascal OSErr SMPEndSend(WindowPtr window, Boolean okToSend)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPEndSend
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$1271
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPEndSend
+	ENDIF
+
+;
+; pascal OSErr SMPOpenLetter(const LetterDescriptor *letter, WindowPtr window, Point upperLeft, Boolean canContract, Boolean initiallyExpanded, PrepareMailerForDrawingUPP prepareMailerForDrawingCB, long clientData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPOpenLetter
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$1268
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPOpenLetter
+	ENDIF
+
+;
+; pascal OSErr SMPAddMainEnclosure(WindowPtr window, const FSSpec *enclosure)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAddMainEnclosure
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$127D
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAddMainEnclosure
+	ENDIF
+
+;
+; pascal OSErr SMPGetMainEnclosureFSSpec(WindowPtr window, FSSpec *enclosureDir)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetMainEnclosureFSSpec
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$127E
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetMainEnclosureFSSpec
+	ENDIF
+
+;
+; pascal OSErr SMPAddContent(WindowPtr window, MailSegmentType segmentType, Boolean appendFlag, void *buffer, unsigned long bufferSize, StScrpRec *textScrap, Boolean startNewScript, ScriptCode script)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAddContent
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$127A
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAddContent
+	ENDIF
+
+;
+; pascal OSErr SMPReadContent(WindowPtr window, MailSegmentMask segmentTypeMask, void *buffer, unsigned long bufferSize, unsigned long *dataSize, StScrpRec *textScrap, ScriptCode *script, MailSegmentType *segmentType, Boolean *endOfScript, Boolean *endOfSegment, Boolean *endOfContent, long *segmentLength, long *segmentID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPReadContent
+			dc.w 	$203C
+			dc.w 	$0019
+			dc.w 	$127B
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPReadContent
+	ENDIF
+
+;
+; pascal OSErr SMPGetFontNameFromLetter(WindowPtr window, short fontNum, Str255 fontName, Boolean doneWithFontTable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetFontNameFromLetter
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$127C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetFontNameFromLetter
+	ENDIF
+
+;
+; pascal OSErr SMPAddBlock(WindowPtr window, const OCECreatorType *blockType, Boolean append, void *buffer, unsigned long bufferSize, MailBlockMode mode, unsigned long offset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAddBlock
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$127F
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAddBlock
+	ENDIF
+
+;
+; pascal OSErr SMPReadBlock(WindowPtr window, const OCECreatorType *blockType, unsigned short blockIndex, void *buffer, unsigned long bufferSize, unsigned long dataOffset, unsigned long *dataSize, Boolean *endOfBlock, unsigned long *remaining)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPReadBlock
+			dc.w 	$203C
+			dc.w 	$0011
+			dc.w 	$1280
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPReadBlock
+	ENDIF
+
+;
+; pascal OSErr SMPEnumerateBlocks(WindowPtr window, unsigned short startIndex, void *buffer, unsigned long bufferSize, unsigned long *dataSize, unsigned short *nextIndex, Boolean *more)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPEnumerateBlocks
+			dc.w 	$203C
+			dc.w 	$000D
+			dc.w 	$1281
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPEnumerateBlocks
+	ENDIF
+
+;
+; pascal OSErr SMPDrawMailer(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPDrawMailer
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1269
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPDrawMailer
+	ENDIF
+
+;
+; pascal OSErr SMPSetSubject(WindowPtr window, const RString *text)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPSetSubject
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$126B
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPSetSubject
+	ENDIF
+
+;
+; pascal OSErr SMPSetFromIdentity(WindowPtr window, AuthIdentity from)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPSetFromIdentity
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$126C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPSetFromIdentity
+	ENDIF
+
+;
+; pascal OSErr SMPAddAddress(WindowPtr window, SMPAddressType addrType, OCEPackedRecipient *address)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAddAddress
+			dc.w 	$203C
+			dc.w 	$0005
+			dc.w 	$126D
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAddAddress
+	ENDIF
+
+;
+; pascal OSErr SMPAddAttachment(WindowPtr window, const FSSpec *attachment)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAddAttachment
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$126E
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAddAttachment
+	ENDIF
+
+;
+; pascal OSErr SMPAttachDialog(WindowPtr window)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPAttachDialog
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$1276
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPAttachDialog
+	ENDIF
+
+;
+; pascal OSErr SMPExpandOrContract(WindowPtr window, Boolean expand)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPExpandOrContract
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$1272
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPExpandOrContract
+	ENDIF
+
+;
+; pascal OSErr SMPMoveMailer(WindowPtr window, short dh, short dv)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPMoveMailer
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$126A
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPMoveMailer
+	ENDIF
+
+;
+; pascal OSErr SMPBecomeTarget(WindowPtr window, Boolean becomeTarget, SMPMailerComponent whichField)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPBecomeTarget
+			dc.w 	$203C
+			dc.w 	$0005
+			dc.w 	$1273
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPBecomeTarget
+	ENDIF
+
+;
+; pascal OSErr SMPGetComponentSize(WindowPtr window, unsigned short whichMailer, SMPMailerComponent whichField, unsigned short *size)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetComponentSize
+			dc.w 	$203C
+			dc.w 	$0007
+			dc.w 	$1277
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetComponentSize
+	ENDIF
+
+;
+; pascal OSErr SMPGetComponentInfo(WindowPtr window, unsigned short whichMailer, SMPMailerComponent whichField, void *buffer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetComponentInfo
+			dc.w 	$203C
+			dc.w 	$0007
+			dc.w 	$1278
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetComponentInfo
+	ENDIF
+
+;
+; pascal OSErr SMPGetListItemInfo(WindowPtr window, unsigned short whichMailer, SMPMailerComponent whichField, void *buffer, unsigned long bufferLength, unsigned short startItem, unsigned short *itemCount, unsigned short *nextItem, Boolean *more)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetListItemInfo
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$1279
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetListItemInfo
+	ENDIF
+
+;
+; pascal OSErr SMPImage(WindowPtr window, SMPDrawImageUPP drawImageProc, long imageRefCon, Boolean supportsColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPImage
+			dc.w 	$203C
+			dc.w 	$0007
+			dc.w 	$1282
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPImage
+	ENDIF
+
+;
+; pascal OSErr SMPGetNextLetter(OSType *typesList, short numTypes, LetterDescriptor *adjacentLetter)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetNextLetter
+			dc.w 	$203C
+			dc.w 	$0005
+			dc.w 	$1286
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetNextLetter
+	ENDIF
+
+;
+; pascal OSErr SMPGetLetterInfo(LetterSpec *mailboxSpec, SMPLetterInfo *info)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SMPGetLetterInfo
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$128A
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SMPGetLetterInfo
+	ENDIF
+
+	ENDIF ; __OCESTANDARDMAIL__

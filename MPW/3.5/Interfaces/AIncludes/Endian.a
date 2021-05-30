@@ -1,0 +1,169 @@
+;
+;    File:       Endian.a
+;
+;    Contains:   QuickTime Interfaces
+;
+;    Version:    Technology: QuickTime 3.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1997-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__ENDIAN__') = 'UNDEFINED' THEN
+__ENDIAN__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+
+;   These types are used for structures that contain data that is
+;   always in BigEndian format.  This extra typing prevents little
+;   endian code from directly changing the data, thus saving much
+;   time in the debugger.
+
+
+
+	IF TARGET_RT_LITTLE_ENDIAN THEN
+BigEndianLong			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianUnsignedLong	RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianShort			RECORD 0
+bigEndianValue			 ds.w	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+BigEndianUnsignedShort	RECORD 0
+bigEndianValue			 ds.w	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+BigEndianFixed			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianUnsignedFixed	RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianOSType			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+	ELSE
+BigEndianLong			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianUnsignedLong	RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianShort			RECORD 0
+bigEndianValue			 ds.w	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+BigEndianUnsignedShort	RECORD 0
+bigEndianValue			 ds.w	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+BigEndianFixed			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianUnsignedFixed	RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+BigEndianOSType			RECORD 0
+bigEndianValue			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+	ENDIF	; TARGET_RT_LITTLE_ENDIAN
+
+
+
+
+; 
+;    Implement low level ≈_Swap functions.
+;    
+;        extern UInt16 Endian16_Swap(UInt16 value);
+;        extern UInt32 Endian32_Swap(UInt32 value);
+;        extern UInt64 Endian64_Swap(UInt64 value);
+;        
+;    Note: Depending on the processor, you might want to implement
+;          these as function calls instead of macros.
+;    
+;
+
+;
+; extern UInt16 Endian16_Swap(UInt16 value)
+;
+    IF TARGET_CPU_68K THEN
+        Macro
+        _Endian16_Swap &Dn
+            IF &Dn = '' THEN
+                ROL.W   #8,D0
+            ELSE
+                ROL.W   #8,&Dn
+            ENDIF
+        Endm
+    ENDIF
+
+;
+; extern UInt32 Endian32_Swap(UInt32 value)
+;
+    IF TARGET_CPU_68K THEN
+        Macro
+        _Endian32_Swap &Dn
+            IF &Dn = '' THEN
+                ROL.W   #8,D0
+                SWAP    D0
+                ROL.W   #8,D0
+            ELSE
+                ROL.W   #8,&Dn
+                SWAP    &Dn
+                ROL.W   #8,&Dn
+            ENDIF
+        Endm
+    ENDIF
+	IF TYPE_LONGLONG THEN
+	ELSE
+;  
+;    Note: When using compilers that don't support "long long",
+;          Endian64_Swap must be implemented as glue. 
+;
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  Endian64_Swap()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UInt64 Endian64_Swap(UInt64 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION Endian64_Swap
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; TYPE_LONGLONG
+
+	ENDIF ; __ENDIAN__ 
+

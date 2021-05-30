@@ -1,0 +1,790 @@
+;
+;    File:       DatabaseAccess.a
+;
+;    Contains:   Database Access Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1989-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DATABASEACCESS__') = 'UNDEFINED' THEN
+__DATABASEACCESS__ SET 1
+
+	IF &TYPE('__RESOURCES__') = 'UNDEFINED' THEN
+	include 'Resources.a'
+	ENDIF
+
+;  data type codes 
+
+typeNone						EQU		'none'
+typeDate						EQU		'date'
+typeTime						EQU		'time'
+typeTimeStamp					EQU		'tims'
+typeDecimal						EQU		'deci'
+typeMoney						EQU		'mone'
+typeVChar						EQU		'vcha'
+typeVBin						EQU		'vbin'
+typeLChar						EQU		'lcha'
+typeLBin						EQU		'lbin'
+typeDiscard						EQU		'disc'				; "dummy" types for DBResultsToText 
+typeUnknown						EQU		'unkn'
+typeColBreak					EQU		'colb'
+typeRowBreak					EQU		'rowb'				; pass this in to DBGetItem for any data type 
+typeAnyType						EQU		0
+;  infinite timeout value for DBGetItem 
+
+															; messages for status functions for DBStartQuery 
+kDBUpdateWind					EQU		0
+kDBAboutToInit					EQU		1
+kDBInitComplete					EQU		2
+kDBSendComplete					EQU		3
+kDBExecComplete					EQU		4
+kDBStartQueryComplete			EQU		5
+
+															; messages for status functions for DBGetQueryResults 
+kDBGetItemComplete				EQU		6
+kDBGetQueryResultsComplete		EQU		7
+kDBWaitForever					EQU		-1
+
+															;  flags for DBGetItem  
+kDBLastColFlag					EQU		$0001
+kDBNullFlag						EQU		$0004
+; typedef OSType 						DBType
+
+
+
+; typedef DBAsyncParamBlockRec *		DBAsyncParmBlkPtr
+
+;  structure for asynchronous parameter block 
+DBAsyncParamBlockRec	RECORD 0
+completionProc			 ds.l	1				; offset: $0 (0)		;  pointer to completion routine 
+result					 ds.w	1				; offset: $4 (4)		;  result of call 
+userRef					 ds.l	1				; offset: $6 (6)		;  for application's use 
+ddevRef					 ds.l	1				; offset: $A (10)		;  for ddev's use 
+reserved				 ds.l	1				; offset: $E (14)		;  for internal use 
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+;  structure for resource list in QueryRecord 
+ResListElem				RECORD 0
+theType					 ds.l	1				; offset: $0 (0)		;  resource type 
+id						 ds.w	1				; offset: $4 (4)		;  resource id 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct ResListElem *			ResListPtr
+
+; typedef ResListPtr *					ResListHandle
+
+;  structure for query list in QueryRecord 
+QueryArray				RECORD 0
+elements				 ds.l	256
+sizeof					 EQU *					; size:   $400 (1024)
+						ENDR
+
+
+; typedef Handle *						QueryListPtr
+
+; typedef QueryListPtr *				QueryListHandle
+
+QueryRecord				RECORD 0
+version					 ds.w	1				; offset: $0 (0)		;  version 
+id						 ds.w	1				; offset: $2 (2)		;  id of 'qrsc' this came from 
+queryProc				 ds.l	1				; offset: $4 (4)		;  handle to query def proc 
+ddevName				 ds		Str63			; offset: $8 (8)		;  ddev name 
+host					 ds		Str255			; offset: $48 (72)		;  host name 
+user					 ds		Str255			; offset: $148 (328)	;  user name 
+password				 ds		Str255			; offset: $248 (584)	;  password 
+connStr					 ds		Str255			; offset: $348 (840)	;  connection string 
+currQuery				 ds.w	1				; offset: $448 (1096)	;  index of current query 
+numQueries				 ds.w	1				; offset: $44A (1098)	;  number of queries in list 
+queryList				 ds.l	1				; offset: $44C (1100)	;  handle to array of handles to text 
+numRes					 ds.w	1				; offset: $450 (1104)	;  number of resources in list 
+resList					 ds.l	1				; offset: $452 (1106)	;  handle to array of resource list elements 
+dataHandle				 ds.l	1				; offset: $456 (1110)	;  for use by query def proc 
+refCon					 ds.l	1				; offset: $45A (1114)	;  for use by application 
+sizeof					 EQU *					; size:   $45E (1118)
+						ENDR
+; typedef struct QueryRecord *			QueryPtr
+
+; typedef QueryPtr *					QueryHandle
+
+;  structure of column types array in ResultsRecord 
+ColTypesArray			RECORD 0
+elements				 ds.l	256
+sizeof					 EQU *					; size:   $400 (1024)
+						ENDR
+
+
+; typedef Handle 						ColTypesHandle
+
+;  structure for column info in ResultsRecord 
+DBColInfoRecord			RECORD 0
+len						 ds.w	1				; offset: $0 (0)
+places					 ds.w	1				; offset: $2 (2)
+flags					 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+ColInfoArray			RECORD 0
+elements				 ds.b	256 * DBColInfoRecord.sizeof
+sizeof					 EQU *					; size:   $600 (1536)
+						ENDR
+
+
+; typedef Handle 						ColInfoHandle
+
+;  structure of results returned by DBGetResults 
+ResultsRecord			RECORD 0
+numRows					 ds.w	1				; offset: $0 (0)		;  number of rows in result 
+numCols					 ds.w	1				; offset: $2 (2)		;  number of columns per row 
+colTypes				 ds.l	1				; offset: $4 (4)		;  data type array 
+colData					 ds.l	1				; offset: $8 (8)		;  actual results 
+colInfo					 ds.l	1				; offset: $C (12)		;  DBColInfoRecord array 
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+															; messages sent to a 'ddev'
+kDBInit							EQU		0
+kDBEnd							EQU		1
+kDBGetConnInfo					EQU		2
+kDBGetSessionNum				EQU		3
+kDBSend							EQU		4
+kDBSendItem						EQU		5
+kDBExec							EQU		6
+kDBState						EQU		7
+kDBGetErr						EQU		8
+kDBBreak						EQU		9
+kDBGetItem						EQU		10
+kDBUngetItem					EQU		11
+kDBKill							EQU		12
+kDBOpen							EQU		100
+kDBClose						EQU		101
+kDBIdle							EQU		102
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewDBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDBQueryDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDBStatusUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDBResultHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDBQueryDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDBStatusUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDBResultHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDBCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDBQueryDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDBStatusUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDBResultHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitDBPack()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr InitDBPack(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_InitDBPack
+			move.w              #$0004,-(sp)
+			move.w              #$0100,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitDBPack
+	ENDIF
+
+
+; *  DBInit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBInit(long *sessID, ConstStr63Param ddevName, ConstStr255Param host, ConstStr255Param user, ConstStr255Param passwd, ConstStr255Param connStr, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBInit
+			move.w              #$0E02,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBInit
+	ENDIF
+
+
+; *  DBEnd()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBEnd(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBEnd
+			move.w              #$0403,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBEnd
+	ENDIF
+
+
+; *  DBGetConnInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetConnInfo(long sessID, short sessNum, long *returnedID, long *version, Str63 ddevName, Str255 host, Str255 user, Str255 network, Str255 connStr, long *start, OSErr *state, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetConnInfo
+			move.w              #$1704,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetConnInfo
+	ENDIF
+
+
+; *  DBGetSessionNum()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetSessionNum(long sessID, short *sessNum, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetSessionNum
+			move.w              #$0605,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetSessionNum
+	ENDIF
+
+
+; *  DBSend()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBSend(long sessID, Ptr text, short len, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBSend
+			move.w              #$0706,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBSend
+	ENDIF
+
+
+; *  DBSendItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBSendItem(long sessID, DBType dataType, short len, short places, short flags, void *buffer, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBSendItem
+			move.w              #$0B07,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBSendItem
+	ENDIF
+
+
+; *  DBExec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBExec(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBExec
+			move.w              #$0408,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBExec
+	ENDIF
+
+
+; *  DBState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBState(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBState
+			move.w              #$0409,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBState
+	ENDIF
+
+
+; *  DBGetErr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetErr(long sessID, long *err1, long *err2, Str255 item1, Str255 item2, Str255 errorMsg, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetErr
+			move.w              #$0E0A,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetErr
+	ENDIF
+
+
+; *  DBBreak()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBBreak(long sessID, Boolean abort, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBBreak
+			move.w              #$050B,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBBreak
+	ENDIF
+
+
+; *  DBGetItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetItem(long sessID, long timeout, DBType *dataType, short *len, short *places, short *flags, void *buffer, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetItem
+			move.w              #$100C,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetItem
+	ENDIF
+
+
+; *  DBUnGetItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBUnGetItem(long sessID, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBUnGetItem
+			move.w              #$040D,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBUnGetItem
+	ENDIF
+
+
+; *  DBKill()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBKill(DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBKill
+			move.w              #$020E,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBKill
+	ENDIF
+
+
+; *  DBGetNewQuery()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetNewQuery(short queryID, QueryHandle *query)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetNewQuery
+			move.w              #$030F,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetNewQuery
+	ENDIF
+
+
+; *  DBDisposeQuery()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBDisposeQuery(QueryHandle query)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBDisposeQuery
+			move.w              #$0210,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBDisposeQuery
+	ENDIF
+
+
+; *  DBStartQuery()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBStartQuery(long *sessID, QueryHandle query, DBStatusUPP statusProc, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBStartQuery
+			move.w              #$0811,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBStartQuery
+	ENDIF
+
+
+; *  DBGetQueryResults()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetQueryResults(long sessID, ResultsRecord *results, long timeout, DBStatusUPP statusProc, DBAsyncParmBlkPtr asyncPB)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetQueryResults
+			move.w              #$0A12,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetQueryResults
+	ENDIF
+
+
+; *  DBResultsToText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBResultsToText(ResultsRecord *results, Handle *theText)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBResultsToText
+			move.w              #$0413,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBResultsToText
+	ENDIF
+
+
+; *  DBInstallResultHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBInstallResultHandler(DBType dataType, DBResultHandlerUPP theHandler, Boolean isSysHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBInstallResultHandler
+			move.w              #$0514,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBInstallResultHandler
+	ENDIF
+
+
+; *  DBRemoveResultHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBRemoveResultHandler(DBType dataType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBRemoveResultHandler
+			move.w              #$0215,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBRemoveResultHandler
+	ENDIF
+
+
+; *  DBGetResultHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBGetResultHandler(DBType dataType, DBResultHandlerUPP *theHandler, Boolean getSysHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBGetResultHandler
+			move.w              #$0516,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBGetResultHandler
+	ENDIF
+
+
+; *  DBIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DBIdle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DBIdle
+			move.w              #$00FF,D0
+			dc.w            	$A82F
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DBIdle
+	ENDIF
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __DATABASEACCESS__ 
+

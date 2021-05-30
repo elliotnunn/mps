@@ -1,0 +1,181 @@
+;
+;	File:		ConditionalMacros.a
+;
+;	Contains:	Compile time feature switches to achieve platform independent sources.
+;
+;	Version:	Technology:	Universal Interface Files 2.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+__CONDITIONALMACROS__ SET 1
+
+;
+;	This file sets up the following compiler independent conditionals:
+;	
+;	GENERATINGPOWERPC		- Compiler is generating PowerPC instructions
+;	GENERATING68K			- Compiler is generating 68k family instructions
+;	GENERATING68881			- Compiler is generating mc68881 floating point instructions
+;	GENERATINGCFM			- Code being generated assumes CFM calling conventions
+;	CFMSYSTEMCALLS			- No A-traps.  Systems calls are made using CFM and UPP's
+;	
+;	SystemSevenFiveOrLater	- Compiled code will only be run on a System 7.5 or later Macintosh
+;	SystemSevenOrLater		- Compiled code will only be run on a System 7.0 or later Macintosh
+;	SystemSixOrLater		- Compiled code will only be run on a System 6.0 or later Macintosh
+;							  A developer should set the appropriate flag on the compiler command-
+;							  line or in a file processed before this file.  This will allow the
+;							  certain optimizations to be made which can result in smaller, faster
+;							  applications.
+;	
+;	CGLUESUPPORTED			- Interface library will support "C glue" functions (function names
+;							  are: all lowercase, use C strings instead of pascal strings, use 
+;							  Point* instead of Point).
+;
+;	OLDROUTINENAMES			- "Old" names for Macintosh system calls are allowed in source code.
+;							  (e.g. DisposPtr instead of DisposePtr). The names of system routine
+;							  are now more sensitive to change because CFM binds by name.  In the 
+;							  past, system routine names were compiled out to just an A-Trap.  
+;							  Macros have been added that each map an old name to its new name.  
+;							  This allows old routine names to be used in existing source files,
+;							  but the macros only work if OLDROUTINENAMES is true.  This support
+;							  will be removed in the near future.  Thus, all source code should 
+;							  be changed to use the new names! You can set OLDROUTINENAMES to false
+;							  to see if your code has any old names left in it.
+;	
+;	OLDROUTINELOCATIONS     - "Old" location of Macintosh system calls are used.  For example, c2pstr 
+;							  has been moved from Strings to TextUtils.  It is conditionalized in
+;							  Strings with OLDROUTINELOCATIONS and in TextUtils with !OLDROUTINELOCATIONS.
+;							  This allows developers to upgrade to newer interface files without suddenly
+;							  all their code not compiling becuase of "incorrect" includes.  But, it
+;							  allows the slow migration of system calls to more understandable file
+;							  locations.  OLDROUTINELOCATIONS currently defaults to true, but eventually
+;							  will default to false.
+;	
+;	PRAGMA_ALIGN_SUPPORTED	- Compiler supports "#pragma align=..." directives. The only compilers that
+;							  can get by without supporting the pragma are old classic 68K compilers
+;							  that will only be used to compile older structs that have 68K alignment
+;							  anyways.  
+;	
+;	PRAGMA_IMPORT_SUPPORTED	- Compiler supports "#pragma import on/off" directives.  These directives
+;							  were introduced with the SC compiler which supports CFM 68K.  The directive
+;							  is used to tell the compiler which functions will be called through a 
+;							  transition vector (instead of a simple PC-relative offset).  This allows 
+;							  the compiler to generate better code.  Since System Software functions are
+;							  implemented as shared libraries and called through transition vectors,
+;							  all System Software functions are declared with "#pragma import on".
+;							  
+;	
+;	There are some invariants among the conditionals:
+;	
+;	GENERATINGPOWERPC != GENERATING68K
+;	GENERATING68881 => GENERATING68K
+;	GENERATINGPOWERPC => GENERATINGCFM
+;	GENERATINGPOWERPC => CFMSYSTEMCALLS
+;	CFMSYSTEMCALLS => GENERATINGCFM
+;	GENERATINGPOWERPC => SystemSevenOrLater
+;	SystemSevenFiveOrLater => SystemSevenOrLater
+;	SystemSevenOrLater => SystemSixOrLater
+;	PRAGMA_IMPORT_SUPPORTED => CFMSYSTEMCALLS
+;	
+;
+;
+;
+;	Set up UNIVERSAL_INTERFACES_VERSION
+;	
+;		0x210 => version 2.1
+;		This conditional did not exist prior to version 2.1
+;
+UNIVERSAL_INTERFACES_VERSION EQU $0210
+;
+;
+;	Set up GENERATINGPOWERPC and GENERATING68K
+;
+;
+	IF &TYPE('PowerAsm') <> 'UNDEFINED' THEN
+	GENERATINGPOWERPC: SET 1
+	GENERATING68K: SET 0
+	ELSE
+	GENERATINGPOWERPC: SET 0
+	GENERATING68K: SET 1
+	ENDIF
+;
+;
+;	Set up GENERATING68881 
+;
+;
+	IF &TYPE('GENERATING68881') = 'UNDEFINED' THEN
+	GENERATING68881: SET 0
+	ENDIF
+;
+;
+;	Set up GENERATINGCFM and  CFMSYSTEMCALLS
+;
+;
+	GENERATINGCFM:  SET GENERATINGPOWERPC
+	CFMSYSTEMCALLS:  SET GENERATINGPOWERPC
+	IF GENERATING68K THEN
+		IF &TYPE('&SYSMODEL') <> 'UNDEFINED' THEN
+			IF &SYSMODEL = '__CFM68K__' THEN
+				GENERATINGCFM: SET 1
+				CFMSYSTEMCALLS: SET 1
+			ENDIF
+		ENDIF
+	ENDIF
+;
+;
+;	Set up SystemSevenFiveOrLater, SystemSevenOrLater, and SystemSixOrLater
+;
+;
+	IF &TYPE('SystemSevenFiveOrLater') = 'UNDEFINED' THEN
+	SystemSevenFiveOrLater: SET 0
+	ENDIF
+	IF &TYPE('SystemSevenOrLater') = 'UNDEFINED' THEN
+	IF GENERATINGCFM  THEN
+	SystemSevenOrLater: SET 1
+	ELSE
+	SystemSevenOrLater: SET SystemSevenFiveOrLater
+	ENDIF
+	ENDIF
+	IF &TYPE('SystemSixOrLater') = 'UNDEFINED' THEN
+	SystemSixOrLater: SET SystemSevenOrLater
+	ENDIF
+;
+;
+;	Set up OLDROUTINENAMES and OLDROUTINELOCATIONS
+;
+;
+	IF &TYPE('OLDROUTINENAMES') = 'UNDEFINED' THEN
+	OLDROUTINENAMES: SET 1
+	ENDIF
+	IF &TYPE('OLDROUTINELOCATIONS') = 'UNDEFINED' THEN
+	OLDROUTINELOCATIONS: SET 1
+	ENDIF
+;
+;
+;	Define IMPORT_CFM_FUNCTION macro
+;
+;
+	IF GENERATINGCFM  THEN
+	IF GENERATINGPOWERPC  THEN
+		Macro
+		IMPORT_CFM_FUNCTION		&functionName
+		IMPORT					.&functionName
+		EndM
+	ELSE
+		Macro
+		IMPORT_CFM_FUNCTION		&functionName
+		IMPORT					&functionName
+		EndM
+	ENDIF
+	ENDIF
+	ENDIF ; __CONDITIONALMACROS__

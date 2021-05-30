@@ -1,0 +1,682 @@
+;
+;    File:       ICAApplication.a
+;
+;    Contains:   General purpose Image Capture definitions
+;
+;    Version:    Technology: 1.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 2000-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__ICAAPPLICATION__') = 'UNDEFINED' THEN
+__ICAAPPLICATION__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+
+
+
+
+
+
+; 
+;--------------- Defines --------------- 
+;
+
+;  Error codes (Image Capture range = -9900...-9949)
+
+kICACommunicationErr			EQU		-9900
+kICADeviceNotFoundErr			EQU		-9901
+kICADeviceNotOpenErr			EQU		-9902
+kICAFileCorruptedErr			EQU		-9903
+kICAIOPendingErr				EQU		-9904
+kICAInvalidObjectErr			EQU		-9905
+kICAInvalidPropertyErr			EQU		-9906
+kICAIndexOutOfRangeErr			EQU		-9907
+kICAPropertyTypeNotFoundErr		EQU		-9908
+; 
+;NOTE: vendor specific constants are UPPERCASE  (exception: 'TEXT')
+;
+
+;  ICAObject types and subtypes 
+
+kICADevice						EQU		'icdv'				; Also creator of device library files 
+kICADeviceCamera				EQU		'cmra'				; Also file type of device library files 
+kICADeviceScanner				EQU		'scan'				; Also file type of device library files 
+kICADeviceMFP					EQU		'mfp '				; Also file type of device library files 
+kICAList						EQU		'objl'
+kICADirectory					EQU		'dire'
+kICAFile						EQU		'file'
+kICAFileImage					EQU		'imag'
+kICAFileMovie					EQU		'moov'
+kICAFileAudio					EQU		'audo'
+kICAFileFirmware				EQU		'firm'
+kICAFileOther					EQU		'othe'
+;  ICAProperties 
+
+kICAProperty					EQU		'prop'
+kICAPropertyImageWidth			EQU		'iwid'				; UInt32 
+kICAPropertyImageHeight			EQU		'ihei'				; UInt32 
+kICAPropertyImageSize			EQU		'isiz'				; UInt32 
+kICAPropertyImageDPI			EQU		'idpi'				; UInt32 
+kICAPropertyImageBitDepth		EQU		'ibit'				; UInt32 
+kICAPropertyImageData			EQU		'idat'				; void * 
+kICAPropertyImageFilename		EQU		'ifil'				; null terminated string 
+kICAPropertyImageCaptureDate	EQU		'icdt'				; null terminated string (YYYYMMDDThhmmss.s) 
+kICAPropertyImageModificationDate EQU	'imdt'				; null terminated string (YYYYMMDDThhmmss.s) 
+kICAPropertyImageThumbnail		EQU		'thum'				; void * 
+kICAPropertyGamma				EQU		'igam'				; UInt32 
+kICAPropertyColorSyncProfile	EQU		'prof'
+kICAPropertyListOfSupportedMessages EQU	'msgs'
+
+;  Messages 
+
+kICAMessageConnect				EQU		'open'
+kICAMessageDisconnect			EQU		'clos'
+kICAMessageReset				EQU		'rese'
+kICAMessageCheckDevice			EQU		'chkd'
+
+;  Data type definitions, mapped to AppleEvent types 
+
+kICATypeUInt16					EQU		'ui16'				; UInt16 
+kICATypeUInt32					EQU		'ui32'				; UInt32 
+kICATypeUInt64					EQU		'ui64'				; UInt64 
+kICATypeSInt16					EQU		'si16'				; SInt16 
+kICATypeSInt32					EQU		'si32'				; SInt32 
+kICATypeSInt64					EQU		'si64'				; SInt64 
+kICATypeFixed					EQU		'sing'				; typeIEEE32BitFloatingPoint 
+kICATypeBoolean					EQU		'bool'				; typeBoolean 
+kICATypeString					EQU		'TEXT'				; typeChar 
+kICATypeData					EQU		'data'				; void * 
+kICATypeThumbnail				EQU		'thum'				; ICAThumbnail
+
+;  Flags for PropertyInfo flag element 
+
+kICAFlagReadWriteAccess			EQU		$00000001
+kICAFlagReadAccess				EQU		$00000002
+
+
+;  Notification types (Refer to section 12.4 of PTP spec) 
+
+kICAEventCancelTransaction		EQU		'ecnt'
+kICAEventObjectAdded			EQU		'eoba'
+kICAEventObjectRemoved			EQU		'eobr'
+kICAEventStoreAdded				EQU		'esta'
+kICAEventStoreRemoved			EQU		'estr'
+kICAEventDeviceAdded			EQU		'edea'
+kICAEventDeviceRemoved			EQU		'eder'
+kICAEventDevicePropChanged		EQU		'edpc'
+kICAEventObjectInfoChanged		EQU		'eoic'
+kICAEventDeviceInfoChanged		EQU		'edic'
+kICAEventRequestObjectTransfer	EQU		'erot'
+kICAEventStoreFull				EQU		'estf'
+kICAEventDeviceReset			EQU		'edvr'
+kICAEventStorageInfoChanged		EQU		'esic'
+kICAEventCaptureComplete		EQU		'ecpc'
+kICAEventUnreportedStatus		EQU		'eurs'
+
+;  Used for partial reads via ICAGetPropertyData 
+
+kICAStartAtBeginning			EQU		0
+kICAEntireLength				EQU		-1
+
+; 
+;--------------- Structures --------------- 
+;
+
+ICAObjectInfo			RECORD 0
+objectType				 ds.l	1				; offset: $0 (0)		;  i.e. kICAFile
+objectSubtype			 ds.l	1				; offset: $4 (4)		;  i.e. kICAFileImage  
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ICAPropertyInfo			RECORD 0
+propertyType			 ds.l	1				; offset: $0 (0)
+dataType				 ds.l	1				; offset: $4 (4)
+dataSize				 ds.l	1				; offset: $8 (8)
+dataFlags				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+ICAMessage				RECORD 0
+messageType				 ds.l	1				; offset: $0 (0)		;  <--  i.e. kICAMessageCameraCaptureNewImage 
+startByte				 ds.l	1				; offset: $4 (4)		;  <-- 
+dataPtr					 ds.l	1				; offset: $8 (8)		;  <-- 
+dataSize				 ds.l	1				; offset: $C (12)		;  <-- 
+dataType				 ds.l	1				; offset: $10 (16)		;  <-- 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+ICAThumbnail			RECORD 0
+width					 ds.l	1				; offset: $0 (0)
+height					 ds.l	1				; offset: $4 (4)
+dataSize				 ds.l	1				; offset: $8 (8)
+data					 ds.b	1				; offset: $C (12) <-- really an array of length one ;  8-bit RGB data (RGBRGBRGB...)
+						 ORG 14
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+kICAPBVersion					EQU		$00010000
+
+;  
+;--------------- Completion Procs --------------- 
+;
+
+
+;   
+;   NOTE: the parameter for the completion proc (ICAHeader*) has to be casted to the appropriate type
+;   e.g. (ICAGetChildCountPB*), ...
+;   
+
+
+
+
+
+;  
+;--------------- ICAHeader --------------- 
+;
+
+ICAHeader				RECORD 0
+err						 ds.w	1				; offset: $0 (0)		;  --> 
+refcon					 ds.l	1				; offset: $2 (2)		;  <-- 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; 
+;--------------- Object parameter blocks --------------- 
+;
+
+ICAGetChildCountPB		RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+count					 ds.l	1				; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+ICAGetNthChildPB		RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+parentObject			 ds.l	1				; offset: $6 (6)		;  <-- 
+index					 ds.l	1				; offset: $A (10)		;  <-- zero based 
+childObject				 ds.l	1				; offset: $E (14)		;  --> 
+childInfo				 ds		ICAObjectInfo	; offset: $12 (18)		;  --> 
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+ICAGetObjectInfoPB		RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+objectInfo				 ds		ICAObjectInfo	; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+ICAGetParentOfObjectPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+parentObject			 ds.l	1				; offset: $A (10)		;  --> 
+parentInfo				 ds		ICAObjectInfo	; offset: $E (14)		;  --> 
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+ICAGetRootOfObjectPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+rootObject				 ds.l	1				; offset: $A (10)		;  --> 
+rootInfo				 ds		ICAObjectInfo	; offset: $E (14)		;  --> 
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+ICAGetObjectRefConPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+objectRefCon			 ds.l	1				; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+ICASetObjectRefConPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+objectRefCon			 ds.l	1				; offset: $A (10)		;  <-- 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; 
+;--------------- Property parameter blocks --------------- 
+;
+
+ICAGetPropertyCountPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+count					 ds.l	1				; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+ICAGetNthPropertyPB		RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+index					 ds.l	1				; offset: $A (10)		;  <-- zero based 
+property				 ds.l	1				; offset: $E (14)		;  --> 
+propertyInfo			 ds		ICAPropertyInfo ; offset: $12 (18)		;  --> 
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+ICAGetPropertyByTypePB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+propertyType			 ds.l	1				; offset: $A (10)		;  <-- 
+property				 ds.l	1				; offset: $E (14)		;  --> 
+propertyInfo			 ds		ICAPropertyInfo ; offset: $12 (18)		;  --> 
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+ICAGetPropertyInfoPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+propertyInfo			 ds		ICAPropertyInfo ; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+ICAGetPropertyDataPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+startByte				 ds.l	1				; offset: $A (10)		;  <-- 
+requestedSize			 ds.l	1				; offset: $E (14)		;  <-- 
+dataPtr					 ds.l	1				; offset: $12 (18)		;  <-> 
+actualSize				 ds.l	1				; offset: $16 (22)		;  --> 
+dataType				 ds.l	1				; offset: $1A (26)		;  --> 
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+ICASetPropertyDataPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+startByte				 ds.l	1				; offset: $A (10)		;  <-- 
+dataPtr					 ds.l	1				; offset: $E (14)		;  <-- 
+dataSize				 ds.l	1				; offset: $12 (18)		;  <-- 
+dataType				 ds.l	1				; offset: $16 (22)		;  <-- 
+sizeof					 EQU *					; size:   $1A (26)
+						ENDR
+ICAGetParentOfPropertyPB RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+parentObject			 ds.l	1				; offset: $A (10)		;  --> 
+parentInfo				 ds		ICAObjectInfo	; offset: $E (14)		;  --> 
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+ICAGetRootOfPropertyPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+rootObject				 ds.l	1				; offset: $A (10)		;  --> 
+rootInfo				 ds		ICAObjectInfo	; offset: $E (14)		;  --> 
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+ICAGetPropertyRefConPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+propertyRefCon			 ds.l	1				; offset: $A (10)		;  --> 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+ICASetPropertyRefConPB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+property				 ds.l	1				; offset: $6 (6)		;  <-- 
+propertyRefCon			 ds.l	1				; offset: $A (10)		;  <-- 
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; 
+;--------------- Device parameter blocks --------------- 
+;
+
+ICAGetDeviceListPB		RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  --> 
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+ICAObjectSendMessagePB	RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+message					 ds		ICAMessage		; offset: $A (10)		;  <-- 
+result					 ds.l	1				; offset: $1E (30)		;  --> message specific result
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+ICARegisterEventNotificationPB RECORD 0
+header					 ds		ICAHeader		; offset: $0 (0)
+object					 ds.l	1				; offset: $6 (6)		;  <-- 
+notifyType				 ds.l	1				; offset: $A (10)		;  <-- 
+notifyProc				 ds.l	1				; offset: $E (14)		;  <-- 
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+;   
+;   NOTE: for all APIs - pass NULL as completion parameter to make a synchronous call 
+;   
+
+
+
+; 
+;--------------- Object functions --------------- 
+;
+
+
+
+; *  ICAGetChildCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetChildCount(ICAGetChildCountPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetChildCount
+	ENDIF
+
+
+; *  ICAGetNthChild()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetNthChild(ICAGetNthChildPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetNthChild
+	ENDIF
+
+
+; *  ICAGetObjectInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetObjectInfo(ICAGetObjectInfoPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetObjectInfo
+	ENDIF
+
+
+; *  ICAGetParentOfObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetParentOfObject(ICAGetParentOfObjectPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetParentOfObject
+	ENDIF
+
+
+; *  ICAGetRootOfObject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetRootOfObject(ICAGetRootOfObjectPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetRootOfObject
+	ENDIF
+
+
+; *  ICAGetObjectRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetObjectRefCon(ICAGetObjectRefConPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetObjectRefCon
+	ENDIF
+
+
+; *  ICASetObjectRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICASetObjectRefCon(ICASetObjectRefConPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICASetObjectRefCon
+	ENDIF
+
+
+; 
+;--------------- Property functions --------------- 
+;
+
+
+; *  ICAGetPropertyCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetPropertyCount(ICAGetPropertyCountPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetPropertyCount
+	ENDIF
+
+
+; *  ICAGetNthProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetNthProperty(ICAGetNthPropertyPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetNthProperty
+	ENDIF
+
+
+; *  ICAGetPropertyByType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetPropertyByType(ICAGetPropertyByTypePB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetPropertyByType
+	ENDIF
+
+
+; *  ICAGetPropertyInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetPropertyInfo(ICAGetPropertyInfoPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetPropertyInfo
+	ENDIF
+
+
+; *  ICAGetPropertyData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetPropertyData(ICAGetPropertyDataPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetPropertyData
+	ENDIF
+
+
+; *  ICASetPropertyData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICASetPropertyData(ICASetPropertyDataPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICASetPropertyData
+	ENDIF
+
+
+; *  ICAGetParentOfProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetParentOfProperty(ICAGetParentOfPropertyPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetParentOfProperty
+	ENDIF
+
+
+; *  ICAGetRootOfProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetRootOfProperty(ICAGetRootOfPropertyPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetRootOfProperty
+	ENDIF
+
+
+; *  ICAGetPropertyRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetPropertyRefCon(ICAGetPropertyRefConPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetPropertyRefCon
+	ENDIF
+
+
+; *  ICASetPropertyRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICASetPropertyRefCon(ICASetPropertyRefConPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICASetPropertyRefCon
+	ENDIF
+
+
+;  
+;--------------- Device functions --------------- 
+;
+
+
+; *  ICAGetDeviceList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAGetDeviceList(ICAGetDeviceListPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAGetDeviceList
+	ENDIF
+
+
+; *  ICAObjectSendMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICAObjectSendMessage(ICAObjectSendMessagePB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICAObjectSendMessage
+	ENDIF
+
+
+; *  ICARegisterEventNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in ImageCaptureLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ICARegisterEventNotification(ICARegisterEventNotificationPB *pb, ICACompletion completion)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ICARegisterEventNotification
+	ENDIF
+
+	ENDIF ; __ICAAPPLICATION__ 
+

@@ -1,0 +1,1037 @@
+;
+;	File:		Sound.a
+;
+;	Contains:	Sound Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.1
+;
+;	Copyright:	© 1984-1996 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SOUND__') = 'UNDEFINED' THEN
+__SOUND__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+;
+;						* * *  N O T E  * * *
+;
+;	This file has been updated to include Sound Manager 3.1 interfaces.
+;
+;	Some of the Sound Manager 3.0 interfaces were not put into the InterfaceLib
+;	that originally shipped with the PowerMacs. These missing functions and the
+;	new 3.2 interfaces have been released in the SoundLib library for PowerPC
+;	developers to link with. The runtime library for these functions are
+;	installed by Sound Manager 3.2. The following functions are found in SoundLib.
+;
+;		GetCompressionInfo, GetSoundPreference, SetSoundPreference,
+;		UnsignedFixedMulDiv, SndGetInfo, SndSetInfo
+;
+;
+;	Interfaces for Sound Driver, !!! OBSOLETE and NOT SUPPORTED !!!
+;
+;	These items are no longer defined, but appear here so that someone
+;	searching the interfaces might find them. If you are using one of these
+;	items, you must change your code to support the Sound Manager.
+;
+;		swMode, ftMode, ffMode
+;		FreeWave, FFSynthRec, Tone, SWSynthRec, Wave, FTSoundRec
+;		SndCompletionProcPtr
+;		StartSound, StopSound, SoundDone
+;
+
+soundListRsrc					EQU		'snd '				;Resource type used by Sound Manager
+rate44khz						EQU		$AC440000			;44100.00000 in fixed-point
+rate22050hz						EQU		$56220000			;22050.00000 in fixed-point
+rate22khz						EQU		$56EE8BA3			;22254.54545 in fixed-point
+rate11khz						EQU		$2B7745D1			;11127.27273 in fixed-point
+rate11025hz						EQU		$2B110000			;11025.00000 in fixed-point
+;synthesizer numbers for SndNewChannel
+squareWaveSynth					EQU		1					;square wave synthesizer
+waveTableSynth					EQU		3					;wave table synthesizer
+sampledSynth					EQU		5					;sampled sound synthesizer
+;old Sound Manager MACE synthesizer numbers
+MACE3snthID						EQU		11
+MACE6snthID						EQU		13
+kMiddleC						EQU		60					;MIDI note value for middle C
+kSimpleBeepID					EQU		1					;reserved resource ID for Simple Beep
+kFullVolume						EQU		$0100				;1.0, setting for full hardware output volume
+kNoVolume						EQU		0					;setting for no sound volume
+;command numbers for SndDoCommand and SndDoImmediate
+nullCmd							EQU		0
+initCmd							EQU		1
+freeCmd							EQU		2
+quietCmd						EQU		3
+flushCmd						EQU		4
+reInitCmd						EQU		5
+waitCmd							EQU		10
+pauseCmd						EQU		11
+resumeCmd						EQU		12
+callBackCmd						EQU		13
+
+syncCmd							EQU		14
+availableCmd					EQU		24
+versionCmd						EQU		25
+totalLoadCmd					EQU		26
+loadCmd							EQU		27
+freqDurationCmd					EQU		40
+restCmd							EQU		41
+freqCmd							EQU		42
+ampCmd							EQU		43
+timbreCmd						EQU		44
+getAmpCmd						EQU		45
+volumeCmd						EQU		46					;sound manager 3.0 or later only
+getVolumeCmd					EQU		47					;sound manager 3.0 or later only
+waveTableCmd					EQU		60
+phaseCmd						EQU		61
+
+soundCmd						EQU		80
+bufferCmd						EQU		81
+rateCmd							EQU		82
+continueCmd						EQU		83
+doubleBufferCmd					EQU		84
+getRateCmd						EQU		85
+rateMultiplierCmd				EQU		86
+getRateMultiplierCmd			EQU		87
+sizeCmd							EQU		90
+convertCmd						EQU		91
+stdQLength						EQU		128
+dataOffsetFlag					EQU		$8000
+
+;channel initialization parameters
+	IF OLDROUTINENAMES  THEN
+waveInitChannelMask				EQU		$07
+waveInitChannel0				EQU		$04					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel1				EQU		$05					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel2				EQU		$06					;wave table only, Sound Manager 2.0 and earlier
+waveInitChannel3				EQU		$07					;wave table only, Sound Manager 2.0 and earlier
+initChan0						EQU		waveInitChannel0	;obsolete spelling
+initChan1						EQU		waveInitChannel1	;obsolete spelling
+initChan2						EQU		waveInitChannel2	;obsolete spelling
+initChan3						EQU		waveInitChannel3	;obsolete spelling
+
+	ENDIF
+initChanLeft					EQU		$0002				;left stereo channel
+initChanRight					EQU		$0003				;right stereo channel
+initNoInterp					EQU		$0004				;no linear interpolation
+initNoDrop						EQU		$0008				;no drop-sample conversion
+initMono						EQU		$0080				;monophonic channel
+initStereo						EQU		$00C0				;stereo channel
+initMACE3						EQU		$0300				;MACE 3:1
+initMACE6						EQU		$0400				;MACE 6:1
+initPanMask						EQU		$0003				;mask for right/left pan values
+initSRateMask					EQU		$0030				;mask for sample rate values
+initStereoMask					EQU		$00C0				;mask for mono/stereo values
+initCompMask					EQU		$FF00				;mask for compression IDs
+kUseOptionalOutputDevice		EQU		-1					;only for Sound Manager 3.0 or later
+notCompressed					EQU		0					;compression ID's
+fixedCompression				EQU		-1					;compression ID for fixed-sized compression
+variableCompression				EQU		-2					;compression ID for variable-sized compression
+twoToOne						EQU		1
+eightToThree					EQU		2
+threeToOne						EQU		3
+sixToOne						EQU		4
+
+	IF ¬ GENERATINGPOWERPC  THEN
+stdSH							EQU		$00					;Standard sound header encode value
+extSH							EQU		$FF					;Extended sound header encode value
+cmpSH							EQU		$FE					;Compressed sound header encode value
+
+	ENDIF
+outsideCmpSH					EQU		0					;obsolete MACE constant
+insideCmpSH						EQU		1					;obsolete MACE constant
+aceSuccess						EQU		0					;obsolete MACE constant
+aceMemFull						EQU		1					;obsolete MACE constant
+aceNilBlock						EQU		2					;obsolete MACE constant
+aceBadComp						EQU		3					;obsolete MACE constant
+aceBadEncode					EQU		4					;obsolete MACE constant
+aceBadDest						EQU		5					;obsolete MACE constant
+aceBadCmd						EQU		6					;obsolete MACE constant
+sixToOnePacketSize				EQU		8
+threeToOnePacketSize			EQU		16
+stateBlockSize					EQU		64
+leftOverBlockSize				EQU		32
+firstSoundFormat				EQU		$0001				;general sound format
+secondSoundFormat				EQU		$0002				;special sampled sound format (HyperCard)
+dbBufferReady					EQU		$00000001			;double buffer is filled
+dbLastBuffer					EQU		$00000004			;last double buffer to play
+sysBeepDisable					EQU		$0000				;SysBeep() enable flags
+sysBeepEnable					EQU		(1 << 0)
+sysBeepSynchronous				EQU		(1 << 1)			;if bit set, make alert sounds synchronous
+unitTypeNoSelection				EQU		$FFFF				;unitTypes for AudioSelection.unitType
+unitTypeSeconds					EQU		$0000
+
+; unsigned fixed-point number 
+; typedef unsigned long 	UnsignedFixed
+SndCommand 				RECORD	0
+cmd						 ds.w   1		; offset: $0 (0)
+param1					 ds.w   1		; offset: $2 (2)
+param2					 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct SndCommand  SndCommand
+; typedef struct SndChannel  SndChannel
+; typedef SndChannel 		*SndChannelPtr
+SndChannel 				RECORD	0
+nextChan				 ds.l   1		; offset: $0 (0)
+firstMod				 ds.l   1		; offset: $4 (4)		; reserved for the Sound Manager 
+callBack				 ds.l   1		; offset: $8 (8)
+userInfo				 ds.l   1		; offset: $C (12)
+wait					 ds.l   1		; offset: $10 (16)		; The following is for internal Sound Manager use only.
+cmdInProgress			 ds     SndCommand ; offset: $14 (20)
+flags					 ds.w   1		; offset: $1C (28)
+qLength					 ds.w   1		; offset: $1E (30)
+qHead					 ds.w   1		; offset: $20 (32)
+qTail					 ds.w   1		; offset: $22 (34)
+queue					 ds.b   128 * SndCommand.sizeof ; offset: $24 (36)
+sizeof					 EQU *			; size:   $424 (1060)
+						ENDR
+
+;MACE structures
+StateBlock 				RECORD	0
+stateVar				 ds.w   64		; offset: $0 (0)
+sizeof					 EQU *			; size:   $80 (128)
+						ENDR
+
+; typedef struct StateBlock  StateBlock
+; typedef StateBlock 		*StateBlockPtr
+LeftOverBlock 			RECORD	0
+count					 ds.l   1		; offset: $0 (0)
+sampleArea				 ds.b   32		; offset: $4 (4)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct LeftOverBlock  LeftOverBlock
+; typedef LeftOverBlock 	*LeftOverBlockPtr
+ModRef 					RECORD	0
+modNumber				 ds.w   1		; offset: $0 (0)
+modInit					 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct ModRef 	ModRef
+SndListResource 		RECORD	0
+format					 ds.w   1		; offset: $0 (0)
+numModifiers			 ds.w   1		; offset: $2 (2)
+modifierPart			 ds     ModRef	; offset: $4 (4)		;This is a variable length array
+numCommands				 ds.w   1		; offset: $A (10)
+commandPart				 ds     SndCommand ; offset: $C (12)	;This is a variable length array
+dataPart				 ds.b   1		; offset: $14 (20)		;This is a variable length array
+						 ORG 22
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+; typedef struct SndListResource  SndListResource
+; typedef SndListResource 	*SndListPtr
+; typedef SndListPtr 		*SndListHndl, *SndListHandle
+;HyperCard sound resource format
+Snd2ListResource 		RECORD	0
+format					 ds.w   1		; offset: $0 (0)
+refCount				 ds.w   1		; offset: $2 (2)
+numCommands				 ds.w   1		; offset: $4 (4)
+commandPart				 ds     SndCommand ; offset: $6 (6)		;This is a variable length array
+dataPart				 ds.b   1		; offset: $E (14)		;This is a variable length array
+						 ORG 16
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct Snd2ListResource  Snd2ListResource
+; typedef Snd2ListResource 	*Snd2ListPtr
+; typedef Snd2ListPtr 		*Snd2ListHndl, *Snd2ListHandle
+SoundHeader 			RECORD	0
+samplePtr				 ds.l   1		; offset: $0 (0)		;if NIL then samples are in sampleArea
+length					 ds.l   1		; offset: $4 (4)		;length of sound in bytes
+sampleRate				 ds.l   1		; offset: $8 (8)		;sample rate for this sound
+loopStart				 ds.l   1		; offset: $C (12)		;start of looping portion
+loopEnd					 ds.l   1		; offset: $10 (16)		;end of looping portion
+encode					 ds.b   1		; offset: $14 (20)		;header encoding
+baseFrequency			 ds.b   1		; offset: $15 (21)		;baseFrequency value
+sampleArea				 ds.b   1		; offset: $16 (22)		;space for when samples follow directly
+						 ORG 24
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct SoundHeader  SoundHeader
+; typedef SoundHeader 		*SoundHeaderPtr
+CmpSoundHeader 			RECORD	0
+samplePtr				 ds.l   1		; offset: $0 (0)		;if nil then samples are in sample area
+numChannels				 ds.l   1		; offset: $4 (4)		;number of channels i.e. mono = 1
+sampleRate				 ds.l   1		; offset: $8 (8)		;sample rate in Apples Fixed point representation
+loopStart				 ds.l   1		; offset: $C (12)		;loopStart of sound before compression
+loopEnd					 ds.l   1		; offset: $10 (16)		;loopEnd of sound before compression
+encode					 ds.b   1		; offset: $14 (20)		;data structure used , stdSH, extSH, or cmpSH
+baseFrequency			 ds.b   1		; offset: $15 (21)		;same meaning as regular SoundHeader
+numFrames				 ds.l   1		; offset: $16 (22)		;length in frames ( packetFrames or sampleFrames )
+AIFFSampleRate			 ds.w   5		; offset: $1A (26)		;IEEE sample rate
+markerChunk				 ds.l   1		; offset: $24 (36)		;sync track
+format					 ds.l   1		; offset: $28 (40)		;data format type, was futureUse1
+futureUse2				 ds.l   1		; offset: $2C (44)		;reserved by Apple
+stateVars				 ds.l   1		; offset: $30 (48)		;pointer to State Block
+leftOverSamples			 ds.l   1		; offset: $34 (52)		;used to save truncated samples between compression calls
+compressionID			 ds.w   1		; offset: $38 (56)		;0 means no compression, non zero means compressionID
+packetSize				 ds.w   1		; offset: $3A (58)		;number of bits in compressed sample packet
+snthID					 ds.w   1		; offset: $3C (60)		;resource ID of Sound Manager snth that contains NRT C/E
+sampleSize				 ds.w   1		; offset: $3E (62)		;number of bits in non-compressed sample
+sampleArea				 ds.b   1		; offset: $40 (64)		;space for when samples follow directly
+						 ORG 66
+sizeof					 EQU *			; size:   $42 (66)
+						ENDR
+
+; typedef struct CmpSoundHeader  CmpSoundHeader
+; typedef CmpSoundHeader 	*CmpSoundHeaderPtr
+ExtSoundHeader 			RECORD	0
+samplePtr				 ds.l   1		; offset: $0 (0)		;if nil then samples are in sample area
+numChannels				 ds.l   1		; offset: $4 (4)		;number of channels,  ie mono = 1
+sampleRate				 ds.l   1		; offset: $8 (8)		;sample rate in Apples Fixed point representation
+loopStart				 ds.l   1		; offset: $C (12)		;same meaning as regular SoundHeader
+loopEnd					 ds.l   1		; offset: $10 (16)		;same meaning as regular SoundHeader
+encode					 ds.b   1		; offset: $14 (20)		;data structure used , stdSH, extSH, or cmpSH
+baseFrequency			 ds.b   1		; offset: $15 (21)		;same meaning as regular SoundHeader
+numFrames				 ds.l   1		; offset: $16 (22)		;length in total number of frames
+AIFFSampleRate			 ds.w   5		; offset: $1A (26)		;IEEE sample rate
+markerChunk				 ds.l   1		; offset: $24 (36)		;sync track
+instrumentChunks		 ds.l   1		; offset: $28 (40)		;AIFF instrument chunks
+AESRecording			 ds.l   1		; offset: $2C (44)
+sampleSize				 ds.w   1		; offset: $30 (48)		;number of bits in sample
+futureUse1				 ds.w   1		; offset: $32 (50)		;reserved by Apple
+futureUse2				 ds.l   1		; offset: $34 (52)		;reserved by Apple
+futureUse3				 ds.l   1		; offset: $38 (56)		;reserved by Apple
+futureUse4				 ds.l   1		; offset: $3C (60)		;reserved by Apple
+sampleArea				 ds.b   1		; offset: $40 (64)		;space for when samples follow directly
+						 ORG 66
+sizeof					 EQU *			; size:   $42 (66)
+						ENDR
+
+; typedef struct ExtSoundHeader  ExtSoundHeader
+; typedef ExtSoundHeader 	*ExtSoundHeaderPtr
+ConversionBlock 		RECORD	0
+destination				 ds.w   1		; offset: $0 (0)
+unused					 ds.w   1		; offset: $2 (2)
+inputPtr				 ds.l   1		; offset: $4 (4)
+outputPtr				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct ConversionBlock  ConversionBlock
+; typedef ConversionBlock 	*ConversionBlockPtr
+SMStatus 				RECORD	0
+smMaxCPULoad			 ds.w   1		; offset: $0 (0)
+smNumChannels			 ds.w   1		; offset: $2 (2)
+smCurCPULoad			 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct SMStatus 	SMStatus
+; typedef SMStatus 			*SMStatusPtr
+SCStatus 				RECORD	0
+scStartTime				 ds.l   1		; offset: $0 (0)
+scEndTime				 ds.l   1		; offset: $4 (4)
+scCurrentTime			 ds.l   1		; offset: $8 (8)
+scChannelBusy			 ds.b   1		; offset: $C (12)
+scChannelDisposed		 ds.b   1		; offset: $D (13)
+scChannelPaused			 ds.b   1		; offset: $E (14)
+scUnused				 ds.b   1		; offset: $F (15)
+scChannelAttributes		 ds.l   1		; offset: $10 (16)
+scCPULoad				 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct SCStatus 	SCStatus
+; typedef SCStatus 			*SCStatusPtr
+AudioSelection 			RECORD	0
+unitType				 ds.l   1		; offset: $0 (0)
+selStart				 ds.l   1		; offset: $4 (4)
+selEnd					 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct AudioSelection  AudioSelection
+; typedef AudioSelection 	*AudioSelectionPtr
+SndDoubleBuffer 		RECORD	0
+dbNumFrames				 ds.l   1		; offset: $0 (0)
+dbFlags					 ds.l   1		; offset: $4 (4)
+dbUserInfo				 ds.l   2		; offset: $8 (8)
+dbSoundData				 ds.b   1		; offset: $10 (16)
+						 ORG 18
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct SndDoubleBuffer  SndDoubleBuffer
+; typedef SndDoubleBuffer 	*SndDoubleBufferPtr
+SndDoubleBufferHeader 	RECORD	0
+dbhNumChannels			 ds.w   1		; offset: $0 (0)
+dbhSampleSize			 ds.w   1		; offset: $2 (2)
+dbhCompressionID		 ds.w   1		; offset: $4 (4)
+dbhPacketSize			 ds.w   1		; offset: $6 (6)
+dbhSampleRate			 ds.l   1		; offset: $8 (8)
+dbhBufferPtr			 ds.l   2		; offset: $C (12)
+dbhDoubleBack			 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct SndDoubleBufferHeader  SndDoubleBufferHeader
+; typedef SndDoubleBufferHeader  *SndDoubleBufferHeaderPtr
+SndDoubleBufferHeader2 	RECORD	0
+dbhNumChannels			 ds.w   1		; offset: $0 (0)
+dbhSampleSize			 ds.w   1		; offset: $2 (2)
+dbhCompressionID		 ds.w   1		; offset: $4 (4)
+dbhPacketSize			 ds.w   1		; offset: $6 (6)
+dbhSampleRate			 ds.l   1		; offset: $8 (8)
+dbhBufferPtr			 ds.l   2		; offset: $C (12)
+dbhDoubleBack			 ds.l   1		; offset: $14 (20)
+dbhFormat				 ds.l   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct SndDoubleBufferHeader2  SndDoubleBufferHeader2
+; typedef SndDoubleBufferHeader2  *SndDoubleBufferHeader2Ptr
+SoundInfoList 			RECORD	0
+count					 ds.w   1		; offset: $0 (0)
+infoHandle				 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct SoundInfoList  SoundInfoList
+; typedef struct SoundInfoList *		SoundInfoListPtr
+
+SoundComponentData		RECORD 0
+flags					 ds.l	1		; offset: $0 (0)
+format					 ds.l	1		; offset: $4 (4)
+numChannels				 ds.w	1		; offset: $8 (8)
+sampleSize				 ds.w	1		; offset: $A (10)
+sampleRate				 ds.l	1		; offset: $C (12)
+sampleCount				 ds.l	1		; offset: $10 (16)
+buffer					 ds.l	1		; offset: $14 (20)
+reserved				 ds.l	1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+; typedef struct SoundComponentData *	SoundComponentDataPtr
+
+CompressionInfo 		RECORD	0
+recordSize				 ds.l   1		; offset: $0 (0)
+format					 ds.l   1		; offset: $4 (4)
+compressionID			 ds.w   1		; offset: $8 (8)
+samplesPerPacket		 ds.w   1		; offset: $A (10)
+bytesPerPacket			 ds.w   1		; offset: $C (12)
+bytesPerFrame			 ds.w   1		; offset: $E (14)
+bytesPerSample			 ds.w   1		; offset: $10 (16)
+futureUse1				 ds.w   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct CompressionInfo  CompressionInfo
+; typedef CompressionInfo 	*CompressionInfoPtr
+; typedef CompressionInfoPtr  *CompressionInfoHandle
+; These two routines for Get/SetSoundVol should no longer be used.
+; They were for old Apple Sound Chip machines, and do not support the DSP or PowerMacs.
+; Use Get/SetDefaultOutputVolume instead, if you must change the user's machine.
+	IF OLDROUTINENAMES  ** ¬ GENERATINGCFM  THEN
+;
+; pascal void SetSoundVol(short level)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetSoundVol
+	ENDIF
+
+;
+; pascal void GetSoundVol(short *level)
+;
+	IF ¬ GENERATINGCFM THEN
+		; parameters: 
+		;	 level         	=> A0
+		Macro
+		_GetSoundVol
+			dc.w 	$4218
+			dc.w 	$10B8
+			dc.w 	$0260
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSoundVol
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr SndDoCommand(SndChannelPtr chan, const SndCommand *cmd, Boolean noWait)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndDoCommand:	OPWORD	$A803
+	ELSE
+		IMPORT_CFM_FUNCTION	SndDoCommand
+	ENDIF
+
+;
+; pascal OSErr SndDoImmediate(SndChannelPtr chan, const SndCommand *cmd)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndDoImmediate:	OPWORD	$A804
+	ELSE
+		IMPORT_CFM_FUNCTION	SndDoImmediate
+	ENDIF
+
+;
+; pascal OSErr SndNewChannel(SndChannelPtr *chan, short synth, long init, SndCallBackUPP userRoutine)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndNewChannel:	OPWORD	$A807
+	ELSE
+		IMPORT_CFM_FUNCTION	SndNewChannel
+	ENDIF
+
+;
+; pascal OSErr SndDisposeChannel(SndChannelPtr chan, Boolean quietNow)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndDisposeChannel:	OPWORD	$A801
+	ELSE
+		IMPORT_CFM_FUNCTION	SndDisposeChannel
+	ENDIF
+
+;
+; pascal OSErr SndPlay(SndChannelPtr chan, SndListHandle sndHdl, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndPlay:	OPWORD	$A805
+	ELSE
+		IMPORT_CFM_FUNCTION	SndPlay
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+;
+; pascal OSErr SndAddModifier(SndChannelPtr chan, Ptr modifier, short id, long init)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndAddModifier:	OPWORD	$A802
+	ELSE
+		IMPORT_CFM_FUNCTION	SndAddModifier
+	ENDIF
+
+	ENDIF
+;
+; pascal OSErr SndControl(short id, SndCommand *cmd)
+;
+	IF ¬ GENERATINGCFM THEN
+		_SndControl:	OPWORD	$A806
+	ELSE
+		IMPORT_CFM_FUNCTION	SndControl
+	ENDIF
+
+; Sound Manager 2.0 and later, uses _SoundDispatch 
+;
+; pascal NumVersion SndSoundManagerVersion(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndSoundManagerVersion
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndSoundManagerVersion
+	ENDIF
+
+;
+; pascal OSErr SndStartFilePlay(SndChannelPtr chan, short fRefNum, short resNum, long bufferSize, void *theBuffer, AudioSelectionPtr theSelection, FilePlayCompletionUPP theCompletion, Boolean async)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndStartFilePlay
+			dc.w 	$203C
+			dc.w 	$0D00
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndStartFilePlay
+	ENDIF
+
+;
+; pascal OSErr SndPauseFilePlay(SndChannelPtr chan)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndPauseFilePlay
+			dc.w 	$203C
+			dc.w 	$0204
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndPauseFilePlay
+	ENDIF
+
+;
+; pascal OSErr SndStopFilePlay(SndChannelPtr chan, Boolean quietNow)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndStopFilePlay
+			dc.w 	$203C
+			dc.w 	$0308
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndStopFilePlay
+	ENDIF
+
+;
+; pascal OSErr SndChannelStatus(SndChannelPtr chan, short theLength, SCStatusPtr theStatus)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndChannelStatus
+			dc.w 	$203C
+			dc.w 	$0510
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndChannelStatus
+	ENDIF
+
+;
+; pascal OSErr SndManagerStatus(short theLength, SMStatusPtr theStatus)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndManagerStatus
+			dc.w 	$203C
+			dc.w 	$0314
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndManagerStatus
+	ENDIF
+
+;
+; pascal void SndGetSysBeepState(short *sysBeepState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndGetSysBeepState
+			dc.w 	$203C
+			dc.w 	$0218
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndGetSysBeepState
+	ENDIF
+
+;
+; pascal OSErr SndSetSysBeepState(short sysBeepState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndSetSysBeepState
+			dc.w 	$203C
+			dc.w 	$011C
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndSetSysBeepState
+	ENDIF
+
+;
+; pascal OSErr SndPlayDoubleBuffer(SndChannelPtr chan, SndDoubleBufferHeaderPtr theParams)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndPlayDoubleBuffer
+			dc.w 	$203C
+			dc.w 	$0420
+			dc.w 	$0008
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndPlayDoubleBuffer
+	ENDIF
+
+; MACE compression routines 
+;
+; pascal NumVersion MACEVersion(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MACEVersion
+			dc.w 	$203C
+			dc.w 	$0000
+			dc.w 	$0010
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MACEVersion
+	ENDIF
+
+;
+; pascal void Comp3to1(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Comp3to1
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0010
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Comp3to1
+	ENDIF
+
+;
+; pascal void Exp1to3(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Exp1to3
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0010
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Exp1to3
+	ENDIF
+
+;
+; pascal void Comp6to1(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Comp6to1
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0010
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Comp6to1
+	ENDIF
+
+;
+; pascal void Exp1to6(const void *inBuffer, void *outBuffer, unsigned long cnt, StateBlockPtr inState, StateBlockPtr outState, unsigned long numChannels, unsigned long whichChannel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_Exp1to6
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0010
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	Exp1to6
+	ENDIF
+
+; Sound Manager 3.0 and later calls 
+;
+; pascal OSErr GetSysBeepVolume(long *level)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSysBeepVolume
+			dc.w 	$203C
+			dc.w 	$0224
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSysBeepVolume
+	ENDIF
+
+;
+; pascal OSErr SetSysBeepVolume(long level)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSysBeepVolume
+			dc.w 	$203C
+			dc.w 	$0228
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSysBeepVolume
+	ENDIF
+
+;
+; pascal OSErr GetDefaultOutputVolume(long *level)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDefaultOutputVolume
+			dc.w 	$203C
+			dc.w 	$022C
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDefaultOutputVolume
+	ENDIF
+
+;
+; pascal OSErr SetDefaultOutputVolume(long level)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDefaultOutputVolume
+			dc.w 	$203C
+			dc.w 	$0230
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDefaultOutputVolume
+	ENDIF
+
+;
+; pascal OSErr GetSoundHeaderOffset(SndListHandle sndHandle, long *offset)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSoundHeaderOffset
+			dc.w 	$203C
+			dc.w 	$0404
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSoundHeaderOffset
+	ENDIF
+
+;
+; pascal UnsignedFixed UnsignedFixedMulDiv(UnsignedFixed value, UnsignedFixed multiplier, UnsignedFixed divisor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UnsignedFixedMulDiv
+			dc.w 	$203C
+			dc.w 	$060C
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UnsignedFixedMulDiv
+	ENDIF
+
+;
+; pascal OSErr GetCompressionInfo(short compressionID, OSType format, short numChannels, short sampleSize, CompressionInfoPtr cp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCompressionInfo
+			dc.w 	$203C
+			dc.w 	$0710
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCompressionInfo
+	ENDIF
+
+;
+; pascal OSErr SetSoundPreference(OSType theType, Str255 name, Handle settings)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSoundPreference
+			dc.w 	$203C
+			dc.w 	$0634
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSoundPreference
+	ENDIF
+
+;
+; pascal OSErr GetSoundPreference(OSType theType, Str255 name, Handle settings)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSoundPreference
+			dc.w 	$203C
+			dc.w 	$0638
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSoundPreference
+	ENDIF
+
+; Sound Manager 3.1 and later calls 
+;
+; pascal OSErr SndGetInfo(SndChannelPtr chan, OSType selector, void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndGetInfo
+			dc.w 	$203C
+			dc.w 	$063C
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndGetInfo
+	ENDIF
+
+;
+; pascal OSErr SndSetInfo(SndChannelPtr chan, OSType selector, void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SndSetInfo
+			dc.w 	$203C
+			dc.w 	$0640
+			dc.w 	$0018
+			dc.w 	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SndSetInfo
+	ENDIF
+
+;
+; pascal OSErr GetSoundOutputInfo(Component outputDevice, OSType selector, void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSoundOutputInfo
+			move.l              #$06440018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION GetSoundOutputInfo
+	ENDIF
+
+;
+; pascal OSErr SetSoundOutputInfo(Component outputDevice, OSType selector, const void *infoPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSoundOutputInfo
+			move.l              #$06480018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SetSoundOutputInfo
+	ENDIF
+
+;  Sound Manager 3.2 and later calls 
+;
+; pascal OSErr GetCompressionName(OSType compressionType, Str255 compressionName)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCompressionName
+			move.l              #$044C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION GetCompressionName
+	ENDIF
+
+;
+; pascal OSErr SoundConverterOpen(const SoundComponentData *inputFormat, const SoundComponentData *outputFormat, SoundConverter *sc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterOpen
+			move.l              #$06500018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterOpen
+	ENDIF
+
+;
+; pascal OSErr SoundConverterClose(SoundConverter sc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterClose
+			move.l              #$02540018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterClose
+	ENDIF
+
+;
+; pascal OSErr SoundConverterGetBufferSizes(SoundConverter sc, unsigned long inputBytesTarget, unsigned long *inputFrames, unsigned long *inputBytes, unsigned long *outputBytes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterGetBufferSizes
+			move.l              #$0A580018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterGetBufferSizes
+	ENDIF
+
+;
+; pascal OSErr SoundConverterBeginConversion(SoundConverter sc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterBeginConversion
+			move.l              #$025C0018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterBeginConversion
+	ENDIF
+
+;
+; pascal OSErr SoundConverterConvertBuffer(SoundConverter sc, const void *inputPtr, unsigned long inputFrames, void *outputPtr, unsigned long *outputFrames, unsigned long *outputBytes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterConvertBuffer
+			move.l              #$0C600018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterConvertBuffer
+	ENDIF
+
+;
+; pascal OSErr SoundConverterEndConversion(SoundConverter sc, void *outputPtr, unsigned long *outputFrames, unsigned long *outputBytes)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SoundConverterEndConversion
+			move.l              #$08640018,D0
+			dc.w            	$A800
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION SoundConverterEndConversion
+	ENDIF
+
+	ENDIF ; __SOUND__ 

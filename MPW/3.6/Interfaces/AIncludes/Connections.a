@@ -1,0 +1,1110 @@
+;
+;    File:       Connections.a
+;
+;    Contains:   Communications Toolbox Connection Manager Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1988-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CONNECTIONS__') = 'UNDEFINED' THEN
+__CONNECTIONS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+curCMVersion					EQU		2					; current Connection Manager version
+
+curConnEnvRecVers				EQU		0					;    current Connection Manager Environment Record version
+
+															; CMErr 
+cmGenericError					EQU		-1
+cmNoErr							EQU		0
+cmRejected						EQU		1
+cmFailed						EQU		2
+cmTimeOut						EQU		3
+cmNotOpen						EQU		4
+cmNotClosed						EQU		5
+cmNoRequestPending				EQU		6
+cmNotSupported					EQU		7
+cmNoTools						EQU		8
+cmUserCancel					EQU		9
+cmUnknownError					EQU		11
+; typedef OSErr 						CMErr
+
+
+
+cmData							EQU		$00000001
+cmCntl							EQU		$00000002
+cmAttn							EQU		$00000004
+cmDataNoTimeout					EQU		$00000010
+cmCntlNoTimeout					EQU		$00000020
+cmAttnNoTimeout					EQU		$00000040
+cmDataClean						EQU		$00000100
+cmCntlClean						EQU		$00000200
+cmAttnClean						EQU		$00000400			;       Only for CMRecFlags (not CMChannel) in the rest of this enum  
+cmNoMenus						EQU		$00010000
+cmQuiet							EQU		$00020000
+cmConfigChanged					EQU		$00040000
+;  CMRecFlags and CMChannel     
+;       Low word of CMRecFlags is same as CMChannel 
+; typedef long 							CMRecFlags
+
+; typedef short 						CMChannel
+
+
+
+
+cmStatusOpening					EQU		$00000001
+cmStatusOpen					EQU		$00000002
+cmStatusClosing					EQU		$00000004
+cmStatusDataAvail				EQU		$00000008
+cmStatusCntlAvail				EQU		$00000010
+cmStatusAttnAvail				EQU		$00000020
+cmStatusDRPend					EQU		$00000040			; data read pending  
+cmStatusDWPend					EQU		$00000080			; data write pending 
+cmStatusCRPend					EQU		$00000100			; cntl read pending  
+cmStatusCWPend					EQU		$00000200			; cntl write pending 
+cmStatusARPend					EQU		$00000400			; attn read pending  
+cmStatusAWPend					EQU		$00000800			; attn write pending 
+cmStatusBreakPend				EQU		$00001000
+cmStatusListenPend				EQU		$00002000
+cmStatusIncomingCallPresent		EQU		$00004000
+cmStatusReserved0				EQU		$00008000
+; typedef unsigned long 				CMStatFlags
+
+
+cmDataIn						EQU		0
+cmDataOut						EQU		1
+cmCntlIn						EQU		2
+cmCntlOut						EQU		3
+cmAttnIn						EQU		4
+cmAttnOut						EQU		5
+cmRsrvIn						EQU		6
+cmRsrvOut						EQU		7
+; typedef unsigned short 				CMBufFields
+
+CMBuffers				RECORD 0
+elements				 ds.l	8
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+CMBufferSizes			RECORD 0
+elements				 ds.l	8
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+; typedef const long *					ConstCMBufferSizesParam
+
+
+cmSearchSevenBit				EQU		$00000001
+; typedef unsigned short 				CMSearchFlags
+
+
+cmFlagsEOM						EQU		$00000001
+; typedef unsigned short 				CMFlags
+
+ConnEnvironRec			RECORD 0
+version					 ds.w	1				; offset: $0 (0)
+baudRate				 ds.l	1				; offset: $2 (2)
+dataBits				 ds.w	1				; offset: $6 (6)
+channels				 ds.w	1				; offset: $8 (8)
+swFlowControl			 ds.b	1				; offset: $A (10)
+hwFlowControl			 ds.b	1				; offset: $B (11)
+flags					 ds.w	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+; typedef struct ConnEnvironRec *		ConnEnvironRecPtr
+
+
+
+; typedef ConnRecord *					ConnPtr
+
+; typedef ConnPtr *						ConnHandle
+
+ConnRecord				RECORD 0
+procID					 ds.w	1				; offset: $0 (0)
+flags					 ds.l	1				; offset: $2 (2)
+errCode					 ds.w	1				; offset: $6 (6)
+refCon					 ds.l	1				; offset: $8 (8)
+userData				 ds.l	1				; offset: $C (12)
+defProc					 ds.l	1				; offset: $10 (16)
+config					 ds.l	1				; offset: $14 (20)
+oldConfig				 ds.l	1				; offset: $18 (24)
+asyncEOM				 ds.l	1				; offset: $1C (28)
+reserved1				 ds.l	1				; offset: $20 (32)
+reserved2				 ds.l	1				; offset: $24 (36)
+cmPrivate				 ds.l	1				; offset: $28 (40)
+bufferArray				 ds		CMBuffers		; offset: $2C (44)
+bufSizes				 ds		CMBufferSizes	; offset: $4C (76)
+mluField				 ds.l	1				; offset: $6C (108)
+asyncCount				 ds		CMBufferSizes	; offset: $70 (112)
+sizeof					 EQU *					; size:   $90 (144)
+						ENDR
+
+															; CMIOPB constants and structure 
+cmIOPBQType						EQU		10
+cmIOPBversion					EQU		0
+CMIOPB					RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)
+qType					 ds.w	1				; offset: $4 (4)		;  cmIOPBQType 
+hConn					 ds.l	1				; offset: $6 (6)
+theBuffer				 ds.l	1				; offset: $A (10)
+count					 ds.l	1				; offset: $E (14)
+flags					 ds.w	1				; offset: $12 (18)
+userCompletion			 ds.l	1				; offset: $14 (20)
+timeout					 ds.l	1				; offset: $18 (24)
+errCode					 ds.w	1				; offset: $1C (28)
+channel					 ds.w	1				; offset: $1E (30)
+asyncEOM				 ds.l	1				; offset: $20 (32)
+reserved1				 ds.l	1				; offset: $24 (36)
+reserved2				 ds.w	1				; offset: $28 (40)
+version					 ds.w	1				; offset: $2A (42)		;  cmIOPBversion 
+refCon					 ds.l	1				; offset: $2C (44)		;  for application 
+toolData1				 ds.l	1				; offset: $30 (48)		;  for tool 
+toolData2				 ds.l	1				; offset: $34 (52)		;  for tool 
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+; typedef struct CMIOPB *				CMIOPBPtr
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewConnectionToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewConnectionSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewConnectionCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewConnectionChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeConnectionToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeConnectionSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeConnectionCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeConnectionChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeConnectionToolDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeConnectionSearchCallBackUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeConnectionCompletionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeConnectionChooseIdleUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitCM()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr InitCM(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitCM
+	ENDIF
+
+
+; *  CMGetVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle CMGetVersion(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetVersion
+	ENDIF
+
+
+; *  CMGetCMVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CMGetCMVersion(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetCMVersion
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ConnHandle CMNew(short procID, CMRecFlags flags, ConstCMBufferSizesParam desiredSizes, long refCon, long userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMNew
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMDispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMDispose(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMDispose
+	ENDIF
+
+
+; *  CMListen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMListen(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMListen
+	ENDIF
+
+
+; *  CMAccept()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMAccept(ConnHandle hConn, Boolean accept)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMAccept
+	ENDIF
+
+
+; *  CMOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMOpen(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMOpen
+	ENDIF
+
+
+; *  CMClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMClose(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout, Boolean now)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMClose
+	ENDIF
+
+
+; *  CMAbort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMAbort(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMAbort
+	ENDIF
+
+
+; *  CMStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMStatus(ConnHandle hConn, CMBufferSizes sizes, CMStatFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMStatus
+	ENDIF
+
+
+; *  CMIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMIdle(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIdle
+	ENDIF
+
+
+; *  CMReset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMReset(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMReset
+	ENDIF
+
+
+; *  CMBreak()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMBreak(ConnHandle hConn, long duration, Boolean async, ConnectionCompletionUPP completor)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMBreak
+	ENDIF
+
+
+; *  CMRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMRead(ConnHandle hConn, void *theBuffer, long *toRead, CMChannel theChannel, Boolean async, ConnectionCompletionUPP completor, long timeout, CMFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMRead
+	ENDIF
+
+
+; *  CMWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMWrite(ConnHandle hConn, const void *theBuffer, long *toWrite, CMChannel theChannel, Boolean async, ConnectionCompletionUPP completor, long timeout, CMFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMWrite
+	ENDIF
+
+
+; *  CMIOKill()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMIOKill(ConnHandle hConn, short which)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIOKill
+	ENDIF
+
+
+; *  CMActivate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMActivate(ConnHandle hConn, Boolean activate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMActivate
+	ENDIF
+
+
+; *  CMResume()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMResume(ConnHandle hConn, Boolean resume)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMResume
+	ENDIF
+
+
+; *  CMMenu()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean CMMenu(ConnHandle hConn, short menuID, short item)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMMenu
+	ENDIF
+
+
+; *  CMValidate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean CMValidate(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMValidate
+	ENDIF
+
+
+; *  CMDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMDefault(Ptr *theConfig, short procID, Boolean allocate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMDefault
+	ENDIF
+
+
+; *  CMSetupPreflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle CMSetupPreflight(short procID, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupPreflight
+	ENDIF
+
+
+; *  CMSetupFilter()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean CMSetupFilter(short procID, const void *theConfig, short count, DialogRef theDialog, EventRecord *theEvent, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupFilter
+	ENDIF
+
+
+; *  CMSetupSetup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetupSetup(short procID, const void *theConfig, short count, DialogRef theDialog, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupSetup
+	ENDIF
+
+
+; *  CMSetupItem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetupItem(short procID, const void *theConfig, short count, DialogRef theDialog, short *theItem, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupItem
+	ENDIF
+
+
+; *  CMSetupXCleanup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetupXCleanup(short procID, const void *theConfig, short count, DialogRef theDialog, Boolean OKed, long *magicCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupXCleanup
+	ENDIF
+
+
+; *  CMSetupPostflight()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetupPostflight(short procID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetupPostflight
+	ENDIF
+
+
+; *  CMGetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Ptr CMGetConfig(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetConfig
+	ENDIF
+
+
+; *  CMSetConfig()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CMSetConfig(ConnHandle hConn, const void *thePtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetConfig
+	ENDIF
+
+
+; *  CMIntlToEnglish()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CMIntlToEnglish(ConnHandle hConn, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMIntlToEnglish
+	ENDIF
+
+
+; *  CMEnglishToIntl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr CMEnglishToIntl(ConnHandle hConn, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMEnglishToIntl
+	ENDIF
+
+
+; *  CMAddSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long CMAddSearch(ConnHandle hConn, ConstStr255Param theString, CMSearchFlags flags, ConnectionSearchCallBackUPP callBack)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMAddSearch
+	ENDIF
+
+
+; *  CMRemoveSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMRemoveSearch(ConnHandle hConn, long refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMRemoveSearch
+	ENDIF
+
+
+; *  CMClearSearch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMClearSearch(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMClearSearch
+	ENDIF
+
+
+; *  CMGetConnEnvirons()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMGetConnEnvirons(ConnHandle hConn, ConnEnvironRec *theEnvirons)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetConnEnvirons
+	ENDIF
+
+
+; *  CMChoose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CMChoose(ConnHandle *hConn, Point where, ConnectionChooseIdleUPP idle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMChoose
+	ENDIF
+
+
+; *  CMEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMEvent(ConnHandle hConn, const EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMEvent
+	ENDIF
+
+
+; *  CMGetToolName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMGetToolName(short procID, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetToolName
+	ENDIF
+
+
+; *  CMGetProcID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short CMGetProcID(ConstStr255Param name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetProcID
+	ENDIF
+
+
+; *  CMSetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetRefCon(ConnHandle hConn, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetRefCon
+	ENDIF
+
+
+; *  CMGetRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long CMGetRefCon(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetRefCon
+	ENDIF
+
+
+; *  CMGetUserData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal long CMGetUserData(ConnHandle hConn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetUserData
+	ENDIF
+
+
+; *  CMSetUserData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMSetUserData(ConnHandle hConn, long userData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMSetUserData
+	ENDIF
+
+
+; *  CMGetErrorString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CMGetErrorString(ConnHandle hConn, short id, Str255 errMsg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMGetErrorString
+	ENDIF
+
+
+; *  CMNewIOPB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMNewIOPB(ConnHandle hConn, CMIOPBPtr *theIOPB)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMNewIOPB
+	ENDIF
+
+
+; *  CMDisposeIOPB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMDisposeIOPB(ConnHandle hConn, CMIOPBPtr theIOPB)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMDisposeIOPB
+	ENDIF
+
+
+; *  CMPBRead()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMPBRead(ConnHandle hConn, CMIOPBPtr theIOPB, Boolean async)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMPBRead
+	ENDIF
+
+
+; *  CMPBWrite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMPBWrite(ConnHandle hConn, CMIOPBPtr theIOPB, Boolean async)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMPBWrite
+	ENDIF
+
+
+; *  CMPBIOKill()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMErr CMPBIOKill(ConnHandle hConn, CMIOPBPtr theIOPB)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMPBIOKill
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __CONNECTIONS__ 
+

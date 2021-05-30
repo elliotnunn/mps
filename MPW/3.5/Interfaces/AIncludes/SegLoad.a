@@ -1,0 +1,148 @@
+;
+;    File:       SegLoad.a
+;
+;    Contains:   Segment Loader Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SEGLOAD__') = 'UNDEFINED' THEN
+__SEGLOAD__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+
+	IF TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM ++ ¬ TARGET_OS_MAC THEN
+
+;   CountAppFiles, GetAppFiles, ClrAppFiles, GetAppParms, getappparms, 
+;   and the AppFile data structure and enums are obsolete. 
+;   They are still supported for writing old style 68K apps, 
+;   but they are not supported for CFM-based apps.
+;   Use AppleEvents to determine which files are to be 
+;   opened or printed from the Finder.
+
+
+
+appOpen							EQU		0					;Open the Document (s)
+appPrint						EQU		1					;Print the Document (s)
+AppFile					RECORD 0
+vRefNum					 ds.w	1				; offset: $0 (0)
+fType					 ds.l	1				; offset: $2 (2)
+versNum					 ds.w	1				; offset: $6 (6)		; versNum in high byte
+fName					 ds		Str255			; offset: $8 (8)
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CountAppFiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CountAppFiles(short *message, short *count)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountAppFiles
+	ENDIF
+
+
+; *  GetAppFiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void GetAppFiles(short index, AppFile *theFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetAppFiles
+	ENDIF
+
+
+; *  ClrAppFiles()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void ClrAppFiles(short index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ClrAppFiles
+	ENDIF
+
+
+; *  GetAppParms()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void GetAppParms(Str255 apName, short *apRefNum, Handle *apParam)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetAppParms:	OPWORD	$A9F5
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetAppParms
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+
+;   Because PowerPC applications don’t have segments.
+;   But, in order to allow applications to not have conditionalized
+;   source code, UnloadSeg is macro'ed away for PowerPC.
+
+
+	IF TARGET_CPU_68K THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  UnloadSeg()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void UnloadSeg(void *routineAddr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_UnloadSeg:	OPWORD	$A9F1
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UnloadSeg
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ELSE
+	ENDIF	; TARGET_CPU_68K
+;  ExitToShell() has moved to Process.h
+
+
+
+
+	ENDIF ; __SEGLOAD__ 
+

@@ -1,0 +1,203 @@
+;
+;	File:		PictUtils.a
+;
+;	Contains:	Picture Utilities Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__PICTUTILS__') = 'UNDEFINED' THEN
+__PICTUTILS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__PALETTES__') = 'UNDEFINED' THEN
+	include 'Palettes.a'
+	ENDIF
+
+returnColorTable				EQU		$0001
+returnPalette					EQU		$0002
+recordComments					EQU		$0004
+recordFontInfo					EQU		$0008
+suppressBlackAndWhite			EQU		$0010
+
+; color pick methods 
+systemMethod					EQU		0					; system color pick method 
+popularMethod					EQU		1					; method that chooses the most popular set of colors 
+medianMethod					EQU		2					; method that chooses a good average mix of colors 
+; color bank types 
+ColorBankIsCustom				EQU		-1
+ColorBankIsExactAnd555			EQU		0
+ColorBankIs555					EQU		1
+
+; typedef long 				PictInfoID
+CommentSpec 			RECORD	0
+count					 ds.w   1		; offset: $0 (0)		; number of occurrances of this comment ID 
+ID						 ds.w   1		; offset: $2 (2)		; ID for the comment in the picture 
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct CommentSpec  CommentSpec, *CommentSpecPtr, **CommentSpecHandle
+FontSpec 				RECORD	0
+pictFontID				 ds.w   1		; offset: $0 (0)		; ID of the font in the picture 
+sysFontID				 ds.w   1		; offset: $2 (2)		; ID of the same font in the current system file 
+size					 ds.l   4		; offset: $4 (4)		; bit array of all the sizes found (1..127) (bit 0 means > 127) 
+style					 ds.w   1		; offset: $14 (20)		; combined style of all occurrances of the font 
+nameOffset				 ds.l   1		; offset: $16 (22)		; offset into the fontNamesHdl handle for the font’s name 
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct FontSpec 	FontSpec, *FontSpecPtr, **FontSpecHandle
+PictInfo 				RECORD	0
+version					 ds.w   1		; offset: $0 (0)		; this is always zero, for now 
+uniqueColors			 ds.l   1		; offset: $2 (2)		; the number of actual colors in the picture(s)/pixmap(s) 
+thePalette				 ds.l   1		; offset: $6 (6)		; handle to the palette information 
+theColorTable			 ds.l   1		; offset: $A (10)		; handle to the color table 
+hRes					 ds.l   1		; offset: $E (14)		; maximum horizontal resolution for all the pixmaps 
+vRes					 ds.l   1		; offset: $12 (18)		; maximum vertical resolution for all the pixmaps 
+depth					 ds.w   1		; offset: $16 (22)		; maximum depth for all the pixmaps (in the picture) 
+sourceRect				 ds     Rect	; offset: $18 (24)		; the picture frame rectangle (this contains the entire picture) 
+textCount				 ds.l   1		; offset: $20 (32)		; total number of text strings in the picture 
+lineCount				 ds.l   1		; offset: $24 (36)		; total number of lines in the picture 
+rectCount				 ds.l   1		; offset: $28 (40)		; total number of rectangles in the picture 
+rRectCount				 ds.l   1		; offset: $2C (44)		; total number of round rectangles in the picture 
+ovalCount				 ds.l   1		; offset: $30 (48)		; total number of ovals in the picture 
+arcCount				 ds.l   1		; offset: $34 (52)		; total number of arcs in the picture 
+polyCount				 ds.l   1		; offset: $38 (56)		; total number of polygons in the picture 
+regionCount				 ds.l   1		; offset: $3C (60)		; total number of regions in the picture 
+bitMapCount				 ds.l   1		; offset: $40 (64)		; total number of bitmaps in the picture 
+pixMapCount				 ds.l   1		; offset: $44 (68)		; total number of pixmaps in the picture 
+commentCount			 ds.l   1		; offset: $48 (72)		; total number of comments in the picture 
+uniqueComments			 ds.l   1		; offset: $4C (76)		; the number of unique comments in the picture 
+commentHandle			 ds.l   1		; offset: $50 (80)		; handle to all the comment information 
+uniqueFonts				 ds.l   1		; offset: $54 (84)		; the number of unique fonts in the picture 
+fontHandle				 ds.l   1		; offset: $58 (88)		; handle to the FontSpec information 
+fontNamesHandle			 ds.l   1		; offset: $5C (92)		; handle to the font names 
+reserved1				 ds.l   1		; offset: $60 (96)
+reserved2				 ds.l   1		; offset: $64 (100)
+sizeof					 EQU *			; size:   $68 (104)
+						ENDR
+
+; typedef struct PictInfo 	PictInfo
+; typedef PictInfo 			*PictInfoPtr, **PictInfoHandle
+;
+; pascal OSErr GetPictInfo(PicHandle thePictHandle, PictInfo *thePictInfo, short verb, short colorsRequested, short colorPickMethod, short version)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPictInfo
+			move.w	#$0800,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPictInfo
+	ENDIF
+
+;
+; pascal OSErr GetPixMapInfo(PixMapHandle thePixMapHandle, PictInfo *thePictInfo, short verb, short colorsRequested, short colorPickMethod, short version)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPixMapInfo
+			move.w	#$0801,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPixMapInfo
+	ENDIF
+
+;
+; pascal OSErr NewPictInfo(PictInfoID *thePictInfoID, short verb, short colorsRequested, short colorPickMethod, short version)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewPictInfo
+			move.w	#$0602,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewPictInfo
+	ENDIF
+
+;
+; pascal OSErr RecordPictInfo(PictInfoID thePictInfoID, PicHandle thePictHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RecordPictInfo
+			move.w	#$0403,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RecordPictInfo
+	ENDIF
+
+;
+; pascal OSErr RecordPixMapInfo(PictInfoID thePictInfoID, PixMapHandle thePixMapHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RecordPixMapInfo
+			move.w	#$0404,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RecordPixMapInfo
+	ENDIF
+
+;
+; pascal OSErr RetrievePictInfo(PictInfoID thePictInfoID, PictInfo *thePictInfo, short colorsRequested)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RetrievePictInfo
+			move.w	#$0505,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RetrievePictInfo
+	ENDIF
+
+;
+; pascal OSErr DisposePictInfo(PictInfoID thePictInfoID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposePictInfo
+			move.w	#$0206,d0
+			dc.w 	$A831
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposePictInfo
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+	ENDIF
+	ENDIF ; __PICTUTILS__

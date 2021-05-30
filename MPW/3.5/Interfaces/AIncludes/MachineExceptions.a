@@ -1,0 +1,276 @@
+;
+;    File:       MachineExceptions.a
+;
+;    Contains:   Processor Exception Handling Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MACHINEEXCEPTIONS__') = 'UNDEFINED' THEN
+__MACHINEEXCEPTIONS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+;  Some basic declarations used throughout the kernel 
+
+
+	IF TARGET_OS_MAC THEN
+;  Machine Dependent types for PowerPC: 
+MachineInformationPowerPC RECORD 0
+CTR						 ds		UnsignedWide	; offset: $0 (0)
+LR						 ds		UnsignedWide	; offset: $8 (8)
+PC						 ds		UnsignedWide	; offset: $10 (16)
+CR						 ds.l	1				; offset: $18 (24)
+XER						 ds.l	1				; offset: $1C (28)
+MSR						 ds.l	1				; offset: $20 (32)
+MQ						 ds.l	1				; offset: $24 (36)
+ExceptKind				 ds.l	1				; offset: $28 (40)
+DSISR					 ds.l	1				; offset: $2C (44)
+DAR						 ds		UnsignedWide	; offset: $30 (48)
+Reserved				 ds		UnsignedWide	; offset: $38 (56)
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+RegisterInformationPowerPC RECORD 0
+R0						 ds		UnsignedWide	; offset: $0 (0)
+R1						 ds		UnsignedWide	; offset: $8 (8)
+R2						 ds		UnsignedWide	; offset: $10 (16)
+R3						 ds		UnsignedWide	; offset: $18 (24)
+R4						 ds		UnsignedWide	; offset: $20 (32)
+R5						 ds		UnsignedWide	; offset: $28 (40)
+R6						 ds		UnsignedWide	; offset: $30 (48)
+R7						 ds		UnsignedWide	; offset: $38 (56)
+R8						 ds		UnsignedWide	; offset: $40 (64)
+R9						 ds		UnsignedWide	; offset: $48 (72)
+R10						 ds		UnsignedWide	; offset: $50 (80)
+R11						 ds		UnsignedWide	; offset: $58 (88)
+R12						 ds		UnsignedWide	; offset: $60 (96)
+R13						 ds		UnsignedWide	; offset: $68 (104)
+R14						 ds		UnsignedWide	; offset: $70 (112)
+R15						 ds		UnsignedWide	; offset: $78 (120)
+R16						 ds		UnsignedWide	; offset: $80 (128)
+R17						 ds		UnsignedWide	; offset: $88 (136)
+R18						 ds		UnsignedWide	; offset: $90 (144)
+R19						 ds		UnsignedWide	; offset: $98 (152)
+R20						 ds		UnsignedWide	; offset: $A0 (160)
+R21						 ds		UnsignedWide	; offset: $A8 (168)
+R22						 ds		UnsignedWide	; offset: $B0 (176)
+R23						 ds		UnsignedWide	; offset: $B8 (184)
+R24						 ds		UnsignedWide	; offset: $C0 (192)
+R25						 ds		UnsignedWide	; offset: $C8 (200)
+R26						 ds		UnsignedWide	; offset: $D0 (208)
+R27						 ds		UnsignedWide	; offset: $D8 (216)
+R28						 ds		UnsignedWide	; offset: $E0 (224)
+R29						 ds		UnsignedWide	; offset: $E8 (232)
+R30						 ds		UnsignedWide	; offset: $F0 (240)
+R31						 ds		UnsignedWide	; offset: $F8 (248)
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+FPUInformationPowerPC	RECORD 0
+Registers				 ds.b	32 * UnsignedWide.sizeof ; offset: $0 (0)
+FPSCR					 ds.l	1				; offset: $100 (256)
+Reserved				 ds.l	1				; offset: $104 (260)
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+Vector128				RECORD 0
+l						 ds.l	4				; offset: $0 (0)
+						 ORG 0
+s						 ds.w	8				; offset: $0 (0)
+						 ORG 0
+c						 ds.b	16				; offset: $0 (0)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+VectorInformationPowerPC RECORD 0
+Registers				 ds.b	32 * Vector128.sizeof ; offset: $0 (0)
+VSCR					 ds		Vector128		; offset: $200 (512)
+VRsave					 ds.l	1				; offset: $210 (528)
+sizeof					 EQU *					; size:   $214 (532)
+						ENDR
+;  Exception related declarations 
+
+kWriteReference					EQU		0
+kReadReference					EQU		1
+kFetchReference					EQU		2
+writeReference					EQU		0					; Obsolete name
+readReference					EQU		1					; Obsolete name
+fetchReference					EQU		2					; Obsolete name
+; typedef unsigned long 				MemoryReferenceKind
+
+MemoryExceptionInformation RECORD 0
+theArea					 ds.l	1				; offset: $0 (0)		;  The area related to the execption, same as MPAreaID.
+theAddress				 ds.l	1				; offset: $4 (4)		;  The 32-bit address of the exception.
+theError				 ds.l	1				; offset: $8 (8)		;  See enum below.
+theReference			 ds.l	1				; offset: $C (12)		;  read, write, instruction fetch.
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+kUnknownException				EQU		0
+kIllegalInstructionException	EQU		1
+kTrapException					EQU		2
+kAccessException				EQU		3
+kUnmappedMemoryException		EQU		4
+kExcludedMemoryException		EQU		5
+kReadOnlyMemoryException		EQU		6
+kUnresolvablePageFaultException	EQU		7
+kPrivilegeViolationException	EQU		8
+kTraceException					EQU		9
+kInstructionBreakpointException	EQU		10					; Optional
+kDataBreakpointException		EQU		11					; Optional
+kIntegerException				EQU		12
+kFloatingPointException			EQU		13
+kStackOverflowException			EQU		14					; Optional, may be implemented as kAccessException on some systems.
+kTaskTerminationException		EQU		15					; Obsolete
+kTaskCreationException			EQU		16					; Obsolete
+kDataAlignmentException			EQU		17					; May occur when a task is in little endian mode or created with kMPTaskTakesAllExceptions.
+	IF OLDROUTINENAMES THEN
+
+unknownException				EQU		0					; Obsolete name
+illegalInstructionException		EQU		1					; Obsolete name
+trapException					EQU		2					; Obsolete name
+accessException					EQU		3					; Obsolete name
+unmappedMemoryException			EQU		4					; Obsolete name
+excludedMemoryException			EQU		5					; Obsolete name
+readOnlyMemoryException			EQU		6					; Obsolete name
+unresolvablePageFaultException	EQU		7					; Obsolete name
+privilegeViolationException		EQU		8					; Obsolete name
+traceException					EQU		9					; Obsolete name
+instructionBreakpointException	EQU		10					; Obsolete name
+dataBreakpointException			EQU		11					; Obsolete name
+integerException				EQU		12					; Obsolete name
+floatingPointException			EQU		13					; Obsolete name
+stackOverflowException			EQU		14					; Obsolete name
+terminationException			EQU		15					; Obsolete name
+kTerminationException			EQU		15					; Obsolete name
+	ENDIF	; OLDROUTINENAMES
+; typedef unsigned long 				ExceptionKind
+
+ExceptionInfo			RECORD 0
+memoryInfo				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+ExceptionInformationPowerPC RECORD 0
+theKind					 ds.l	1				; offset: $0 (0)
+machineState			 ds.l	1				; offset: $4 (4)
+registerImage			 ds.l	1				; offset: $8 (8)
+FPUImage				 ds.l	1				; offset: $C (12)
+info					 ds		ExceptionInfo	; offset: $10 (16)
+vectorImage				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+	IF TARGET_CPU_PPC ++ TARGET_CPU_68K THEN
+ExceptionInformation	RECORD 0
+f						 ds		ExceptionInformationPowerPC
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+
+MachineInformation		RECORD 0
+f						 ds		MachineInformationPowerPC
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+
+
+RegisterInformation		RECORD 0
+f						 ds		RegisterInformationPowerPC
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+
+
+FPUInformation			RECORD 0
+f						 ds		FPUInformationPowerPC
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+
+
+VectorInformation		RECORD 0
+f						 ds		VectorInformationPowerPC
+sizeof					 EQU *					; size:   $214 (532)
+						ENDR
+
+
+	ENDIF
+;  
+;    Note:   An ExceptionHandler is NOT a UniversalProcPtr, except in Carbon.
+;            It must be a PowerPC function pointer with NO routine descriptor, 
+;            except on Carbon, where it must be a UniversalProcPtr (TPP actually)
+;            to allow the interface to work from both CFM and Mach-O.
+;
+
+
+; *  NewExceptionHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeExceptionHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeExceptionHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;   ExceptionHandler function pointers (TPP):
+;   on classic PowerPC, use raw function pointers
+;   on classic PowerPC with OPAQUE_UPP_TYPES=1, use UPP's
+;   on Carbon, use UPP's
+
+
+	IF TARGET_OS_MAC ** ¬ OPAQUE_UPP_TYPES THEN
+;  use raw function pointers
+; typedef ExceptionHandlerProcPtr 		ExceptionHandlerTPP
+
+	ELSE
+;  use UPP's
+; typedef ExceptionHandlerUPP 			ExceptionHandlerTPP
+
+	ENDIF
+; typedef ExceptionHandlerTPP 			ExceptionHandler
+
+;  Routine for installing per-process exception handlers 
+
+; *  InstallExceptionHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ExceptionHandlerTPP InstallExceptionHandler(ExceptionHandlerTPP theHandler)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallExceptionHandler
+	ENDIF
+
+	ENDIF	; TARGET_OS_MAC
+
+	ENDIF ; __MACHINEEXCEPTIONS__ 
+

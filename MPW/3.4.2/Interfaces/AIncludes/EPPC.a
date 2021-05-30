@@ -1,0 +1,166 @@
+;
+;	File:		EPPC.a
+;
+;	Contains:	High Level Event Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2.1
+;
+;	Copyright:	© 1984-1996 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__EPPC__') = 'UNDEFINED' THEN
+__EPPC__ SET 1
+
+
+	IF &TYPE('__ERRORS__') = 'UNDEFINED' THEN
+	include 'Errors.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+	include 'AppleTalk.a'
+	ENDIF
+;		include 'Types.a'											;
+;		include 'OSUtils.a'											;
+;			include 'MixedMode.a'									;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'Finder.a'											;
+
+	IF &TYPE('__PPCTOOLBOX__') = 'UNDEFINED' THEN
+	include 'PPCToolbox.a'
+	ENDIF
+
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+
+; postOptions currently supported 
+receiverIDMask					EQU		$0000F000
+receiverIDisPSN					EQU		$00008000
+receiverIDisSignature			EQU		$00007000
+receiverIDisSessionID			EQU		$00006000
+receiverIDisTargetID			EQU		$00005000
+systemOptionsMask				EQU		$00000F00
+nReturnReceipt					EQU		$00000200
+priorityMask					EQU		$000000FF
+nAttnMsg						EQU		$00000001
+
+; constant for return receipts 
+HighLevelEventMsgClass			EQU		'jaym'
+rtrnReceiptMsgID				EQU		'rtrn'
+
+msgWasPartiallyAccepted			EQU		2
+msgWasFullyAccepted				EQU		1
+msgWasNotAccepted				EQU		0
+
+TargetID 				RECORD	0
+sessionID				 ds.l   1		; offset: $0 (0)
+name					 ds.l   18		; offset: $4 (4)
+location				 ds.l   26		; offset: $4C (76)
+recvrName				 ds.l   18		; offset: $B4 (180)
+sizeof					 EQU *			; size:   $FC (252)
+						ENDR
+
+; typedef struct TargetID 	TargetID
+; typedef TargetID 			*TargetIDPtr, **TargetIDHandle, **TargetIDHdl
+; typedef TargetID 			SenderID
+; typedef SenderID 			*SenderIDPtr
+HighLevelEventMsg 		RECORD	0
+HighLevelEventMsgHeaderLength ds.w   1	; offset: $0 (0)
+version					 ds.w   1		; offset: $2 (2)
+reserved1				 ds.l   1		; offset: $4 (4)
+theMsgEvent				 ds     EventRecord ; offset: $8 (8)
+userRefcon				 ds.l   1		; offset: $18 (24)
+postingOptions			 ds.l   1		; offset: $1C (28)
+msgLength				 ds.l   1		; offset: $20 (32)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct HighLevelEventMsg  HighLevelEventMsg
+; typedef HighLevelEventMsg  *HighLevelEventMsgPtr, **HighLevelEventMsgHandle, **HighLevelEventMsgHdl
+;
+; pascal OSErr PostHighLevelEvent(const EventRecord *theEvent, unsigned long receiverID, unsigned long msgRefcon, void *msgBuff, unsigned long msgLen, unsigned long postingOptions)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_PostHighLevelEvent
+			move.w	#$0034,-(sp)
+			dc.w 	$A88F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	PostHighLevelEvent
+	ENDIF
+
+;
+; pascal OSErr AcceptHighLevelEvent(TargetID *sender, unsigned long *msgRefcon, void *msgBuff, unsigned long *msgLen)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AcceptHighLevelEvent
+			move.w	#$0033,-(sp)
+			dc.w 	$A88F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AcceptHighLevelEvent
+	ENDIF
+
+;
+; pascal OSErr GetProcessSerialNumberFromPortName(const PPCPortRec *portName, ProcessSerialNumber *pPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetProcessSerialNumberFromPortName
+			move.w	#$0035,-(sp)
+			dc.w 	$A88F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetProcessSerialNumberFromPortName
+	ENDIF
+
+;
+; pascal OSErr GetPortNameFromProcessSerialNumber(PPCPortRec *portName, const ProcessSerialNumber *pPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPortNameFromProcessSerialNumber
+			move.w	#$0046,-(sp)
+			dc.w 	$A88F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPortNameFromProcessSerialNumber
+	ENDIF
+
+;
+; pascal Boolean GetSpecificHighLevelEvent(GetSpecificFilterUPP aFilter, void *contextPtr, OSErr *err)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSpecificHighLevelEvent
+			move.w	#$0045,-(sp)
+			dc.w 	$A88F
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSpecificHighLevelEvent
+	ENDIF
+
+	ENDIF ; __EPPC__

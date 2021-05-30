@@ -1,0 +1,1487 @@
+;
+;    File:       Devices.a
+;
+;    Contains:   Device Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DEVICES__') = 'UNDEFINED' THEN
+__DEVICES__ SET 1
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__MULTIPROCESSING__') = 'UNDEFINED' THEN
+	include 'Multiprocessing.a'
+	ENDIF
+	IF &TYPE('__DRIVERFAMILYMATCHING__') = 'UNDEFINED' THEN
+	include 'DriverFamilyMatching.a'
+	ENDIF
+	IF &TYPE('__DISKS__') = 'UNDEFINED' THEN
+	include 'Disks.a'
+	ENDIF
+;  Values of the 'message' parameter to a Chooser device package 
+
+chooserInitMsg					EQU		11					; the user selected this device package 
+newSelMsg						EQU		12					; the user made new device selections 
+fillListMsg						EQU		13					; fill the device list with choices 
+getSelMsg						EQU		14					; mark one or more choices as selected 
+selectMsg						EQU		15					; the user made a selection 
+deselectMsg						EQU		16					; the user canceled a selection 
+terminateMsg					EQU		17					; allows device package to clean up 
+buttonMsg						EQU		19					; the user selected a button 
+
+;  Values of the 'caller' parameter to a Chooser device package 
+
+chooserID						EQU		1
+
+;  Values of the 'message' parameter to a Monitor 'mntr' 
+
+initMsg							EQU		1					;initialization
+okMsg							EQU		2					;user clicked OK button
+cancelMsg						EQU		3					;user clicked Cancel button
+hitMsg							EQU		4					;user clicked control in Options dialog
+nulMsg							EQU		5					;periodic event
+updateMsg						EQU		6					;update event
+activateMsg						EQU		7					;not used
+deactivateMsg					EQU		8					;not used
+keyEvtMsg						EQU		9					;keyboard event
+superMsg						EQU		10					;show superuser controls
+normalMsg						EQU		11					;show only normal controls
+startupMsg						EQU		12					;code has been loaded
+
+;  control codes for DeskAccessories 
+
+goodbye							EQU		-1					; heap being reinitialized 
+killCode						EQU		1					; KillIO requested 
+accEvent						EQU		64					; handle an event 
+accRun							EQU		65					; time for periodic action 
+accCursor						EQU		66					; change cursor shape 
+accMenu							EQU		67					; handle menu item 
+accUndo							EQU		68					; handle undo command 
+accCut							EQU		70					; handle cut command 
+accCopy							EQU		71					; handle copy command 
+accPaste						EQU		72					; handle paste command 
+accClear						EQU		73					; handle clear command 
+;  Control/Status Call Codes 
+;  drvStsCode, ejectCode and tgBuffCode are now defined in Disks.h/p/a 
+
+;  miscellaneous Device Manager constants 
+
+ioInProgress					EQU		1					; predefined value of ioResult while I/O is pending 
+aRdCmd							EQU		2					; low byte of ioTrap for Read calls 
+aWrCmd							EQU		3					; low byte of ioTrap for Write calls 
+asyncTrpBit						EQU		10					; trap word modifier 
+noQueueBit						EQU		9					; trap word modifier 
+;  flags used in the driver header and device control entry 
+
+dReadEnable						EQU		0					; set if driver responds to read requests 
+dWritEnable						EQU		1					; set if driver responds to write requests 
+dCtlEnable						EQU		2					; set if driver responds to control requests 
+dStatEnable						EQU		3					; set if driver responds to status requests 
+dNeedGoodBye					EQU		4					; set if driver needs time for performing periodic tasks 
+dNeedTime						EQU		5					; set if driver needs time for performing periodic tasks 
+dNeedLock						EQU		6					; set if driver must be locked in memory as soon as it is opened 
+
+dNeedLockMask					EQU		$4000				; set if driver must be locked in memory as soon as it is opened 
+dNeedTimeMask					EQU		$2000				; set if driver needs time for performing periodic tasks 
+dNeedGoodByeMask				EQU		$1000				; set if driver needs to be called before the application heap is initialized 
+dStatEnableMask					EQU		$0800				; set if driver responds to status requests 
+dCtlEnableMask					EQU		$0400				; set if driver responds to control requests 
+dWritEnableMask					EQU		$0200				; set if driver responds to write requests 
+dReadEnableMask					EQU		$0100				; set if driver responds to read requests 
+
+;  run-time flags used in the device control entry 
+
+dVMImmuneBit					EQU		0					; driver does not need VM protection 
+dOpened							EQU		5					; driver is open 
+dRAMBased						EQU		6					; dCtlDriver is a handle (1) or pointer (0) 
+drvrActive						EQU		7					; driver is currently processing a request 
+
+dVMImmuneMask					EQU		$0001				; driver does not need VM protection 
+dOpenedMask						EQU		$0020				; driver is open 
+dRAMBasedMask					EQU		$0040				; dCtlDriver is a handle (1) or pointer (0) 
+drvrActiveMask					EQU		$0080				; driver is currently processing a request 
+DRVRHeader				RECORD 0
+drvrFlags				 ds.w	1				; offset: $0 (0)
+drvrDelay				 ds.w	1				; offset: $2 (2)
+drvrEMask				 ds.w	1				; offset: $4 (4)
+drvrMenu				 ds.w	1				; offset: $6 (6)
+drvrOpen				 ds.w	1				; offset: $8 (8)
+drvrPrime				 ds.w	1				; offset: $A (10)
+drvrCtl					 ds.w	1				; offset: $C (12)
+drvrStatus				 ds.w	1				; offset: $E (14)
+drvrClose				 ds.w	1				; offset: $10 (16)
+drvrName				 ds.b	1				; offset: $12 (18) <-- really an array of length one
+						 ORG 20
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct DRVRHeader *			DRVRHeaderPtr
+
+; typedef DRVRHeaderPtr *				DRVRHeaderHandle
+
+DCtlEntry				RECORD 0
+dCtlDriver				 ds.l	1				; offset: $0 (0)
+dCtlFlags				 ds.w	1				; offset: $4 (4)
+dCtlQHdr				 ds		QHdr			; offset: $6 (6)
+dCtlPosition			 ds.l	1				; offset: $10 (16)
+dCtlStorage				 ds.l	1				; offset: $14 (20)
+dCtlRefNum				 ds.w	1				; offset: $18 (24)
+dCtlCurTicks			 ds.l	1				; offset: $1A (26)
+dCtlWindow				 ds.l	1				; offset: $1E (30)
+dCtlDelay				 ds.w	1				; offset: $22 (34)
+dCtlEMask				 ds.w	1				; offset: $24 (36)
+dCtlMenu				 ds.w	1				; offset: $26 (38)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+; typedef struct DCtlEntry *			DCtlPtr
+
+; typedef DCtlPtr *						DCtlHandle
+
+AuxDCE					RECORD 0
+dCtlDriver				 ds.l	1				; offset: $0 (0)
+dCtlFlags				 ds.w	1				; offset: $4 (4)
+dCtlQHdr				 ds		QHdr			; offset: $6 (6)
+dCtlPosition			 ds.l	1				; offset: $10 (16)
+dCtlStorage				 ds.l	1				; offset: $14 (20)
+dCtlRefNum				 ds.w	1				; offset: $18 (24)
+dCtlCurTicks			 ds.l	1				; offset: $1A (26)
+dCtlWindow				 ds.l	1				; offset: $1E (30)
+dCtlDelay				 ds.w	1				; offset: $22 (34)
+dCtlEMask				 ds.w	1				; offset: $24 (36)
+dCtlMenu				 ds.w	1				; offset: $26 (38)
+dCtlSlot				 ds.b	1				; offset: $28 (40)
+dCtlSlotId				 ds.b	1				; offset: $29 (41)
+dCtlDevBase				 ds.l	1				; offset: $2A (42)
+dCtlOwner				 ds.l	1				; offset: $2E (46)
+dCtlExtDev				 ds.b	1				; offset: $32 (50)
+fillByte				 ds.b	1				; offset: $33 (51)
+dCtlNodeID				 ds.l	1				; offset: $34 (52)
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+; typedef struct AuxDCE *				AuxDCEPtr
+
+; typedef AuxDCEPtr *					AuxDCEHandle
+
+;   The NDRV Driver IO Entry Point and Commands 
+; typedef UInt16 						UnitNumber
+
+; typedef UInt32 						DriverOpenCount
+
+; typedef SInt16 						DriverRefNum
+
+; typedef SInt16 						DriverFlags
+
+; typedef UInt32 						IOCommandCode
+
+
+kOpenCommand					EQU		0
+kCloseCommand					EQU		1
+kReadCommand					EQU		2
+kWriteCommand					EQU		3
+kControlCommand					EQU		4
+kStatusCommand					EQU		5
+kKillIOCommand					EQU		6
+kInitializeCommand				EQU		7					; init driver and device
+kFinalizeCommand				EQU		8					; shutdown driver and device
+kReplaceCommand					EQU		9					; replace an old driver
+kSupersededCommand				EQU		10					; prepare to be replaced by a new driver
+kSuspendCommand					EQU		11					; prepare driver to go to sleep
+kResumeCommand					EQU		12					; wake up sleeping driver
+
+															; one more IOCommandCode
+kPowerManagementCommand			EQU		13					; power management command, supercedes kSuspendCommand and kResumeCommand
+; typedef MPAddressSpaceID 				AddressSpaceID
+
+
+
+; typedef UInt32 						IOCommandKind
+
+
+kSynchronousIOCommandKind		EQU		$00000001
+kAsynchronousIOCommandKind		EQU		$00000002
+kImmediateIOCommandKind			EQU		$00000004
+DriverInitInfo			RECORD 0
+refNum					 ds.w	1				; offset: $0 (0)
+deviceEntry				 ds		RegEntryID		; offset: $2 (2)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+; typedef struct DriverInitInfo *		DriverInitInfoPtr
+
+DriverReplaceInfo		RECORD 0
+f						 ds		DriverInitInfo
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+
+; typedef struct DriverInitInfo *		DriverReplaceInfoPtr
+
+DriverFinalInfo			RECORD 0
+refNum					 ds.w	1				; offset: $0 (0)
+deviceEntry				 ds		RegEntryID		; offset: $2 (2)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+; typedef struct DriverFinalInfo *		DriverFinalInfoPtr
+
+DriverSupersededInfo	RECORD 0
+f						 ds		DriverFinalInfo
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+
+; typedef struct DriverFinalInfo *		DriverSupersededInfoPtr
+
+
+;  Contents are command specific
+
+IOCommandContents		RECORD 0
+pb						 ds.l	1				; offset: $0 (0)
+						 ORG 0
+initialInfo				 ds.l	1				; offset: $0 (0)
+						 ORG 0
+finalInfo				 ds.l	1				; offset: $0 (0)
+						 ORG 0
+replaceInfo				 ds.l	1				; offset: $0 (0)
+						 ORG 0
+supersededInfo			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  Record to describe a file-based driver candidate 
+FileBasedDriverRecord	RECORD 0
+theSpec					 ds		FSSpec			; offset: $0 (0)		;  file specification
+theType					 ds		MacDriverType	; offset: $46 (70)		;  nameInfoStr + version number
+compatibleProp			 ds.b	1				; offset: $6A (106)		;  true if matched using a compatible name
+pad						 ds.b	3				; offset: $6B (107)		;  alignment
+sizeof					 EQU *					; size:   $6E (110)
+						ENDR
+; typedef struct FileBasedDriverRecord * FileBasedDriverRecordPtr
+
+;  Detailed Record to describe a file-based driver candidate. Includes fragment name 
+FileBasedDriverDetailed	RECORD 0
+fileBasedDriver			 ds		FileBasedDriverRecord ; offset: $0 (0)
+fragName				 ds		Str63			; offset: $6E (110)
+sizeof					 EQU *					; size:   $AE (174)
+						ENDR
+; typedef struct FileBasedDriverDetailed * FileBasedDriverDetailedPtr
+
+;  Driver Loader API 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  HigherDriverVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern SInt16 HigherDriverVersion(const NumVersion *driverVersion1, const NumVersion *driverVersion2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HigherDriverVersion
+	ENDIF
+
+
+; *  VerifyFragmentAsDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr VerifyFragmentAsDriver(CFragConnectionID fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION VerifyFragmentAsDriver
+	ENDIF
+
+
+; *  GetDriverMemoryFragment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetDriverMemoryFragment(Ptr memAddr, long length, ConstStr63Param fragName, CFragConnectionID *fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDriverMemoryFragment
+	ENDIF
+
+
+; *  GetDriverDiskFragment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetDriverDiskFragment(FSSpecPtr fragmentSpec, CFragConnectionID *fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDriverDiskFragment
+	ENDIF
+
+
+; *  GetNamedDriverDiskFragment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetNamedDriverDiskFragment(FSSpecPtr fragmentSpec, ConstStr63Param fragName, CFragConnectionID *fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNamedDriverDiskFragment
+	ENDIF
+
+
+; *  InstallDriverFromFragment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverFromFragment(CFragConnectionID fragmentConnID, RegEntryID *device, UnitNumber beginningUnit, UnitNumber endingUnit, DriverRefNum *refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverFromFragment
+	ENDIF
+
+
+; *  InstallDriverFromFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverFromFile(FSSpecPtr fragmentSpec, RegEntryID *device, UnitNumber beginningUnit, UnitNumber endingUnit, DriverRefNum *refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverFromFile
+	ENDIF
+
+
+; *  InstallDriverFromMemory()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverFromMemory(Ptr memory, long length, ConstStr63Param fragName, RegEntryID *device, UnitNumber beginningUnit, UnitNumber endingUnit, DriverRefNum *refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverFromMemory
+	ENDIF
+
+
+; *  InstallDriverFromResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverFromResource(SInt16 theRsrcID, ConstStr255Param theRsrcName, RegEntryIDPtr theDevice, UnitNumber theBeginningUnit, UnitNumber theEndingUnit, DriverRefNum *theRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverFromResource
+	ENDIF
+
+
+; *  InstallDriverFromDisk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverFromDisk(Ptr theDriverName, RegEntryID *theDevice, UnitNumber theBeginningUnit, UnitNumber theEndingUnit, DriverRefNum *theRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverFromDisk
+	ENDIF
+
+
+; *  FindDriversForDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr FindDriversForDevice(RegEntryID *device, FSSpec *fragmentSpec, DriverDescription *fileDriverDesc, Ptr *memAddr, long *length, StringPtr fragName, DriverDescription *memDriverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindDriversForDevice
+	ENDIF
+
+
+; *  FindDriverForDeviceFromFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr FindDriverForDeviceFromFile(RegEntryID *device, FSSpec *fragmentSpec, DriverDescription *driverDesc, StringPtr fragName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindDriverForDeviceFromFile
+	ENDIF
+
+
+; *  FindDriverCandidates()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr FindDriverCandidates(RegEntryID *deviceID, Ptr *propBasedDriver, RegPropertyValueSize *propBasedDriverSize, StringPtr deviceName, MacDriverType *propBasedDriverType, Boolean *gotPropBasedDriver, FileBasedDriverRecordPtr fileBasedDrivers, ItemCount *nFileBasedDrivers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindDriverCandidates
+	ENDIF
+
+
+; *  FindDriverCandidatesDetailed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr FindDriverCandidatesDetailed(RegEntryIDPtr deviceID, Ptr *propBasedDriver, RegPropertyValueSize *propBasedDriverSize, StringPtr deviceName, MacDriverType *propBasedDriverType, Boolean *gotPropBasedDriver, FileBasedDriverDetailedPtr fileBasedDrivers, ItemCount *nFileBasedDrivers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindDriverCandidatesDetailed
+	ENDIF
+
+
+; *  ScanDriverCandidates()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr ScanDriverCandidates(RegEntryID *deviceID, FileBasedDriverRecordPtr fileBasedDrivers, ItemCount nFileBasedDrivers, FileBasedDriverRecordPtr matchingDrivers, ItemCount *nMatchingDrivers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ScanDriverCandidates
+	ENDIF
+
+
+; *  ScanDriverCandidatesDetailed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr ScanDriverCandidatesDetailed(RegEntryID *deviceID, FileBasedDriverDetailedPtr fileBasedDrivers, ItemCount nFileBasedDrivers, FileBasedDriverDetailedPtr matchingDrivers, ItemCount *nMatchingDrivers)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ScanDriverCandidatesDetailed
+	ENDIF
+
+
+; *  CompareFileCandToPropCand()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern SInt16 CompareFileCandToPropCand(RegEntryID *device, StringPtr deviceName, DriverTypePtr propBasedCandidate, FileBasedDriverRecordPtr fileBasedCandidate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CompareFileCandToPropCand
+	ENDIF
+
+
+; *  GetCompatibleProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GetCompatibleProperty(RegEntryID *device, StringPtr *compatibleNames, ItemCount *nCompatibleNames)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCompatibleProperty
+	ENDIF
+
+
+; *  CompatibleDriverNames()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean CompatibleDriverNames(StringPtr nameInfoStr, StringPtr compatibleNames, ItemCount nCompatibleNames, long *nameCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CompatibleDriverNames
+	ENDIF
+
+
+; *  GetDriverForDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetDriverForDevice(RegEntryID *device, CFragConnectionID *fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDriverForDevice
+	ENDIF
+
+
+; *  InstallDriverForDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr InstallDriverForDevice(RegEntryID *device, UnitNumber beginningUnit, UnitNumber endingUnit, DriverRefNum *refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallDriverForDevice
+	ENDIF
+
+
+; *  GetDriverInformation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetDriverInformation(DriverRefNum refNum, UnitNumber *unitNum, DriverFlags *flags, DriverOpenCount *count, StringPtr name, RegEntryID *device, CFragSystem7Locator *driverLoadLocation, CFragConnectionID *fragmentConnID, DriverEntryPointPtr *fragmentMain, DriverDescription *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDriverInformation
+	ENDIF
+
+
+; *  GetDriverDescription()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr GetDriverDescription(LogicalAddress fragmentPtr, DriverDescriptionPtr *theDriverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDriverDescription
+	ENDIF
+
+
+; *  GetNamedDriverDescFromFSSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus GetNamedDriverDescFromFSSpec(FSSpecPtr fragmentSpec, StringPtr fragName, DriverDescriptionPtr *driverDesc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNamedDriverDescFromFSSpec
+	ENDIF
+
+
+; *  SetDriverClosureMemory()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr SetDriverClosureMemory(CFragConnectionID fragmentConnID, Boolean holdDriverMemory)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDriverClosureMemory
+	ENDIF
+
+
+; *  ReplaceDriverWithFragment()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr ReplaceDriverWithFragment(DriverRefNum theRefNum, CFragConnectionID fragmentConnID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReplaceDriverWithFragment
+	ENDIF
+
+
+; *  OpenInstalledDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr OpenInstalledDriver(DriverRefNum refNum, SInt8 ioPermission)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenInstalledDriver
+	ENDIF
+
+
+; *  RenameDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr RenameDriver(DriverRefNum refNum, StringPtr newDriverName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RenameDriver
+	ENDIF
+
+
+; *  RemoveDriver()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr RemoveDriver(DriverRefNum refNum, Boolean immediate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveDriver
+	ENDIF
+
+
+; *  LookupDrivers()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr LookupDrivers(UnitNumber beginningUnit, UnitNumber endingUnit, Boolean emptyUnits, ItemCount *returnedRefNums, DriverRefNum *refNums)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION LookupDrivers
+	ENDIF
+
+
+; *  HighestUnitNumber()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern UnitNumber HighestUnitNumber(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HighestUnitNumber
+	ENDIF
+
+
+; *  DriverGestaltOn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr DriverGestaltOn(DriverRefNum refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriverGestaltOn
+	ENDIF
+
+
+; *  DriverGestaltOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSErr DriverGestaltOff(DriverRefNum refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriverGestaltOff
+	ENDIF
+
+
+; *  DriverGestaltIsOn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverLoaderLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean DriverGestaltIsOn(DriverFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriverGestaltIsOn
+	ENDIF
+
+
+; *  PBOpenSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBOpenSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBOpenSync:	OPWORD	$A000
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBOpenSync
+	ENDIF
+
+
+; *  PBOpenAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBOpenAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBOpenAsync:	OPWORD	$A400
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBOpenAsync
+	ENDIF
+
+
+; *  PBOpenImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBOpenImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBOpenImmed:	OPWORD	$A200
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBOpenImmed
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PBCloseSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBCloseSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBCloseSync:	OPWORD	$A001
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBCloseSync
+	ENDIF
+
+
+; *  PBCloseAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBCloseAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBCloseAsync:	OPWORD	$A401
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBCloseAsync
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PBCloseImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBCloseImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBCloseImmed:	OPWORD	$A201
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBCloseImmed
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PBReadSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBReadSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBReadSync:	OPWORD	$A002
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBReadSync
+	ENDIF
+
+
+; *  PBReadAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBReadAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBReadAsync:	OPWORD	$A402
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBReadAsync
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PBReadImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBReadImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBReadImmed:	OPWORD	$A202
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBReadImmed
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PBWriteSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBWriteSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBWriteSync:	OPWORD	$A003
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBWriteSync
+	ENDIF
+
+
+; *  PBWriteAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBWriteAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBWriteAsync:	OPWORD	$A403
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBWriteAsync
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PBWriteImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBWriteImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBWriteImmed:	OPWORD	$A203
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBWriteImmed
+	ENDIF
+
+; 
+;    PBWaitIOComplete is a friendly way for applications to monitor
+;    a pending asynchronous I/O operation in power-managed and
+;    preemptive multitasking systems.
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PBWaitIOComplete()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PBWaitIOComplete(ParmBlkPtr paramBlock, Duration timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBWaitIOComplete
+	ENDIF
+
+;  AddDrive and GetDrvQHdr are now defined in Disks.h/p/a 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetDCtlEntry()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal DCtlHandle GetDCtlEntry(short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDCtlEntry
+	ENDIF
+
+; 
+;    SetChooserAlert used to simply set a bit in a low-mem global
+;    to tell the Chooser not to display its warning message when
+;    the printer is changed. However, under MultiFinder and System 7,
+;    this low-mem is swapped out when a layer change occurs, and the
+;    Chooser never sees the change. It is obsolete, and completely
+;    unsupported on the PowerPC. 68K apps can still call it if they
+;    wish.
+;    
+;    pascal Boolean SetChooserAlert(Boolean f);
+;
+;
+
+
+; *  DriverInstall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DriverInstall(DRVRHeaderPtr drvrPtr, short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	drvrPtr         => A0
+		;	refNum          => D0
+		; returns:
+		;	OSErr           <= D0
+		_DriverInstall:	OPWORD	$A03D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriverInstall
+	ENDIF
+
+
+; *  DriverInstallReserveMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DriverInstallReserveMem(DRVRHeaderPtr drvrPtr, short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	drvrPtr         => A0
+		;	refNum          => D0
+		; returns:
+		;	OSErr           <= D0
+		_DriverInstallReserveMem:	OPWORD	$A43D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriverInstallReserveMem
+	ENDIF
+
+; 
+;  Note: DrvrInstall() is no longer supported, becuase it never really worked anyways.
+;        There will soon be a DriverInstall() which does the right thing.
+;
+;        DrvrRemove has been renamed to DriverRemove.  But, InterfaceLib for PowerPC
+;        still exports DrvrRemove, so a macro is used to map the new name to old.
+;
+;
+
+
+; *  DrvrRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DrvrRemove(short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	refNum          => D0
+		; returns:
+		;	OSErr           <= D0
+		_DrvrRemove:	OPWORD	$A03E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrvrRemove
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PBControlSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBControlSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBControlSync:	OPWORD	$A004
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBControlSync
+	ENDIF
+
+
+; *  PBControlAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBControlAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBControlAsync:	OPWORD	$A404
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBControlAsync
+	ENDIF
+
+
+; *  PBControlImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBControlImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBControlImmed:	OPWORD	$A204
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBControlImmed
+	ENDIF
+
+
+; *  PBStatusSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBStatusSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBStatusSync:	OPWORD	$A005
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBStatusSync
+	ENDIF
+
+
+; *  PBStatusAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBStatusAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBStatusAsync:	OPWORD	$A405
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBStatusAsync
+	ENDIF
+
+
+; *  PBStatusImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBStatusImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBStatusImmed:	OPWORD	$A205
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBStatusImmed
+	ENDIF
+
+
+; *  PBKillIOSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBKillIOSync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBKillIOSync:	OPWORD	$A006
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBKillIOSync
+	ENDIF
+
+
+; *  PBKillIOAsync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBKillIOAsync(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBKillIOAsync:	OPWORD	$A406
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBKillIOAsync
+	ENDIF
+
+
+; *  PBKillIOImmed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr PBKillIOImmed(ParmBlkPtr paramBlock)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	paramBlock      => A0
+		; returns:
+		;	OSErr           <= D0
+		_PBKillIOImmed:	OPWORD	$A206
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PBKillIOImmed
+	ENDIF
+
+
+; *  OpenDeskAcc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal short OpenDeskAcc(ConstStr255Param deskAccName)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_OpenDeskAcc:	OPWORD	$A9B6
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenDeskAcc
+	ENDIF
+
+
+; *  CloseDeskAcc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CloseDeskAcc(short refNum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CloseDeskAcc:	OPWORD	$A9B7
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseDeskAcc
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; 
+;    The PBxxx() routines are obsolete.  
+;    
+;    Use the PBxxxSync(), PBxxxAsync(), or PBxxxImmed version instead.
+;
+
+
+
+
+
+
+
+	ENDIF ; __DEVICES__ 
+

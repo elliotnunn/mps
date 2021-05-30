@@ -1,0 +1,334 @@
+;
+;	File:		ScalerTypes.a
+;
+;	Contains:	Apple public font scaler object and constant definitions
+;
+;	Version:	Technology:	Quickdraw GX 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SCALERTYPES__') = 'UNDEFINED' THEN
+__SCALERTYPES__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+
+	IF &TYPE('__GXMATH__') = 'UNDEFINED' THEN
+	include 'GXMath.a'
+	ENDIF
+;		include 'FixMath.a'										;
+
+	IF &TYPE('__SFNTTYPES__') = 'UNDEFINED' THEN
+	include 'SFNTTypes.a'
+	ENDIF
+;		include 'GXTypes.a'										;
+	scalerTypeIncludes: SET 1
+
+truetypeFontFormatTag			EQU		'true'
+type1FontFormatTag				EQU		'typ1'
+nfntFontFormatTag				EQU		'nfnt'
+
+scaler_first_error				EQU		1
+scaler_first_warning			EQU		1024
+
+kOFAVersion1Dot0				EQU		$10000
+kOFAVersion1Dot1				EQU		$10100				; added scalerVariationInfo 
+
+scaler_no_problem				EQU		0					; Everything went OK 
+scaler_null_context				EQU		scaler_first_error	; Client passed a null context pointer 
+scaler_null_input				EQU		scaler_first_error + 1 ; Client passed a null input pointer 
+scaler_invalid_context			EQU		scaler_first_error + 2 ; There was a problem with the context 
+scaler_invalid_input			EQU		scaler_first_error + 3 ; There was a problem with an input 
+scaler_invalid_font_data		EQU		scaler_first_error + 4 ; A portion of the font was corrupt 
+scaler_new_block_failed			EQU		scaler_first_error + 5 ; A call to NewBlock() failed 
+scaler_get_font_table_failed	EQU		scaler_first_error + 6 ; The table was present (length > 0) but couldn't be read 
+scaler_bitmap_alloc_failed		EQU		scaler_first_error + 7 ; Call to allocate bitmap permanent block failed 
+scaler_outline_alloc_failed		EQU		scaler_first_error + 8 ; Call to allocate outline permanent block failed 
+scaler_required_table_missing	EQU		scaler_first_error + 9 ; A needed font table was not found 
+scaler_unsupported_outline_format EQU		scaler_first_error + 10 ; Couldn't create an outline of the desired format 
+scaler_unsupported_stream_format EQU		scaler_first_error + 11 ; ScalerStreamFont() call can't supply any requested format 
+scaler_unsupported_font_format	EQU		scaler_first_error + 12 ; No scaler supports the font format 
+scaler_hinting_error			EQU		scaler_first_error + 13 ; An error occurred during hinting 
+scaler_scan_error				EQU		scaler_first_error + 14 ; An error occurred in scan conversion 
+scaler_internal_error			EQU		scaler_first_error + 15 ; Scaler has a bug 
+scaler_invalid_matrix			EQU		scaler_first_error + 16 ; The transform matrix was unusable 
+scaler_fixed_overflow			EQU		scaler_first_error + 17 ; An overflow ocurred during matrix operations 
+scaler_API_version_mismatch		EQU		scaler_first_error + 18 ; Scaler requires a newer/older version of the scaler API 
+scaler_streaming_aborted		EQU		scaler_first_error + 19 ; StreamFunction callback indicated that streaming should cease 
+scaler_last_error				EQU		scaler_streaming_aborted
+scaler_no_output				EQU		scaler_first_warning ; Couldn't fulfill any glyph request. 
+scaler_fake_metrics				EQU		scaler_first_warning ; Returned metrics aren't based on information in the font 
+scaler_fake_linespacing			EQU		scaler_first_warning ; Linespacing metrics not based on information in the font 
+scaler_glyph_substitution		EQU		scaler_first_warning ; Requested glyph out of range, a substitute was used 
+scaler_last_warning				EQU		scaler_glyph_substitution
+
+; typedef long 				scalerError
+; ScalerOpen output type 
+scalerInfo 				RECORD	0
+format					 ds.l   1		; offset: $0 (0)		; Font format supported by this scaler 
+scalerVersion			 ds.l   1		; offset: $4 (4)		; Version number of the scaler 
+APIVersion				 ds.l   1		; offset: $8 (8)		; Version of API implemented (compare with version in scalerContext) 
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct scalerInfo  scalerInfo
+; ScalerNewFont output type 
+
+requiresLayoutFont				EQU		1
+hasNormalLayoutFont				EQU		2
+canReorderFont					EQU		4
+canRearrangeFont				EQU		8
+hasOutlinesFont					EQU		16
+
+; typedef long 				scalerFontFlag
+scalerFontInfo 			RECORD	0
+unitsPerEm				 ds.l   1		; offset: $0 (0)
+flags					 ds.l   1		; offset: $4 (4)
+numGlyphs				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct scalerFontInfo  scalerFontInfo
+; ScalerNewTransform input types 
+; ScalerNewVariation1Dot1 output type 
+scalerFixedRectangle 	RECORD	0
+left					 ds.l   1		; offset: $0 (0)
+top						 ds.l   1		; offset: $4 (4)
+right					 ds.l   1		; offset: $8 (8)
+bottom					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct scalerFixedRectangle  scalerFixedRectangle
+scalerVariationInfo 	RECORD	0
+bounds					 ds     scalerFixedRectangle ; offset: $0 (0)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct scalerVariationInfo  scalerVariationInfo
+; ScalerNewTransform input types 
+
+applyHintsTransform				EQU		1					; Execute hinting instructions (grid fit) 
+exactBitmapTransform			EQU		2					; Use embedded gxBitmap iff exact size 
+useThresholdTransform			EQU		4					; Use scaled gxBitmap (if any) if below outline threshold 
+verticalTransform				EQU		8					; Glyphs will be in vertical orientation 
+deviceMetricsTransform			EQU		16					; All metrics should be device (vs. fractional) 
+allScalerTransformFlags			EQU		applyHintsTransform | exactBitmapTransform | useThresholdTransform | verticalTransform | deviceMetricsTransform
+
+; typedef long 				scalerTransformFlag
+scalerTransform 		RECORD	0
+flags					 ds.l   1		; offset: $0 (0)		; Hint, embedded gxBitmap control, etc. 
+pointSize				 ds.l   1		; offset: $4 (4)		; The desired pointsize 
+fontMatrix				 ds.l   1		; offset: $8 (8)		; The 3x3 matrix to apply to glyphs 
+resolution				 ds     gxPoint	; offset: $C (12)		; 2D device resolution 
+spotSize				 ds     gxPoint	; offset: $14 (20)		; 2D pixel size 
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct scalerTransform  scalerTransform
+; ScalerNewTransform output type 
+scalerTransformInfo 	RECORD	0
+before					 ds     gxPoint	; offset: $0 (0)		; Spacing of the line before 
+after					 ds     gxPoint	; offset: $8 (8)		; Spacing of the line after 
+caretAngle				 ds     gxPoint	; offset: $10 (16)		; Rise (y) and run (x) of the insertion caret 
+caretOffset				 ds     gxPoint	; offset: $18 (24)		; Adjustment to caret for variants like italic 
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct scalerTransformInfo  scalerTransformInfo
+; ScalerNewGlyph input types 
+
+noImageGlyph					EQU		1					; Don't return the bitmap image for this glyph 
+
+; typedef long 				scalerGlyphFlag
+; QuickDraw GX outline 
+
+pathOutlineFormat				EQU		'path'
+
+; typedef long 				scalerOutlineFormat
+scalerGlyph 			RECORD	0
+glyphIndex				 ds.l   1		; offset: $0 (0)		; Index of the glyph to be considered 
+bandingTop				 ds.l   1		; offset: $4 (4)		; Banding controls (scanline numbers) top=bottom=0 means no banding 
+bandingBottom			 ds.l   1		; offset: $8 (8)
+format					 ds.l   1		; offset: $C (12)		; Format of outline to return, ignored if no outline desired 
+flags					 ds.l   1		; offset: $10 (16)		; Control generation of image representation 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct scalerGlyph  scalerGlyph
+; ScalerNewGlyph output types 
+scalerMetrics 			RECORD	0
+advance					 ds     gxPoint	; offset: $0 (0)
+sideBearing				 ds     gxPoint	; offset: $8 (8)
+otherSideBearing		 ds     gxPoint	; offset: $10 (16)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct scalerMetrics  scalerMetrics
+scalerRectangle 		RECORD	0
+xMin					 ds.l   1		; offset: $0 (0)
+yMin					 ds.l   1		; offset: $4 (4)
+xMax					 ds.l   1		; offset: $8 (8)
+yMax					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct scalerRectangle  scalerRectangle
+; ScalerKernGlyphs input/output types 
+
+lineStartKerning				EQU		1					; Array of glyphs starts a line 
+lineEndKerning					EQU		2					; Array of glyphs ends a line 
+noCrossKerning					EQU		4					; Prohibit cross kerning 
+allScalerKerningFlags			EQU		lineStartKerning | lineEndKerning | noCrossKerning
+
+; typedef long 				scalerKerningFlag
+
+noStakeKerningNote				EQU		1					; Indicates a glyph was involver in a kerning pair/group 
+crossStreamResetKerningNote		EQU		2					; Indicates a return-to-baseline in cross-stream kerning 
+
+; typedef unsigned short 	scalerKerningNote
+
+noKerningAppliedOutput			EQU		$0001				; All kerning values were zero, kerning call had no effect 
+
+; These are bit-fields 
+; typedef long 				scalerKerningOutput
+; typedef struct scalerKerning  scalerKerning
+scalerKerning 			RECORD	0
+numGlyphs				 ds.l   1		; offset: $0 (0)		; Number of glyphs in the glyphs array 
+scaleFactor				 ds.l   1		; offset: $4 (4)		; Amount of kerning to apply (0 == none, fract1 == all) 
+flags					 ds.l   1		; offset: $8 (8)		; Various control flags 
+glyphs					 ds.l   1		; offset: $C (12)		; Pointer to the array of glyphs to be kerned 
+info					 ds.l   1		; offset: $10 (16)		; Qualitative results of kerning 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; ScalerStream input/output types 
+
+cexec68K						EQU		$0001
+truetypeStreamType				EQU		$0001
+type1StreamType					EQU		$0002
+type3StreamType					EQU		$0004
+type42StreamType				EQU		$0008
+type42GXStreamType				EQU		$0010
+portableStreamType				EQU		$0020
+flattenedStreamType				EQU		$0040
+evenOddModifierStreamType		EQU		$8000
+
+; Possible streamed font formats 
+; typedef unsigned long 	scalerStreamTypeFlag
+
+downloadStreamAction			EQU		0					; Transmit the (possibly sparse) font data 
+asciiDownloadStreamAction		EQU		1					; Transmit font data to a 7-bit ASCII destination 
+fontSizeQueryStreamAction		EQU		2					; Estimate in-printer memory used if the font were downloaded 
+encodingOnlyStreamAction		EQU		3					; Transmit only the encoding for the font 
+prerequisiteQueryStreamAction	EQU		4					; Return a list of prerequisite items needed for the font 
+prerequisiteItemStreamAction	EQU		5					; Transmit a specified prerequisite item 
+variationQueryStreamAction		EQU		6					; Return information regarding support for variation streaming 
+variationPSOperatorStreamAction	EQU		7					; Transmit Postscript code necessary to effect variation of a font 
+
+; typedef long 				scalerStreamAction
+
+selectAllVariations				EQU		-1					; Special variationCount value meaning include all variation data 
+
+scalerPrerequisiteItem 	RECORD	0
+enumeration				 ds.l   1		; offset: $0 (0)		; Shorthand tag identifying the item 
+size					 ds.l   1		; offset: $4 (4)		; Worst case vm in printer item requires 
+name					 ds.b   1		; offset: $8 (8)		; Name to be used by the client when emitting the item (Pascal string) 
+						 ORG 10
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct scalerPrerequisiteItem  scalerPrerequisiteItem
+scalerStream 			RECORD	0
+streamRefCon			 ds.l   1		; offset: $0 (0)		; <-	private reference for client 
+targetVersion			 ds.l   1		; offset: $4 (4)		; <-	e.g. Postscript printer name (C string) 
+types					 ds.l   1		; offset: $8 (8)		; <->	Data stream formats desired/supplied 
+action					 ds.l   1		; offset: $C (12)		; <- 	What action to take 
+memorySize				 ds.l   1		; offset: $10 (16)		; ->	Worst case memory use (vm) in printer or as sfnt 
+variationCount			 ds.l   1		; offset: $14 (20)		; <-	The number of variations, or selectAllVariations 
+variations				 ds.l   1		; offset: $18 (24)		; <-	A pointer to an array of the variations 
+encoding				 ds.l   1		; offset: $1C (28)		; <-	Intention is * unsigned short[256] 
+glyphBits				 ds.l   1		; offset: $20 (32)		; <->	Bitvector: a bit for each glyph, 1 = desired/supplied 
+name					 ds.l   1		; offset: $24 (36)		; <->	The printer font name to use/used (C string) 
+						 ORG 28
+size					 ds.l   1		; offset: $1C (28)		; -> 	Size of the prereq. list in bytes (0 indicates no prerequisites)
+list					 ds.l   1		; offset: $20 (32)		; <-	Pointer to client block to hold list (nil = list size query only) 
+						 ORG 28
+prerequisiteItem		 ds.l   1		; offset: $1C (28)		; <- 	Enumeration value for the prerequisite item to be streamed.
+						 ORG 28
+variationQueryResult	 ds.l   1		; offset: $1C (28)		; ->	Output from the variationQueryStreamAction 
+						 ORG 40
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct scalerStream  scalerStream
+scalerStreamData 		RECORD	0
+hexFlag					 ds.l   1		; offset: $0 (0)		; Indicates that the data is to be interpreted as hex, versus binary 
+byteCount				 ds.l   1		; offset: $4 (4)		; Number of bytes in the data being streamed 
+data					 ds.l   1		; offset: $8 (8)		; Pointer to the data being streamed 
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct scalerStreamData  scalerStreamData
+
+scalerScratchBlock				EQU		-1					; Scaler alloced/freed temporary memory 
+scalerOpenBlock					EQU		0					; Five permanent input/state block types 
+scalerFontBlock					EQU		1
+scalerVariationBlock			EQU		2
+scalerTransformBlock			EQU		3
+scalerGlyphBlock				EQU		4
+scalerBlockCount				EQU		5					; Number of permanent block types 
+scalerOutlineBlock				EQU		scalerBlockCount	; Two output block types 
+scalerBitmapBlock				EQU		scalerBlockCount + 1
+
+; typedef long 				scalerBlockType
+; special tag used only by scalers to access an sfnt's directory 
+
+sfntDirectoryTag				EQU		'dir '
+
+; typedef struct scalerBitmap  scalerBitmap
+; typedef struct scalerContext  scalerContext
+; Type definitions for function pointers used with the scalerContext structure 
+scalerBitmap 			RECORD	0
+image					 ds.l   1		; offset: $0 (0)		; Pointer to pixels 
+topLeft					 ds     gxPoint	; offset: $4 (4)		; Bitmap positioning relative to client's origin 
+bounds					 ds     scalerRectangle ; offset: $C (12) ; Bounding box of bitmap 
+rowBytes				 ds.l   1		; offset: $1C (28)		; Width in bytes 
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; scalerContext: the vehicle with which the caller and scaler communicate 
+scalerContext 			RECORD	0
+version					 ds.l   1		; offset: $0 (0)		; Version of the scaler API implemented by the caller 
+theFont					 ds.l   1		; offset: $4 (4)		; Caller's private reference to the font being processed 
+format					 ds.l   1		; offset: $8 (8)		; Format of the sfnt font data, corresponds to the scaler 
+GetFontTable			 ds.l   1		; offset: $C (12)		; Callback for accessing sfnt tables or portions thereof 
+ReleaseFontTable		 ds.l   1		; offset: $10 (16)		; Callback for releasing sfnt tables 
+NewBlock				 ds.l   1		; offset: $14 (20)		; Callback for allocating and/or growing permanent and scratch blocks 
+DisposeBlock			 ds.l   1		; offset: $18 (24)		; Callback for freeing permanent and scratch blocks 
+StreamFunction			 ds.l   1		; offset: $1C (28)		; Callback for transmitting blocks of data during streaming 
+ScanLineFunction		 ds.l   1		; offset: $20 (32)		; Callback for emitting individual bitmap scanlines during scan conversion 
+PostErrorFunction		 ds.l   1		; offset: $24 (36)		; Callback for posting errors and warnings 
+scalerBlocks			 ds.l   5		; offset: $28 (40)		; Array of permanent scaler blocks 
+ScalerFunction			 ds.l   1		; offset: $3C (60)		; Callback for scaler-specific tracing, debugging, etc. 
+sizeof					 EQU *			; size:   $40 (64)
+						ENDR
+
+	ENDIF ; __SCALERTYPES__

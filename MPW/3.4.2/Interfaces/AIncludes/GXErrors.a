@@ -1,0 +1,857 @@
+;
+;	File:		GXErrors.a
+;
+;	Contains:	QuickDraw GX error constants and debugging routines
+;
+;	Version:	Technology:	Quickdraw GX 1.1
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__GXERRORS__') = 'UNDEFINED' THEN
+__GXERRORS__ SET 1
+
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+;		include 'Types.a'											;
+
+	IF &TYPE('__GXTYPES__') = 'UNDEFINED' THEN
+	include 'GXTypes.a'
+	ENDIF
+;		include 'GXMath.a'											;
+;			include 'FixMath.a'									;
+	graphicsErrorsIncludes: SET 1
+
+gxFirstSystemError				EQU		-27999				; 0xffff92a1 
+gxFirstFatalError				EQU		-27999
+gxLastFatalError				EQU		-27951
+gxFirstNonfatalError			EQU		-27950
+gxFirstFontScalerError			EQU		-27900
+gxLastFontScalerError			EQU		-27851
+gxFirstParameterError			EQU		-27850
+gxFirstImplementationLimitError	EQU		-27800
+gxFirstSystemDebuggingError		EQU		-27700
+gxLastSystemError				EQU		-27000				; 0xffff9688 
+gxFirstLibraryError				EQU		1048576				; 0x00100000 
+gxLastLibraryError				EQU		2097151				; 0x001fffff 
+gxFirstAppError					EQU		2097152				; 0x00200000 
+gxLastAppError					EQU		4194303				; 0x003fffff 
+gxFirstSystemWarning			EQU		-26999				; 0xffff9689 
+gxFirstResultOutOfRangeWarning	EQU		-26950
+gxFirstParameterOutOfRangeWarning EQU		-26900
+gxFirstFontScalerWarning		EQU		-26850
+gxFirstSystemDebuggingWarning	EQU		-26700
+gxLastSystemWarning				EQU		-26000				; 0xffff9a70 
+gxFirstLibraryWarning			EQU		4194304				; 0x00400000 
+gxLastLibraryWarning			EQU		5242879				; 0x004fffff 
+gxFirstAppWarning				EQU		5242880				; 0x00500000 
+gxLastAppWarning				EQU		7340031				; 0x006fffff 
+gxFirstSystemNotice				EQU		-25999				; 0xffff9a71 
+gxLastSystemNotice				EQU		-25500				; 0xffff9c64 
+gxFirstLibraryNotice			EQU		7340032				; 0x00700000 
+gxLastLibraryNotice				EQU		7602175				; 0x0073ffff 
+gxFirstAppNotice				EQU		7602176				; 0x00740000 
+gxLastAppNotice					EQU		8388607				; 0x007fffff 
+
+; truly fatal errors 
+out_of_memory					EQU		gxFirstFatalError
+internal_fatal_error			EQU		gxFirstFatalError + 1
+no_outline_font_found			EQU		gxFirstFatalError + 2
+not_enough_memory_for_graphics_client_heap EQU		gxFirstFatalError + 3
+could_not_create_backing_store	EQU		gxFirstFatalError + 4
+; internal errors 
+internal_error					EQU		gxFirstNonfatalError
+internal_font_error				EQU		gxFirstNonfatalError + 1
+internal_layout_error			EQU		gxFirstNonfatalError + 2
+; recoverable errors 
+could_not_dispose_backing_store	EQU		internal_layout_error + 2
+unflattening_interrupted_by_client EQU		internal_layout_error + 3
+; font manager errors 
+font_cannot_be_changed			EQU		internal_layout_error + 4
+illegal_font_parameter			EQU		internal_layout_error + 5
+; gxFont scaler errors 
+null_font_scaler_context		EQU		gxFirstFontScalerError
+null_font_scaler_input			EQU		gxFirstFontScalerError + 1
+invalid_font_scaler_context		EQU		gxFirstFontScalerError + 2
+invalid_font_scaler_input		EQU		gxFirstFontScalerError + 3
+invalid_font_scaler_font_data	EQU		gxFirstFontScalerError + 4
+font_scaler_newblock_failed		EQU		gxFirstFontScalerError + 5
+font_scaler_getfonttable_failed	EQU		gxFirstFontScalerError + 6
+font_scaler_bitmap_allocation_failed EQU		gxFirstFontScalerError + 7
+font_scaler_outline_allocation_failed EQU		gxFirstFontScalerError + 8
+required_font_scaler_table_missing EQU		gxFirstFontScalerError + 9
+unsupported_font_scaler_outline_format EQU		gxFirstFontScalerError + 10
+unsupported_font_scaler_stream_format EQU		gxFirstFontScalerError + 11
+unsupported_font_scaler_font_format EQU		gxFirstFontScalerError + 12
+font_scaler_hinting_error		EQU		gxFirstFontScalerError + 13
+font_scaler_rasterizer_error	EQU		gxFirstFontScalerError + 14
+font_scaler_internal_error		EQU		gxFirstFontScalerError + 15
+font_scaler_invalid_matrix		EQU		gxFirstFontScalerError + 16
+font_scaler_fixed_overflow		EQU		gxFirstFontScalerError + 17
+font_scaler_api_version_mismatch EQU		gxFirstFontScalerError + 18
+font_scaler_streaming_aborted	EQU		gxFirstFontScalerError + 19
+unknown_font_scaler_error		EQU		gxFirstFontScalerError + 20
+; bad parameters 
+parameter_is_nil				EQU		gxFirstParameterError
+shape_is_nil					EQU		gxFirstParameterError + 1
+style_is_nil					EQU		gxFirstParameterError + 2
+transform_is_nil				EQU		gxFirstParameterError + 3
+ink_is_nil						EQU		gxFirstParameterError + 4
+transferMode_is_nil				EQU		gxFirstParameterError + 5
+color_is_nil					EQU		gxFirstParameterError + 6
+colorProfile_is_nil				EQU		gxFirstParameterError + 7
+colorSet_is_nil					EQU		gxFirstParameterError + 8
+spoolProcedure_is_nil			EQU		gxFirstParameterError + 9
+tag_is_nil						EQU		gxFirstParameterError + 10
+type_is_nil						EQU		gxFirstParameterError + 11
+mapping_is_nil					EQU		gxFirstParameterError + 12
+invalid_viewDevice_reference	EQU		gxFirstParameterError + 13
+invalid_viewGroup_reference		EQU		gxFirstParameterError + 14
+invalid_viewPort_reference		EQU		gxFirstParameterError + 15
+; implementation limits, these should be right before the debugging errors 
+number_of_contours_exceeds_implementation_limit EQU		gxFirstImplementationLimitError
+number_of_points_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 1
+size_of_polygon_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 2
+size_of_path_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 3
+size_of_text_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 4
+size_of_bitmap_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 5
+number_of_colors_exceeds_implementation_limit EQU		gxFirstImplementationLimitError + 6
+procedure_not_reentrant			EQU		gxFirstImplementationLimitError + 7
+
+; internal debugging errors 
+functionality_unimplemented		EQU		gxFirstSystemDebuggingError
+clip_to_frame_shape_unimplemented EQU		gxFirstSystemDebuggingError + 1
+; font parameter debugging errors 
+illegal_font_storage_type		EQU		gxFirstSystemDebuggingError + 2
+illegal_font_storage_reference	EQU		gxFirstSystemDebuggingError + 3
+illegal_font_attributes			EQU		gxFirstSystemDebuggingError + 4
+; parameter debugging errors 
+parameter_out_of_range			EQU		gxFirstSystemDebuggingError + 5
+inconsistent_parameters			EQU		gxFirstSystemDebuggingError + 6
+index_is_less_than_zero			EQU		gxFirstSystemDebuggingError + 7
+index_is_less_than_one			EQU		gxFirstSystemDebuggingError + 8
+count_is_less_than_zero			EQU		gxFirstSystemDebuggingError + 9
+count_is_less_than_one			EQU		gxFirstSystemDebuggingError + 10
+contour_is_less_than_zero		EQU		gxFirstSystemDebuggingError + 11
+length_is_less_than_zero		EQU		gxFirstSystemDebuggingError + 12
+invalid_client_reference		EQU		gxFirstSystemDebuggingError + 13
+invalid_graphics_heap_start_pointer EQU		gxFirstSystemDebuggingError + 14
+invalid_nongraphic_globals_pointer EQU		gxFirstSystemDebuggingError + 15
+colorSpace_out_of_range			EQU		gxFirstSystemDebuggingError + 16
+pattern_lattice_out_of_range	EQU		gxFirstSystemDebuggingError + 17
+frequency_parameter_out_of_range EQU		gxFirstSystemDebuggingError + 18
+tinting_parameter_out_of_range	EQU		gxFirstSystemDebuggingError + 19
+method_parameter_out_of_range	EQU		gxFirstSystemDebuggingError + 20
+space_may_not_be_indexed		EQU		gxFirstSystemDebuggingError + 21
+glyph_index_too_small			EQU		gxFirstSystemDebuggingError + 22
+no_glyphs_added_to_font			EQU		gxFirstSystemDebuggingError + 23
+glyph_not_added_to_font			EQU		gxFirstSystemDebuggingError + 24
+point_does_not_intersect_bitmap	EQU		gxFirstSystemDebuggingError + 25
+required_font_table_not_present	EQU		gxFirstSystemDebuggingError + 25
+unknown_font_table_format		EQU		gxFirstSystemDebuggingError + 26 ; the styles encoding is not present in the font 
+shapeFill_not_allowed			EQU		gxFirstSystemDebuggingError + 27
+inverseFill_face_must_set_clipLayer_flag EQU		gxFirstSystemDebuggingError + 28
+invalid_transferMode_colorSpace	EQU		gxFirstSystemDebuggingError + 29
+colorProfile_must_be_nil		EQU		gxFirstSystemDebuggingError + 30
+bitmap_pixel_size_must_be_1		EQU		gxFirstSystemDebuggingError + 31
+empty_shape_not_allowed			EQU		gxFirstSystemDebuggingError + 32
+ignorePlatformShape_not_allowed	EQU		gxFirstSystemDebuggingError + 33
+nil_style_in_glyph_not_allowed	EQU		gxFirstSystemDebuggingError + 34
+complex_glyph_style_not_allowed	EQU		gxFirstSystemDebuggingError + 35
+invalid_mapping					EQU		gxFirstSystemDebuggingError + 36
+cannot_set_item_shapes_to_nil	EQU		gxFirstSystemDebuggingError + 37
+cannot_use_original_item_shapes_when_growing_picture EQU		gxFirstSystemDebuggingError + 38
+cannot_add_unspecified_new_glyphs EQU		gxFirstSystemDebuggingError + 39
+cannot_dispose_locked_tag		EQU		gxFirstSystemDebuggingError + 40
+cannot_dispose_locked_shape		EQU		gxFirstSystemDebuggingError + 41
+; restricted access 
+shape_access_not_allowed		EQU		gxFirstSystemDebuggingError + 42
+colorSet_access_restricted		EQU		gxFirstSystemDebuggingError + 43
+colorProfile_access_restricted	EQU		gxFirstSystemDebuggingError + 44
+tag_access_restricted			EQU		gxFirstSystemDebuggingError + 45
+viewDevice_access_restricted	EQU		gxFirstSystemDebuggingError + 46
+graphic_type_does_not_have_a_structure EQU		gxFirstSystemDebuggingError + 47
+style_run_array_does_not_match_number_of_characters EQU		gxFirstSystemDebuggingError + 48
+rectangles_cannot_be_inserted_into EQU		gxFirstSystemDebuggingError + 49
+unknown_graphics_heap			EQU		gxFirstSystemDebuggingError + 50
+graphics_routine_selector_is_obsolete EQU		gxFirstSystemDebuggingError + 51
+cannot_set_graphics_client_memory_without_setting_size EQU		gxFirstSystemDebuggingError + 52
+graphics_client_memory_too_small EQU		gxFirstSystemDebuggingError + 53
+graphics_client_memory_is_already_allocated EQU		gxFirstSystemDebuggingError + 54
+viewPort_is_a_window			EQU		gxFirstSystemDebuggingError + 55
+; wrong type/bad reference 
+illegal_type_for_shape			EQU		gxFirstSystemDebuggingError + 56
+shape_does_not_contain_a_bitmap	EQU		gxFirstSystemDebuggingError + 57
+shape_does_not_contain_text		EQU		gxFirstSystemDebuggingError + 58
+picture_expected				EQU		gxFirstSystemDebuggingError + 59
+bitmap_is_not_resizable			EQU		gxFirstSystemDebuggingError + 60
+shape_may_not_be_a_bitmap		EQU		gxFirstSystemDebuggingError + 61
+shape_may_not_be_a_picture		EQU		gxFirstSystemDebuggingError + 62
+graphic_type_does_not_contain_points EQU		gxFirstSystemDebuggingError + 63
+graphic_type_does_not_have_multiple_contours EQU		gxFirstSystemDebuggingError + 64
+graphic_type_cannot_be_mapped	EQU		gxFirstSystemDebuggingError + 65
+graphic_type_cannot_be_moved	EQU		gxFirstSystemDebuggingError + 66
+graphic_type_cannot_be_scaled	EQU		gxFirstSystemDebuggingError + 67
+graphic_type_cannot_be_rotated	EQU		gxFirstSystemDebuggingError + 68
+graphic_type_cannot_be_skewed	EQU		gxFirstSystemDebuggingError + 69
+graphic_type_cannot_be_reset	EQU		gxFirstSystemDebuggingError + 70
+graphic_type_cannot_be_dashed	EQU		gxFirstSystemDebuggingError + 71
+graphic_type_cannot_be_reduced	EQU		gxFirstSystemDebuggingError + 72
+graphic_type_cannot_be_inset	EQU		gxFirstSystemDebuggingError + 73
+shape_cannot_be_inverted		EQU		gxFirstSystemDebuggingError + 74
+shape_does_not_have_area		EQU		gxFirstSystemDebuggingError + 75
+shape_does_not_have_length		EQU		gxFirstSystemDebuggingError + 76
+first_glyph_advance_must_be_absolute EQU		gxFirstSystemDebuggingError + 77
+picture_cannot_contain_itself	EQU		gxFirstSystemDebuggingError + 78
+viewPort_cannot_contain_itself	EQU		gxFirstSystemDebuggingError + 79
+cannot_set_unique_items_attribute_when_picture_contains_items EQU		gxFirstSystemDebuggingError + 80
+layer_style_cannot_contain_a_face EQU		gxFirstSystemDebuggingError + 81
+layer_glyph_shape_cannot_contain_nil_styles EQU		gxFirstSystemDebuggingError + 82
+; validation errors 
+object_wrong_type				EQU		gxFirstSystemDebuggingError + 83
+shape_wrong_type				EQU		gxFirstSystemDebuggingError + 84
+style_wrong_type				EQU		gxFirstSystemDebuggingError + 85
+ink_wrong_type					EQU		gxFirstSystemDebuggingError + 86
+transform_wrong_type			EQU		gxFirstSystemDebuggingError + 87
+device_wrong_type				EQU		gxFirstSystemDebuggingError + 88
+port_wrong_type					EQU		gxFirstSystemDebuggingError + 89
+; validation cache errors 
+shape_cache_wrong_type			EQU		gxFirstSystemDebuggingError + 90
+style_cache_wrong_type			EQU		gxFirstSystemDebuggingError + 91
+ink_cache_wrong_type			EQU		gxFirstSystemDebuggingError + 92
+transform_cache_wrong_type		EQU		gxFirstSystemDebuggingError + 93
+port_cache_wrong_type			EQU		gxFirstSystemDebuggingError + 94
+shape_cache_parent_mismatch		EQU		gxFirstSystemDebuggingError + 95
+style_cache_parent_mismatch		EQU		gxFirstSystemDebuggingError + 96
+ink_cache_parent_mismatch		EQU		gxFirstSystemDebuggingError + 97
+transform_cache_parent_mismatch	EQU		gxFirstSystemDebuggingError + 98
+port_cache_parent_mismatch		EQU		gxFirstSystemDebuggingError + 99
+invalid_shape_cache_port		EQU		gxFirstSystemDebuggingError + 100
+invalid_shape_cache_device		EQU		gxFirstSystemDebuggingError + 101
+invalid_ink_cache_port			EQU		gxFirstSystemDebuggingError + 102
+invalid_ink_cache_device		EQU		gxFirstSystemDebuggingError + 103
+invalid_style_cache_port		EQU		gxFirstSystemDebuggingError + 104
+invalid_style_cache_device		EQU		gxFirstSystemDebuggingError + 105
+invalid_transform_cache_port	EQU		gxFirstSystemDebuggingError + 106
+invalid_transform_cache_device	EQU		gxFirstSystemDebuggingError + 107
+recursive_caches				EQU		gxFirstSystemDebuggingError + 108
+; validation shape cache errors 
+invalid_fillShape_ownerCount	EQU		gxFirstSystemDebuggingError + 109
+recursive_fillShapes			EQU		gxFirstSystemDebuggingError + 110
+; validation memory block errors 
+indirect_memory_block_too_small	EQU		gxFirstSystemDebuggingError + 111
+indirect_memory_block_too_large	EQU		gxFirstSystemDebuggingError + 112
+unexpected_nil_pointer			EQU		gxFirstSystemDebuggingError + 113
+bad_address						EQU		gxFirstSystemDebuggingError + 114
+; validation object errors 
+no_owners						EQU		gxFirstSystemDebuggingError + 115
+invalid_pointer					EQU		gxFirstSystemDebuggingError + 116
+invalid_seed					EQU		gxFirstSystemDebuggingError + 117
+invalid_frame_seed				EQU		gxFirstSystemDebuggingError + 118
+invalid_text_seed				EQU		gxFirstSystemDebuggingError + 119
+invalid_draw_seed				EQU		gxFirstSystemDebuggingError + 120
+bad_private_flags				EQU		gxFirstSystemDebuggingError + 121
+; validation path and polygon errors 
+invalid_vector_count			EQU		gxFirstSystemDebuggingError + 122
+invalid_contour_count			EQU		gxFirstSystemDebuggingError + 123
+; validation bitmap errors 
+bitmap_ptr_too_small			EQU		gxFirstSystemDebuggingError + 124
+bitmap_ptr_not_aligned			EQU		gxFirstSystemDebuggingError + 125
+bitmap_rowBytes_negative		EQU		gxFirstSystemDebuggingError + 126
+bitmap_width_negative			EQU		gxFirstSystemDebuggingError + 127
+bitmap_height_negative			EQU		gxFirstSystemDebuggingError + 128
+invalid_pixelSize				EQU		gxFirstSystemDebuggingError + 129
+bitmap_rowBytes_too_small		EQU		gxFirstSystemDebuggingError + 130
+bitmap_rowBytes_not_aligned		EQU		gxFirstSystemDebuggingError + 131
+bitmap_rowBytes_must_be_specified_for_user_image_buffer EQU		gxFirstSystemDebuggingError + 132
+; validation bitmap image errors 
+invalid_bitImage_fileOffset		EQU		gxFirstSystemDebuggingError + 133
+invalid_bitImage_owners			EQU		gxFirstSystemDebuggingError + 134
+invalid_bitImage_rowBytes		EQU		gxFirstSystemDebuggingError + 135
+invalid_bitImage_internal_flag	EQU		gxFirstSystemDebuggingError + 136
+; validation text errors 
+text_bounds_cache_wrong_size	EQU		gxFirstSystemDebuggingError + 137
+text_metrics_cache_wrong_size	EQU		gxFirstSystemDebuggingError + 138
+text_index_cache_wrong_size		EQU		gxFirstSystemDebuggingError + 139
+; validation glyph errors 
+glyph_run_count_negative		EQU		gxFirstSystemDebuggingError + 140
+glyph_run_count_zero			EQU		gxFirstSystemDebuggingError + 141
+glyph_run_counts_do_not_sum_to_character_count EQU		gxFirstSystemDebuggingError + 142
+glyph_first_advance_bit_set_not_allowed EQU		gxFirstSystemDebuggingError + 143
+glyph_tangent_vectors_both_zero	EQU		gxFirstSystemDebuggingError + 144
+; validation layout errors 
+layout_run_length_negative		EQU		gxFirstSystemDebuggingError + 145
+layout_run_length_zero			EQU		gxFirstSystemDebuggingError + 146
+layout_run_level_negative		EQU		gxFirstSystemDebuggingError + 147
+layout_run_lengths_do_not_sum_to_text_length EQU		gxFirstSystemDebuggingError + 148
+; validation picture errors 
+bad_shape_in_picture			EQU		gxFirstSystemDebuggingError + 149
+bad_style_in_picture			EQU		gxFirstSystemDebuggingError + 150
+bad_ink_in_picture				EQU		gxFirstSystemDebuggingError + 151
+bad_transform_in_picture		EQU		gxFirstSystemDebuggingError + 152
+bad_shape_cache_in_picture		EQU		gxFirstSystemDebuggingError + 153
+bad_seed_in_picture				EQU		gxFirstSystemDebuggingError + 154
+invalid_picture_count			EQU		gxFirstSystemDebuggingError + 155
+; validation text face errors 
+bad_textLayer_count				EQU		gxFirstSystemDebuggingError + 156
+bad_fillType_in_textFace		EQU		gxFirstSystemDebuggingError + 157
+bad_style_in_textFace			EQU		gxFirstSystemDebuggingError + 158
+bad_transform_in_textFace		EQU		gxFirstSystemDebuggingError + 159
+; validation transform errors 
+invalid_matrix_flag				EQU		gxFirstSystemDebuggingError + 160
+transform_clip_missing			EQU		gxFirstSystemDebuggingError + 161
+; validation font cache errors 
+metrics_wrong_type				EQU		gxFirstSystemDebuggingError + 162
+metrics_point_size_probably_bad	EQU		gxFirstSystemDebuggingError + 163
+scalar_block_wrong_type			EQU		gxFirstSystemDebuggingError + 164
+scalar_block_parent_mismatch	EQU		gxFirstSystemDebuggingError + 165
+scalar_block_too_small			EQU		gxFirstSystemDebuggingError + 166
+scalar_block_too_large			EQU		gxFirstSystemDebuggingError + 167
+invalid_metrics_range			EQU		gxFirstSystemDebuggingError + 168
+invalid_metrics_flags			EQU		gxFirstSystemDebuggingError + 169
+metrics_maxWidth_probably_bad	EQU		gxFirstSystemDebuggingError + 170
+font_wrong_type					EQU		gxFirstSystemDebuggingError + 171
+font_wrong_size					EQU		gxFirstSystemDebuggingError + 172
+invalid_font_platform			EQU		gxFirstSystemDebuggingError + 173
+invalid_lookup_range			EQU		gxFirstSystemDebuggingError + 174
+invalid_lookup_platform			EQU		gxFirstSystemDebuggingError + 175
+font_not_in_font_list			EQU		gxFirstSystemDebuggingError + 176
+metrics_not_in_metrics_list		EQU		gxFirstSystemDebuggingError + 177
+; validation view device errors 
+bad_device_private_flags		EQU		gxFirstSystemDebuggingError + 178
+bad_device_attributes			EQU		gxFirstSystemDebuggingError + 179
+invalid_device_number			EQU		gxFirstSystemDebuggingError + 180
+invalid_device_viewGroup		EQU		gxFirstSystemDebuggingError + 181
+invalid_device_bounds			EQU		gxFirstSystemDebuggingError + 182
+invalid_bitmap_in_device		EQU		gxFirstSystemDebuggingError + 183
+; validation color set errors 
+colorSet_wrong_type				EQU		gxFirstSystemDebuggingError + 184
+invalid_colorSet_viewDevice_owners EQU		gxFirstSystemDebuggingError + 185
+invalid_colorSet_colorSpace		EQU		gxFirstSystemDebuggingError + 186
+invalid_colorSet_count			EQU		gxFirstSystemDebuggingError + 187
+; validation color profile errors 
+colorProfile_wrong_type			EQU		gxFirstSystemDebuggingError + 188
+invalid_colorProfile_flags		EQU		gxFirstSystemDebuggingError + 189
+invalid_colorProfile_response_count EQU		gxFirstSystemDebuggingError + 190
+; validation internal backing store errors 
+backing_free_parent_mismatch	EQU		gxFirstSystemDebuggingError + 191
+backing_store_parent_mismatch	EQU		gxFirstSystemDebuggingError + 192
+
+; warnings about warnings 
+warning_stack_underflow			EQU		gxFirstSystemWarning
+warning_stack_overflow			EQU		gxFirstSystemWarning + 1
+notice_stack_underflow			EQU		gxFirstSystemWarning + 2
+notice_stack_overflow			EQU		gxFirstSystemWarning + 3
+about_to_grow_heap				EQU		gxFirstSystemWarning + 4
+about_to_unload_objects			EQU		gxFirstSystemWarning + 5
+; result went out of range 
+map_shape_out_of_range			EQU		gxFirstResultOutOfRangeWarning
+move_shape_out_of_range			EQU		gxFirstResultOutOfRangeWarning + 1
+scale_shape_out_of_range		EQU		gxFirstResultOutOfRangeWarning + 2
+rotate_shape_out_of_range		EQU		gxFirstResultOutOfRangeWarning + 3
+skew_shape_out_of_range			EQU		gxFirstResultOutOfRangeWarning + 4
+map_transform_out_of_range		EQU		gxFirstResultOutOfRangeWarning + 5
+move_transform_out_of_range		EQU		gxFirstResultOutOfRangeWarning + 6
+scale_transform_out_of_range	EQU		gxFirstResultOutOfRangeWarning + 7
+rotate_transform_out_of_range	EQU		gxFirstResultOutOfRangeWarning + 8
+skew_transform_out_of_range		EQU		gxFirstResultOutOfRangeWarning + 9
+map_points_out_of_range			EQU		gxFirstResultOutOfRangeWarning + 10
+; gave a parameter out of range 
+contour_out_of_range			EQU		gxFirstParameterOutOfRangeWarning
+index_out_of_range_in_contour	EQU		gxFirstParameterOutOfRangeWarning + 1
+picture_index_out_of_range		EQU		gxFirstParameterOutOfRangeWarning + 2
+color_index_requested_not_found	EQU		gxFirstParameterOutOfRangeWarning + 3
+colorSet_index_out_of_range		EQU		gxFirstParameterOutOfRangeWarning + 4
+index_out_of_range				EQU		gxFirstParameterOutOfRangeWarning + 5
+count_out_of_range				EQU		gxFirstParameterOutOfRangeWarning + 6
+length_out_of_range				EQU		gxFirstParameterOutOfRangeWarning + 7
+font_table_index_out_of_range	EQU		gxFirstParameterOutOfRangeWarning + 8
+font_glyph_index_out_of_range	EQU		gxFirstParameterOutOfRangeWarning + 9
+point_out_of_range				EQU		gxFirstParameterOutOfRangeWarning + 10
+profile_response_out_of_range	EQU		gxFirstParameterOutOfRangeWarning + 11
+; gxFont scaler warnings 
+font_scaler_no_output			EQU		gxFirstFontScalerWarning
+font_scaler_fake_metrics		EQU		gxFirstFontScalerWarning + 1
+font_scaler_fake_linespacing	EQU		gxFirstFontScalerWarning + 2
+font_scaler_glyph_substitution	EQU		gxFirstFontScalerWarning + 3
+font_scaler_no_kerning_applied	EQU		gxFirstFontScalerWarning + 4
+; might not be what you expected 
+character_substitution_took_place EQU		gxFirstFontScalerWarning + 5
+unable_to_get_bounds_on_multiple_devices EQU		gxFirstFontScalerWarning + 6
+font_language_not_found			EQU		gxFirstFontScalerWarning + 7
+font_not_found_during_unflattening EQU		gxFirstFontScalerWarning + 8
+;storage 
+unrecognized_stream_version		EQU		gxFirstFontScalerWarning + 9
+bad_data_in_stream				EQU		gxFirstFontScalerWarning + 10
+
+; nonsense data 
+new_shape_contains_invalid_data	EQU		gxFirstSystemDebuggingWarning
+new_tag_contains_invalid_data	EQU		gxFirstSystemDebuggingWarning + 1
+extra_data_passed_was_ignored	EQU		gxFirstSystemDebuggingWarning + 2
+font_table_not_found			EQU		gxFirstSystemDebuggingWarning + 3
+font_name_not_found				EQU		gxFirstSystemDebuggingWarning + 4
+; doesn't make sense to do 
+unable_to_traverse_open_contour_that_starts_or_ends_off_the_curve EQU		gxFirstSystemDebuggingWarning + 5
+unable_to_draw_open_contour_that_starts_or_ends_off_the_curve EQU		gxFirstSystemDebuggingWarning + 6
+cannot_dispose_default_shape	EQU		gxFirstSystemDebuggingWarning + 7
+cannot_dispose_default_style	EQU		gxFirstSystemDebuggingWarning + 8
+cannot_dispose_default_ink		EQU		gxFirstSystemDebuggingWarning + 9
+cannot_dispose_default_transform EQU		gxFirstSystemDebuggingWarning + 10
+cannot_dispose_default_colorProfile EQU		gxFirstSystemDebuggingWarning + 11
+cannot_dispose_default_colorSet	EQU		gxFirstSystemDebuggingWarning + 12
+shape_direct_attribute_not_set	EQU		gxFirstSystemDebuggingWarning + 13
+; couldn't find what you were looking for 
+point_does_not_intersect_port	EQU		gxFirstSystemDebuggingWarning + 14
+cannot_dispose_non_font			EQU		gxFirstSystemDebuggingWarning + 15
+face_override_style_font_must_match_style EQU		gxFirstSystemDebuggingWarning + 16
+union_of_area_and_length_returns_area_only EQU		gxFirstSystemDebuggingWarning + 17
+insufficient_coordinate_space_for_new_device EQU		gxFirstSystemDebuggingWarning + 18
+; other 
+shape_passed_has_no_bounds		EQU		gxFirstSystemDebuggingWarning + 19
+tags_of_type_flst_removed		EQU		gxFirstSystemDebuggingWarning + 20
+translator_not_installed_on_this_grafport EQU		gxFirstSystemDebuggingWarning + 21
+
+parameters_have_no_effect		EQU		gxFirstSystemNotice
+attributes_already_set			EQU		gxFirstSystemNotice + 1
+caps_already_set				EQU		gxFirstSystemNotice + 2
+clip_already_set				EQU		gxFirstSystemNotice + 3
+color_already_set				EQU		gxFirstSystemNotice + 4
+curve_error_already_set			EQU		gxFirstSystemNotice + 5
+dash_already_set				EQU		gxFirstSystemNotice + 6
+default_colorProfile_already_set EQU		gxFirstSystemNotice + 7
+default_ink_already_set			EQU		gxFirstSystemNotice + 8
+default_transform_already_set	EQU		gxFirstSystemNotice + 9
+default_shape_already_set		EQU		gxFirstSystemNotice + 10
+default_style_already_set		EQU		gxFirstSystemNotice + 11
+dither_already_set				EQU		gxFirstSystemNotice + 12
+encoding_already_set			EQU		gxFirstSystemNotice + 13
+face_already_set				EQU		gxFirstSystemNotice + 14
+fill_already_set				EQU		gxFirstSystemNotice + 15
+font_already_set				EQU		gxFirstSystemNotice + 16
+font_variations_already_set		EQU		gxFirstSystemNotice + 17
+glyph_positions_are_already_set	EQU		gxFirstSystemNotice + 18
+glyph_tangents_are_already_set	EQU		gxFirstSystemNotice + 19
+halftone_already_set			EQU		gxFirstSystemNotice + 20
+hit_test_already_set			EQU		gxFirstSystemNotice + 21
+ink_already_set					EQU		gxFirstSystemNotice + 22
+join_already_set				EQU		gxFirstSystemNotice + 23
+justification_already_set		EQU		gxFirstSystemNotice + 24
+mapping_already_set				EQU		gxFirstSystemNotice + 25
+pattern_already_set				EQU		gxFirstSystemNotice + 26
+pen_already_set					EQU		gxFirstSystemNotice + 27
+style_already_set				EQU		gxFirstSystemNotice + 28
+tag_already_set					EQU		gxFirstSystemNotice + 29
+text_attributes_already_set		EQU		gxFirstSystemNotice + 30
+text_size_already_set			EQU		gxFirstSystemNotice + 31
+transfer_already_set			EQU		gxFirstSystemNotice + 32
+translator_already_installed_on_this_grafport EQU		gxFirstSystemNotice + 33
+transform_already_set			EQU		gxFirstSystemNotice + 34
+type_already_set				EQU		gxFirstSystemNotice + 35
+validation_level_already_set	EQU		gxFirstSystemNotice + 36
+viewPorts_already_set			EQU		gxFirstSystemNotice + 37
+viewPort_already_in_viewGroup	EQU		gxFirstSystemNotice + 38
+viewDevice_already_in_viewGroup	EQU		gxFirstSystemNotice + 39
+geometry_unaffected				EQU		gxFirstSystemNotice + 40
+mapping_unaffected				EQU		gxFirstSystemNotice + 41
+tags_in_shape_ignored			EQU		gxFirstSystemNotice + 42
+shape_already_in_primitive_form	EQU		gxFirstSystemNotice + 43
+shape_already_in_simple_form	EQU		gxFirstSystemNotice + 44
+shape_already_broken			EQU		gxFirstSystemNotice + 45
+shape_already_joined			EQU		gxFirstSystemNotice + 46
+cache_already_cleared			EQU		gxFirstSystemNotice + 47
+shape_not_disposed				EQU		gxFirstSystemNotice + 48
+style_not_disposed				EQU		gxFirstSystemNotice + 49
+ink_not_disposed				EQU		gxFirstSystemNotice + 50
+transform_not_disposed			EQU		gxFirstSystemNotice + 51
+colorSet_not_disposed			EQU		gxFirstSystemNotice + 52
+colorProfile_not_disposed		EQU		gxFirstSystemNotice + 53
+font_not_disposed				EQU		gxFirstSystemNotice + 54
+glyph_tangents_have_no_effect	EQU		gxFirstSystemNotice + 55
+glyph_positions_determined_by_advance EQU		gxFirstSystemNotice + 56
+transform_viewPorts_already_set	EQU		gxFirstSystemNotice + 57
+directShape_attribute_set_as_side_effect EQU		gxFirstSystemNotice + 58
+lockShape_called_as_side_effect	EQU		gxFirstSystemNotice + 59
+lockTag_called_as_side_effect	EQU		gxFirstSystemNotice + 60
+shapes_unlocked_as_side_effect	EQU		gxFirstSystemNotice + 61
+shape_not_locked				EQU		gxFirstSystemNotice + 62
+tag_not_locked					EQU		gxFirstSystemNotice + 63
+profile_not_locked				EQU		tag_not_locked
+lockProfile_called_as_side_effect EQU		lockTag_called_as_side_effect
+disposed_dead_caches			EQU		gxFirstSystemNotice + 64
+disposed_live_caches			EQU		gxFirstSystemNotice + 65
+low_on_memory					EQU		gxFirstSystemNotice + 66
+very_low_on_memory				EQU		gxFirstSystemNotice + 67
+transform_references_disposed_viewPort EQU		gxFirstSystemNotice + 68
+
+; typedef long 				gxGraphicsError
+; typedef long 				gxGraphicsWarning
+; typedef long 				gxGraphicsNotice
+; typedef gxUserErrorProcPtr  gxUserErrorFunction
+; typedef gxUserWarningProcPtr  gxUserWarningFunction
+; typedef gxUserNoticeProcPtr  gxUserNoticeFunction
+
+common_colors_not_initialized	EQU		gxFirstLibraryError
+no_open_picture					EQU		gxFirstLibraryError + 1
+picture_already_open			EQU		gxFirstLibraryError + 2
+no_open_poly					EQU		gxFirstLibraryError + 3
+poly_already_open				EQU		gxFirstLibraryError + 4
+no_open_region					EQU		gxFirstLibraryError + 5
+region_already_open				EQU		gxFirstLibraryError + 6
+no_active_picture				EQU		gxFirstLibraryError + 7
+
+no_picture_drawn				EQU		gxFirstLibraryWarning
+polygons_have_different_size_contours EQU		gxFirstLibraryWarning + 1
+graphic_type_cannot_be_specifed_by_four_values EQU		gxFirstLibraryWarning + 2
+graphic_type_cannot_be_specifed_by_six_values EQU		gxFirstLibraryWarning + 3
+point_expected					EQU		gxFirstLibraryWarning + 4
+line_or_rectangle_expected		EQU		gxFirstLibraryWarning + 5
+curve_expected					EQU		gxFirstLibraryWarning + 6
+graphic_type_does_not_contain_control_bits EQU		gxFirstLibraryWarning + 7
+request_exceeds_available_data	EQU		gxFirstLibraryWarning + 8
+extra_data_unread				EQU		gxFirstLibraryWarning + 9
+no_variable_length_user_data_saved EQU		gxFirstLibraryWarning + 10
+
+zero_length_string_passed		EQU		gxFirstLibraryNotice
+
+	graphicsDebuggingIncludes: SET 1
+; These levels tell how to validate routines.  Choose one. 
+gxNoValidation					EQU		$00					; no validation 
+gxPublicValidation				EQU		$01					; check parameters to public routines 
+gxInternalValidation			EQU		$02					; check parameters to internal routines 
+; These levels tell how to validate types.  Choose one. 
+gxTypeValidation				EQU		$00					; check types of objects 
+gxStructureValidation			EQU		$10					; check fields of private structures 
+gxAllObjectValidation			EQU		$20					; check every object over every call 
+; These levels tell how to validate memory manager blocks.  Choose any combination. 
+gxNoMemoryManagerValidation		EQU		$0000
+gxApBlockValidation				EQU		$0100				; check the relevant block structures after each memory mgr. call 
+gxFontBlockValidation			EQU		$0200				; check the system gxHeap as well 
+gxApHeapValidation				EQU		$0400				; check the memory manager’s gxHeap after every mem. call 
+gxFontHeapValidation			EQU		$0800				; check the system gxHeap as well 
+gxCheckApHeapValidation			EQU		$1000				; check the memory manager’s gxHeap if checking routine parameters 
+gxCheckFontHeapValidation		EQU		$2000				; check the system gxHeap as well 
+
+; typedef long 				gxValidationLevel
+
+no_draw_error					EQU		0
+; gxShape type errors 
+shape_emptyType					EQU		1
+shape_inverse_fullType			EQU		2
+rectangle_zero_width			EQU		3
+rectangle_zero_height			EQU		4
+polygon_empty					EQU		5
+path_empty						EQU		6
+bitmap_zero_width				EQU		7
+bitmap_zero_height				EQU		8
+text_empty						EQU		9
+glyph_empty						EQU		10
+layout_empty					EQU		11
+picture_empty					EQU		12
+; general gxShape errors 
+shape_no_fill					EQU		13
+shape_no_enclosed_area			EQU		14
+shape_no_enclosed_pixels		EQU		15
+shape_very_small				EQU		16
+shape_very_large				EQU		17
+shape_contours_cancel			EQU		18
+; gxStyle errors 
+pen_too_small					EQU		19
+text_size_too_small				EQU		20
+dash_empty						EQU		21
+start_cap_empty					EQU		22
+pattern_empty					EQU		23
+textFace_empty					EQU		24
+shape_primitive_empty			EQU		25
+shape_primitive_very_small		EQU		26
+; gxInk errors 
+transfer_equals_noMode			EQU		27
+transfer_matrix_ignores_source	EQU		28
+transfer_matrix_ignores_device	EQU		29
+transfer_source_reject			EQU		30
+transfer_mode_ineffective		EQU		31
+colorSet_no_entries				EQU		32
+bitmap_colorSet_one_entry		EQU		33
+; gxTransform errors 
+transform_scale_too_small		EQU		34
+transform_map_too_large			EQU		35
+transform_move_too_large		EQU		36
+transform_scale_too_large		EQU		37
+transform_rotate_too_large		EQU		38
+transform_perspective_too_large	EQU		39
+transform_skew_too_large		EQU		40
+transform_clip_no_intersection	EQU		41
+transform_clip_empty			EQU		42
+transform_no_viewPorts			EQU		43
+; gxViewPort errors 
+viewPort_disposed				EQU		44
+viewPort_clip_empty				EQU		45
+viewPort_clip_no_intersection	EQU		46
+viewPort_scale_too_small		EQU		47
+viewPort_map_too_large			EQU		48
+viewPort_move_too_large			EQU		49
+viewPort_scale_too_large		EQU		50
+viewPort_rotate_too_large		EQU		51
+viewPort_perspective_too_large	EQU		52
+viewPort_skew_too_large			EQU		53
+viewPort_viewGroup_offscreen	EQU		54
+; gxViewDevice errors 
+viewDevice_clip_no_intersection	EQU		55
+viewDevice_scale_too_small		EQU		56
+viewDevice_map_too_large		EQU		57
+viewDevice_move_too_large		EQU		58
+viewDevice_scale_too_large		EQU		59
+viewDevice_rotate_too_large		EQU		60
+viewDevice_perspective_too_large EQU		61
+viewDevice_skew_too_large		EQU		62
+
+; typedef long 				gxDrawError
+;
+; gxDrawError GXGetShapeDrawError(gxShape source)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetShapeDrawError
+			move.w	#$1ee,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetShapeDrawError
+	ENDIF
+
+;
+; void GXValidateAll(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateAll
+			move.w	#$1ef,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateAll
+	ENDIF
+
+;
+; void GXValidateColorSet(gxColorSet target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateColorSet
+			move.w	#$1f0,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateColorSet
+	ENDIF
+
+;
+; void GXValidateColorProfile(gxColorProfile target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateColorProfile
+			move.w	#$1f1,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateColorProfile
+	ENDIF
+
+;
+; void GXValidateGraphicsClient(gxGraphicsClient target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateGraphicsClient
+			move.w	#$1f2,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateGraphicsClient
+	ENDIF
+
+;
+; void GXValidateInk(gxInk target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateInk
+			move.w	#$1f3,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateInk
+	ENDIF
+
+;
+; void GXValidateShape(gxShape target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateShape
+			move.w	#$1f4,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateShape
+	ENDIF
+
+;
+; void GXValidateStyle(gxStyle target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateStyle
+			move.w	#$1f5,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateStyle
+	ENDIF
+
+;
+; void GXValidateTag(gxTag target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateTag
+			move.w	#$1f6,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateTag
+	ENDIF
+
+;
+; void GXValidateTransform(gxTransform target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateTransform
+			move.w	#$1f7,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateTransform
+	ENDIF
+
+;
+; void GXValidateViewDevice(gxViewDevice target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateViewDevice
+			move.w	#$1f8,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateViewDevice
+	ENDIF
+
+;
+; void GXValidateViewPort(gxViewPort target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateViewPort
+			move.w	#$1f9,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateViewPort
+	ENDIF
+
+;
+; void GXValidateViewGroup(gxViewGroup target)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXValidateViewGroup
+			move.w	#$1fa,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXValidateViewGroup
+	ENDIF
+
+;
+; gxValidationLevel GXGetValidation(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetValidation
+			move.w	#$1fb,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetValidation
+	ENDIF
+
+;
+; void GXSetValidation(gxValidationLevel level)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXSetValidation
+			move.w	#$1fc,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXSetValidation
+	ENDIF
+
+;
+; long GXGetValidationError(char *procedureName, void **argument, long *argumentNumber)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetValidationError
+			move.w	#$1fd,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetValidationError
+	ENDIF
+
+;
+; gxUserDebugFunction GXGetUserGraphicsDebug(long *reference)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXGetUserGraphicsDebug
+			move.w	#$1ff,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXGetUserGraphicsDebug
+	ENDIF
+
+;
+; void GXSetUserGraphicsDebug(gxUserDebugFunction userFunction, long reference)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GXSetUserGraphicsDebug
+			move.w	#$200,d0
+			dc.w 	$A832
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GXSetUserGraphicsDebug
+	ENDIF
+
+	ENDIF ; __GXERRORS__

@@ -1,0 +1,5619 @@
+;
+;    File:       MacWindows.a
+;
+;    Contains:   Window Manager Interfaces
+;
+;    Version:    Technology: Mac OS X/CarbonLib 1.3
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1997-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__MACWINDOWS__') = 'UNDEFINED' THEN
+__MACWINDOWS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__ALIASES__') = 'UNDEFINED' THEN
+	include 'Aliases.a'
+	ENDIF
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__COLLECTIONS__') = 'UNDEFINED' THEN
+	include 'Collections.a'
+	ENDIF
+	IF &TYPE('__DRAG__') = 'UNDEFINED' THEN
+	include 'Drag.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__QDOFFSCREEN__') = 'UNDEFINED' THEN
+	include 'QDOffscreen.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__TEXTCOMMON__') = 'UNDEFINED' THEN
+	include 'TextCommon.a'
+	ENDIF
+	IF &TYPE('__ICONS__') = 'UNDEFINED' THEN
+	include 'Icons.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__CFSTRING__') = 'UNDEFINED' THEN
+	include 'CFString.a'
+	ENDIF
+;                                                                                                       
+;  Current documentation for the Mac OS Window Manager is available on the web:                         
+;   <http://developer.apple.com/techpubs/macos8/HumanInterfaceToolbox/WindowManager/windowmanager.html> 
+;                                                                                                       
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Property Types                                                                     
+; ——————————————————————————————————————————————————————————————————————————————————————
+; typedef OSType 						PropertyCreator
+
+; typedef OSType 						PropertyTag
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Classes                                                                     
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef UInt32						WindowClass
+kAlertWindowClass				EQU		1					; “I need your attention now.”
+kMovableAlertWindowClass		EQU		2					; “I need your attention now, but I’m kind enough to let you switch out of this app to do other things.”
+kModalWindowClass				EQU		3					; system modal, not draggable
+kMovableModalWindowClass		EQU		4					; application modal, draggable
+kFloatingWindowClass			EQU		5					; floats above all other application windows
+kDocumentWindowClass			EQU		6					; document windows
+kUtilityWindowClass				EQU		8					; system-wide floating windows (TSM, AppleGuide) (available in CarbonLib 1.1)
+kHelpWindowClass				EQU		10					; help window (no frame; coachmarks, help tags ) (available in CarbonLib 1.1)
+kSheetWindowClass				EQU		11					; sheet windows for dialogs (available in Mac OS X and CarbonLib 1.3)
+kToolbarWindowClass				EQU		12					; toolbar windows (above documents, below floating windows) (available in CarbonLib 1.1)
+kPlainWindowClass				EQU		13					; plain window (in document layer)
+kOverlayWindowClass				EQU		14					; transparent window which allows 'screen' drawing via CoreGraphics (Mac OS X only)
+kSheetAlertWindowClass			EQU		15					; sheet windows for alerts (available in Mac OS X after 1.0 and CarbonLib 1.3)
+kAltPlainWindowClass			EQU		16					; alternate plain window (in document layer) (available in Mac OS X after 1.0 and CarbonLib 1.3)
+kAllWindowClasses				EQU		$FFFFFFFF			; for use with GetFrontWindowOfClass, FindWindowOfClass, GetNextWindowOfClass
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Attributes                                                                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef UInt32 						WindowAttributes
+
+
+kWindowNoAttributes				EQU		0					; no attributes 
+kWindowCloseBoxAttribute		EQU		$00000001			; window has a close box 
+kWindowHorizontalZoomAttribute	EQU		$00000002			; window has horizontal zoom box 
+kWindowVerticalZoomAttribute	EQU		$00000004			; window has vertical zoom box 
+kWindowFullZoomAttribute		EQU		$00000006
+kWindowCollapseBoxAttribute		EQU		$00000008			; window has a collapse box 
+kWindowResizableAttribute		EQU		$00000010			; window is resizable 
+kWindowSideTitlebarAttribute	EQU		$00000020			; window wants a titlebar on the side    (floating window class only) 
+kWindowNoUpdatesAttribute		EQU		$00010000			; this window receives no update events 
+kWindowNoActivatesAttribute		EQU		$00020000			; this window receives no activate events 
+kWindowOpaqueForEventsAttribute	EQU		$00040000			; valid only for kOverlayWindowClass. Means even transparent areas get clicks.
+kWindowNoShadowAttribute		EQU		$00200000			; this window should have no shadow (X only)
+kWindowHideOnSuspendAttribute	EQU		$01000000			; this window is automatically hidden on suspend and shown on resume (Carbon only) 
+															; floating windows get kWindowHideOnSuspendAttribute automatically
+kWindowStandardHandlerAttribute	EQU		$02000000			; this window should have the standard toolbox window event handler installed (Carbon only) 
+kWindowHideOnFullScreenAttribute EQU	$04000000			; this window is automatically hidden during fullscreen mode and shown afterwards (Carbon only) 
+															; utility windows get kWindowHideOnFullScreenAttribute automatically
+kWindowInWindowMenuAttribute	EQU		$08000000			; this window is automatically tracked in the window menu (Carbon only)
+kWindowLiveResizeAttribute		EQU		$10000000			; this window supports live resizing (X only)
+kWindowStandardDocumentAttributes EQU	$0000001F
+kWindowStandardFloatingAttributes EQU	$00000009
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Definition Type                                                             
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kWindowDefProcType				EQU		'WDEF'
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Mac OS 7.5 Window Definition Resource IDs                                          
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kStandardWindowDefinition		EQU		0					; for document windows and dialogs
+kRoundWindowDefinition			EQU		1					; old da-style window
+kFloatingWindowDefinition		EQU		124					; for floating windows
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Variant Codes                                                                      
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+															; for use with kStandardWindowDefinition 
+kDocumentWindowVariantCode		EQU		0
+kModalDialogVariantCode			EQU		1
+kPlainDialogVariantCode			EQU		2
+kShadowDialogVariantCode		EQU		3
+kMovableModalDialogVariantCode	EQU		5
+kAlertVariantCode				EQU		7
+kMovableAlertVariantCode		EQU		9					; for use with kFloatingWindowDefinition 
+kSideFloaterVariantCode			EQU		8
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • DefProc IDs                                                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+															; classic ids 
+documentProc					EQU		0
+dBoxProc						EQU		1
+plainDBox						EQU		2
+altDBoxProc						EQU		3
+noGrowDocProc					EQU		4
+movableDBoxProc					EQU		5
+zoomDocProc						EQU		8
+zoomNoGrow						EQU		12					; floating window defproc ids 
+floatProc						EQU		1985
+floatGrowProc					EQU		1987
+floatZoomProc					EQU		1989
+floatZoomGrowProc				EQU		1991
+floatSideProc					EQU		1993
+floatSideGrowProc				EQU		1995
+floatSideZoomProc				EQU		1997
+floatSideZoomGrowProc			EQU		1999
+	IF CALL_NOT_IN_CARBON THEN
+;  The rDocProc (rounded WDEF, ala calculator) is not supported in Carbon.
+
+rDocProc						EQU		16
+	ENDIF	; CALL_NOT_IN_CARBON
+
+															; Resource IDs for theme-savvy window defprocs 
+kWindowDocumentDefProcResID		EQU		64
+kWindowDialogDefProcResID		EQU		65
+kWindowUtilityDefProcResID		EQU		66
+kWindowUtilitySideTitleDefProcResID EQU	67
+kWindowSheetDefProcResID		EQU		68
+kWindowSimpleDefProcResID		EQU		69
+kWindowSheetAlertDefProcResID	EQU		70
+
+															; Proc IDs for theme-savvy windows 
+kWindowDocumentProc				EQU		1024
+kWindowGrowDocumentProc			EQU		1025
+kWindowVertZoomDocumentProc		EQU		1026
+kWindowVertZoomGrowDocumentProc	EQU		1027
+kWindowHorizZoomDocumentProc	EQU		1028
+kWindowHorizZoomGrowDocumentProc EQU	1029
+kWindowFullZoomDocumentProc		EQU		1030
+kWindowFullZoomGrowDocumentProc	EQU		1031
+
+
+															; Proc IDs for theme-savvy dialogs 
+kWindowPlainDialogProc			EQU		1040
+kWindowShadowDialogProc			EQU		1041
+kWindowModalDialogProc			EQU		1042
+kWindowMovableModalDialogProc	EQU		1043
+kWindowAlertProc				EQU		1044
+kWindowMovableAlertProc			EQU		1045
+
+
+															; procIDs available from Mac OS 8.1 (Appearance 1.0.1) forward 
+kWindowMovableModalGrowProc		EQU		1046
+
+
+															; Proc IDs for top title bar theme-savvy floating windows 
+kWindowFloatProc				EQU		1057
+kWindowFloatGrowProc			EQU		1059
+kWindowFloatVertZoomProc		EQU		1061
+kWindowFloatVertZoomGrowProc	EQU		1063
+kWindowFloatHorizZoomProc		EQU		1065
+kWindowFloatHorizZoomGrowProc	EQU		1067
+kWindowFloatFullZoomProc		EQU		1069
+kWindowFloatFullZoomGrowProc	EQU		1071
+
+
+															; Proc IDs for side title bar theme-savvy floating windows 
+kWindowFloatSideProc			EQU		1073
+kWindowFloatSideGrowProc		EQU		1075
+kWindowFloatSideVertZoomProc	EQU		1077
+kWindowFloatSideVertZoomGrowProc EQU	1079
+kWindowFloatSideHorizZoomProc	EQU		1081
+kWindowFloatSideHorizZoomGrowProc EQU	1083
+kWindowFloatSideFullZoomProc	EQU		1085
+kWindowFloatSideFullZoomGrowProc EQU	1087
+
+
+															; Proc IDs for sheet windows 
+kWindowSheetProc				EQU		1088				; available in Mac OS X and CarbonLib 1.3 
+kWindowSheetAlertProc			EQU		1120				; available in Mac OS X after 1.0, and CarbonLib 1.3 
+
+
+
+; *  Discussion:
+; *    Window defproc IDs for simple windows
+; 
+
+
+															; Proc IDs for simple windows 
+kWindowSimpleProc				EQU		1104
+kWindowSimpleFrameProc			EQU		1105
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • System 7 Window Positioning Constants                                              
+;                                                                                       
+;  Passed into StandardAlert and used in ‘WIND’, ‘DLOG’, and ‘ALRT’ templates           
+;  StandardAlert uses zero to specify the default position. Other calls use zero to     
+;  specify “no position”.  Do not pass these constants to RepositionWindow.  Do not     
+;  store these constants in the BasicWindowDescription of a ‘wind’ resource.            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+kWindowNoPosition				EQU		$0000
+kWindowDefaultPosition			EQU		$0000				; used by StandardAlert
+kWindowCenterMainScreen			EQU		$280A
+kWindowAlertPositionMainScreen	EQU		$300A
+kWindowStaggerMainScreen		EQU		$380A
+kWindowCenterParentWindow		EQU		$A80A
+kWindowAlertPositionParentWindow EQU	$B00A
+kWindowStaggerParentWindow		EQU		$B80A
+kWindowCenterParentWindowScreen	EQU		$680A
+kWindowAlertPositionParentWindowScreen EQU $700A
+kWindowStaggerParentWindowScreen EQU	$780A
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Positioning Methods                                                         
+;                                                                                       
+;  Positioning methods passed to RepositionWindow.                                      
+;  Do not use them in WIND, ALRT, DLOG templates.                                       
+;  Do not confuse these constants with the constants above                              
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef UInt32						WindowPositionMethod
+kWindowCenterOnMainScreen		EQU		$00000001
+kWindowCenterOnParentWindow		EQU		$00000002
+kWindowCenterOnParentWindowScreen EQU	$00000003
+kWindowCascadeOnMainScreen		EQU		$00000004
+kWindowCascadeOnParentWindow	EQU		$00000005
+kWindowCascadeOnParentWindowScreen EQU	$00000006
+kWindowAlertPositionOnMainScreen EQU	$00000007
+kWindowAlertPositionOnParentWindow EQU	$00000008
+kWindowAlertPositionOnParentWindowScreen EQU $00000009
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • GetWindowRegion Types                                                              
+; ——————————————————————————————————————————————————————————————————————————————————————
+; typedef UInt16 						WindowRegionCode
+
+
+															; Region values to pass into GetWindowRegion & GetWindowBounds 
+kWindowTitleBarRgn				EQU		0
+kWindowTitleTextRgn				EQU		1
+kWindowCloseBoxRgn				EQU		2
+kWindowZoomBoxRgn				EQU		3
+kWindowDragRgn					EQU		5
+kWindowGrowRgn					EQU		6
+kWindowCollapseBoxRgn			EQU		7
+kWindowTitleProxyIconRgn		EQU		8					; Mac OS 8.5 forward
+kWindowStructureRgn				EQU		32
+kWindowContentRgn				EQU		33					; Content area of the window; empty when the window is collapsed
+kWindowUpdateRgn				EQU		34					; Carbon forward
+kWindowOpaqueRgn				EQU		35					; Mac OS X: Area of window considered to be opaque. Only valid for windows with alpha channels.
+kWindowGlobalPortRgn			EQU		40					; Carbon forward - bounds of the window’s port in global coordinates; not affected by CollapseWindow
+;  GetWindowRegionRec - a pointer to this is passed in WDEF param for kWindowMsgGetRegion
+GetWindowRegionRec		RECORD 0
+winRgn					 ds.l	1				; offset: $0 (0)
+regionCode				 ds.w	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct GetWindowRegionRec *	GetWindowRegionPtr
+
+; typedef struct GetWindowRegionRec *	GetWindowRegionRecPtr
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • WDEF Message Types                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   SetupWindowProxyDragImageRec - setup the proxy icon drag image
+;   Both regions are allocated and disposed by the Window Manager.
+;   The GWorld is disposed of by the Window Manager, but the WDEF must allocate
+;   it.  See Technote on Drag Manager 1.1 additions for more information and sample code for
+;   setting up drag images.
+
+
+
+SetupWindowProxyDragImageRec RECORD 0
+imageGWorld				 ds.l	1				; offset: $0 (0)		;  locked GWorld containing the drag image - output - can be NULL
+imageRgn				 ds.l	1				; offset: $4 (4)		;  image clip region, contains the portion of the image which gets blitted to screen - preallocated output - if imageGWorld is NULL, this is ignored
+outlineRgn				 ds.l	1				; offset: $8 (8)		;  the outline region used on shallow monitors - preallocated output - must always be non-empty
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  MeasureWindowTitleRec - a pointer to this is passed in WDEF param for kWindowMsgMeasureTitle
+MeasureWindowTitleRec	RECORD 0
+;  output parameters (filled in by the WDEF)
+fullTitleWidth			 ds.w	1				; offset: $0 (0)		;  text + proxy icon width
+titleTextWidth			 ds.w	1				; offset: $2 (2)		;  text width
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct MeasureWindowTitleRec * MeasureWindowTitleRecPtr
+
+
+;   GetGrowImageRegionRec - generate a region to be xored during GrowWindow and ResizeWindow.
+;   This is passed along with a kWindowMsgGetGrowImageRegion message. On input, the growRect
+;   parameter is the window's new bounds in global coordinates. The growImageRegion parameter
+;   will be allocated and disposed automatically; the window definition should alter the 
+;   region appropriately.
+
+
+GetGrowImageRegionRec	RECORD 0
+growRect				 ds		Rect			; offset: $0 (0)
+growImageRegion			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Standard Window Kinds                                                              
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+dialogKind						EQU		2
+userKind						EQU		8
+kDialogWindowKind				EQU		2
+kApplicationWindowKind			EQU		8
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • FindWindow Result Codes                                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef SInt16						WindowPartCode
+inDesk							EQU		0
+inNoWindow						EQU		0
+inMenuBar						EQU		1
+inSysWindow						EQU		2
+inContent						EQU		3
+inDrag							EQU		4
+inGrow							EQU		5
+inGoAway						EQU		6
+inZoomIn						EQU		7
+inZoomOut						EQU		8
+inCollapseBox					EQU		11					; Mac OS 8.0 forward
+inProxyIcon						EQU		12					; Mac OS 8.5 forward
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Definition Hit Test Result Codes                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef SInt16						WindowDefPartCode
+wNoHit							EQU		0
+wInContent						EQU		1
+wInDrag							EQU		2
+wInGrow							EQU		3
+wInGoAway						EQU		4
+wInZoomIn						EQU		5
+wInZoomOut						EQU		6
+wInCollapseBox					EQU		9					; Mac OS 8.0 forward
+wInProxyIcon					EQU		10					; Mac OS 8.5 forward
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Definition Messages                                                         
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+kWindowMsgDraw					EQU		0
+kWindowMsgHitTest				EQU		1
+kWindowMsgCalculateShape		EQU		2
+kWindowMsgInitialize			EQU		3
+kWindowMsgCleanUp				EQU		4
+kWindowMsgDrawGrowOutline		EQU		5
+kWindowMsgDrawGrowBox			EQU		6
+;  Messages available from Mac OS 8.0 forward
+
+kWindowMsgGetFeatures			EQU		7
+kWindowMsgGetRegion				EQU		8
+;  Messages available from Mac OS 8.5 forward
+
+kWindowMsgDragHilite			EQU		9					; parameter boolean indicating on or off
+kWindowMsgModified				EQU		10					; parameter boolean indicating saved (false) or modified (true)
+kWindowMsgDrawInCurrentPort		EQU		11					; same as kWindowMsgDraw, but must draw in current port
+kWindowMsgSetupProxyDragImage	EQU		12					; parameter pointer to SetupWindowProxyDragImageRec
+kWindowMsgStateChanged			EQU		13					; something about the window's state has changed
+kWindowMsgMeasureTitle			EQU		14					; measure and return the ideal title width
+;  Messages only available in Carbon
+
+kWindowMsgGetGrowImageRegion	EQU		19					; get region to xor during grow/resize. parameter pointer to GetGrowImageRegionRec.
+;  old names
+
+wDraw							EQU		0
+wHit							EQU		1
+wCalcRgns						EQU		2
+wNew							EQU		3
+wDispose						EQU		4
+wGrow							EQU		5
+wDrawGIcon						EQU		6
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • State-changed Flags for kWindowMsgStateChanged                                     
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kWindowStateTitleChanged		EQU		$01
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Feature Bits                                                                
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kWindowCanGrow					EQU		$01
+kWindowCanZoom					EQU		$02
+kWindowCanCollapse				EQU		$04
+kWindowIsModal					EQU		$08
+kWindowCanGetWindowRegion		EQU		$10
+kWindowIsAlert					EQU		$20
+kWindowHasTitleBar				EQU		$40
+;  Feature bits available from Mac OS 8.5 forward
+
+kWindowSupportsDragHilite		EQU		$80					; window definition supports kWindowMsgDragHilite
+kWindowSupportsModifiedBit		EQU		$0100				; window definition supports kWindowMsgModified
+kWindowCanDrawInCurrentPort		EQU		$0200				; window definition supports kWindowMsgDrawInCurrentPort
+kWindowCanSetupProxyDragImage	EQU		$0400				; window definition supports kWindowMsgSetupProxyDragImage
+kWindowCanMeasureTitle			EQU		$0800				; window definition supports kWindowMsgMeasureTitle
+kWindowWantsDisposeAtProcessDeath EQU	$1000				; window definition wants a Dispose message for windows still extant during ExitToShell
+kWindowSupportsGetGrowImageRegion EQU	$2000				; window definition will calculate the grow image region manually.
+kWindowDefSupportsColorGrafPort	EQU		$40000002
+;  Feature bits for post MacOS 10.0
+
+kWindowIsOpaque					EQU		$4000				; Window doesn't need an alpha channel. Saves memory.
+
+;   THIS CONSTANT IS GOING AWAY. IT IS NAMED INCORRECTLY. USE THE GETGROWIMAGE CONSTANT ABOVE INSTEAD.
+;   DO YOU HEAR ME! AM I YELLING LOUD ENOUGH?!
+
+
+
+kWindowSupportsSetGrowImageRegion EQU	$2000
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Desktop Pattern Resource ID                                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+deskPatID						EQU		16
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Color Part Codes                                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+wContentColor					EQU		0
+wFrameColor						EQU		1
+wTextColor						EQU		2
+wHiliteColor					EQU		3
+wTitleBarColor					EQU		4
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Region Dragging Constants                                                         
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+kMouseUpOutOfSlop				EQU		$80008000
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Color Table                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+WinCTab					RECORD 0
+wCSeed					 ds.l	1				; offset: $0 (0)		;  reserved 
+wCReserved				 ds.w	1				; offset: $4 (4)		;  reserved 
+ctSize					 ds.w	1				; offset: $6 (6)		;  usually 4 for windows 
+ctTable					 ds.b	5 * ColorSpec.sizeof ; offset: $8 (8)
+sizeof					 EQU *					; size:   $30 (48)
+						ENDR
+; typedef struct WinCTab *				WCTabPtr
+
+; typedef WCTabPtr *					WCTabHandle
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • WindowRecord                                                                       
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+
+
+; typedef WindowRecord *				WindowPeek
+
+WindowRecord			RECORD 0
+port					 ds		GrafPort		; offset: $0 (0)		;  in Carbon use GetWindowPort
+windowKind				 ds.w	1				; offset: $6C (108)		;  in Carbon use Get/SetWindowKind
+visible					 ds.b	1				; offset: $6E (110)		;  in Carbon use Hide/ShowWindow, ShowHide, IsWindowVisible
+hilited					 ds.b	1				; offset: $6F (111)		;  in Carbon use HiliteWindow, IsWindowHilited
+goAwayFlag				 ds.b	1				; offset: $70 (112)		;  in Carbon use ChangeWindowAttributes
+spareFlag				 ds.b	1				; offset: $71 (113)		;  in Carbon use ChangeWindowAttributes
+strucRgn				 ds.l	1				; offset: $72 (114)		;  in Carbon use GetWindowRegion
+contRgn					 ds.l	1				; offset: $76 (118)		;  in Carbon use GetWindowRegion
+updateRgn				 ds.l	1				; offset: $7A (122)		;  in Carbon use GetWindowRegion
+windowDefProc			 ds.l	1				; offset: $7E (126)		;  not supported in Carbon 
+dataHandle				 ds.l	1				; offset: $82 (130)		;  not supported in Carbon 
+titleHandle				 ds.l	1				; offset: $86 (134)		;  in Carbon use Get/SetWTitle 
+titleWidth				 ds.w	1				; offset: $8A (138)		;  in Carbon use GetWindowRegion 
+controlList				 ds.l	1				; offset: $8C (140)		;  in Carbon use GetRootControl 
+nextWindow				 ds.l	1				; offset: $90 (144)		;  in Carbon use GetNextWindow 
+windowPic				 ds.l	1				; offset: $94 (148)		;  in Carbon use Get/SetWindowPic 
+refCon					 ds.l	1				; offset: $98 (152)		;  in Carbon use Get/SetWRefCon
+sizeof					 EQU *					; size:   $9C (156)
+						ENDR
+	ENDIF
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Color WindowRecord                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+
+
+; typedef CWindowRecord *				CWindowPeek
+
+CWindowRecord			RECORD 0
+port					 ds		CGrafPort		; offset: $0 (0)		;  in Carbon use GetWindowPort
+windowKind				 ds.w	1				; offset: $6C (108)		;  in Carbon use Get/SetWindowKind    
+visible					 ds.b	1				; offset: $6E (110)		;  in Carbon use Hide/ShowWindow, ShowHide, IsWindowVisible     
+hilited					 ds.b	1				; offset: $6F (111)		;  in Carbon use HiliteWindow, IsWindowHilited
+goAwayFlag				 ds.b	1				; offset: $70 (112)		;  in Carbon use ChangeWindowAttributes   
+spareFlag				 ds.b	1				; offset: $71 (113)		;  in Carbon use ChangeWindowAttributes   
+strucRgn				 ds.l	1				; offset: $72 (114)		;  in Carbon use GetWindowRegion  
+contRgn					 ds.l	1				; offset: $76 (118)		;  in Carbon use GetWindowRegion  
+updateRgn				 ds.l	1				; offset: $7A (122)		;  in Carbon use GetWindowRegion  
+windowDefProc			 ds.l	1				; offset: $7E (126)		;  not supported in Carbon 
+dataHandle				 ds.l	1				; offset: $82 (130)		;  not supported in Carbon 
+titleHandle				 ds.l	1				; offset: $86 (134)		;  in Carbon use Get/SetWTitle 
+titleWidth				 ds.w	1				; offset: $8A (138)		;  in Carbon use GetWindowRegion 
+controlList				 ds.l	1				; offset: $8C (140)		;  in Carbon use GetRootControl 
+nextWindow				 ds.l	1				; offset: $90 (144)		;  in Carbon use GetNextWindow 
+windowPic				 ds.l	1				; offset: $94 (148)		;  in Carbon use Get/SetWindowPic     
+refCon					 ds.l	1				; offset: $98 (152)		;  in Carbon use Get/SetWRefCon      
+sizeof					 EQU *					; size:   $9C (156)
+						ENDR
+	ENDIF
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • AuxWinHandle                                                                       
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+
+
+; typedef AuxWinRec *					AuxWinPtr
+
+; typedef AuxWinPtr *					AuxWinHandle
+
+AuxWinRec				RECORD 0
+awNext					 ds.l	1				; offset: $0 (0)		;  handle to next AuxWinRec, not supported in Carbon
+awOwner					 ds.l	1				; offset: $4 (4)		;  not supported in Carbon
+awCTable				 ds.l	1				; offset: $8 (8)		;  color table for this window, use  Get/SetWindowContentColor in Carbon
+reserved				 ds.l	1				; offset: $C (12)		;  not supported in Carbon
+awFlags					 ds.l	1				; offset: $10 (16)		;  reserved for expansion, not supported in Carbon
+awReserved				 ds.l	1				; offset: $14 (20)		;  reserved for expansion, not supported in Carbon
+awRefCon				 ds.l	1				; offset: $18 (24)		;  user constant, in Carbon use Get/SetWindowProperty if you need more refCons
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+	ENDIF
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • BasicWindowDescription                                                            
+;                                                                                       
+;   Contains statically-sized basic attributes of the window, for storage in a          
+;   collection item.                                                                    
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  constants for the version field
+
+kWindowDefinitionVersionOne		EQU		1
+kWindowDefinitionVersionTwo		EQU		2
+;  constants for the stateflags bit field 
+
+kWindowIsCollapsedState			EQU		$01
+BasicWindowDescription	RECORD 0
+descriptionSize			 ds.l	1				; offset: $0 (0)		;  sizeof(BasicWindowDescription)
+windowContentRect		 ds		Rect			; offset: $4 (4)		;  location on screen
+windowZoomRect			 ds		Rect			; offset: $C (12)		;  location on screen when zoomed out
+windowRefCon			 ds.l	1				; offset: $14 (20)		;  the refcon - __avoid saving stale pointers here__  
+windowStateFlags		 ds.l	1				; offset: $18 (24)		;  window state bit flags
+windowPositionMethod	 ds.l	1				; offset: $1C (28)		;  method last used by RepositionWindow to position the window (if any)
+windowDefinitionVersion	 ds.l	1				; offset: $20 (32)
+windowDefProc			 ds.w	1				; offset: $24 (36)		;  defProc and variant
+windowHasCloseBox		 ds.b	1				; offset: $26 (38)
+						 ORG 36
+windowClass				 ds.l	1				; offset: $24 (36)		;  the class
+windowAttributes		 ds.l	1				; offset: $28 (40)		;  the attributes
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+;   the window manager stores the default collection items using these IDs
+
+kStoredWindowSystemTag			EQU		'appl'				; Only Apple collection items will be of this tag
+kStoredBasicWindowDescriptionID	EQU		'sbas'				; BasicWindowDescription
+kStoredWindowPascalTitleID		EQU		's255'				; pascal title string
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Class Ordering                                                              
+;                                                                                       
+;   Special cases for the “behind” parameter in window creation calls.                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+; #define kFirstWindowOfClass ((WindowRef)(-1))
+; #define kLastWindowOfClass ((WindowRef)0)
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Zoom Information Handle                                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+WStateData				RECORD 0
+userState				 ds		Rect			; offset: $0 (0)		; user zoom state
+stdState				 ds		Rect			; offset: $8 (8)		; standard zoom state
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct WStateData *			WStateDataPtr
+
+; typedef WStateDataPtr *				WStateDataHandle
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • MixedMode & ProcPtrs                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  NewWindowDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewDeskHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewWindowPaintUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeWindowDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DisposeDeskHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DisposeWindowPaintUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeWindowDefUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InvokeDeskHookUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  InvokeWindowPaintUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Definition Spec.  Used in Carbon to specify the code that defines a window. 
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+kWindowDefProcPtr				EQU		0					; raw proc-ptr based access
+kWindowDefObjectClass			EQU		1					; event-based definition (Carbon 1.1 or later)
+kWindowDefProcID				EQU		2					; explicit proc ID; overrides the window class default proc ID
+; typedef UInt32 						WindowDefType
+
+WindowDefSpec			RECORD 0
+defType					 ds.l	1				; offset: $0 (0)
+defProc					 ds.l	1				; offset: $4 (4)
+						 ORG 4
+classRef				 ds.l	1				; offset: $4 (4)
+						 ORG 4
+procID					 ds.w	1				; offset: $4 (4)
+						 ORG 8
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct WindowDefSpec *		WindowDefSpecPtr
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Creation & Persistence                                                      
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  GetNewCWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetNewCWindow(short windowID, void *wStorage, WindowRef behind)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetNewCWindow:	OPWORD	$AA46
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNewCWindow
+	ENDIF
+
+
+; *  NewWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef NewWindow(void *wStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, short theProc, WindowRef behind, Boolean goAwayFlag, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewWindow:	OPWORD	$A913
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewWindow
+	ENDIF
+
+
+; *  GetNewWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetNewWindow(short windowID, void *wStorage, WindowRef behind)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetNewWindow:	OPWORD	$A9BD
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNewWindow
+	ENDIF
+
+
+; *  NewCWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef NewCWindow(void *wStorage, const Rect *boundsRect, ConstStr255Param title, Boolean visible, short procID, WindowRef behind, Boolean goAwayFlag, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_NewCWindow:	OPWORD	$AA45
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewCWindow
+	ENDIF
+
+
+; *  DisposeWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisposeWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DisposeWindow:	OPWORD	$A914
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeWindow
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  [Mac]CloseWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CloseWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CloseWindow:	OPWORD	$A92D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseWindow
+	ENDIF
+
+
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  CreateNewWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateNewWindow(WindowClass windowClass, WindowAttributes attributes, const Rect *contentBounds, WindowRef *outWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateNewWindow
+	ENDIF
+
+;  Routines available from Mac OS 8.5 forward
+
+;  Create a window from a ‘wind’ resource
+
+; *  CreateWindowFromResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateWindowFromResource(SInt16 resID, WindowRef *outWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateWindowFromResource
+	ENDIF
+
+;  window persistence
+
+; *  StoreWindowIntoCollection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus StoreWindowIntoCollection(WindowRef window, Collection collection)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION StoreWindowIntoCollection
+	ENDIF
+
+
+; *  CreateWindowFromCollection()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateWindowFromCollection(Collection collection, WindowRef *outWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateWindowFromCollection
+	ENDIF
+
+;  window refcounting
+
+; *  GetWindowOwnerCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowOwnerCount(WindowRef window, UInt32 *outCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowOwnerCount
+	ENDIF
+
+
+; *  CloneWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CloneWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloneWindow
+	ENDIF
+
+
+; *  GetWindowRetainCount()
+; *  
+; *  Summary:
+; *    Returns the retain count of a window.
+; *  
+; *  Discussion:
+; *    This API is equivalent to GetWindowOwnerCount. For consistency
+; *    with CoreFoundation and Carbon Events, it is preferred over
+; *    GetWindowOwnerCount. Both APIs will continue to be supported.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose retain count to retrieve.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ItemCount GetWindowRetainCount(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowRetainCount
+	ENDIF
+
+
+; *  RetainWindow()
+; *  
+; *  Summary:
+; *    Increments the retain count of a window.
+; *  
+; *  Discussion:
+; *    This API is equivalent to CloneWindow. For consistency with
+; *    CoreFoundation and Carbon Events, it is preferred over
+; *    CloneWindow. Both APIs will continue to be supported.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose retain count to increment.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RetainWindow(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RetainWindow
+	ENDIF
+
+
+; *  ReleaseWindow()
+; *  
+; *  Summary:
+; *    Decrements the retain count of a window, and destroys the window
+; *    if the retain count falls to zero.
+; *  
+; *  Discussion:
+; *    This API is equivalent to DisposeWindow. For consistency with
+; *    CoreFoundation and Carbon Events, it is preferred over
+; *    DisposeWindow. Both APIs will continue to be supported.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose retain count to decrement.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ReleaseWindow(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReleaseWindow
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Custom Windows                                                                     
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  Routines available from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+; *  CreateCustomWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateCustomWindow(const WindowDefSpec *def, WindowClass windowClass, WindowAttributes attributes, const Rect *contentBounds, WindowRef *outWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateCustomWindow
+	ENDIF
+
+
+; *  ReshapeCustomWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ReshapeCustomWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReshapeCustomWindow
+	ENDIF
+
+
+; *  RegisterWindowDefinition()
+; *  
+; *  Summary:
+; *    Registers or unregisters a binding between a resource ID and a
+; *    window definition function.
+; *  
+; *  Discussion:
+; *    In the Mac OS 8.x Window Manager, a 'WIND' resource can contain
+; *    an embedded WDEF procID that is used by the Window Manager as the
+; *    resource ID of an 'WDEF' resource to lay out and draw the window.
+; *    The 'WDEF' resource is loaded by the Window Manager when you load
+; *    the menu with GetNewWindow. Since WDEFs can no longer be packaged
+; *    as code resources on Carbon, the procID can no longer refer
+; *    directly to a WDEF resource. However, using
+; *    RegisterWindowDefinition you can instead specify a
+; *    UniversalProcPtr pointing to code in your application code
+; *    fragment. RegisterWindowDefinition is available when linking to
+; *    CarbonLib 1.1 forward.
+; *  
+; *  Parameters:
+; *    
+; *    inResID:
+; *      A WDEF proc ID, as used in a 'WIND' resource.
+; *    
+; *    inDefSpec:
+; *      Specifies the WindowDefUPP that should be used for windows with
+; *      the given WDEF proc ID. Passing NULL allows you to unregister
+; *      the window definition that had been associated with the given
+; *      WDEF proc ID.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RegisterWindowDefinition(SInt16 inResID, const WindowDefSpec *inDefSpec)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterWindowDefinition
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window part tracking                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   Routines available from Mac OS 8.5 forward
+;        (or from Mac OS 8.6 forward when linking to CarbonLib 1.1 forward)
+
+
+
+
+
+; *  GetWindowWidgetHilite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowWidgetHilite(WindowRef inWindow, WindowDefPartCode *outHilite)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowWidgetHilite
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Metainformation Accessors                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+; *  GetWindowClass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowClass(WindowRef window, WindowClass *outClass)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowClass
+	ENDIF
+
+
+; *  GetWindowAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowAttributes(WindowRef window, WindowAttributes *outAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowAttributes
+	ENDIF
+
+
+;   Routines available from Mac OS 9.0 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+; *  ChangeWindowAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeWindowAttributes(WindowRef window, WindowAttributes setTheseAttributes, WindowAttributes clearTheseAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeWindowAttributes
+	ENDIF
+
+; 
+;    WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+;    WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+;    
+;    SetWindowClass will disappear in the near future. Instead of SetWindowClass,
+;    you should use SetWindowGroup to move a window into the group of the desired
+;    class. This API is very dangerous in that is actually does change the class
+;    of the window, but class was meant to be an immutable property of the window.
+;    At the very least, this API will be modified to only change the layer of the
+;    window to match the layer that the specified class normally lives in. Consider
+;    yourself warned!
+;    
+;    WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+;    WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+;
+
+
+; *  SetWindowClass()
+; *  
+; *  Summary:
+; *    Changes the window class of a window.
+; *  
+; *  Discussion:
+; *    SetWindowClass changes the class of a window. It also changes the
+; *    window's z-order so that it is grouped with other windows of the
+; *    same class. It does not change the visual appearance of the
+; *    window. In CarbonLib, SetWindowClass may not be used to change a
+; *    non-utility window to have utility window class, or to make a
+; *    utility window have non-utility class. SetWindowClass is
+; *    available from CarbonLib 1.1 forward.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose class to change.
+; *    
+; *    inWindowClass:
+; *      The new window class.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowClass(WindowRef inWindow, WindowClass inWindowClass)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowClass
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • Window Modality                                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+; *  WindowModality
+; *  
+; 
+
+
+; typedef UInt32						WindowModality
+kWindowModalityNone				EQU		0
+kWindowModalitySystemModal		EQU		1
+kWindowModalityAppModal			EQU		2
+kWindowModalityWindowModal		EQU		3
+
+
+; *  SetWindowModality()
+; *  
+; *  Summary:
+; *    Sets the modality of a window.
+; *  
+; *  Discussion:
+; *    The modality of a window is used by the Carbon event manager to
+; *    automatically determine appropriate event handling.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose modality to set.
+; *    
+; *    inModalKind:
+; *      The new modality for the window.
+; *    
+; *    inUnavailableWindow:
+; *      If the window is becoming window-modal, this parameter
+; *      specifies the window to which the inWindow parameter is modal.
+; *      The unavailableWindow will not be available while inWindow is
+; *      in window-modal state.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowModality(WindowRef inWindow, WindowModality inModalKind, WindowRef inUnavailableWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowModality
+	ENDIF
+
+
+; *  GetWindowModality()
+; *  
+; *  Summary:
+; *    Retrieves the modality of a window.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose modality to retrieve.
+; *    
+; *    outModalKind:
+; *      On exit, contains the modality of the window.
+; *    
+; *    outUnavailableWindow:
+; *      On exit, if the window is window-modal, contains the target
+; *      window of the specified window's modality.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowModality(WindowRef inWindow, WindowModality *outModalKind, WindowRef *outUnavailableWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowModality
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Floating Windows                                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   Routines available from Mac OS 8.6 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+
+; *  ShowFloatingWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ShowFloatingWindows(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowFloatingWindows
+	ENDIF
+
+
+; *  HideFloatingWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HideFloatingWindows(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideFloatingWindows
+	ENDIF
+
+
+; *  AreFloatingWindowsVisible()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean AreFloatingWindowsVisible(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AreFloatingWindowsVisible
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Groups                                                                      
+;                                                                                       
+;  The Window Group API allows the creation and management of groups of windows,        
+;  allowing control of the z-order, activation, and positioning of the windows.         
+;  Internally to the Window Manager, each of the standard window tiers (document,       
+;  toolbar, floating, modal, utility, help, and overlay) is implemented as a window     
+;  group; you can access the window group for a class with GetWindowGroupOfClass.       
+;  You can create your own window groups, if you would like your windows to float,      
+;  for example, above the floating window layer but below the modal layer. It is        
+;  also possible to create more complex hierarchical arrangements of window groups.     
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+
+windowGroupInvalidErr			EQU		-5616				; WindowGroup is invalid 
+;  may be passed as the "behindWindow" parameter to NewCWindow and SendBehind
+; #define kFirstWindowOfGroup ((WindowRef)(-1))
+; #define kLastWindowOfGroup ((WindowRef)NULL)
+;  may be passed as the "behindGroup" parameter to SendWindowGroupBehind
+; #define kFirstWindowGroup ((WindowGroupRef)(-1))
+; #define kLastWindowGroup ((WindowGroupRef)NULL)
+
+
+; *  WindowGroupAttributes
+; *  
+; *  Summary:
+; *    These are attributes that may be applied to a window group.
+; 
+
+
+; typedef UInt32						WindowGroupAttributes
+kWindowGroupAttrSelectAsLayer	EQU		$01
+kWindowGroupAttrMoveTogether	EQU		$02
+kWindowGroupAttrLayerTogether	EQU		$04
+kWindowGroupAttrSharedActivation EQU	$08
+kWindowGroupAttrHideOnCollapse	EQU		$10
+
+
+; *  WindowActivationScope
+; *  
+; *  Discussion:
+; *    Every window has a WindowActivationScope. It defines how windows
+; *    are activated by the Window Manager with respect to other windows
+; *    in the window’s group and in the current process.
+; 
+
+
+; typedef UInt32						WindowActivationScope
+kWindowActivationScopeNone		EQU		0
+kWindowActivationScopeIndependent EQU	1
+kWindowActivationScopeAll		EQU		2
+
+
+; *  Summary:
+; *    These are constants that can be used for the inNextGroup
+; *    parameter to GetSiblingWindowGroup.
+; 
+
+
+kNextWindowGroup				EQU		1
+kPreviousWindowGroup			EQU		0
+
+
+; *  WindowGroupContentOptions
+; *  
+; *  Discussion:
+; *    Window group contents options are used to control what group
+; *    content is counted or returned by the CountWindowGroupContents
+; *    and GetWindowGroupContents APIs.
+; 
+
+
+; typedef UInt32						WindowGroupContentOptions
+kWindowGroupContentsReturnWindows EQU	$01
+kWindowGroupContentsRecurse		EQU		$02
+kWindowGroupContentsVisible		EQU		$04
+
+; ----------------------------------------------------------------------------------
+;   • Group creation, destruction, and refcounting                                  
+; ----------------------------------------------------------------------------------
+
+; *  CreateWindowGroup()
+; *  
+; *  Summary:
+; *    Creates a new window group.
+; *  
+; *  Parameters:
+; *    
+; *    inAttributes:
+; *      Attributes for the new window group.
+; *    
+; *    outGroup:
+; *      On exit, contains the new window group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus CreateWindowGroup(WindowGroupAttributes inAttributes, WindowGroupRef *outGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateWindowGroup
+	ENDIF
+
+
+; *  RetainWindowGroup()
+; *  
+; *  Summary:
+; *    Increments the refcount of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose refcount to increment.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus RetainWindowGroup(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RetainWindowGroup
+	ENDIF
+
+
+; *  ReleaseWindowGroup()
+; *  
+; *  Summary:
+; *    Releases a refcount on a window group. If the refcount goes to
+; *    zero, the group is destroyed, and a refcount is released from all
+; *    contained objects.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose refcount to decrement.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ReleaseWindowGroup(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReleaseWindowGroup
+	ENDIF
+
+
+; *  GetWindowGroupRetainCount()
+; *  
+; *  Summary:
+; *    Returns the refcount of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose refcount to return.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X after version 10.0
+; *    Mac OS X:         in after version 10.0
+; 
+
+;
+; extern ItemCount GetWindowGroupRetainCount(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupRetainCount
+	ENDIF
+
+
+; *  GetWindowGroupOfClass()
+; *  
+; *  Summary:
+; *    Gets the window group in which windows of a given class are
+; *    placed.
+; *  
+; *  Discussion:
+; *    The Window Manager uses window groups internally to manage the
+; *    ordering of windows of different classes. In some cases, multiple
+; *    classes are placed within the same group; for example, windows
+; *    from all of the modal and alert window classes are placed into
+; *    the same modal window group. The refcount of the group returned
+; *    by this API is not incremented, and the caller does not need to
+; *    release the reference.
+; *  
+; *  Parameters:
+; *    
+; *    windowClass:
+; *      The class whose window group to retrieve. You may pass
+; *      kAllWindowClasses to retrieve the root window group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowGroupRef GetWindowGroupOfClass(WindowClass windowClass)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupOfClass
+	ENDIF
+
+
+; ----------------------------------------------------------------------------------
+;   • Group name, attributes, and level                                             
+; ----------------------------------------------------------------------------------
+
+; *  SetWindowGroupName()
+; *  
+; *  Summary:
+; *    Sets the name of a window group.
+; *  
+; *  Discussion:
+; *    The name of a window group is never displayed to the user.
+; *    However, it is displayed by debugging functions such as
+; *    DebugPrintWindowGroup. This can be very useful when debugging the
+; *    structure of your window groups.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose name to set.
+; *    
+; *    inName:
+; *      The name of the group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowGroupName(WindowGroupRef inGroup, CFStringRef inName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowGroupName
+	ENDIF
+
+
+; *  CopyWindowGroupName()
+; *  
+; *  Summary:
+; *    Returns a copy of the name of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose name to retrieve.
+; *    
+; *    outName:
+; *      On exit, contains the name of the group. It is the caller's
+; *      responsibility to release the name.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus CopyWindowGroupName(WindowGroupRef inGroup, CFStringRef *outName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyWindowGroupName
+	ENDIF
+
+
+; *  GetWindowGroupAttributes()
+; *  
+; *  Summary:
+; *    Retrieves the attributes of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose attributes to retrieve.
+; *    
+; *    outAttributes:
+; *      On exit, the group’s attributes.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetWindowGroupAttributes(WindowGroupRef inGroup, WindowGroupAttributes *outAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupAttributes
+	ENDIF
+
+
+; *  ChangeWindowGroupAttributes()
+; *  
+; *  Summary:
+; *    Changes the attributes of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose attributes to change.
+; *    
+; *    setTheseAttributes:
+; *      The attributes to set.
+; *    
+; *    clearTheseAttributes:
+; *      The attributes to clear.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ChangeWindowGroupAttributes(WindowGroupRef inGroup, WindowGroupAttributes setTheseAttributes, WindowGroupAttributes clearTheseAttributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeWindowGroupAttributes
+	ENDIF
+
+
+; *  SetWindowGroupLevel()
+; *  
+; *  Summary:
+; *    Sets the CoreGraphics window group level of windows in a group.
+; *  
+; *  Discussion:
+; *    CoreGraphics windows (used to implement all windows in Carbon and
+; *    Cocoa applications on Mac OS X) are divided into layers specified
+; *    by a window level. Standard window levels are listed in
+; *    <CoreGraphics/CGWindowLevel.h>. By default, a new window group
+; *    has a window level of kCGNormalWindowLevel. When a window is
+; *    placed into a window group, its window level is determined by the
+; *    window level of its "base group". This is the containing group
+; *    that is a child of the root group. For example, if group A is a
+; *    child of the root group, and group B is a child of group A, and
+; *    window C is in group B, then window C's base group is group A,
+; *    and group A's window level determines the level of window C.
+; *    SetWindowGroupLevel only allows changing the window level of
+; *    groups that are children of the root group. It returns paramErr
+; *    for other groups, since a group that is not a child of the root
+; *    group is not a base group and changing its level has no effect.
+; *    Changing the level of a group also changes the level of all
+; *    windows currently contained by the group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The window group whose level to change.
+; *    
+; *    inLevel:
+; *      The new level for the windows in this group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowGroupLevel(WindowGroupRef inGroup, SInt32 inLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowGroupLevel
+	ENDIF
+
+
+; *  GetWindowGroupLevel()
+; *  
+; *  Summary:
+; *    Gets the CoreGraphics window group level of windows in a group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The window group whose level to return.
+; *    
+; *    outLevel:
+; *      On exit, contains the window level of the windows in this group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetWindowGroupLevel(WindowGroupRef inGroup, SInt32 *outLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupLevel
+	ENDIF
+
+
+; ----------------------------------------------------------------------------------
+;   • Group z-ordering                                                              
+; ----------------------------------------------------------------------------------
+
+; *  SendWindowGroupBehind()
+; *  
+; *  Summary:
+; *    Changes the z-order of a group, if the group does not have the
+; *    kWindowGroupAttributeLayerTogether attribute set.
+; *  
+; *  Discussion:
+; *    SendWindowGroupBehind currently requires that the group being
+; *    moved and the behindGroup have the same parent group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose z-order to change.
+; *    
+; *    behindGroup:
+; *      The group behind which to position the specified group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SendWindowGroupBehind(WindowGroupRef inGroup, WindowGroupRef behindGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SendWindowGroupBehind
+	ENDIF
+
+; ----------------------------------------------------------------------------------
+;   • Group containment hierarchy manipulation                                      
+; ----------------------------------------------------------------------------------
+
+; *  GetWindowGroup()
+; *  
+; *  Summary:
+; *    Gets the window group that contains a window.
+; *  
+; *  Discussion:
+; *    The refcount of the group returned by this API is not
+; *    incremented, and the caller does not need to release the
+; *    reference.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose containing group to retrieve.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowGroupRef GetWindowGroup(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroup
+	ENDIF
+
+
+; *  SetWindowGroup()
+; *  
+; *  Summary:
+; *    Sets the window group that contains a window.
+; *  
+; *  Discussion:
+; *    The window’s z-order relative to windows in the current process
+; *    may also be changed by this API. If the new window group is
+; *    z-ordered above the window’s current group, the window will be
+; *    placed at the end of the new group. If the new window group is
+; *    z-ordered below the window’s current group, the window will be
+; *    placed at the top of the new group. You may not place a window
+; *    directly into the root group.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose group to change.
+; *    
+; *    inNewGroup:
+; *      The new containing group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowGroup(WindowRef inWindow, WindowGroupRef inNewGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowGroup
+	ENDIF
+
+
+; *  IsWindowContainedInGroup()
+; *  
+; *  Summary:
+; *    Indicates whether a window is contained within a group or any of
+; *    its subgroups.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose containment to examine.
+; *    
+; *    inGroup:
+; *      The group that might contain the window.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean IsWindowContainedInGroup(WindowRef inWindow, WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowContainedInGroup
+	ENDIF
+
+
+; *  GetWindowGroupParent()
+; *  
+; *  Summary:
+; *    Gets the window group that contains a group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose containing group to retrieve.
+; *    
+; *    outGroup:
+; *      On exit, the containing window group of the group. The group’s
+; *      refcount is not incremented by this API, and the caller does
+; *      not need to release the reference.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowGroupRef GetWindowGroupParent(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupParent
+	ENDIF
+
+
+; *  SetWindowGroupParent()
+; *  
+; *  Summary:
+; *    Sets the window group that contains a group.
+; *  
+; *  Discussion:
+; *    SetWindowGroupParent currently requires that the group have no
+; *    windows in it.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose containing group to change.
+; *    
+; *    inNewGroup:
+; *      The new containing group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowGroupParent(WindowGroupRef inGroup, WindowGroupRef inNewGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowGroupParent
+	ENDIF
+
+
+; *  GetWindowGroupSibling()
+; *  
+; *  Summary:
+; *    Returns the next or previous group of a window group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose sibling to return.
+; *    
+; *    inNextGroup:
+; *      True to return the next sibling, false to return the previous
+; *      sibling.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowGroupRef GetWindowGroupSibling(WindowGroupRef inGroup, Boolean inNextGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupSibling
+	ENDIF
+
+
+; *  GetWindowGroupOwner()
+; *  
+; *  Summary:
+; *    Returns the window that owns a window group, or NULL if none.
+; *  
+; *  Discussion:
+; *    A window may own one or more window groups. The windows in an
+; *    owned window group will always be z-ordered above the owner
+; *    window. Whenever the owner window changes z-order, the windows in
+; *    the groups owned by the window will be moved also.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose owner to retrieve.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowRef GetWindowGroupOwner(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupOwner
+	ENDIF
+
+
+; *  SetWindowGroupOwner()
+; *  
+; *  Summary:
+; *    Sets the window that owns a window group.
+; *  
+; *  Discussion:
+; *    The group and the window must have the same parent group.
+; *    SetWindowGroupOwner currently requires that the group have no
+; *    windows in it.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose owner to set.
+; *    
+; *    inWindow:
+; *      The group's new owner.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowGroupOwner(WindowGroupRef inGroup, WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowGroupOwner
+	ENDIF
+
+
+; ----------------------------------------------------------------------------------
+;   • Inspection of group contents                                                  
+; ----------------------------------------------------------------------------------
+
+
+; *  CountWindowGroupContents()
+; *  
+; *  Summary:
+; *    Counts the windows or groups contained in a group.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose contents to count.
+; *    
+; *    inOptions:
+; *      Specifies how to count the group’s contents.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern ItemCount CountWindowGroupContents(WindowGroupRef inGroup, WindowGroupContentOptions inOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountWindowGroupContents
+	ENDIF
+
+
+; *  GetWindowGroupContents()
+; *  
+; *  Summary:
+; *    Retrieves the windows or groups contained in a group.
+; *  
+; *  Discussion:
+; *    The windows or groups returned by this API will be placed into
+; *    the output buffer in z-order, from highest to lowest.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose contents to retrieve.
+; *    
+; *    inOptions:
+; *      Specifies which content to retrieve.
+; *    
+; *    inAllowedItems:
+; *      The number of items that will fit in the output buffer.
+; *    
+; *    outNumItems:
+; *      On exit, the number of items that were returned. May be NULL.
+; *    
+; *    outItems:
+; *      On entry, points to enough memory to hold inAllowedSize
+; *      WindowRefs or WindowGroupRefs. On exit, contains *outNumItems
+; *      WindowRefs or WindowGroupRefs.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetWindowGroupContents(WindowGroupRef inGroup, WindowGroupContentOptions inOptions, ItemCount inAllowedItems, ItemCount *outNumItems, void **outItems)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGroupContents
+	ENDIF
+
+
+; *  GetIndexedWindow()
+; *  
+; *  Summary:
+; *    Retrieves a specified window from a group.
+; *  
+; *  Discussion:
+; *    GetIndexedWindow is provided as an easier way to get a particular
+; *    window from a group than using GetWindowGroupContents. If you
+; *    only need to retrieve, say, the last window in a group, it is
+; *    easier and more efficient to use GetIndexedWindow. If you need to
+; *    retrieve all the windows in a group, it is more efficient to use
+; *    GetWindowGroupContents.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group containing the window to retrieve.
+; *    
+; *    inIndex:
+; *      The index of the window. This parameter may range from 1 to
+; *      CountWindowGroupContents( inGroup,
+; *      kWindowGroupContentsReturnWindows | inOptions );
+; *    
+; *    inOptions:
+; *      Indicates how to locate the specified window.
+; *      kWindowGroupContentsReturnWindows is implied by this API and
+; *      does not need to be explicitly specified.
+; *    
+; *    outWindow:
+; *      On exit, the window at the specified index.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetIndexedWindow(WindowGroupRef inGroup, UInt32 inIndex, WindowGroupContentOptions inOptions, WindowRef *outWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIndexedWindow
+	ENDIF
+
+
+; *  GetWindowIndex()
+; *  
+; *  Summary:
+; *    Retrieves the z-order index of a window inside a group.
+; *  
+; *  Discussion:
+; *    The z-order index of a window is its relative position in z-order
+; *    inside a group. The index ranges from 1 to the number of windows
+; *    in the group.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose z-order index to retrieve.
+; *    
+; *    inStartGroup:
+; *      The group on which to base the z-order index. This should be
+; *      either the containing group of the window, or NULL. If NULL,
+; *      this API returns the z-order index of the window across the
+; *      entire process.
+; *    
+; *    inOptions:
+; *      Indicates how to enumerate the specified window.
+; *      kWindowGroupContentsReturnWindows is implied by this API and
+; *      does not need to be explicitly specified.
+; *    
+; *    outIndex:
+; *      On exit, contains the window’s z-order index.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetWindowIndex(WindowRef inWindow, WindowGroupRef inStartGroup, WindowGroupContentOptions inOptions, UInt32 *outIndex)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowIndex
+	ENDIF
+
+
+; ----------------------------------------------------------------------------------
+;   • Window activation                                                             
+; ----------------------------------------------------------------------------------
+
+; *  ActiveNonFloatingWindow()
+; *  
+; *  Summary:
+; *    Returns the window, among all windows with activation scope of
+; *    kWindowActivationScopeAll, that is considered active.
+; *  
+; *  Discussion:
+; *    The Mac OS 8.5 Window Manager introduced the
+; *    FrontNonFloatingWindow API, which was designed to return the
+; *    window that should be considered active by the application. With
+; *    the advent of window groups, it is now possible to have a window
+; *    that looks active (is highlighted, and accepts keyboard input)
+; *    but to have other non-floating windows grouped above the active
+; *    window. The ActiveNonFloatingWindow API returns the active window
+; *    regardless of where it is positioned in the z-order. Most code
+; *    that currently uses FrontNonFloatingWindow or
+; *    GetFrontWindowOfClass(kDocumentClass) to get the active window
+; *    should use ActiveNonFloatingWindow instead.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern WindowRef ActiveNonFloatingWindow(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ActiveNonFloatingWindow
+	ENDIF
+
+
+; *  IsWindowActive()
+; *  
+; *  Summary:
+; *    Indicates whether a window is active.
+; *  
+; *  Discussion:
+; *    The active state of a window is simply determined by whether its
+; *    window frame is drawn using an active appearance. This does not
+; *    indicate whether the window has keyboard focus. To get the window
+; *    with keyboard focus, use GetUserFocusWindow().
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose active state to retrieve.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean IsWindowActive(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowActive
+	ENDIF
+
+
+; *  ActivateWindow()
+; *  
+; *  Summary:
+; *    Activates or deactivates a window.
+; *  
+; *  Discussion:
+; *    Window activation consists of two steps: hiliting the window
+; *    frame and sending an activate event to the window. ActivateWindow
+; *    handles both of these steps and also updates internal Window
+; *    Manager state. If you just need to hilite the window frame, you
+; *    may use HiliteWindow. If you need to send an activate event, you
+; *    should always use ActivateWindow rather than creating and sending
+; *    the event yourself.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to activate or deactivate.
+; *    
+; *    inActivate:
+; *      Whether to activate or deactivate the window.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ActivateWindow(WindowRef inWindow, Boolean inActivate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ActivateWindow
+	ENDIF
+
+
+; *  GetWindowActivationScope()
+; *  
+; *  Summary:
+; *    Retrieves a window’s activation scope.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose activation scope to retrieve.
+; *    
+; *    outScope:
+; *      On exit, the window’s activation scope.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus GetWindowActivationScope(WindowRef inWindow, WindowActivationScope *outScope)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowActivationScope
+	ENDIF
+
+
+; *  SetWindowActivationScope()
+; *  
+; *  Summary:
+; *    Sets a window’s activation scope.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window whose activation scope to set.
+; *    
+; *    inScope:
+; *      The new activation scope.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus SetWindowActivationScope(WindowRef inWindow, WindowActivationScope inScope)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowActivationScope
+	ENDIF
+
+
+; ----------------------------------------------------------------------------------
+;   • Debugging Utilities                                                           
+; ----------------------------------------------------------------------------------
+
+; *  DebugPrintWindowGroup()
+; *  
+; *  Summary:
+; *    Prints the contents of a window group to stdout.
+; *  
+; *  Parameters:
+; *    
+; *    inGroup:
+; *      The group whose contents to print.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void DebugPrintWindowGroup(WindowGroupRef inGroup)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DebugPrintWindowGroup
+	ENDIF
+
+
+; *  DebugPrintAllWindowGroups()
+; *  
+; *  Summary:
+; *    Prints the full window group hierarchy, starting at the root
+; *    group.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void DebugPrintAllWindowGroups(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DebugPrintAllWindowGroups
+	ENDIF
+
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Background Image                                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  SetWinColor is not available in Carbon.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SetWinColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetWinColor(WindowRef window, WCTabHandle newColorTable)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetWinColor:	OPWORD	$AA41
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWinColor
+	ENDIF
+
+;  SetDeskCPat is not available in Carbon.
+
+; *  SetDeskCPat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetDeskCPat(PixPatHandle deskPixPat)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetDeskCPat:	OPWORD	$AA47
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDeskCPat
+	ENDIF
+
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  SetWindowContentColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowContentColor(WindowRef window, const RGBColor *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowContentColor
+	ENDIF
+
+
+; *  GetWindowContentColor()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowContentColor(WindowRef window, RGBColor *color)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowContentColor
+	ENDIF
+
+;  Routines available from Mac OS 8.5 forward
+
+; *  GetWindowContentPattern()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowContentPattern(WindowRef window, PixPatHandle outPixPat)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowContentPattern
+	ENDIF
+
+
+; *  SetWindowContentPattern()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowContentPattern(WindowRef window, PixPatHandle pixPat)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowContentPattern
+	ENDIF
+
+;  Routines available from Mac OS 9.0 forward
+; typedef OptionBits 					WindowPaintProcOptions
+
+
+kWindowPaintProcOptionsNone		EQU		0
+
+; *  InstallWindowContentPaintProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 9.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InstallWindowContentPaintProc(WindowRef window, WindowPaintUPP paintProc, WindowPaintProcOptions options, void *refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InstallWindowContentPaintProc
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Scrolling Routines                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef UInt32						ScrollWindowOptions
+kScrollWindowNoOptions			EQU		0
+kScrollWindowInvalidate			EQU		$00000001			; add the exposed area to the window’s update region
+kScrollWindowEraseToPortBackground EQU	$00000002			; erase the exposed area using the background color/pattern of the window’s grafport
+
+;  Routines available from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+; *  ScrollWindowRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ScrollWindowRect(WindowRef inWindow, const Rect *inScrollRect, SInt16 inHPixels, SInt16 inVPixels, ScrollWindowOptions inOptions, RgnHandle outExposedRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ScrollWindowRect
+	ENDIF
+
+
+; *  ScrollWindowRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ScrollWindowRegion(WindowRef inWindow, RgnHandle inScrollRgn, SInt16 inHPixels, SInt16 inVPixels, ScrollWindowOptions inOptions, RgnHandle outExposedRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ScrollWindowRegion
+	ENDIF
+
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Low-Level Region & Painting Routines                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  ClipAbove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ClipAbove(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ClipAbove:	OPWORD	$A90B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ClipAbove
+	ENDIF
+
+;  SaveOld/DrawNew are not available in Carbon.  Use ReshapeCustomWindow instead.
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  SaveOld()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SaveOld(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SaveOld:	OPWORD	$A90E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SaveOld
+	ENDIF
+
+
+; *  DrawNew()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void DrawNew(WindowRef window, Boolean update)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawNew:	OPWORD	$A90F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawNew
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  PaintOne()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void PaintOne(WindowRef window, RgnHandle clobberedRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_PaintOne:	OPWORD	$A90C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PaintOne
+	ENDIF
+
+
+; *  PaintBehind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void PaintBehind(WindowRef startWindow, RgnHandle clobberedRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_PaintBehind:	OPWORD	$A90D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PaintBehind
+	ENDIF
+
+
+; *  CalcVis()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CalcVis(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CalcVis:	OPWORD	$A909
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CalcVis
+	ENDIF
+
+
+; *  CalcVisBehind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CalcVisBehind(WindowRef startWindow, RgnHandle clobberedRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CalcVisBehind:	OPWORD	$A90A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CalcVisBehind
+	ENDIF
+
+
+; *  CheckUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean CheckUpdate(EventRecord *theEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_CheckUpdate:	OPWORD	$A911
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CheckUpdate
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window List                                                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  [Mac]FindWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowPartCode FindWindow(Point thePoint, WindowRef *window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FindWindow:	OPWORD	$A92C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindWindow
+	ENDIF
+
+
+; *  FrontWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef FrontWindow(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_FrontWindow:	OPWORD	$A924
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FrontWindow
+	ENDIF
+
+
+; *  BringToFront()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void BringToFront(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_BringToFront:	OPWORD	$A920
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BringToFront
+	ENDIF
+
+
+; *  SendBehind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SendBehind(WindowRef window, WindowRef behindWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SendBehind:	OPWORD	$A921
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SendBehind
+	ENDIF
+
+
+; *  SelectWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SelectWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SelectWindow:	OPWORD	$A91F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SelectWindow
+	ENDIF
+
+
+;   Routines available from Mac OS 8.6 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+
+; *  FrontNonFloatingWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef FrontNonFloatingWindow(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FrontNonFloatingWindow
+	ENDIF
+
+;  Routines available from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+; *  GetNextWindowOfClass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetNextWindowOfClass(WindowRef inWindow, WindowClass inWindowClass, Boolean mustBeVisible)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNextWindowOfClass
+	ENDIF
+
+
+; *  GetFrontWindowOfClass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetFrontWindowOfClass(WindowClass inWindowClass, Boolean mustBeVisible)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetFrontWindowOfClass
+	ENDIF
+
+
+; *  FindWindowOfClass()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus FindWindowOfClass(const Point *where, WindowClass inWindowClass, WindowRef *outWindow, WindowPartCode *outWindowPart)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindWindowOfClass
+	ENDIF
+
+
+;  Carbon only
+
+; *  CreateStandardWindowMenu()
+; *  
+; *  Discussion:
+; *    Creates a standard Window menu for your application. You can call
+; *    this to create a window menu for your application and insert it
+; *    in your menu bar (typically at the end of your menu list). To
+; *    register a window to be tracked by this menu, you either create
+; *    your window with CreateNewWindow, passing the
+; *    kWindowInWindowMenuAttribute, or you can use
+; *    ChangeWindowAttributes after the window is created. The Toolbox
+; *    takes care of acting on the standard items such as zoom and
+; *    minimize, as well as bringing selected windows to the front. All
+; *    you need to do is install it and register your windows and the
+; *    Toolbox does the rest.
+; *  
+; *  Parameters:
+; *    
+; *    inOptions:
+; *      Currently you must pass zero for this parameter.
+; *    
+; *    outMenu:
+; *      Receives a new menu reference which contains the standard
+; *      window menu items and commands.
+; *  
+; *  Result:
+; *    An operating system status code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CreateStandardWindowMenu(OptionBits inOptions, MenuRef *outMenu)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateStandardWindowMenu
+	ENDIF
+
+
+; *  SetWindowAlternateTitle()
+; *  
+; *  Discussion:
+; *    This API sets an alternate title for a window. The alternate
+; *    title overrides what is displayed in the Window menu. If you do
+; *    not set an alternate title, the normal window title is used. You
+; *    would normally use this if the window title was not expressive
+; *    enough to be used in the Window menu (or similar text-only
+; *    situation).
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to set the alternate title.
+; *    
+; *    inTitle:
+; *      The alternate title for the window. Passing NULL for this
+; *      parameter will remove any alternate title that might be present.
+; *  
+; *  Result:
+; *    An operating system status code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowAlternateTitle(WindowRef inWindow, CFStringRef inTitle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowAlternateTitle
+	ENDIF
+
+
+; *  CopyWindowAlternateTitle()
+; *  
+; *  Discussion:
+; *    This API gets the alternate title for a window. See the
+; *    discussion of SetWindowAlternateTitle for more info.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to get the alternate title from.
+; *    
+; *    outTitle:
+; *      Receives the alternate title for the window. If the window does
+; *      not have an alternate title, NULL will be returned in outTitle.
+; *  
+; *  Result:
+; *    An operating system status code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyWindowAlternateTitle(WindowRef inWindow, CFStringRef *outTitle)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyWindowAlternateTitle
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Misc Low-Level stuff                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InitWindows(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InitWindows:	OPWORD	$A912
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitWindows
+	ENDIF
+
+;   The window manager port does not exist in Carbon.   
+;   We are investigating replacement technologies.      
+
+; *  GetWMgrPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void GetWMgrPort(GrafPtr *wPort)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetWMgrPort:	OPWORD	$A910
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWMgrPort
+	ENDIF
+
+
+; *  GetCWMgrPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void GetCWMgrPort(CGrafPtr *wMgrCPort)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetCWMgrPort:	OPWORD	$AA48
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCWMgrPort
+	ENDIF
+
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  IsValidWindowPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsValidWindowPtr(WindowRef possibleWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsValidWindowPtr
+	ENDIF
+
+
+;   Routines available from Mac OS 8.6 forward
+;   InitFloatingWindows is not available in Carbon;
+;   window ordering is always active for Carbon clients
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitFloatingWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus InitFloatingWindows(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitFloatingWindows
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Various & Sundry Window Accessors                                                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  HiliteWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HiliteWindow(WindowRef window, Boolean fHilite)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_HiliteWindow:	OPWORD	$A91C
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HiliteWindow
+	ENDIF
+
+
+; *  SetWRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWRefCon(WindowRef window, long data)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetWRefCon:	OPWORD	$A918
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWRefCon
+	ENDIF
+
+
+; *  GetWRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long GetWRefCon(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetWRefCon:	OPWORD	$A917
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWRefCon
+	ENDIF
+
+
+; *  SetWindowPic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWindowPic(WindowRef window, PicHandle pic)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetWindowPic:	OPWORD	$A92E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowPic
+	ENDIF
+
+
+; *  GetWindowPic()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal PicHandle GetWindowPic(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetWindowPic:	OPWORD	$A92F
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowPic
+	ENDIF
+
+
+; *  GetWVariant()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short GetWVariant(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetWVariant:	OPWORD	$A80A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWVariant
+	ENDIF
+
+;  Routines available from Mac OS 8.0 (Appearance 1.0) forward
+
+; *  GetWindowFeatures()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowFeatures(WindowRef window, UInt32 *outFeatures)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetWindowFeatures
+			move.w              #$0013,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowFeatures
+	ENDIF
+
+
+; *  GetWindowRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowRegion(WindowRef window, WindowRegionCode inRegionCode, RgnHandle ioWinRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetWindowRegion
+			move.w              #$0014,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowRegion
+	ENDIF
+
+
+; *  GetWindowStructureWidths()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowStructureWidths(WindowRef inWindow, Rect *outRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowStructureWidths
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Update Events                                                                      
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   These aren't present in Carbon. Please use the InvalWindowRect, etc. routines
+;   below instead.
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InvalRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InvalRect(const Rect *badRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InvalRect:	OPWORD	$A928
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalRect
+	ENDIF
+
+
+; *  InvalRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void InvalRgn(RgnHandle badRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_InvalRgn:	OPWORD	$A927
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalRgn
+	ENDIF
+
+
+; *  ValidRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void ValidRect(const Rect *goodRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ValidRect:	OPWORD	$A92A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ValidRect
+	ENDIF
+
+
+; *  ValidRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void ValidRgn(RgnHandle goodRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ValidRgn:	OPWORD	$A929
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ValidRgn
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  BeginUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void BeginUpdate(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_BeginUpdate:	OPWORD	$A922
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BeginUpdate
+	ENDIF
+
+
+; *  EndUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EndUpdate(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_EndUpdate:	OPWORD	$A923
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EndUpdate
+	ENDIF
+
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+
+; *  InvalWindowRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InvalWindowRgn(WindowRef window, RgnHandle region)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalWindowRgn
+	ENDIF
+
+
+; *  InvalWindowRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InvalWindowRect(WindowRef window, const Rect *bounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InvalWindowRect
+	ENDIF
+
+
+; *  ValidWindowRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ValidWindowRgn(WindowRef window, RgnHandle region)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ValidWindowRgn
+	ENDIF
+
+
+; *  ValidWindowRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ValidWindowRect(WindowRef window, const Rect *bounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ValidWindowRect
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • DrawGrowIcon                                                                       
+;                                                                                       
+;   DrawGrowIcon is deprecated from Mac OS 8.0 forward.  Theme-savvy window defprocs    
+;   include the grow box in the window frame.                                           
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  DrawGrowIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DrawGrowIcon(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DrawGrowIcon:	OPWORD	$A904
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DrawGrowIcon
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Titles                                                                      
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  SetWTitle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWTitle(WindowRef window, ConstStr255Param title)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SetWTitle:	OPWORD	$A91A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWTitle
+	ENDIF
+
+
+; *  GetWTitle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetWTitle(WindowRef window, Str255 title)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetWTitle:	OPWORD	$A919
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWTitle
+	ENDIF
+
+
+; *  SetWindowTitleWithCFString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowTitleWithCFString(WindowRef inWindow, CFStringRef inString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowTitleWithCFString
+	ENDIF
+
+
+; *  CopyWindowTitleAsCFString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CopyWindowTitleAsCFString(WindowRef inWindow, CFStringRef *outString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CopyWindowTitleAsCFString
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Proxies                                                                     
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  Routines available from Mac OS 8.5 forward
+
+
+; *  SetWindowProxyFSSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowProxyFSSpec(WindowRef window, const FSSpec *inFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowProxyFSSpec
+	ENDIF
+
+
+; *  GetWindowProxyFSSpec()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowProxyFSSpec(WindowRef window, FSSpec *outFile)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowProxyFSSpec
+	ENDIF
+
+
+; *  SetWindowProxyAlias()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowProxyAlias(WindowRef window, AliasHandle alias)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowProxyAlias
+	ENDIF
+
+
+; *  GetWindowProxyAlias()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowProxyAlias(WindowRef window, AliasHandle *alias)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowProxyAlias
+	ENDIF
+
+
+; *  SetWindowProxyCreatorAndType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowProxyCreatorAndType(WindowRef window, OSType fileCreator, OSType fileType, SInt16 vRefNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowProxyCreatorAndType
+	ENDIF
+
+
+; *  GetWindowProxyIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowProxyIcon(WindowRef window, IconRef *outIcon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowProxyIcon
+	ENDIF
+
+
+; *  SetWindowProxyIcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowProxyIcon(WindowRef window, IconRef icon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowProxyIcon
+	ENDIF
+
+
+; *  RemoveWindowProxy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RemoveWindowProxy(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveWindowProxy
+	ENDIF
+
+
+; *  BeginWindowProxyDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus BeginWindowProxyDrag(WindowRef window, DragReference *outNewDrag, RgnHandle outDragOutlineRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BeginWindowProxyDrag
+	ENDIF
+
+
+; *  EndWindowProxyDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus EndWindowProxyDrag(WindowRef window, DragReference theDrag)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EndWindowProxyDrag
+	ENDIF
+
+
+; *  TrackWindowProxyFromExistingDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TrackWindowProxyFromExistingDrag(WindowRef window, Point startPt, DragReference drag, RgnHandle inDragOutlineRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TrackWindowProxyFromExistingDrag
+	ENDIF
+
+
+; *  TrackWindowProxyDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TrackWindowProxyDrag(WindowRef window, Point startPt)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TrackWindowProxyDrag
+	ENDIF
+
+
+; *  IsWindowModified()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowModified(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowModified
+	ENDIF
+
+
+; *  SetWindowModified()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowModified(WindowRef window, Boolean modified)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowModified
+	ENDIF
+
+
+; *  IsWindowPathSelectClick()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowPathSelectClick(WindowRef window, const EventRecord *event)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowPathSelectClick
+	ENDIF
+
+
+; *  WindowPathSelect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus WindowPathSelect(WindowRef window, MenuRef menu, SInt32 *outMenuResult)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION WindowPathSelect
+	ENDIF
+
+
+; *  IsWindowPathSelectEvent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowPathSelectEvent(WindowRef window, EventRef inEvent)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowPathSelectEvent
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • HiliteWindowFrameForDrag                                                          
+;                                                                                       
+;   If you call ShowDragHilite and HideDragHilite, you don’t need to use this routine.  
+;   If you implement custom drag hiliting, you should call HiliteWindowFrameForDrag     
+;   when the drag is tracking inside a window with drag-hilited content.                
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  Routines available from Mac OS 8.5 forward
+
+
+; *  HiliteWindowFrameForDrag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HiliteWindowFrameForDrag(WindowRef window, Boolean hilited)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_HiliteWindowFrameForDrag
+			moveq           	#25,D0
+			dc.w            	$A829
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HiliteWindowFrameForDrag
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Transitions                                                                 
+;                                                                                       
+;   TransitionWindow displays a window with accompanying animation and sound.           
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; typedef UInt32						WindowTransitionEffect
+kWindowZoomTransitionEffect		EQU		1					; Finder-like zoom rectangles. Use with Show or Hide transition actions
+kWindowSheetTransitionEffect	EQU		2					; Zoom in/out from parent. Use with TransitionWindowAndParent and Show or Hide transition actions
+kWindowSlideTransitionEffect	EQU		3					; Slide the window into its new position. Use with Move or Resize transition actions
+
+; typedef UInt32						WindowTransitionAction
+kWindowShowTransitionAction		EQU		1					; param is rect in global coordinates from which to start the animation
+kWindowHideTransitionAction		EQU		2					; param is rect in global coordinates at which to end the animation
+kWindowMoveTransitionAction		EQU		3					; param is rect in global coordinates of window's new structure bounds
+kWindowResizeTransitionAction	EQU		4					; param is rect in global coordinates of window's new structure bounds
+
+; *  TransitionWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TransitionWindow(WindowRef window, WindowTransitionEffect effect, WindowTransitionAction action, const Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TransitionWindow
+	ENDIF
+
+
+; *  TransitionWindowAndParent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus TransitionWindowAndParent(WindowRef window, WindowRef parentWindow, WindowTransitionEffect effect, WindowTransitionAction action, const Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TransitionWindowAndParent
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Positioning                                                                 
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+
+; *  [Mac]MoveWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void MoveWindow(WindowRef window, short hGlobal, short vGlobal, Boolean front)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_MoveWindow:	OPWORD	$A91B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MoveWindow
+	ENDIF
+
+
+; *  SizeWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SizeWindow(WindowRef window, short w, short h, Boolean fUpdate)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_SizeWindow:	OPWORD	$A91D
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SizeWindow
+	ENDIF
+
+
+;  Note: bBox can only be NULL when linking to CarbonLib 1.0 forward 
+
+; *  GrowWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long GrowWindow(WindowRef window, Point startPt, const Rect *bBox)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GrowWindow:	OPWORD	$A92B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GrowWindow
+	ENDIF
+
+;  Note: boundsRect can only be NULL when linking to CarbonLib 1.0 forward 
+
+; *  DragWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DragWindow(WindowRef window, Point startPt, const Rect *boundsRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DragWindow:	OPWORD	$A925
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DragWindow
+	ENDIF
+
+
+; *  ZoomWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ZoomWindow(WindowRef window, WindowPartCode partCode, Boolean front)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ZoomWindow:	OPWORD	$A83A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ZoomWindow
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Collapsing/Expanding                                                        
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  Routines available from Mac OS 8.0 (Appearance 1.0) forward
+
+; *  IsWindowCollapsable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowCollapsable(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IsWindowCollapsable
+			move.w              #$000F,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowCollapsable
+	ENDIF
+
+
+; *  IsWindowCollapsed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowCollapsed(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_IsWindowCollapsed
+			move.w              #$0010,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowCollapsed
+	ENDIF
+
+
+; *  CollapseWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CollapseWindow(WindowRef window, Boolean collapse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CollapseWindow
+			move.w              #$0011,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CollapseWindow
+	ENDIF
+
+
+; *  CollapseAllWindows()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in AppearanceLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus CollapseAllWindows(Boolean collapse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CollapseAllWindows
+			move.w              #$0012,D0
+			dc.w            	$AA74
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CollapseAllWindows
+	ENDIF
+
+;  Routines available on Mac OS X
+
+
+; *  CreateQDContextForCollapsedWindowDockTile()
+; *  
+; *  Discussion:
+; *    Creates and returns a CGrafPtr for a collapsed window's tile in
+; *    the dock. You can use this port to draw into your window's dock
+; *    tile with Quickdraw. You **MUST** call
+; *    ReleaseQDContextForCollapsedWindowDockTile and NOT DisposePort
+; *    when using this API, as it maintains more state than just the
+; *    port. If you call DisposePort, you may leak system resources.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to create the dock tile port for. If this window is
+; *      not collapsed, an error is returned.
+; *    
+; *    outContext:
+; *      The Quickdraw port for you to use to draw into. If you wish to
+; *      use CoreGraphics (Quartz) drawing, call CreateCGContextForPort
+; *      with this port to obtain a CGContext.
+; *  
+; *  Result:
+; *    An operating system result code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus CreateQDContextForCollapsedWindowDockTile(WindowRef inWindow, CGrafPtr *outContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CreateQDContextForCollapsedWindowDockTile
+	ENDIF
+
+
+; *  ReleaseQDContextForCollapsedWindowDockTile()
+; *  
+; *  Discussion:
+; *    Releases a port and other state created by the
+; *    CreateQDContextForCollapsedWindowDockTile API. You MUST call this
+; *    instead of DisposePort directly, or you may leak system resources.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window you created the port for. If this window is not
+; *      collapsed, an error is returned.
+; *    
+; *    inContext:
+; *      The Quickdraw context to dispose.
+; *  
+; *  Result:
+; *    An operating system result code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus ReleaseQDContextForCollapsedWindowDockTile(WindowRef inWindow, CGrafPtr inContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ReleaseQDContextForCollapsedWindowDockTile
+	ENDIF
+
+
+; *  UpdateCollapsedWindowDockTile()
+; *  
+; *  Discussion:
+; *    Automatically updates the image of a particular window in the
+; *    dock to the current contents of the window. Use this for periodic
+; *    updates, etc. Do not use this for animation purposes, if you want
+; *    animation, use the above create/release drawing context APIs.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to update the dock tile for. If this window is not
+; *      collapsed, an error is returned.
+; *  
+; *  Result:
+; *    An operating system result code.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available in CarbonLib 1.x, is availble on Mac OS X version 10.0 or later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OSStatus UpdateCollapsedWindowDockTile(WindowRef inWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateCollapsedWindowDockTile
+	ENDIF
+
+
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+
+; *  GetWindowBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowBounds(WindowRef window, WindowRegionCode regionCode, Rect *globalBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowBounds
+	ENDIF
+
+;  Note: newContentRect can only be NULL when linking to CarbonLib 1.0 forward 
+
+; *  ResizeWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean ResizeWindow(WindowRef window, Point startPoint, const Rect *sizeConstraints, Rect *newContentRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResizeWindow
+	ENDIF
+
+
+
+;   Routines available from Mac OS 8.5 forward,
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0.2 forward
+
+
+
+
+; *  SetWindowBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowBounds(WindowRef window, WindowRegionCode regionCode, const Rect *globalBounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowBounds
+	ENDIF
+
+;  Routines available from Mac OS 8.5 forward
+
+
+; *  RepositionWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RepositionWindow(WindowRef window, WindowRef parentWindow, WindowPositionMethod method)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RepositionWindow
+	ENDIF
+
+
+; *  MoveWindowStructure()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus MoveWindowStructure(WindowRef window, short hGlobal, short vGlobal)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MoveWindowStructure
+	ENDIF
+
+
+;   Routines available from Mac OS 8.5 forward,
+;   or from Mac OS 8.6 forward when linking to CarbonLib 1.1 forward
+
+
+
+
+; *  IsWindowInStandardState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowInStandardState(WindowRef window, Point *idealSize, Rect *idealStandardState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowInStandardState
+	ENDIF
+
+
+; *  ZoomWindowIdeal()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ZoomWindowIdeal(WindowRef window, WindowPartCode partCode, Point *ioIdealSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ZoomWindowIdeal
+	ENDIF
+
+
+; *  GetWindowIdealUserState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowIdealUserState(WindowRef window, Rect *userState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowIdealUserState
+	ENDIF
+
+
+; *  SetWindowIdealUserState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowIdealUserState(WindowRef window, const Rect *userState)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowIdealUserState
+	ENDIF
+
+;  Routines available in CarbonLib 1.1 and later
+
+
+; *  GetWindowGreatestAreaDevice()
+; *  
+; *  Summary:
+; *    Returns the graphics device with the greatest area of
+; *    intersection with a specified window region.
+; *  
+; *  Parameters:
+; *    
+; *    inWindow:
+; *      The window to compare against.
+; *    
+; *    inRegion:
+; *      The window region to compare against.
+; *    
+; *    outGreatestDevice:
+; *      On exit, the graphics device with the greatest intersection.
+; *      May be NULL.
+; *    
+; *    outGreatestDeviceRect:
+; *      On exit, the bounds of the graphics device with the greatest
+; *      intersection. May be NULL. If the device with the greatest
+; *      intersection also contains the menu bar, the device rect will
+; *      exclude the menu bar area.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowGreatestAreaDevice(WindowRef inWindow, WindowRegionCode inRegion, GDHandle *outGreatestDevice, Rect *outGreatestDeviceRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGreatestAreaDevice
+	ENDIF
+
+
+
+; *  WindowConstrainOptions
+; *  
+; 
+
+
+; typedef UInt32						WindowConstrainOptions
+kWindowConstrainMayResize		EQU		$00000001
+kWindowConstrainMoveRegardlessOfFit EQU	$00000002
+kWindowConstrainAllowPartial	EQU		$00000004
+kWindowConstrainCalcOnly		EQU		$00000008
+kWindowConstrainStandardOptions	EQU		$00000002
+
+; *  ConstrainWindowToScreen()
+; *  
+; *  Summary:
+; *    Moves and resizes a window so that it's contained entirely on a
+; *    single screen.
+; *  
+; *  Parameters:
+; *    
+; *    inWindowRef:
+; *      The window to constrain.
+; *    
+; *    inRegionCode:
+; *      The window region to constrain.
+; *    
+; *    inOptions:
+; *      Flags controlling how the window is constrained.
+; *    
+; *    inScreenRect:
+; *      A rectangle, in global coordinates, in which to constrain the
+; *      window. May be NULL. If NULL, the window is constrained to the
+; *      screen with the greatest intersection with the specified window
+; *      region.
+; *    
+; *    outStructure:
+; *      On exit, contains the new structure bounds of the window, in
+; *      global coordinates. May be NULL.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ConstrainWindowToScreen(WindowRef inWindowRef, WindowRegionCode inRegionCode, WindowConstrainOptions inOptions, const Rect *inScreenRect, Rect *outStructure)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ConstrainWindowToScreen
+	ENDIF
+
+
+; *  GetAvailableWindowPositioningBounds()
+; *  
+; *  Summary:
+; *    Returns the available window positioning bounds on the given
+; *    screen (i.e., the screen rect minus the MenuBar and Dock if
+; *    located on that screen).
+; *  
+; *  Parameters:
+; *    
+; *    inDevice:
+; *      The device for which to find the available bounds.
+; *    
+; *    availableRect:
+; *      On exit, contains the available bounds for the given device.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetAvailableWindowPositioningBounds(GDHandle inDevice, Rect *availableRect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetAvailableWindowPositioningBounds
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Visibility                                                                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  HideWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void HideWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_HideWindow:	OPWORD	$A916
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideWindow
+	ENDIF
+
+
+; *  [Mac]ShowWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ShowWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ShowWindow:	OPWORD	$A915
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowWindow
+	ENDIF
+
+
+; *  ShowHide()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void ShowHide(WindowRef window, Boolean showFlag)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_ShowHide:	OPWORD	$A908
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowHide
+	ENDIF
+
+
+
+; *  [Mac]IsWindowVisible()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowVisible(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowVisible
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+; 
+;    • Sheets
+;    
+;    Sheets are a new user interface object in Mac OS X. A sheet is a modal alert or dialog,
+;    but unlike a traditional alert or dialog window (which is visually separate from the
+;    frontmost document window), a sheet appears to be attached to its parent window; it
+;    moves and z-orders simultaneously with its parent. Furthermore, sheets on Mac OS X
+;    use a new type of modality called window modality. A traditional alert or dialog is
+;    app-modal; it prevents user interaction with all other windows in the current application.
+;    A sheet is window-modal; it only prevents user interaction with its parent window, and
+;    events continue to flow to other windows in the application.
+;    
+;    • Sheet Event Handling
+;    
+;    Implementing a sheet window in your application generally requires some modifications
+;    to your event-handling code. A traditional app-modal window is implemented using a modal
+;    event loop; your application starts a new event loop (either by processing events itself,
+;    or by calling ModalDialog), which does not return back to your application's main event
+;    loop until the app-modal window has closed.
+;    
+;    Starting a new event loop doesn't work with sheets, because typically the modal event loop
+;    will only handle events destined for the sheet, and not events for other windows, but
+;    a sheet only blocks events for its parent window, and your application must still handle
+;    events for the rest of its windows as normal. Therefore, you will usually not use a modal
+;    event loop to handle events in a sheet. Rather, you will show the sheet window, and then
+;    return directly back to your main event loop. The Carbon Event Manager automatically 
+;    prevents events in the sheet's parent window from reaching it; events in your application's
+;    other windows are still returned to you via WaitNextEvent or your application's Carbon
+;    event handlers, where you can process them as normal.
+;    
+;    You have several choices for handling events in the sheet itself. A sheet is, at the most
+;    basic level, simply another window in your application, and you can use any of the standard
+;    event-handling APIs to receive events in the sheet. For example, you can:
+;    
+;        -   receive events in the sheet via WaitNextEvent, and handle them directly in your
+;            main event loop
+;            
+;        -   create the sheet using Dialog Manager APIs, and use IsDialogEvent and DialogSelect
+;            to handle events in the sheet
+;            
+;        -   install Carbon event handlers on the sheet, and respond to events in your handlers
+;    
+;    Which approach you choose is up to you.
+;    
+;    • Sheets in CarbonLib
+;    
+;    The sheet window class, sheet WDEF procIDs, and ShowSheetWindow, HideSheetWindow, and
+;    GetSheetWindowParent APIs are implemented in CarbonLib starting with version 1.3. However,
+;    since Mac OS 8 and 9 do not traditionally support a window-modal user interface, sheet
+;    windows are displayed as app-modal windows by CarbonLib. From your application's perspective,
+;    event handling for a sheet in CarbonLib is the same as event handling for a sheet on X;
+;    ShowSheetWindow still returns immediately, and your application should still return back
+;    to its main event loop and be prepared to handle events in other windows. On CarbonLib,
+;    your application will simply never receive an user input in any of your other windows;
+;    since the sheet has application modality, the Carbon Event Manager will discard events
+;    in any windows other than the sheet.
+;    
+;    • Creating a Sheet
+;    
+;    A sheet is just a normal window with a special window class: kSheetWindowClass or
+;    kSheetAlertWindowClass. As such, it can be created in any of the ways you might create
+;    a window: NewWindow, NewCWindow, CreateNewWindow, GetNewWindow, GetNewCWindow, 
+;    CreateWindowFromCollection, CreateWindowFromResource, CreateWindowFromNib, NewDialog,
+;    NewColorDialog, NewFeaturesDialog, or GetNewDialog.
+;    
+;    The Window Manager defines two window classes and two WDEF procIDs for sheets:
+;        
+;        -   kSheetWindowClass and kSheetAlertWindowClass
+;        -   kWindowSheetProc and kWindowSheetAlertProc
+;        
+;    The window classes may be used with CreateNewWindow, CreateWindowFromCollection, and
+;    CreateWindowFromResource; the WDEF procIDs may be used with NewWindow, NewCWindow, NewDialog,
+;    NewColorDialog, NewFeaturesDialog, and in 'WDEF' and 'DLOG' resources.
+;    
+;    The first release of Mac OS X only supports kSheetWindowClass and kWindowSheetProc;
+;    it does not support kSheetAlertWindowClass or kWindowSheetAlertProc. The latter window
+;    class and procID were added in CarbonLib 1.3 and will be added to a future version of
+;    Mac OS X. A new window class and procID were necessary for CarbonLib support because
+;    sheets can be used for both alerts ("Do you want to save changes before closing this
+;    window?") and dialogs (a Navigation Services PutFile dialog). On Mac OS X, sheet windows
+;    have the same appearance when used for either an alert or a dialog, but on Mac OS 8 and 9,
+;    alert windows have a different appearance from dialog windows. Two separate window classes
+;    are necessary for CarbonLib to know whether to display a sheet using a movable alert or a
+;    movable dialog window. Therefore, it is recommended that you use kSheetAlertWindowClass when
+;    creating a sheet window that will be used to display an alert, although this is not required.
+;    
+;    • Displaying a Sheet
+;    
+;    A sheet is made visible by calling the ShowSheetWindow API. This API shows the sheet,
+;    using whatever visual effects are appropriate for the platform, and then returns immediately.
+;    On Mac OS X, it creates a window group and places the sheet and its parent window into the
+;    group; it also marks the sheet as window-modal. On CarbonLib, it marks the sheet as app-modal
+;    but does not create a window group.
+;    
+;    On Mac OS X, before the sheet window is actually made visible, ShowSheetWindow sends a 
+;    kEventWindowDrawContent event to the sheet window, asking it to draw its content into the
+;    window's offscreen buffer. The sheet must handle this event, or its content area will be
+;    blank after the sheet becomes visible.
+;    
+;    In some cases, this handler is automatically provided for you:
+;    
+;        -   If you create your sheet window using the Dialog Manager, the Dialog Manager
+;            automatically installs a handler for this event that calls DrawDialog, so you
+;            don't need to install the handler yourself.
+;            
+;        -   If you install the standard Carbon window event handler on your sheet window
+;            (using kWindowStandardHandlerAttribute or InstallStandardEventHandler), the
+;            standard handler automatically handles this event and calls DrawControls.
+;            
+;    Typically, your event handling code (whether it uses WaitNextEvent, the Dialog Manager,
+;    or Carbon event handlers) will receive and respond to events in the sheet until the
+;    user does something that should cause the sheet to close. This might be clicking in an
+;    OK or Cancel button, for example. At that time, your event handling code should call
+;    HideSheetWindow. The sheet window will hide, but will not be destroyed, so you can use
+;    it again later if you want.
+;
+
+
+; *  ShowSheetWindow()
+; *  
+; *  Summary:
+; *    Shows a sheet window using appropriate visual effects.
+; *  
+; *  Discussion:
+; *    ShowSheetWindow is implemented in both CarbonLib 1.3 and Mac OS
+; *    X. Since Mac OS 9 does not use a window-modal user interface for
+; *    alerts and dialogs, ShowSheetWindow in CarbonLib does not bind
+; *    the sheet to the parent window in the same way that it does on
+; *    Mac OS X; instead, it shows the sheet like a standard
+; *    movable-modal dialog window. Sheet windows must use the window
+; *    classes kSheetWindowClass or kSheetAlertWindowClass to get the
+; *    right appearance on both platforms.
+; *  
+; *  Parameters:
+; *    
+; *    inSheet:
+; *      The sheet window to show.
+; *    
+; *    inParentWindow:
+; *      The sheet's parent window.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ShowSheetWindow(WindowRef inSheet, WindowRef inParentWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ShowSheetWindow
+	ENDIF
+
+
+; *  HideSheetWindow()
+; *  
+; *  Summary:
+; *    Hides a sheet window using appropriate visual effects.
+; *  
+; *  Parameters:
+; *    
+; *    inSheet:
+; *      The sheet window to hide.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus HideSheetWindow(WindowRef inSheet)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HideSheetWindow
+	ENDIF
+
+
+; *  GetSheetWindowParent()
+; *  
+; *  Summary:
+; *    Returns the parent window of a sheet.
+; *  
+; *  Parameters:
+; *    
+; *    inSheet:
+; *      The sheet window whose parent to retrieve.
+; *    
+; *    outParentWindow:
+; *      On exit, contains the parent window of the sheet.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetSheetWindowParent(WindowRef inSheet, WindowRef *outParentWindow)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSheetWindowParent
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Disabling Screen Redraw                                                            
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   disable and enable screen updates for changes to the current application’s windows
+;   (OS X only for now)
+
+
+
+
+; *  DisableScreenUpdates()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus DisableScreenUpdates(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableScreenUpdates
+	ENDIF
+
+
+; *  EnableScreenUpdates()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus EnableScreenUpdates(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableScreenUpdates
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Properties                                                                  
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+;   Routines available from Mac OS 8.5 forward
+;   or from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+
+
+; *  GetWindowProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowProperty(WindowRef window, PropertyCreator propertyCreator, PropertyTag propertyTag, UInt32 bufferSize, UInt32 *actualSize, void *propertyBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowProperty
+	ENDIF
+
+
+; *  GetWindowPropertySize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowPropertySize(WindowRef window, PropertyCreator creator, PropertyTag tag, UInt32 *size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowPropertySize
+	ENDIF
+
+
+; *  SetWindowProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus SetWindowProperty(WindowRef window, PropertyCreator propertyCreator, PropertyTag propertyTag, UInt32 propertySize, void *propertyBuffer)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowProperty
+	ENDIF
+
+
+; *  RemoveWindowProperty()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in WindowsLib 8.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus RemoveWindowProperty(WindowRef window, PropertyCreator propertyCreator, PropertyTag propertyTag)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveWindowProperty
+	ENDIF
+
+
+;  Routines available from Mac OS 8.1 forward when linking to CarbonLib 1.0 forward
+
+
+kWindowPropertyPersistent		EQU		$00000001			; whether this property gets saved when flattening the window 
+
+; *  GetWindowPropertyAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus GetWindowPropertyAttributes(WindowRef window, OSType propertyCreator, OSType propertyTag, UInt32 *attributes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowPropertyAttributes
+	ENDIF
+
+
+; *  ChangeWindowPropertyAttributes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus ChangeWindowPropertyAttributes(WindowRef window, OSType propertyCreator, OSType propertyTag, UInt32 attributesToSet, UInt32 attributesToClear)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ChangeWindowPropertyAttributes
+	ENDIF
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Utilities                                                                          
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  PinRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long PinRect(const Rect *theRect, Point thePt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_PinRect:	OPWORD	$A94E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PinRect
+	ENDIF
+
+
+
+; *  GetGrayRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal RgnHandle GetGrayRgn(void)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetGrayRgn           &dest=(sp)
+			move.l            $09EE,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetGrayRgn
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Part Tracking                                                               
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  TrackBox()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean TrackBox(WindowRef window, Point thePt, WindowPartCode partCode)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TrackBox:	OPWORD	$A83B
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TrackBox
+	ENDIF
+
+
+; *  TrackGoAway()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean TrackGoAway(WindowRef window, Point thePt)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_TrackGoAway:	OPWORD	$A91E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION TrackGoAway
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Region Dragging                                                                    
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+; *  DragGrayRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long DragGrayRgn(RgnHandle theRgn, Point startPt, const Rect *limitRect, const Rect *slopRect, short axis, DragGrayRgnUPP actionProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DragGrayRgn:	OPWORD	$A905
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DragGrayRgn
+	ENDIF
+
+
+; *  DragTheRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long DragTheRgn(RgnHandle theRgn, Point startPt, const Rect *limitRect, const Rect *slopRect, short axis, DragGrayRgnUPP actionProc)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_DragTheRgn:	OPWORD	$A926
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DragTheRgn
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————
+;   • GetAuxWin                                                                         
+;                                                                                       
+;   GetAuxWin is not available in Carbon                                                
+; ——————————————————————————————————————————————————————————————————————————————————————
+	IF ¬ OPAQUE_TOOLBOX_STRUCTS THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetAuxWin()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean GetAuxWin(WindowRef window, AuxWinHandle *awHndl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_GetAuxWin:	OPWORD	$AA42
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetAuxWin
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; ——————————————————————————————————————————————————————————————————————————————————————
+;  • Window Accessors                                                                   
+; ——————————————————————————————————————————————————————————————————————————————————————
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetWindowGoAwayFlag()
+; *  
+; *  Discussion:
+; *    use GetWindowAttributes in Carbon
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean GetWindowGoAwayFlag(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowGoAwayFlag
+	ENDIF
+
+
+; *  GetWindowSpareFlag()
+; *  
+; *  Discussion:
+; *    use GetWindowAttributes in Carbon
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean GetWindowSpareFlag(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowSpareFlag
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  GetWindowList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetWindowList(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowList
+	ENDIF
+
+
+
+; *  GetWindowPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal CGrafPtr GetWindowPort(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowPort
+	ENDIF
+
+
+
+; *  GetWindowKind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short GetWindowKind(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowKind
+	ENDIF
+
+
+
+; *  IsWindowHilited()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowHilited(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowHilited
+	ENDIF
+
+
+
+; *  IsWindowUpdatePending()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsWindowUpdatePending(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsWindowUpdatePending
+	ENDIF
+
+
+
+; *  [Mac]GetNextWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0.2 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetNextWindow(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetNextWindow
+	ENDIF
+
+
+
+; *  GetWindowStandardState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Rect *GetWindowStandardState(WindowRef window, Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowStandardState
+	ENDIF
+
+
+
+; *  GetWindowUserState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Rect *GetWindowUserState(WindowRef window, Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowUserState
+	ENDIF
+
+
+
+; *  SetWindowKind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWindowKind(WindowRef window, short kind)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowKind
+	ENDIF
+
+
+
+; *  SetWindowStandardState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWindowStandardState(WindowRef window, const Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowStandardState
+	ENDIF
+
+
+
+
+; *  SetWindowUserState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWindowUserState(WindowRef window, const Rect *rect)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowUserState
+	ENDIF
+
+
+
+; *  SetPortWindowPort()
+; *  
+; *  Discussion:
+; *    set the current QuickDraw port to the port associated with the
+; *    window
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetPortWindowPort(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetPortWindowPort
+	ENDIF
+
+
+
+
+; *  GetWindowPortBounds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Rect *GetWindowPortBounds(WindowRef window, Rect *bounds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowPortBounds
+	ENDIF
+
+
+
+; *  GetWindowFromPort()
+; *  
+; *  Discussion:
+; *    Needed to ‘cast up’ to a WindowRef from a GrafPtr
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CarbonAccessors.o 1.0 and later or as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal WindowRef GetWindowFromPort(CGrafPtr port)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowFromPort
+	ENDIF
+
+
+
+
+
+;  old accessors
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetWindowDataHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Handle GetWindowDataHandle(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowDataHandle
+	ENDIF
+
+
+
+; *  SetWindowDataHandle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void SetWindowDataHandle(WindowRef window, Handle data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWindowDataHandle
+	ENDIF
+
+
+
+; *  GetWindowZoomFlag()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean GetWindowZoomFlag(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowZoomFlag
+	ENDIF
+
+
+
+; *  GetWindowStructureRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GetWindowStructureRgn(WindowRef window, RgnHandle r)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowStructureRgn
+	ENDIF
+
+
+
+; *  GetWindowContentRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GetWindowContentRgn(WindowRef window, RgnHandle r)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowContentRgn
+	ENDIF
+
+
+
+; *  GetWindowUpdateRgn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void GetWindowUpdateRgn(WindowRef window, RgnHandle r)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowUpdateRgn
+	ENDIF
+
+
+
+; *  GetWindowTitleWidth()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern SInt16 GetWindowTitleWidth(WindowRef window)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWindowTitleWidth
+	ENDIF
+
+
+; ——————————————————————————————————————————————————————————————————————————————————————————————————
+;  Obsolete symbolic names                                                                          
+; ——————————————————————————————————————————————————————————————————————————————————————————————————
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kWindowGroupAttrSelectable		EQU		$01
+kWindowGroupAttrPositionFixed	EQU		$02
+kWindowGroupAttrZOrderFixed		EQU		$04
+
+
+
+
+
+
+
+
+	ENDIF ; __MACWINDOWS__ 
+

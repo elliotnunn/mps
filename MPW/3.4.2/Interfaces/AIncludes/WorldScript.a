@@ -1,0 +1,391 @@
+;
+;	File:		WorldScript.a
+;
+;	Contains:	WorldScript I Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__WORLDSCRIPT__') = 'UNDEFINED' THEN
+__WORLDSCRIPT__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__TRAPS__') = 'UNDEFINED' THEN
+	include 'Traps.a'
+	ENDIF
+
+	IF &TYPE('__QUICKDRAWTEXT__') = 'UNDEFINED' THEN
+	include 'QuickdrawText.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+; typedef UInt16 			WSIOffset
+; typedef UInt8 			WSIByteCount
+; typedef UInt8 			WSIByteIndex
+; offset from start of sub-table to row in state table 
+; typedef UInt16 			WSIStateOffset
+; typedef UInt32 			WSITableOffset
+; typedef UInt16 			WSISubtableOffset
+; typedef UInt16 			WSIGlyphcode
+; typedef UInt32 			WSITableIdentifiers
+
+kScriptSettingsTag				EQU		'info'
+kMetamorphosisTag				EQU		'mort'
+kGlyphExpansionTag				EQU		'g2g#'
+kPropertiesTag					EQU		'prop'
+kJustificationTag				EQU		'kash'
+kCharToGlyphTag					EQU		'cmap'
+kGlyphToCharTag					EQU		'pamc'
+kFindScriptRunTag				EQU		'fstb'
+
+;*** 			L O O K U P    T A B L E    T Y P E S		***
+WSILookupSimpleArray			EQU		0					; a simple array indexed by glyph code 
+WSILookupSegmentSingle			EQU		2					; segment mapping to single value 
+WSILookupSegmentArray			EQU		4					; segment mapping to lookup array 
+WSILookupSingleTable			EQU		6					; sorted list of glyph, value pairs 
+WSILookupTrimmedArray			EQU		8					; a simple trimmed array indexed by glyph code 
+
+; typedef unsigned short 	WSILookupTableFormat
+; typedef unsigned short 	WSILookupValue
+; An offset from the beginning of the lookup table 
+; typedef unsigned short 	WSILookupOffset
+;	FORMAT SPECIFIC DEFINITIONS 
+;
+;		lookupSimpleArray:
+;		
+;		This is a simple array which maps all glyphs in the font
+;		to lookup values.
+;	
+WSILookupArrayHeader 	RECORD	0
+lookupValues			 ds.w   1		; offset: $0 (0)		; The array of values indexed by glyph code 
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct WSILookupArrayHeader  WSILookupArrayHeader
+;
+;		lookupTrimmedArray:
+;		
+;		This is a single trimmed array which maps a single range
+;		of glyhs in the font to lookup values.
+;	
+WSILookupTrimmedArrayHeader RECORD	0
+firstGlyph				 ds.w   1		; offset: $0 (0)
+limitGlyph				 ds.w   1		; offset: $2 (2)
+valueArray				 ds.w   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct WSILookupTrimmedArrayHeader  WSILookupTrimmedArrayHeader
+; The format specific part of the subtable header 
+WSILookupFormatSpecificHeader RECORD	0
+lookupArray				 ds     WSILookupArrayHeader ; offset: $0 (0)
+						 ORG 0
+trimmedArray			 ds     WSILookupTrimmedArrayHeader ; offset: $0 (0)
+						 ORG 6
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef union WSILookupFormatSpecificHeader  WSILookupFormatSpecificHeader
+; The overall subtable header 
+WSILookupTableHeader 	RECORD	0
+format					 ds.w   1		; offset: $0 (0)		; table format 
+fsHeader				 ds.w   3		; offset: $2 (2)		; format specific header 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct WSILookupTableHeader  WSILookupTableHeader
+;***		G L Y P H    E X P A N S I O N    ***
+
+; fixed 1.0 
+kCurrentGlyphExpansionVersion	EQU		$00010000
+
+; typedef unsigned short 	GlyphExpansionFormats
+
+GlyphExpansionLookupFormat		EQU		1
+GlyphExpansionContextualFormat	EQU		2
+
+ExpandedGlyphCluster 	RECORD	0
+numGlyphs				 ds.b   1		; offset: $0 (0)
+bestGlyph				 ds.b   1		; offset: $1 (1)
+glyphs					 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ExpandedGlyphCluster  ExpandedGlyphCluster
+ExpandedGlyphOffset 	RECORD	0
+glyph					 ds.w   1		; offset: $0 (0)
+offset					 ds.w   1		; offset: $2 (2)		; offset to ExpandedGlyphCluster 
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct ExpandedGlyphOffset  ExpandedGlyphOffset
+GlyphExpansionStateTable RECORD	0
+stateTableOffset		 ds.w   1		; offset: $0 (0)
+classTableOffset		 ds.w   1		; offset: $2 (2)
+actionTableOffset		 ds.w   1		; offset: $4 (4)		; state, class and actions tables follow here... 
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef GlyphExpansionStateTable  GlyphExpansionStateTable
+GlyphExpansionTable 	RECORD	0
+version					 ds.l   1		; offset: $0 (0)
+format					 ds.w   1		; offset: $4 (4)
+expansionNumer			 ds.w   1		; offset: $6 (6)
+expansionDenom			 ds.w   1		; offset: $8 (8)		; num/denom ratio for expansion <2> 
+stateTable				 ds     GlyphExpansionStateTable ; offset: $A (10)
+						 ORG 10
+lookup					 ds     WSILookupTableHeader ; offset: $A (10) ; expanded glyph clusters follow here... 
+						 ORG 18
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct GlyphExpansionTable  GlyphExpansionTable
+; Glyph-to-Character constants and types  
+
+kCurrentGlyphToCharVersion		EQU		$00010100
+
+; typedef unsigned short 	GlyphToCharLookupFormats
+
+kGlyphToCharLookup8Format		EQU		1
+kGlyphToCharLookup16Format		EQU		2
+kGlyphToCharLookup32Format		EQU		3
+
+; typedef UInt8 			GlyphToCharFontIndex
+; typedef UInt8 			QDGlyphcode
+GlyphToCharActionTable 	RECORD	0
+fontNameOffset			 ds.w   1		; offset: $0 (0)		; offset relative to this table 
+actions					 ds     WSILookupTableHeader ; offset: $2 (2) ; only support lookupSimpleArray format for now 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct GlyphToCharActionTable  GlyphToCharActionTable
+GlyphToCharActionHeader RECORD	0
+numTables				 ds.w   1		; offset: $0 (0)		; 0..n 
+offsets					 ds.w   1		; offset: $2 (2)		; offsets from start of action table header 
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct GlyphToCharActionHeader  GlyphToCharActionHeader
+GlyphToCharHeader 		RECORD	0
+version					 ds.l   1		; offset: $0 (0)
+actionOffset			 ds.w   1		; offset: $4 (4)		; offset to GlyphToCharActionHeader 
+format					 ds.w   1		; offset: $6 (6)		; size of font mask 
+mappingTable			 ds     WSILookupTableHeader ; offset: $8 (8)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct GlyphToCharHeader  GlyphToCharHeader
+; JUSTIFICATION TYPES
+;	WorldScript supports justification of text using insertion. The justification
+;	table specifies a insertion string to insert between 2 specified glyphs.
+;	Each combination of inter-glyph boundary can be assigned a justification priority,
+;	the higher the priority the more justification strings inserted at that position.
+;	
+;	The priorities for each inter-glyph boundary are specified by the justification table's
+;	state table.
+;	
+;	Special handling is done for scripts which use spaces to justify, because the width of 
+;	a space varies depending on the setting of SpaceExtra. This is why the number of spaces
+;	per inserting string is specified in the justification table.
+;
+;
+
+; 1.0 not supported 
+kCurrentJustificationVersion	EQU		$0200
+
+kJustificationStateTableFormat	EQU		1
+
+; WSI's internal limitation <12> 
+kMaxJustificationStringLength	EQU		13
+
+; typedef UInt8 			WSIJustificationPriority
+
+WSIJustificationSetMarkMask		EQU		$80
+
+WSIJustificationStateEntry RECORD	0
+markPriority			 ds.b   1		; offset: $0 (0)		; non-zero priorities means insertion 
+priority				 ds.b   1		; offset: $1 (1)
+newState				 ds.w   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct WSIJustificationStateEntry  WSIJustificationStateEntry
+; typedef unsigned short 	WSIJustificationClasses
+
+wsiJustEndOfLineClass			EQU		0
+wsiJustEndOfRunClass			EQU		1
+wsiJustDeletedGlyphClass		EQU		2
+wsiJustUserDefinedClass			EQU		3
+
+; typedef unsigned short 	WSIJustificationStates
+
+wsiStartOfLineState				EQU		0					; pre-defined states 
+wsiStartOfRunState				EQU		1
+wsiUserDefinedState				EQU		2
+
+; pre-multiplied: class# * sizeof(WSIJustificationStateEntry) 
+; typedef UInt8 			WSIJustificationClassOffset
+WSIJustificationStateTable RECORD	0
+maxPriorities			 ds.w   1		; offset: $0 (0)
+rowWidth				 ds.w   1		; offset: $2 (2)		; width of a state table row in bytes 
+classTableOffset		 ds.w   1		; offset: $4 (4)
+stateTableOffset		 ds.w   1		; offset: $6 (6)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct WSIJustificationStateTable  WSIJustificationStateTable
+WSIJustificationHeader 	RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+format					 ds.w   1		; offset: $2 (2)
+scaling					 ds     Point	; offset: $4 (4)		; numer/denom scaling of priority weights <7> 
+spacesPerInsertion		 ds.w   1		; offset: $8 (8)		; # of $20 chars in justification insertion string <12> 
+justStringOffset		 ds.w   1		; offset: $A (10)		; offset to justification string 
+stateTable				 ds     WSIJustificationStateTable ; offset: $C (12) ; long-aligned boundary aligned w/ spacesPerInsertion field - justification string follows 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct WSIJustificationHeader  WSIJustificationHeader
+; Line Layout's Property table version <11> 
+
+; v1.0 
+currentPropsTableVersion		EQU		$00010000
+
+; ??? is this right 
+kCharToGlyphCurrentVersion		EQU		0100
+
+; pass as priorityWeight to JustifyWSILayout to use script's current just setting 
+kScriptsDefaultJustWeight		EQU		-1
+
+WSIGlyphInfoRec 		RECORD	0
+qdChar					 ds.b   1		; offset: $0 (0)
+rightToLeft				 ds.b   1		; offset: $1 (1)		; !0 means rightToLeft, 0 means leftToRight 
+fontID					 ds.w   1		; offset: $2 (2)
+originalOffset			 ds.w   1		; offset: $4 (4)		; or negative original offset if not in original text input 
+unused					 ds.w   1		; offset: $6 (6)		; long-align 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct WSIGlyphInfoRec  WSIGlyphInfoRec, **WSIGlyphInfoHandle
+; typedef Handle 			WSILayoutHandle
+;
+; pascal WSILayoutHandle NewWSILayout(WSILayoutHandle layoutH, Ptr text, short txLength, short lineDirection, unsigned long flags, OSErr *err)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewWSILayout
+			dc.w 	$2F3C
+			dc.w 	$8414
+			dc.w 	$0040
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewWSILayout
+	ENDIF
+
+;
+; pascal WSILayoutHandle JustifyWSILayout(WSILayoutHandle layoutH, Fixed slop, short priorityWeight, JustStyleCode styleRunPosition, Point numer, Point denom, OSErr *err)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_JustifyWSILayout
+			dc.w 	$2F3C
+			dc.w 	$8418
+			dc.w 	$0042
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	JustifyWSILayout
+	ENDIF
+
+;
+; pascal Fixed MeasureWSILayout(WSILayoutHandle layoutH, Point numer, Point denom)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MeasureWSILayout
+			dc.w 	$2F3C
+			dc.w 	$840C
+			dc.w 	$0044
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MeasureWSILayout
+	ENDIF
+
+;
+; pascal void DrawWSILayout(WSILayoutHandle layoutH, Point numer, Point denom)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawWSILayout
+			dc.w 	$2F3C
+			dc.w 	$800C
+			dc.w 	$0046
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawWSILayout
+	ENDIF
+
+; "low-level" routines 
+;
+; pascal WSIGlyphInfoHandle GetWSILayoutParts(WSILayoutHandle layoutH, WSIGlyphInfoHandle destH, short *numGlyphs, OSErr *err)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetWSILayoutParts
+			dc.w 	$2F3C
+			dc.w 	$8410
+			dc.w 	$0048
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetWSILayoutParts
+	ENDIF
+
+;
+; pascal void DrawWSIGlyphs(short length, Ptr qdCodes, Point numer, Point denom)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawWSIGlyphs
+			dc.w 	$2F3C
+			dc.w 	$800E
+			dc.w 	$004A
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawWSIGlyphs
+	ENDIF
+
+;
+; pascal Fixed xMeasureWSIGlyphs(Ptr *qdCodes, short length, Point numer, Point denom)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_xMeasureWSIGlyphs
+			dc.w 	$2F3C
+			dc.w 	$840E
+			dc.w 	$004C
+			dc.w 	$A8B5
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	xMeasureWSIGlyphs
+	ENDIF
+
+	ENDIF ; __WORLDSCRIPT__

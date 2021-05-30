@@ -1,0 +1,3058 @@
+;
+;    File:       NetworkSetup.a
+;
+;    Contains:   Network Setup Interfaces
+;
+;    Version:    Technology: 1.3.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1998-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__NETWORKSETUP__') = 'UNDEFINED' THEN
+__NETWORKSETUP__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+    IF &TYPE('__NETWORKSETUPTYPES__') = 'UNDEFINED' THEN
+    __NETWORKSETUPTYPES__: SET 1
+
+
+
+kInvalidCfgAreaID				EQU		0
+; typedef UInt32 						CfgAreaID
+
+; typedef OSType 						CfgEntityClass
+
+; typedef OSType 						CfgEntityType
+
+CfgEntityRef			RECORD 0
+fLoc					 ds.l	1				; offset: $0 (0)
+fReserved				 ds.l	1				; offset: $4 (4)
+fID						 ds		Str255			; offset: $8 (8)
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+CfgResourceLocator		RECORD 0
+fFile					 ds		FSSpec			; offset: $0 (0)
+fResID					 ds.w	1				; offset: $46 (70)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+CfgEntityInfo			RECORD 0
+fClass					 ds.l	1				; offset: $0 (0)
+fType					 ds.l	1				; offset: $4 (4)
+fName					 ds		Str255			; offset: $8 (8)
+fIcon					 ds		CfgResourceLocator ; offset: $108 (264)
+sizeof					 EQU *					; size:   $150 (336)
+						ENDR
+; typedef void *						CfgEntityAccessID
+
+CfgPrefsHeader			RECORD 0
+fSize					 ds.w	1				; offset: $0 (0)		;  size, in bytes, does not include this header 
+fVersion				 ds.w	1				; offset: $2 (2)
+fType					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;     -------------------------------------------------------------------------
+;    Error codes
+;    ------------------------------------------------------------------------- 
+
+
+kCfgErrDatabaseChanged			EQU		-3290				; database has changed since last call - close and reopen DB
+kCfgErrAreaNotFound				EQU		-3291				; Area doesn't exist
+kCfgErrAreaAlreadyExists		EQU		-3292				; Area already exists
+kCfgErrAreaNotOpen				EQU		-3293				; Area needs to open first
+kCfgErrConfigLocked				EQU		-3294				; Access conflict - retry later
+kCfgErrEntityNotFound			EQU		-3295				; An entity with this name doesn't exist
+kCfgErrEntityAlreadyExists		EQU		-3296				; An entity with this name already exists
+kCfgErrPrefsTypeNotFound		EQU		-3297				; A preference with this prefsType doesn't exist
+kCfgErrDataTruncated			EQU		-3298				; Data truncated when read buffer too small
+kCfgErrFileCorrupted			EQU		-3299				; The database format appears to be corrupted.
+kCfgErrFirst					EQU		-3290
+kCfgErrLast						EQU		-3299
+;   reserve a 'free' tag for free blocks
+
+kCfgFreePref					EQU		'free'
+;     -------------------------------------------------------------------------
+;    CfgEntityClass / CfgEntityType
+;
+;    The database can distinguish between several classes of objects and 
+;    several types withing each class
+;    Use of different classes allow to store type of information in the same database
+;
+;    Other entity classes and types can be defined by developers.
+;    they should be unique and registered with Developer Tech Support (DTS)
+;    ------------------------------------------------------------------------- 
+
+
+kCfgClassAnyEntity				EQU		'****'
+kCfgClassUnknownEntity			EQU		'????'
+kCfgTypeAnyEntity				EQU		'****'
+kCfgTypeUnknownEntity			EQU		'????'
+;     -------------------------------------------------------------------------
+;    For CfgIsSameEntityRef
+;    ------------------------------------------------------------------------- 
+
+
+kCfgIgnoreArea					EQU		1
+kCfgDontIgnoreArea				EQU		0
+    ENDIF
+; *******************************************************************************
+;**  Configuration Information Access API 
+;*******************************************************************************
+
+;     -------------------------------------------------------------------------
+;    Database access
+;    ------------------------------------------------------------------------- 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgOpenDatabase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgOpenDatabase(CfgDatabaseRef *dbRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgOpenDatabase
+	ENDIF
+
+; 
+;    OTCfgOpenDatabase()
+;
+;    Inputs:     none
+;    Outputs:    CfgDatabaseRef* dbRef           Reference to opened database
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Opens Network Setup for a given client. This call should be made prior to any other call.
+;
+
+
+; *  OTCfgCloseDatabase()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgCloseDatabase(CfgDatabaseRef *dbRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgCloseDatabase
+	ENDIF
+
+; 
+;    OTCfgCloseDatabase()
+;
+;    Inputs:     CfgDatabaseRef* dbRef           Reference to opened database
+;    Outputs:    CfgDatabaseRef* dbRef           Reference to opened database is cleared
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Closes Network Setup for a given client. This call should be made when the client no 
+;    longer wants to use Network Setup.  
+;
+
+;     -------------------------------------------------------------------------
+;    Area management
+;    ------------------------------------------------------------------------- 
+
+
+; *  OTCfgGetAreasCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetAreasCount(CfgDatabaseRef dbRef, ItemCount *itemCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetAreasCount
+	ENDIF
+
+; 
+;    OTCfgGetAreasCount()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;    Outputs:    ItemCount* itemCount            Number of entities defined
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns the number of areas currently defined.
+;
+
+
+; *  OTCfgGetAreasList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetAreasList(CfgDatabaseRef dbRef, ItemCount *itemCount, CfgAreaID areaID[], Str255 areaName[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetAreasList
+	ENDIF
+
+; 
+;    OTCfgGetAreasList()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                ItemCount* itemCount            Number of entities requested
+;                CfgAreaID areaID[]              Pointer to array of *itemCount area IDs
+;                Str255 areaName[]               Pointer to array of *itemCount area names
+;    Outputs:    ItemCount* itemCount            Number of entities defined
+;                CfgAreaID areaID[]              Filled in array of area IDs
+;                Str255 areaName[]               Filled in array of area names
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns a list of area IDs and names. On entry, count should be set to whatever OTCfgGetAreasCount 
+;    returned.  On exit, count contains the actual number of areas found. This can be less than the 
+;    initial count value if areas were deleted in the meantime.  The id and name parameters are stored 
+;    in arrays that should each be able to contain count values.
+;
+
+
+; *  OTCfgGetCurrentArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetCurrentArea(CfgDatabaseRef dbRef, CfgAreaID *areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetCurrentArea
+	ENDIF
+
+; 
+;    OTCfgGetCurrentArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;    Outputs:    CfgAreaID* areaID               ID of current area
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns the id of the current area.
+;
+
+
+; *  OTCfgSetCurrentArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgSetCurrentArea(CfgDatabaseRef dbRef, CfgAreaID areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgSetCurrentArea
+	ENDIF
+
+; 
+;    OTCfgSetCurrentArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to make active
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Sets the current area. If the area doesn’t exist kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgCreateArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgCreateArea(CfgDatabaseRef dbRef, ConstStr255Param areaName, CfgAreaID *areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgCreateArea
+	ENDIF
+
+; 
+;    OTCfgCreateArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                ConstStr255Param areaName       Name of area to create
+;    Outputs:    CfgAreaID* areaID               ID of newly created area
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Creates a new area with the specified name. Then name must be unique or kCfgErrAreaAlreadyExists 
+;    will be returned.
+;
+
+
+; *  OTCfgDeleteArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgDeleteArea(CfgDatabaseRef dbRef, CfgAreaID areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDeleteArea
+	ENDIF
+
+; 
+;    OTCfgDeleteArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to delete
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Deletes the specified area. If the area doesn’t exist kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgDuplicateArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgDuplicateArea(CfgDatabaseRef dbRef, CfgAreaID sourceAreaID, CfgAreaID destAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDuplicateArea
+	ENDIF
+
+; 
+;    OTCfgDuplicateArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID sourceAreaID          Area to duplicate
+;                CfgAreaID destAreaID            Area to contain duplicate
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Duplicates the source area content into the destination area. Both areas should exist prior to 
+;    making this call. If either area doesn’t exist kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgSetAreaName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgSetAreaName(CfgDatabaseRef dbRef, CfgAreaID areaID, ConstStr255Param areaName, CfgAreaID *newAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgSetAreaName
+	ENDIF
+
+; 
+;    OTCfgSetAreaName()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area being named
+;                ConstStr255Param areaName       New name for area
+;    Outputs:    CfgAreaID* newAreaID            ID of renamed area
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Renames the specified area. A new id is returned: it should be used from now on. If the area 
+;    doesn’t exist kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgGetAreaName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetAreaName(CfgDatabaseRef dbRef, CfgAreaID areaID, Str255 areaName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetAreaName
+	ENDIF
+
+; 
+;    OTCfgGetAreaName()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area being queried
+;    Outputs:    Str255 areaName                 Name of area
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Gets the name of the specified area. If the area doesn’t exist kCfgErrAreaNotFound is returned.
+;    
+;    Requires Network Setup 1.0.1 or higher.
+;
+
+;     -------------------------------------------------------------------------
+;    Configuration Database API
+;    
+;    Single Writer ONLY!!!
+;    ------------------------------------------------------------------------- 
+
+;     -------------------------------------------------------------------------
+;    Opening an area for reading
+;    ------------------------------------------------------------------------- 
+
+
+; *  OTCfgOpenArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgOpenArea(CfgDatabaseRef dbRef, CfgAreaID areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgOpenArea
+	ENDIF
+
+; 
+;    OTCfgOpenArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to open
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Opens the specified area for reading. If the area doesn’t exist kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgCloseArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgCloseArea(CfgDatabaseRef dbRef, CfgAreaID areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgCloseArea
+	ENDIF
+
+; 
+;    OTCfgCloseArea()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to close
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Closes an area opened for reading. If the area doesn’t exist kCfgErrAreaNotFound is returned.  
+;
+
+; 
+;    For write access
+;
+
+
+; *  OTCfgBeginAreaModifications()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgBeginAreaModifications(CfgDatabaseRef dbRef, CfgAreaID readAreaID, CfgAreaID *writeAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgBeginAreaModifications
+	ENDIF
+
+; 
+;    OTCfgBeginAreaModifications()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID readAreaID            ID of area opened for reading
+;    Outputs:    CfgAreaID* writeAreaID          ID of area opened for modification
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Opens the specified area for writing. A new area id is provided.  This area id should be used to 
+;    enumerate, add, delete, read and write to the modified data. The original id can still be used to 
+;    access the original unmodified data. If the area doesn’t exist, kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgCommitAreaModifications()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgCommitAreaModifications(CfgDatabaseRef dbRef, CfgAreaID readAreaID, CfgAreaID writeAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgCommitAreaModifications
+	ENDIF
+
+; 
+;    OTCfgCommitAreaModifications()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID readAreaID            ID of area opened for reading
+;                CfgAreaID writeAreaID           ID of area opened for modification
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Closes an area opened for writing.  All modifications are committed and readers are informed that 
+;    the database changed state.  The readAreaID should be the ID of the original area passed to
+;    OTCfgBeginAreaModifications.  The writeAreaID should be the ID returned by OTCfgBeginAreaModifications.
+;    If either area doesn’t exist or there is a mismatch between readAreaID and writeAreaID,
+;    kCfgErrAreaNotFound is returned.
+;
+
+
+; *  OTCfgAbortAreaModifications()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgAbortAreaModifications(CfgDatabaseRef dbRef, CfgAreaID readAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgAbortAreaModifications
+	ENDIF
+
+; 
+;    OTCfgAbortAreaModifications()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID readAreaID            ID of area opened for reading
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Closes an area opened for writing, discarding any modification. The areaID should be the id of 
+;    the original area. If the area doesn’t exist or the wrong id is passed kCfgErrAreaNotFound is 
+;    returned.
+;
+
+; 
+;    Working with entities
+;
+;    Entities can be manipulated as soon as an area has been opened.  The same calls work both for 
+;    areas opened for reading or for modification. In the latter case, the calls can be used on the 
+;    original or new area id to access the original data or the modified data.
+;
+
+; 
+;    For everybody
+;    Count receives the actual number of entities
+;
+
+
+; *  OTCfgGetEntitiesCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetEntitiesCount(CfgDatabaseRef dbRef, CfgAreaID areaID, CfgEntityClass entityClass, CfgEntityType entityType, ItemCount *itemCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetEntitiesCount
+	ENDIF
+
+; 
+;    OTCfgGetEntitiesCount()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to count
+;                CfgEntityClass entityClass      Class of entities to count
+;                CfgEntityType entityType        Type of entities to count
+;    Outputs:    ItemCount* itemCount            Count of matching entities
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns the number of entities of the specified class and type in the specified area. To obtain 
+;    all entities regardless of their class or type pass kCfgClassAnyEntity or kCfgTypeAnyEntity. If 
+;    the area doesn’t exist, kCfgErrAreaNotFound is returned.
+;
+
+
+; 
+;    Count as input, is the number of entities to read;
+;    count as output, receives the actual number of entities or the number you specified. 
+;
+
+
+; *  OTCfgGetEntitiesList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetEntitiesList(CfgDatabaseRef dbRef, CfgAreaID areaID, CfgEntityClass entityClass, CfgEntityType entityType, ItemCount *itemCount, CfgEntityRef entityRef[], CfgEntityInfo entityInfo[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetEntitiesList
+	ENDIF
+
+; 
+;    OTCfgGetEntitiesList()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to list
+;                CfgEntityClass entityClass      Class of entities to list
+;                CfgEntityType entityType        Type of entities to list
+;                ItemCount* itemCount            Count of entities requested
+;                CfgEntityRef entityRef[]        Pointer to array of *itemCount entity refs
+;                CfgEntityInfo entityInfo[]      Pointer to array of *itemCount entity infos
+;    Outputs:    ItemCount* itemCount            Count of entities listed
+;                CfgEntityRef entityRef[]        Filled in array of *itemCount entity refs
+;                CfgEntityInfo entityInfo[]      Filled in array of *itemCount entity infos
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns the list of entities of the specified class and type in the specified area. To obtain all 
+;    entities regardless of their class or type pass kCfgClassAnyEntity or kCfgTypeAnyEntity. The 
+;    count parameter should have the value obtained by CfgGetEntitiesCount.  On exit count may be less 
+;    if some entities were deleted in the meantime. The id and info parameters should be arrays large 
+;    enough to hold count entries. If the area doesn’t exist, 
+;    kCfgErrAreaNotFound is returned.  The info array contains information about each entity, 
+;    including its class, type, name and the area of its icon:
+;
+;    struct CfgEntityInfo
+;    {
+;        CfgEntityClass      fClass;
+;        CfgEntityType       fType;
+;        ConstStr255Param    fName;
+;        CfgResourceLocator  fIcon;
+;    };
+;
+
+
+; *  OTCfgCreateEntity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgCreateEntity(CfgDatabaseRef dbRef, CfgAreaID areaID, const CfgEntityInfo *entityInfo, CfgEntityRef *entityRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgCreateEntity
+	ENDIF
+
+; 
+;    OTCfgCreateEntity()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgAreaID areaID                ID of area to contain entity
+;                CfgEntityInfo* entityInfo       Information that defines the entity
+;    Outputs:    CfgEntityRef* entityRef         Reference to entity created
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Creates a new entity with the specified class, type and name and returns an id for it. If the 
+;    area doesn’t exist, kCfgErrAreaNotFound is returned. If there is already 
+;    an entity with the same name kCfgErrEntityAlreadyExists is returned.
+;
+
+
+; *  OTCfgDeleteEntity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgDeleteEntity(CfgDatabaseRef dbRef, const CfgEntityRef *entityRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDeleteEntity
+	ENDIF
+
+; 
+;    OTCfgDeleteEntity()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityRef* entityRef         Reference to entity to delete
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Deletes the specified entity. If there is no entity with this id, kCfgEntityNotfoundErr is returned
+;
+
+
+; *  OTCfgDuplicateEntity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgDuplicateEntity(CfgDatabaseRef dbRef, const CfgEntityRef *entityRef, const CfgEntityRef *newEntityRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDuplicateEntity
+	ENDIF
+
+; 
+;    OTCfgDuplicateEntity()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityRef* entityRef         Reference to entity to duplicate
+;                CfgEntityRef* newEntityRef      Reference to destination entity
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Copies the contents of entityRef into newEntityRef. Both entities must exit.
+;    If either entity doesn’t exist kCfgErrEntityNotFound is returned.
+;
+
+
+; *  OTCfgSetEntityName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgSetEntityName(CfgDatabaseRef dbRef, const CfgEntityRef *entityRef, ConstStr255Param entityName, CfgEntityRef *newEntityRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgSetEntityName
+	ENDIF
+
+; 
+;    OTCfgSetEntityName()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityRef* entityRef         Reference to entity to rename
+;                ConstStr255Param entityName     New name for entity
+;    Outputs:    CfgEntityRef* newEntityRef      Reference to renamed entity
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Renames the specified entity. If the entity doesn’t exist kCfgEntityNotfoundErr is returned. If 
+;    there is already an entity with that name kCfgErrEntityAlreadyExists is returned.
+;
+
+
+; *  OTCfgGetEntityArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTCfgGetEntityArea(const CfgEntityRef *entityRef, CfgAreaID *areaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetEntityArea
+	ENDIF
+
+; 
+;    OTCfgGetEntityArea()
+;
+;    Inputs:     CfgEntityRef *entityRef         Reference to an entity
+;    Outputs:    CfgAreaID *areaID               ID of area that contains the entity
+;    Returns:    none
+;
+;    Returns the area ID associated with the specified entity reference.
+;
+
+
+; *  OTCfgGetEntityName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTCfgGetEntityName(const CfgEntityRef *entityRef, Str255 entityName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetEntityName
+	ENDIF
+
+; 
+;    OTCfgGetEntityName()
+;
+;    Inputs:     CfgEntityRef *entityRef         Reference to an entity
+;    Outputs:    Str255 entityName               Name of the entity
+;    Returns:    none
+;
+;    Returns the entity name associated with the specified entity reference.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgGetEntityLogicalName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetEntityLogicalName(CfgDatabaseRef dbRef, const CfgEntityRef *entityRef, Str255 entityName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetEntityLogicalName
+	ENDIF
+
+; 
+;    OTCfgGetEntityName()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityRef *entityRef         Reference to an entity
+;    Outputs:    Str255 entityName               Logical Name of the entity
+;    Returns:    none
+;
+;    Returns the logical name associated with the specified entity reference.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgChangeEntityArea()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTCfgChangeEntityArea(CfgEntityRef *entityRef, CfgAreaID newAreaID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgChangeEntityArea
+	ENDIF
+
+; 
+;    OTCfgChangeEntityArea()
+;
+;    Inputs:     CfgEntityRef *entityRef         Reference to an entity
+;                CfgAreaID newAreaID             ID of area to contain moved entity
+;    Outputs:    none
+;    Returns:    none
+;
+;    Changes the area ID associated with the specified entity reference.
+;
+
+;     -------------------------------------------------------------------------
+;    These API calls are for the protocol developers to compare the IDs.
+;    ------------------------------------------------------------------------- 
+
+;     -------------------------------------------------------------------------
+;    For OTCfgIsSameEntityRef
+;    ------------------------------------------------------------------------- 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kOTCfgIgnoreArea				EQU		1
+kOTCfgDontIgnoreArea			EQU		0
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgIsSameEntityRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTCfgIsSameEntityRef(const CfgEntityRef *entityRef1, const CfgEntityRef *entityRef2, Boolean ignoreArea)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgIsSameEntityRef
+	ENDIF
+
+; 
+;    OTCfgIsSameEntityRef()
+;
+;    Inputs:     CfgEntityRef* entityRef1        Reference to an entity
+;                CfgEntityRef* entityRef2        Reference to another entity
+;                Boolean ignoreArea              If true, ignore the area ID
+;    Outputs:    none
+;    Returns:    Boolean                         If true, entity references match
+;
+;    Compare two entity references. If ignoreArea is true, and the two entity names are the same, then return 
+;    true. If ignoreArea is false, then the area IDs must be the same, as well as the entity names 
+;    must be the same, then can return true.
+;
+
+
+; *  OTCfgIsSameAreaID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTCfgIsSameAreaID(CfgAreaID areaID1, CfgAreaID areaID2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgIsSameAreaID
+	ENDIF
+
+; 
+;    OTCfgIsSameAreaID()
+;
+;    Inputs:     CfgAreaID areaID1               ID of an area
+;                CfgAreaID areaID2               ID of another area
+;    Outputs:    none
+;    Returns:    Boolean                         If true, area IDs match
+;
+;    Compare two area IDs. Return true for matching area IDs, and return false for the different area IDs.
+;
+
+;     -------------------------------------------------------------------------
+;    Dealing with individual preferences
+;    ------------------------------------------------------------------------- 
+
+;     -------------------------------------------------------------------------
+;    Open Preferences
+;    if writer = true, GetPrefs and SetPrefs are allowed, else only GetPrefs is allowed.
+;    ------------------------------------------------------------------------- 
+
+
+; *  OTCfgOpenPrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgOpenPrefs(CfgDatabaseRef dbRef, const CfgEntityRef *entityRef, Boolean writer, CfgEntityAccessID *accessID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgOpenPrefs
+	ENDIF
+
+; 
+;    OTCfgOpenPrefs()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityRef* entityRef         Reference to an entity
+;                Boolean writer                  If true, open for write
+;    Outputs:    CfgEntityAccessID* accessID     ID for entity access
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Open the specified entity and return the CfgEntityAccessID for the following access of the 
+;    content of the entity. If writer is true, CfgGetPrefs and CfgSetPrefs are allowed, otherwise only 
+;    CfgGetPrefs is allowed.
+;
+
+
+; *  OTCfgClosePrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgClosePrefs(CfgEntityAccessID accessID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgClosePrefs
+	ENDIF
+
+; 
+;    OTCfgClosePrefs()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID for entity to close
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Close the entity with the specified CfgEntityAccessID.
+;
+
+;     -------------------------------------------------------------------------
+;    Get/Set Preferences
+;
+;    Accessing the content of an entity
+;
+;    These API calls are for the protocol developers. It supports multiple preferences per entity. Each 
+;    preference is identified by an OSType (typically called prefsType). The structure of the
+;    preference data is protocol stack dependent.
+;    ------------------------------------------------------------------------- 
+
+
+; *  OTCfgSetPrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgSetPrefs(CfgEntityAccessID accessID, OSType prefsType, const void *data, ByteCount length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgSetPrefs
+	ENDIF
+
+; 
+;    OTCfgSetPrefs()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;                OSType prefsType                Preference type to set
+;                void* data                      Address of data
+;                ByteCount length                Number of bytes of data
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Write the data to the specified preference, creating the preference if necessary.
+;    The preference is identified by the prefsType. If the entity is not opened for
+;    the writer, an error code is returned.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgDeletePrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgDeletePrefs(CfgEntityAccessID accessID, OSType prefsType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDeletePrefs
+	ENDIF
+
+; 
+;    OTCfgDeletePrefs()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;                OSType prefsType                Preference type to get
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Delete the specified preference. The preference is identified by the prefsType. 
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgGetPrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetPrefs(CfgEntityAccessID accessID, OSType prefsType, void *data, ByteCount length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetPrefs
+	ENDIF
+
+; 
+;    OTCfgGetPrefs()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;                OSType prefsType                Preference type to get
+;                void* data                      Address for data
+;                ByteCount length                Number of bytes of data requested
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Read the data from the specified preference to the passed buffer. The preference is identified by the 
+;    prefsType. If the passed buffer is too small, kCfgErrDataTruncated is returned, but will copy as 
+;    many data as possible to the buffer.
+;
+
+
+; *  OTCfgGetPrefsSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetPrefsSize(CfgEntityAccessID accessID, OSType prefsType, ByteCount *length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetPrefsSize
+	ENDIF
+
+; 
+;    OTCfgGetPrefsSize()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;                OSType prefsType                Preference type to get
+;                ByteCount length                Number of bytes of data available
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Returns the length, in bytes, of the specified preference. The preference is identified by the prefsType.
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgGetTemplate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.2 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetTemplate(CfgEntityClass entityClass, CfgEntityType entityType, OSType prefsType, void *data, ByteCount *dataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetTemplate
+	ENDIF
+
+; 
+;    OTCfgGetDefault()
+;
+;    Inputs:     OSType      entityClass         entityClass
+;                OSType      entityType          entityType
+;                OSType      prefsType           prefsType
+;                ByteCount*  dataSize            maximum length of buffer
+;    Outputs:    void*       data                template for the preference class/type/prefsType
+;                ByteCount*  dataSize            actual length of template
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    This routine returns the template for the specified preference class, type, and prefsType.
+;
+
+; 
+;    Due to a human error, OTCfgGetDefault was published with the entity type and class parameters reversed, 
+;    with respect to the other calls that take these same parameters.  Please, use OTCfgGetTemplate instead.  
+;
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgGetDefault()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Handle OTCfgGetDefault(OSType entityType, OSType entityClass, OSType prefsType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetDefault
+	ENDIF
+
+; 
+;    OTCfgGetDefault()
+;
+;    Inputs:     OSType  entityType              entityType
+;                OSType  entityClass             entityClass
+;                OSType  prefsType               prefsType
+;    Outputs:    none
+;    Returns:    Handle                          default preference for the preference type/class/prefsType
+;
+;    This routine returns the default preference value for the specified preference type, class, and prefsType.
+;
+
+;     -------------------------------------------------------------------------
+;    Get table of contents for prefs
+;    ------------------------------------------------------------------------- 
+
+
+; *  OTCfgGetPrefsTOCCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetPrefsTOCCount(CfgEntityAccessID accessID, ItemCount *itemCount)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetPrefsTOCCount
+	ENDIF
+
+; 
+;    OTCfgGetPrefsTOCCount()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;    Outputs:    ItemCount* itemCount            Number of entries available
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Get the count of all the preference in the entity.
+;
+
+
+; *  OTCfgGetPrefsTOC()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgGetPrefsTOC(CfgEntityAccessID accessID, ItemCount *itemCount, CfgPrefsHeader prefsTOC[])
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgGetPrefsTOC
+	ENDIF
+
+; 
+;    OTCfgGetPrefsTOC()
+;
+;    Inputs:     CfgEntityAccessID* accessID     ID of entity to access
+;                ItemCount* itemCount            Number of entries requested
+;                CfgPrefsHeader prefsTOC[]       Pointer to array of *itemCount pref headers
+;    Outputs:    ItemCount* itemCount            Number of entries returned
+;                CfgPrefsHeader prefsTOC[]       Filled in array of *itemCount pref headers
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Get the list of all the preference in the entity. Return the number of preferences in the count. 
+;    prefsTOC has to be big enough to hold information about all the preference.
+;
+;    Current versions of Network Setup don’t read the input value of itemCount to ensure
+;    that the returned preference information doesn't write off the end of the prefsTOC array.
+;    This is too be fixed in a future version.  The upshot is that:
+;    
+;     a) always call OTCfgGetPrefsTOCCount before calling this routine and then allocate
+;        an appropriate sized array to pass to prefsTOC
+;     b) before calling this routine, always set up itemCount to the size of the prefsTOC
+;        array so that your code will run on future systems
+;
+
+;     -------------------------------------------------------------------------
+;    Database Change Notification
+;    ------------------------------------------------------------------------- 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+OTCfgNotifierEntry		RECORD 0
+dbRef					 ds.l	1				; offset: $0 (0)
+theClass				 ds.l	1				; offset: $4 (4)
+theType					 ds.l	1				; offset: $8 (8)
+notifier				 ds.l	1				; offset: $C (12)
+contextPtr				 ds.l	1				; offset: $10 (16)
+theArea					 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgInstallNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgInstallNotifier(CfgDatabaseRef dbRef, CfgEntityClass theClass, CfgEntityType theType, OTCfgNotifyProcPtr notifier, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgInstallNotifier
+	ENDIF
+
+; 
+;    OTCfgInstallNotifier()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityClass theClass         receives notifications about changes to this class
+;                CfgEntityType theType           receives notifications about changes to this type
+;                OTCfgNotifyProcPtr notifier     address of callback routine
+;                void* contextPtr                refCon for callback routine
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Installs a notifier that Network Setup will call when interesting things happen.
+;
+;    Requires Network Setup 1.1 or higher.
+;
+
+
+; *  OTCfgRemoveNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCfgRemoveNotifier(CfgDatabaseRef dbRef, CfgEntityClass theClass, CfgEntityType theType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgRemoveNotifier
+	ENDIF
+
+; 
+;    OTCfgRemoveNotifier()
+;
+;    Inputs:     CfgDatabaseRef dbRef            Reference to opened database
+;                CfgEntityClass theClass         remove notifier for this class
+;                CfgEntityType theType           remove notifier for this type
+;    Outputs:    none
+;    Returns:    OSStatus                        *** list errors ***
+;
+;    Removes a notifier previously installed with OTCfgRemoveNotifier.
+;
+;    Requires Network Setup 1.1 or higher.
+;
+
+;  Constants for the code parameter of the notifier installed by OTCfgInstallNotifier.
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kOTCfgDatabaseChanged			EQU		$10000000			; result will be kCfgErrDatabaseChanged, cookie is meaningless
+;     -------------------------------------------------------------------------
+;    Remote Access Preference Utilities
+;    ------------------------------------------------------------------------- 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCfgEncrypt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal SInt16 OTCfgEncrypt(UInt8 *key, UInt8 *data, SInt16 dataLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgEncrypt
+	ENDIF
+
+; 
+;    OTCfgEncrypt()
+;
+;    Inputs:     UInt8 *key                      encryption key ( user name )
+;                UInt8 *data                     data to encrypt ( password )
+;                SInt16 dataLen                  length of data to encrypt
+;    Outputs:    UInt8 *data                     encrypted data
+;    Returns:    SInt16                          length of encrypted data
+;
+;    Encrypt the password, using the user name as the encryption key.  Return the encrypted password and its length.  
+;    
+;    Requires Network Setup 1.1 or higher.
+;
+
+
+; *  OTCfgDecrypt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in CfgOpenTpt 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal SInt16 OTCfgDecrypt(UInt8 *key, UInt8 *data, SInt16 dataLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCfgDecrypt
+	ENDIF
+
+; 
+;    OTCfgDecrypt()
+;
+;    Inputs:     UInt8 *key                      encryption key ( user name )
+;                UInt8 *data                     data to decrypt ( password )
+;                SInt16 dataLen                  length of data to decrypt
+;    Outputs:    UInt8 *data                     decrypted data
+;    Returns:    SInt16                          length of decrypted data
+;
+;    Decrypt the password, using the user name as the encryption key.  Return the decrypted password and its length.  
+;
+;    Requires Network Setup 1.1 or higher.
+;
+
+
+;     -------------------------------------------------------------------------
+;    CfgEntityClass / CfgEntityType
+;
+;    The database can distinguish between several classes of objects and 
+;    several types withing each class
+;    Use of different classes allow to store type of information in the same database
+;
+;    Other entity classes and types can be defined by developers.
+;    they should be unique and registered with Developer Tech Support (DTS)
+;    ------------------------------------------------------------------------- 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kOTCfgClassNetworkConnection	EQU		'otnc'
+kOTCfgClassGlobalSettings		EQU		'otgl'
+kOTCfgClassServer				EQU		'otsv'
+kOTCfgTypeGeneric				EQU		'otan'
+kOTCfgTypeAppleTalk				EQU		'atlk'
+kOTCfgTypeTCPv4					EQU		'tcp4'
+kOTCfgTypeTCPv6					EQU		'tcp6'
+kOTCfgTypeDNS					EQU		'dns '
+kOTCfgTypeRemote				EQU		'ara '
+kOTCfgTypeDial					EQU		'dial'
+kOTCfgTypeModem					EQU		'modm'
+kOTCfgTypeInfrared				EQU		'infr'
+kOTCfgClassSetOfSettings		EQU		'otsc'
+kOTCfgTypeSetOfSettings			EQU		'otst'
+;     *****************************************************
+;    *************** Preference Structures ***************
+;    *****************************************************
+;
+
+
+;   ------------------ Network Setup ------------------ 
+
+
+
+kOTCfgSetsStructPref			EQU		'stru'				; CfgSetsStruct
+kOTCfgSetsElementPref			EQU		'elem'				; CfgSetsElement
+kOTCfgSetsVectorPref			EQU		'vect'				; CfgSetsVector
+
+;   Bits and masks for the fFlags field of CfgSetsStruct.
+;   Second line.
+
+
+
+kOTCfgSetsFlagActiveBit			EQU		0
+
+kOTCfgSetsFlagActiveMask		EQU		$0001
+
+;  Indexes for the fTimes field of CfgSetsStruct.
+
+kOTCfgIndexSetsActive			EQU		0
+kOTCfgIndexSetsEdit				EQU		1
+kOTCfgIndexSetsLimit			EQU		2					;    last value, no comma
+CfgSetsStruct			RECORD 0
+fFlags					 ds.l	1				; offset: $0 (0)
+fTimes					 ds.l	2				; offset: $4 (4)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+CfgSetsElement			RECORD 0
+fEntityRef				 ds		CfgEntityRef	; offset: $0 (0)
+fEntityInfo				 ds		CfgEntityInfo	; offset: $108 (264)
+sizeof					 EQU *					; size:   $258 (600)
+						ENDR
+CfgSetsVector			RECORD 0
+fCount					 ds.l	1				; offset: $0 (0)
+fElements				 ds		CfgSetsElement ; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $25C (604)
+						ENDR
+
+
+
+kOTCfgFlagRecordVersion			EQU		$01200120
+kOTCfgProtocolActive			EQU		$01
+kOTCfgProtocolMultihoming		EQU		$00010000
+kOTCfgProtocolLimit				EQU		$00010001
+OTCfgFlagRecord			RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)
+fFlags					 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+;   ------------------ Common ------------------    
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgUserVisibleNamePref		EQU		'pnam'				; Pascal string
+kOTCfgVersionPref				EQU		'cvrs'				; UInt16, values should be 1
+kOTCfgPortUserVisibleNamePref	EQU		'port'				; Pascal string
+kOTCfgPortUIName				EQU		'otgn'				; Pascal String
+kOTCfgProtocolUserVisibleNamePref EQU	'prot'				; C string (TCP/IP = "tcp", AppleTalk = "ddp", n/a for others)
+kOTCfgAdminPasswordPref			EQU		'pwrd'				; not to be documented
+kOTCfgProtocolOptionsPref		EQU		'opts'				; UInt32, protocol specific flags
+
+;  Global preference types
+
+
+kOTCfgUserModePref				EQU		'ulvl'				; OTCfgUserMode, TCP/IP and AppleTalk only
+kOTCfgPrefWindowPositionPref	EQU		'wpos'				; Point, global coordinates, TCP/IP, AppleTalk, Infrared only
+
+;  Per-connection backward compatibility preference types
+
+
+kOTCfgCompatNamePref			EQU		'cnam'
+kOTCfgCompatResourceNamePref	EQU		'resn'
+
+;  Global backward compatibility preference types
+
+
+kOTCfgCompatSelectedPref		EQU		'ccfg'
+kOTCfgCompatResourceIDPref		EQU		'resi'
+
+
+;   For most control panels that support a concept of "user mode",
+;   the OTCfgUserMode preference holds (or is used as a field in 
+;   another preference to hold) the current user mode.
+
+
+
+; typedef UInt16						OTCfgUserMode
+kOTCfgBasicUserMode				EQU		1
+kOTCfgAdvancedUserMode			EQU		2
+kOTCfgAdminUserMode				EQU		3					; admin mode is never valid in a preference, here for completeness only
+
+
+
+;   The exceptions (and there has to be exceptions, right) are Remote
+;   Access and Modem, where the user mode is always stored as a UInt32
+;   instead of a UInt16.  The constant values from OTCfgUserMode apply though.
+
+
+; typedef UInt32 						OTCfgUserMode32
+
+
+
+;   ------------------ AppleTalk ------------------ 
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgATalkGeneralPref			EQU		'atpf'				; OTCfgATalkGeneral
+kOTCfgATalkLocksPref			EQU		'lcks'				; OTCfgATalkLocks
+kOTCfgATalkPortDeviceTypePref	EQU		'ptfm'				; OTCfgATalkPortDeviceType
+
+;  Global preference types
+
+
+kOTCfgATalkNetworkArchitecturePref EQU	'neta'				; OTCfgATalkNetworkArchitecture
+
+
+;   OTCfgATalkGeneralAARP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the AppleTalk Address Resolution Protocol
+;   (AARP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralAARP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralAARP)
+fAgingCount				 ds.l	1				; offset: $4 (4)		;  default of 8
+fAgingInterval			 ds.l	1				; offset: $8 (8)		;  ms, default of 10000
+fProtAddrLen			 ds.l	1				; offset: $C (12)		;  bytes, must be 4, ignored by current versions of OT
+fHWAddrLen				 ds.l	1				; offset: $10 (16)		;  bytes, must be 6, ignored by current versions of OT
+fMaxEntries				 ds.l	1				; offset: $14 (20)		;  default of 100
+fProbeInterval			 ds.l	1				; offset: $18 (24)		;  ms, default of 200
+fProbeRetryCount		 ds.l	1				; offset: $1C (28)		;  default of 10
+fRequestInterval		 ds.l	1				; offset: $20 (32)		;  ms, default of 200
+fRequestRetryCount		 ds.l	1				; offset: $24 (36)		;  default of 8
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+
+
+
+;   OTCfgATalkUnloadOptions controls whether AppleTalk is active or not.
+;   The various constants deserve some explanation.  The original definition
+;   of this field was as an inactivity timeout (in minutes), similar to that
+;   implemented by TCP/IP in current versions of OT.  However, before OT 1.0
+;   shipped Apple realised that loading and unloading AppleTalk on demand
+;   was not possible, so this was redefined as a flag, with zero meaning
+;   inactive and not-zero meaning active.  However, the default preferences
+;   were not updated to reflect this change.  So, it is possible to see
+;   the values defined below stored in this field.
+;   When reading, you should treat zero as inactive, and all non-zero values
+;   as active.  When writing, you should write either kOTCfgATalkInactive
+;   or kOTCfgATalkActive, never kOTCfgATalkDefaultUnloadTimeout.
+
+
+
+; typedef UInt8							OTCfgATalkUnloadOptions
+kOTCfgATalkInactive				EQU		0
+kOTCfgATalkDefaultUnloadTimeout	EQU		5
+kOTCfgATalkActive				EQU		$FF
+
+
+
+
+;   OTCfgATalkGeneralDDP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the Datagram Deliver Protocol
+;   (DDP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralDDP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralDDP)
+fTSDUSize				 ds.l	1				; offset: $4 (4)		;  must be 586
+fLoadType				 ds.b	1				; offset: $8 (8)		;  whether AppleTalk is active, see the discussion above
+fNode					 ds.b	1				; offset: $9 (9)		;  last acquired node number, or fixed node to use
+fNetwork				 ds.w	1				; offset: $A (10)		;  last acquired network, or fixed network to use
+fRTMPRequestLimit		 ds.w	1				; offset: $C (12)		;  must be 3, ignored by current versions of OT
+fRTMPRequestInterval	 ds.w	1				; offset: $E (14)		;  ms, must be 200, ignored by current versions of OT
+fAddressGenLimit		 ds.l	1				; offset: $10 (16)		;  default of 250
+fBRCAgingInterval		 ds.l	1				; offset: $14 (20)		;  ms, must be 40000, BRC = best routing cache, ignored by current versions of OT
+fRTMPAgingInterval		 ds.l	1				; offset: $18 (24)		;  ms, must be 50000, ignored by current versions of OT
+fMaxAddrTries			 ds.l	1				; offset: $1C (28)		;  default of 4096
+fDefaultChecksum		 ds.b	1				; offset: $20 (32)		;  default of false, does DDP checksum by default
+fIsFixedNode			 ds.b	1				; offset: $21 (33)		;  default of false, using fixed net/node
+fMyZone					 ds.b	33				; offset: $22 (34)		;  last acquired zone
+						 ORG 68
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralNBP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the Name Binding Protocol 
+;   (NBP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralNBP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralNBP)
+fTSDUSize				 ds.l	1				; offset: $4 (4)		;  default of 584
+fDefaultRetryInterval	 ds.l	1				; offset: $8 (8)		;  ms, default of 800
+fDefaultRetryCount		 ds.l	1				; offset: $C (12)		;  default of 3
+fCaseSensitiveCompare	 ds.b	1				; offset: $10 (16)		;  default of false
+fPad					 ds.b	1				; offset: $11 (17)		;  must be 0
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralZIP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the Zone Information Protocol
+;   (ZIP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralZIP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralZIP)
+fGetZoneInterval		 ds.l	1				; offset: $4 (4)		;  ms, default of 2000
+fZoneListInterval		 ds.l	1				; offset: $8 (8)		;  ms, defalut of 2000
+fDDPInfoTimeout			 ds.w	1				; offset: $C (12)		;  ms, default of 4000;
+fGetZoneRetries			 ds.b	1				; offset: $E (14)		;  default of 4
+fZoneListRetries		 ds.b	1				; offset: $F (15)		;  default of 4
+fChecksumFlag			 ds.b	1				; offset: $10 (16)		;  default of 0
+fPad					 ds.b	1				; offset: $11 (17)		;  must be 0
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralATP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the AppleTalk Transaction Protocol
+;   (ATP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralATP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralATP)
+fTSDUSize				 ds.l	1				; offset: $4 (4)		;  default of 578
+fDefaultRetryInterval	 ds.l	1				; offset: $8 (8)		;  ms, default of 2000
+fDefaultRetryCount		 ds.l	1				; offset: $C (12)		;  default of 8
+fDefaultReleaseTimer	 ds.b	1				; offset: $10 (16)		;  default of 0, same format as ATP_OPT_RELTIMER option
+fDefaultALOSetting		 ds.b	1				; offset: $11 (17)		;  default of false
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralADSP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the AppleTalk Data Stream Protocol
+;   (ADSP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralADSP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralADSP)
+fDefaultSendBlocking	 ds.l	1				; offset: $4 (4)		;  bytes, default of 16
+fTSDUSize				 ds.l	1				; offset: $8 (8)		;  default of 572
+fETSDUSize				 ds.l	1				; offset: $C (12)		;  default of 572
+fDefaultOpenInterval	 ds.l	1				; offset: $10 (16)		;  ms, default of 3000
+fDefaultProbeInterval	 ds.l	1				; offset: $14 (20)		;  ms, default of 30000
+fMinRoundTripTime		 ds.l	1				; offset: $18 (24)		;  ms, default of 100
+fDefaultSendInterval	 ds.l	1				; offset: $1C (28)		;  ms, default of 100
+fDefaultRecvWindow		 ds.l	1				; offset: $20 (32)		;  bytes, must be 27648, ignored by current versions of OT
+fDefaultOpenRetries		 ds.b	1				; offset: $24 (36)		;  default of 3
+fDefaultBadSeqMax		 ds.b	1				; offset: $25 (37)		;  default of 3
+fDefaultProbeRetries	 ds.b	1				; offset: $26 (38)		;  default of 4
+fMaxConsecutiveDataPackets  ds.b 1				; offset: $27 (39)		;  default of 48
+fDefaultChecksum		 ds.b	1				; offset: $28 (40)		;  default of false
+fDefaultEOM				 ds.b	1				; offset: $29 (41)		;  default of false
+sizeof					 EQU *					; size:   $2A (42)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralPAP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the Printer Access Protocol
+;   (PAP) component of the AppleTalk protocol stack.
+
+
+OTCfgATalkGeneralPAP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralPAP)
+fDefaultOpenInterval	 ds.l	1				; offset: $4 (4)		;  ms, default of 2000
+fDefaultTickleInterval	 ds.l	1				; offset: $8 (8)		;  ms, default of 15000
+fDefaultOpenRetries		 ds.b	1				; offset: $C (12)		;  default of 0
+fDefaultTickleRetries	 ds.b	1				; offset: $D (13)		;  default of 8
+fDefaultReplies			 ds.b	1				; offset: $E (14)		;  must be 8, ignored by current versions of OT
+fDefaultPAPEOMEnabled	 ds.b	1				; offset: $F (15)		;  default of false
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+
+;   OTCfgATalkGeneralASP is a sub-structure of OTCfgATalkGeneral.
+;   It defines parameters for the AppleTalk Session Protocol
+;   (ASP) component of the AppleTalk protocol stack.
+;   IMPORTANT:  Open Transport does not currently include a native
+;   ASP implemention, and the classic AppleTalk ASP implementation
+;   does not heed these preferences.
+
+
+OTCfgATalkGeneralASP	RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 1
+fSize					 ds.w	1				; offset: $2 (2)		;  must be sizeof(OTCfgATalkGeneralASP)
+fDefaultTickleInterval	 ds.l	1				; offset: $4 (4)		;  ms, must be 30000, ignored by current versions of OT
+fDefaultTickleRetries	 ds.b	1				; offset: $8 (8)		;  must be 8, ignored by current versions of OT
+fDefaultReplies			 ds.b	1				; offset: $9 (9)		;  must be 8, ignored by current versions of OT
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+
+
+
+;   The OTCfgATalkGeneral structure is a conglomeration of the above structures
+;   and is used to access the kOTCfgATalkGeneralPref preference.
+
+
+OTCfgATalkGeneral		RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)		;  must be 0
+fNumPrefs				 ds.w	1				; offset: $2 (2)		;  must be 0
+fPort					 ds.l	1				; offset: $4 (4)		;  a reference to the port over which this configuration is running
+fLink					 ds.l	1				; offset: $8 (8)		;  run-time use only, must be nil
+fPrefs					 ds.l	8				; offset: $C (12)		;  run-time use only, initialise to nil
+aarpPrefs				 ds		OTCfgATalkGeneralAARP ; offset: $2C (44)
+ddpPrefs				 ds		OTCfgATalkGeneralDDP ; offset: $54 (84)
+nbpPrefs				 ds		OTCfgATalkGeneralNBP ; offset: $98 (152)
+zipPrefs				 ds		OTCfgATalkGeneralZIP ; offset: $AA (170)
+atpPrefs				 ds		OTCfgATalkGeneralATP ; offset: $BC (188)
+adspPrefs				 ds		OTCfgATalkGeneralADSP ; offset: $CE (206)
+papPrefs				 ds		OTCfgATalkGeneralPAP ; offset: $F8 (248)
+aspPrefs				 ds		OTCfgATalkGeneralASP ; offset: $108 (264)
+sizeof					 EQU *					; size:   $112 (274)
+						ENDR
+
+
+
+;   OTCfgATalkLocks determines which preferences have been
+;   locked by the administrator mode of the control panel.
+
+
+OTCfgATalkLocks			RECORD 0
+fLocks					 ds.w	1				; offset: $0 (0)		;  a bit field, see the definitions below
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+
+
+kOTCfgATalkPortLockMask			EQU		$01
+kOTCfgATalkZoneLockMask			EQU		$02
+kOTCfgATalkAddressLockMask		EQU		$04
+kOTCfgATalkConnectionLockMask	EQU		$08
+kOTCfgATalkSharingLockMask		EQU		$10
+
+
+
+
+;   OTCfgATalkPortDeviceType holds either the OT device type (eg kOTEthernetDevice)
+;   or an ADEV ID for the current port.  It is not used by the AppleTalk
+;   protocol stack, but it is used by the AppleTalk control panel.
+
+
+OTCfgATalkPortDeviceType RECORD 0
+fDeviceType				 ds.w	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+
+
+
+;   OTCfgATalkNetworkArchitecture is a vestigial remnent of the
+;   "Network Software Selector" in System 7.5.3 through 7.5.5.
+
+
+OTCfgATalkNetworkArchitecture RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  must be 0
+fNetworkArchitecture	 ds.l	1				; offset: $4 (4)		;  must be 'OTOn'
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Masks for the kOTCfgProtocolOptionsPref preference.
+
+
+kOTCfgATalkNoBadRouterUpNotification EQU $01
+kOTCfgATalkNoAllNodesTakenNotification EQU $02
+kOTCfgATalkNoFixedNodeTakenNotification EQU $04
+kOTCfgATalkNoInternetAvailableNotification EQU $08
+kOTCfgATalkNoCableRangeChangeNotification EQU $10
+kOTCfgATalkNoRouterDownNotification EQU	$20
+kOTCfgATalkNoRouterUpNotification EQU	$40
+kOTCfgATalkNoFixedNodeBadNotification EQU $80
+
+
+
+;   ------------------ Infrared ------------------  
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgIRGeneralPref				EQU		'atpf'				; OTCfgIRGeneral
+
+; typedef UInt16						OTCfgIRPortSetting
+kOTCfgIRIrDA					EQU		0
+kOTCfgIRIRTalk					EQU		1
+OTCfgIRGeneral			RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  must be 0
+fPortRef				 ds.l	1				; offset: $4 (4)		;  reference to IR port
+fPortSetting			 ds.w	1				; offset: $8 (8)		;  IrDA or IRTalk, use constants defined above
+fNotifyOnDisconnect		 ds.b	1				; offset: $A (10)
+fDisplayIRControlStrip	 ds.b	1				; offset: $B (11)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+;   ------------------ TCP/IP (v4) ------------------   
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgTCPInterfacesPref			EQU		'iitf'				; OTCfgTCPInterfaces (packed)
+kOTCfgTCPDeviceTypePref			EQU		'dtyp'				; UInt16 (device type)
+kOTCfgTCPRoutersListPref		EQU		'irte'				; OTCfgTCPRoutersList
+kOTCfgTCPSearchListPref			EQU		'ihst'				; OTCfgTCPSearchList (packed)
+kOTCfgTCPDNSServersListPref		EQU		'idns'				; OTCfgTCPDNSServersList
+kOTCfgTCPSearchDomainsPref		EQU		'isdm'				; OTCfgTCPSearchDomains
+kOTCfgTCPDHCPLeaseInfoPref		EQU		'dclt'				; OTCfgTCPDHCPLeaseInfo
+kOTCfgTCPDHCPClientIDPref		EQU		'dcid'				; DHCP client ID, Pascal string
+kOTCfgTCPUnloadAttrPref			EQU		'unld'				; OTCfgTCPUnloadAttr
+kOTCfgTCPLocksPref				EQU		'stng'				; OTCfgTCPLocks
+kOTCfgTCPPushBelowIPPref		EQU		'crpt'				; single module to push below IP, Pascal string
+kOTCfgTCPPushBelowIPListPref	EQU		'blip'				; list of modules to push below IP (Mac OS 9.0 and higher), 'STR#' format
+
+
+;   OTCfgTCPConfigMethod is used as a field of OTCfgTCPInterfacesUnpacked
+;   to denote how TCP/IP should acquire an address.
+
+
+
+; typedef UInt8							OTCfgTCPConfigMethod
+kOTCfgManualConfig				EQU		0
+kOTCfgRARPConfig				EQU		1
+kOTCfgBOOTPConfig				EQU		2
+kOTCfgDHCPConfig				EQU		3
+kOTCfgMacIPConfig				EQU		4
+
+
+;   The OTCfgTCPInterfacesPacked structure holds information
+;   about the TCP/IP interfaces configured on the computer.
+;   IMPORTANT: You must pack this structure when writing it to the
+;   database and unpack it when reading it from the database.
+;    The OTCfgTCPInterfacesPacked structure is a complex case, consisting of 
+;    a fixed size structure, appended after a variable length string.
+
+
+OTCfgTCPInterfacesPackedPart RECORD 0
+path					 ds.b	36				; offset: $0 (0)
+module					 ds.b	32				; offset: $24 (36)
+framing					 ds.l	1				; offset: $44 (68)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+
+;    This structure also contains an IP address and subnet mask that are not aligned on a four byte boundary.  
+;    In order to avoid compiler warnings, and the possibility of code that won't work, 
+;    these fields are defined here as four character arrays.  
+;    It is suggested that BlockMoveData be used to copy to and from a field of type InetHost.  
+
+
+OTCfgTCPInterfacesPacked RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fConfigMethod			 ds.b	1				; offset: $2 (2)
+fIPAddress				 ds.b	4				; offset: $3 (3)
+fSubnetMask				 ds.b	4				; offset: $7 (7)
+fAppleTalkZone			 ds.b	256				; offset: $B (11)
+part					 ds.b	72				; offset: $10B (267)
+						 ORG 340
+sizeof					 EQU *					; size:   $154 (340)
+						ENDR
+
+;   The OTCfgTCPInterfacesUnpacked structure holds information
+;   about the TCP/IP interfaces configured on the computer.
+;   IMPORTANT: You must pack this structure when writing it to the
+;   database and unpack it when reading it from the database.
+
+
+OTCfgTCPInterfacesUnpacked RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)		;  always 1 in current versions of OT
+pad1					 ds.b	1				; offset: $2 (2)		;  remove this pad byte when packing
+fConfigMethod			 ds.b	1				; offset: $3 (3)
+fIPAddress				 ds.l	1				; offset: $4 (4)
+fSubnetMask				 ds.l	1				; offset: $8 (8)
+fAppleTalkZone			 ds.b	33				; offset: $C (12)		;  remove bytes beyond end of string when packing
+pad2					 ds.b	1				; offset: $2D (45)		;  remove this pad byte when packing
+path					 ds.b	36				; offset: $2E (46)
+module					 ds.b	32				; offset: $52 (82)
+framing					 ds.l	1				; offset: $72 (114)
+sizeof					 EQU *					; size:   $76 (118)
+						ENDR
+
+
+
+;   The OTCfgTCPRoutersListEntry structure is an array element
+;   in the OTCfgTCPRoutersList preference.
+
+
+OTCfgTCPRoutersListEntry RECORD 0
+fToHost					 ds.l	1				; offset: $0 (0)		;     must be 0
+fViaHost				 ds.l	1				; offset: $4 (4)		;     router address
+fLocal					 ds.w	1				; offset: $8 (8)		;     must be 0
+fHost					 ds.w	1				; offset: $A (10)		;     must be 0
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+
+;   The OTCfgTCPRoutersList preferences is used to hold the
+;   configured list of routers.
+
+
+OTCfgTCPRoutersList		RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fList					 ds		OTCfgTCPRoutersListEntry ; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+;   The OTCfgTCPSearchList preference holds some basic information
+;   about the DNS configuration.
+;   IMPORTANT: You must pack this structure when writing it to the
+;   database and unpack it when reading it from the database.
+
+
+OTCfgTCPSearchList		RECORD 0
+fPrimaryInterfaceIndex	 ds.b	1				; offset: $0 (0)		;  always 1 in current versions of OT
+pad0					 ds.b	1				; offset: $1 (1)		;  required by Interfacer
+fLocalDomainName		 ds		Str255			; offset: $2 (2)		;  in the file, these strings are packed
+fAdmindomain			 ds		Str255			; offset: $102 (258)
+sizeof					 EQU *					; size:   $202 (514)
+						ENDR
+
+
+
+;   The OTCfgTCPDNSServersList preference holds the configured
+;   list of name servers.
+
+
+OTCfgTCPDNSServersList	RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fAddressesList			 ds.l	1				; offset: $2 (2) <-- really an array of length one
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+
+
+;   The OTCfgTCPSearchDomains preference holds the configured
+;   list additional search domains.
+;   IMPORTANT: This preference is actually stored in string list
+;   format, ie the same format as a 'STR#' resource.
+
+
+OTCfgTCPSearchDomains	RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fFirstSearchDomains		 ds		Str255			; offset: $2 (2)		;  subsequent search domains are packed after this one
+sizeof					 EQU *					; size:   $102 (258)
+						ENDR
+
+
+
+;   The OTCfgTCPDHCPLeaseInfo preference holds information about
+;   the DHCP lease.
+
+
+OTCfgTCPDHCPLeaseInfo	RECORD 0
+ipIPAddr				 ds.l	1				; offset: $0 (0)
+ipConfigServer			 ds.l	1				; offset: $4 (4)
+ipLeaseGrantTime		 ds.l	1				; offset: $8 (8)
+ipLeaseExpirationTime	 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+
+;   The OTCfgTCPUnloadAttr preference determines whether TCP/IP is
+;   active or inactive and, if active, whether it will
+;   unload after 2 minutes of inactivity.
+
+
+
+; typedef UInt16						OTCfgTCPUnloadAttr
+kOTCfgTCPActiveLoadedOnDemand	EQU		1
+kOTCfgTCPActiveAlwaysLoaded		EQU		2
+kOTCfgTCPInactive				EQU		3
+
+
+
+
+;   OTCfgTCPLocks determines which preferences have been
+;   locked by the administrator mode of the control panel.
+;   
+;   IMPORTANT: This structure has an odd size.  See notes below.
+
+
+OTCfgTCPLocks			RECORD 0
+pad1					 ds.b	1				; offset: $0 (0)		;  Set this and all other pad fields to 0.
+lockConnectViaPopup		 ds.b	1				; offset: $1 (1)
+pad2					 ds.b	1				; offset: $2 (2)
+lockConfigurePopup		 ds.b	1				; offset: $3 (3)
+pad3					 ds.b	1				; offset: $4 (4)
+lockAppleTalkZone		 ds.b	1				; offset: $5 (5)
+pad4					 ds.b	1				; offset: $6 (6)
+lockIPAddress			 ds.b	1				; offset: $7 (7)
+pad5					 ds.b	1				; offset: $8 (8)
+lockLocalDomainName		 ds.b	1				; offset: $9 (9)
+pad6					 ds.b	1				; offset: $A (10)
+lockSubnetMask			 ds.b	1				; offset: $B (11)
+pad7					 ds.b	1				; offset: $C (12)
+lockRoutersList			 ds.b	1				; offset: $D (13)
+pad8					 ds.b	1				; offset: $E (14)
+lockDNSServersList		 ds.b	1				; offset: $F (15)
+pad9					 ds.b	1				; offset: $10 (16)
+lockAdminDomainName		 ds.b	1				; offset: $11 (17)
+pad10					 ds.b	1				; offset: $12 (18)
+lockSearchDomains		 ds.b	1				; offset: $13 (19)
+pad11					 ds.b	1				; offset: $14 (20)
+lockUnknown				 ds.b	1				; offset: $15 (21)
+pad12					 ds.b	1				; offset: $16 (22)
+lock8023				 ds.b	1				; offset: $17 (23)
+pad13					 ds.b	1				; offset: $18 (24)
+lockDHCPClientID		 ds.b	1				; offset: $19 (25)		;  this field added in OT 2.0
+pad14					 ds.b	1				; offset: $1A (26)		;  this field added in OT 2.0
+						 ORG 28
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+;   The OTCfgTCPLocks preference has an odd size, either 25 or
+;   27 bytes depending on the verson on OT.  It is impossible
+;   to represent an odd size structure in 68K aligned C structures,
+;   because the compiler always pads structures to an even size.
+;   So, when reading and writing this preference you should use one
+;   of the constants defined below.
+
+
+
+kOTCfgTCPLocksPrefPre2_0Size	EQU		25
+kOTCfgTCPLocksPref2_0Size		EQU		27
+kOTCfgTCPLocksPrefCurrentSize	EQU		27
+
+;  Masks for the kOTCfgProtocolOptionsPref preference.
+
+
+kOTCfgDontDoPMTUDiscoveryMask	EQU		$0001				; Turns off Path MTU Discovery
+kOTCfgDontShutDownOnARPCollisionMask EQU $0002				; To be able to Disable ARP Collision ShutDown 
+kOTCfgDHCPInformMask			EQU		$0004				; Enables DHCPINFORM instead of DHCPREQUEST
+kOTCfgOversizeOffNetPacketsMask	EQU		$0008				; With PMTU off, don't limit off-net packet to 576 bytes
+kOTCfgDHCPDontPreserveLeaseMask	EQU		$0010				; Turns off DHCP INIT-REBOOT capability.
+
+
+;   ------------------ DNS ------------------   
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgTypeDNSidns				EQU		'idns'
+kOTCfgTypeDNSisdm				EQU		'isdm'
+kOTCfgTypeDNSihst				EQU		'ihst'
+kOTCfgTypeDNSstng				EQU		'stng'
+
+
+;   ------------------ Modem ------------------ 
+
+
+
+;  Per-connection preference types
+
+
+kOTCfgModemGeneralPrefs			EQU		'ccl '				; OTCfgModemGeneral
+kOTCfgModemLocksPref			EQU		'lkmd'				; OTCfgModemLocks
+kOTCfgModemAdminPasswordPref	EQU		'mdpw'				; not to be documented
+
+;  Global preference types
+
+
+kOTCfgModemApplicationPref		EQU		'mapt'				; OTCfgModemApplication
+
+
+;   OTCfgModemDialogToneMode specifies the handling of the dial
+;   tone within a OTCfgModemGeneral preference.
+
+
+
+; typedef UInt32						OTCfgModemDialogToneMode
+kOTCfgModemDialToneNormal		EQU		0
+kOTCfgModemDialToneIgnore		EQU		1
+kOTCfgModemDialToneManual		EQU		2
+
+
+
+
+;   The OTCfgModemGeneral preference holds the important
+;   per-connection preferences for Modem.
+
+
+OTCfgModemGeneral		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, below
+useModemScript			 ds.b	1				; offset: $4 (4)		;  whether to use a modem script, must be true
+pad						 ds.b	1				; offset: $5 (5)		;  must be 0
+modemScript				 ds		FSSpec			; offset: $6 (6)		;  the modem script (CCL) to use
+modemSpeakerOn			 ds.b	1				; offset: $4C (76)		;  whether to dial with the speaker on
+modemPulseDial			 ds.b	1				; offset: $4D (77)		;  true if pulse dial, false if tone dial
+modemDialToneMode		 ds.l	1				; offset: $4E (78)		;  constants are given above
+lowerLayerName			 ds.b	36				; offset: $52 (82)		;  C string, name of underlying serial port
+sizeof					 EQU *					; size:   $76 (118)
+						ENDR
+
+
+
+;   OTCfgModemLocks determines which preferences have been
+;   locked by the administrator mode of the control panel.
+
+
+OTCfgModemLocks			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  must be 1
+port					 ds.l	1				; offset: $4 (4)		;  the underlying serial port is locked (1) or not locked (0)
+script					 ds.l	1				; offset: $8 (8)		;  the modem script (CCL) is locked (1) or not locked (0)
+speaker					 ds.l	1				; offset: $C (12)		;  the speaker settings are locked (1) or not locked (0)
+dialing					 ds.l	1				; offset: $10 (16)		;  the pulse/tone dial setting is locked (1) or not locked (0)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+
+;  Preferences for the modem application itself.
+OTCfgModemApplication	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  must be 1
+windowPos				 ds		Point			; offset: $4 (4)		;  global coordinates, window position
+userMode				 ds.l	1				; offset: $8 (8)		;  must be kOTCfgBasicUserMode, Modem control panel has no "advance" mode
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+;   ------------------ Remote Access ------------------ 
+
+
+
+; 
+;    Remote Access Versions
+;    ----------------------
+;    Many Remote Access preferences include a version number.  Depending
+;    on how the preferences were constructed, the version might either
+;    be kOTCfgRemoteDefaultVersion or kOTCfgRemoteAcceptedVersion.  It
+;    turns out that Remote Access doesn't actually check the version,
+;    so both versions work equally well.  However, you should abide by
+;    the following rules:
+;    
+;      o When reading the version number field, accept both
+;        kOTCfgRemoteDefaultVersion and kOTCfgRemoteAcceptedVersion.
+;      o When writing the version number field, write kOTCfgRemoteDefaultVersion.
+;
+
+
+kOTCfgRemoteDefaultVersion		EQU		$00020003
+kOTCfgRemoteAcceptedVersion		EQU		$00010000
+
+;  Per-connection preference types
+
+
+kOTCfgRemoteARAPPref			EQU		'arap'				; OTCfgRemoteARAP
+kOTCfgRemoteAddressPref			EQU		'cadr'				; 'TEXT' format, max 255 characters, see also OTCfgRemoteConnect
+kOTCfgRemoteChatPref			EQU		'ccha'				; 'TEXT', see also OTCfgRemoteConnect
+kOTCfgRemoteDialingPref			EQU		'cdia'				; OTCfgRemoteDialing
+kOTCfgRemoteAlternateAddressPref EQU	'cead'				; OTCfgRemoteAlternateAddress
+kOTCfgRemoteClientLocksPref		EQU		'clks'				; OTCfgRemoteClientLocks
+kOTCfgRemoteClientMiscPref		EQU		'cmsc'				; OTCfgRemoteClientMisc
+kOTCfgRemoteConnectPref			EQU		'conn'				; OTCfgRemoteConnect
+kOTCfgRemoteUserPref			EQU		'cusr'				; user name, Pascal string
+kOTCfgRemoteDialAssistPref		EQU		'dass'				; OTCfgRemoteDialAssist
+kOTCfgRemoteIPCPPref			EQU		'ipcp'				; OTCfgRemoteIPCP
+kOTCfgRemoteLCPPref				EQU		'lcp '				; OTCfgRemoteLCP
+kOTCfgRemoteLogOptionsPref		EQU		'logo'				; OTCfgRemoteLogOptions
+kOTCfgRemotePasswordPref		EQU		'pass'				; OTCfgRemotePassword
+kOTCfgRemoteTerminalPref		EQU		'term'				; OTCfgRemoteTerminal
+kOTCfgRemoteUserModePref		EQU		'usmd'				; OTCfgRemoteUserMode
+kOTCfgRemoteSecurityDataPref	EQU		'csec'				; untyped data for external security modules
+kOTCfgRemoteX25Pref				EQU		'x25 '				; OTCfgRemoteX25
+
+;  Global preference types
+
+
+kOTCfgRemoteServerPortPref		EQU		'port'				; OTCfgRemoteServerPort
+kOTCfgRemoteServerPref			EQU		'srvr'				; OTCfgRemoteServer
+kOTCfgRemoteApplicationPref		EQU		'capt'				; OTCfgRemoteApplication
+
+
+
+
+;   The OTCfgRemoteARAP preference holds connection information
+;   for the ARAP protocol modules.
+;   Also used as part of a Remote Access server configuration.
+
+
+OTCfgRemoteARAP			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+lowerLayerName			 ds.b	36				; offset: $4 (4)		;  C string, name of underlying modem port, must be "Script"
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+
+
+
+;   OTCfgRemoteRedialMode specifies the handling of redial
+;   within a OTCfgRemoteDialing preference.
+
+
+
+; typedef UInt32						OTCfgRemoteRedialMode
+kOTCfgRemoteRedialNone			EQU		2
+kOTCfgRemoteRedialMain			EQU		3
+kOTCfgRemoteRedialMainAndAlternate EQU	4
+
+
+
+
+;   The OTCfgRemoteDialing controls the dialing characteristics
+;   of outgoing connections.
+
+
+OTCfgRemoteDialing		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+fType					 ds.l	1				; offset: $4 (4)		;  must be 'dial'
+additionalPtr			 ds.l	1				; offset: $8 (8)		;  must be 0
+dialMode				 ds.l	1				; offset: $C (12)		;  constants are given above
+redialTries				 ds.l	1				; offset: $10 (16)		;  only valid if dialMode != kOTCfgRemoteRedialNone
+redialDelay				 ds.l	1				; offset: $14 (20)		;  ms, only valid if dialMode != kOTCfgRemoteRedialNone
+pad						 ds.l	1				; offset: $18 (24)		;  must be zero
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+
+
+;   The OTCfgRemoteAlternateAddress holds the alternate phone number
+;   to dial if the dialMode field of the OTCfgRemoteDialing 
+;   preference is kOTCfgRemoteRedialMainAndAlternate.
+
+
+OTCfgRemoteAlternateAddress RECORD 0
+pad						 ds.l	1				; offset: $0 (0)		;  must be zero
+alternateAddress		 ds		Str255			; offset: $4 (4)
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+
+
+
+;   OTCfgRemoteClientLocks determines which preferences have been
+;   locked by the administrator mode of the control panel.
+
+
+OTCfgRemoteClientLocks	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+name					 ds.l	1				; offset: $4 (4)		;  "Name" field is locked (1) or unlocked (0)
+password				 ds.l	1				; offset: $8 (8)		;  "Password" field is locked (1) or unlocked (0)
+number					 ds.l	1				; offset: $C (12)		;  "Number" field is locked (1) or unlocked (0)
+errorCheck				 ds.l	1				; offset: $10 (16)		;  "Allow error correction and compression in modem" checkbox is locked (1) or unlocked (0)
+headerCompress			 ds.l	1				; offset: $14 (20)		;  "Use TCP header compression" checkbox is locked (1) or unlocked (0)
+termWindow				 ds.l	1				; offset: $18 (24)		;  "Connect to a command-line host" options are locked (1) or unlocked (0)
+reminder				 ds.l	1				; offset: $1C (28)		;  "Reminders" options are locked (1) or unlocked (0)
+autoConn				 ds.l	1				; offset: $20 (32)		;  "Connect automatically when starting TCP/IP applications" checkbox is locked (1) or unlocked (0)
+redial					 ds.l	1				; offset: $24 (36)		;  "Redialing" panel is locked (1) or unlocked (0)
+useProtocolLock			 ds.l	1				; offset: $28 (40)		;  "Use protocol" popup is locked (1) or unlocked (0)
+useVerboseLogLock		 ds.l	1				; offset: $2C (44)		;  "Use verbose logging" checkbox is locked (1) or unlocked (0)
+regUserOrGuestLock		 ds.l	1				; offset: $30 (48)		;  "Register User"/"Guest" radio buttons are locked (1) or unlocked (0)
+dialAssistLock			 ds.l	1				; offset: $34 (52)		;  "Use DialAssist" checkbox is locked (1) or unlocked (0)
+savePasswordLock		 ds.l	1				; offset: $38 (56)		;  "Save password" checkbox is locked (1) or unlocked (0)
+useOpenStatusAppLock	 ds.l	1				; offset: $3C (60)		;  "Open Status Application" checkbox is locked (1) or unlocked (0)
+reserved				 ds.l	1				; offset: $40 (64) <-- really an array of length one ;  must be 0
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+
+
+
+;   The OTCfgRemoteClientMisc preference holds, as you might guess,
+;   one miscellaneous preference.
+
+
+OTCfgRemoteClientMisc	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+connectAutomatically	 ds.l	1				; offset: $4 (4)		;  connect automatically when starting TCP/IP applications (1), or not (0)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+;  The following types are used by the OTCfgRemoteConnect preference.
+
+; typedef UInt32						OTCfgRemotePPPConnectScript
+kOTCfgRemotePPPConnectScriptNone EQU	0					; no chat script
+kOTCfgRemotePPPConnectScriptTerminalWindow EQU 1			; use a terminal window
+kOTCfgRemotePPPConnectScriptScript EQU	2					; use save chat script (OTCfgRemoteChat)
+
+; typedef UInt32						OTCfgRemoteProtocol
+kOTCfgRemoteProtocolPPP			EQU		1					; PPP only
+kOTCfgRemoteProtocolARAP		EQU		2					; ARAP only
+kOTCfgRemoteProtocolAuto		EQU		3					; auto-detect PPP or ARAP (not support in ARA 3.5 and above)
+
+
+
+
+;   The OTCfgRemoteConnect holds the core connection information
+;   for a Remote Access configuration.
+
+
+OTCfgRemoteConnect		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+fType					 ds.l	1				; offset: $4 (4)		;  must be 0
+isGuest					 ds.l	1				; offset: $8 (8)		;  registered user (0) or guest (1) login
+canInteract				 ds.l	1				; offset: $C (12)		;  must be 1
+showStatus				 ds.l	1				; offset: $10 (16)		;  must be 0
+passwordSaved			 ds.l	1				; offset: $14 (20)		;  use saved password (1) or not (0)
+flashConnectedIcon		 ds.l	1				; offset: $18 (24)		;  flash menu bar reminder icon (1) or not (0)
+issueConnectedReminders	 ds.l	1				; offset: $1C (28)		;  issue Notification Manager reminders (1) or not (0)
+reminderMinutes			 ds.l	1				; offset: $20 (32)		;  minutes, time between each reminder
+connectManually			 ds.l	1				; offset: $24 (36)		;  must be 0
+allowModemDataCompression  ds.l	1				; offset: $28 (40)		;  allow modem data compression (1) or not (0), only valid for PPP connections
+chatMode				 ds.l	1				; offset: $2C (44)		;  constants are given above
+serialProtocolMode		 ds.l	1				; offset: $30 (48)		;  constants are given above
+passwordPtr				 ds.l	1				; offset: $34 (52)		;  run-time use only, initialise to 0, read ignore & preserve
+userNamePtr				 ds.l	1				; offset: $38 (56)		;  run-time use only, initialise to 0, read ignore & preserve
+addressLength			 ds.l	1				; offset: $3C (60)		;  length of phone number (OTCfgRemoteAddress)
+addressPtr				 ds.l	1				; offset: $40 (64)		;  run-time use only, initialise to 0, read ignore & preserve
+chatScriptName			 ds		Str63			; offset: $44 (68)		;  user-visible name of chat script
+chatScriptLength		 ds.l	1				; offset: $84 (132)		;  length of chat script (OTCfgRemoteChat)
+chatScriptPtr			 ds.l	1				; offset: $88 (136)		;  run-time use only, initialise to 0, read ignore & preserve
+additional				 ds.l	1				; offset: $8C (140)		;  run-time use only, initialise to 0, read ignore & preserve
+useSecurityModule		 ds.l	1				; offset: $90 (144)		;  must be 0
+securitySignature		 ds.l	1				; offset: $94 (148)		;  must be 0
+securityDataLength		 ds.l	1				; offset: $98 (152)		;  must be 0
+securityDataPtr			 ds.l	1				; offset: $9C (156)		;  must be 0
+sizeof					 EQU *					; size:   $A0 (160)
+						ENDR
+
+
+;  OTCfgRemoteDialAssist
+OTCfgRemoteDialAssist	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+isAssisted				 ds.l	1				; offset: $4 (4)		;  0 for no assist (default), 1 for assist
+areaCodeStr				 ds		Str31			; offset: $8 (8)
+countryCodeStr			 ds		Str31			; offset: $28 (40)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+
+
+
+;   The OTCfgRemoteIPCP preference holds configuration information
+;   for the Internet Protocol Control Protocol (IPCP) layer of PPP.
+;   The contents of this record only make sense for PPP connections
+;   and are ignored for ARAP connections.
+;   Also used as part of a Remote Access server configuration.
+
+
+OTCfgRemoteIPCP			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+reserved				 ds.l	2				; offset: $4 (4)		;  must be 0
+maxConfig				 ds.l	1				; offset: $C (12)		;  must be 10
+maxTerminate			 ds.l	1				; offset: $10 (16)		;  must be 10
+maxFailureLocal			 ds.l	1				; offset: $14 (20)		;  must be 10
+maxFailureRemote		 ds.l	1				; offset: $18 (24)		;  must be 10
+timerPeriod				 ds.l	1				; offset: $1C (28)		;  ms, must be 10000
+localIPAddress			 ds.l	1				; offset: $20 (32)		;  must be 0
+remoteIPAddress			 ds.l	1				; offset: $24 (36)		;  must be 0
+allowAddressNegotiation	 ds.l	1				; offset: $28 (40)		;  must be 1
+idleTimerEnabled		 ds.w	1				; offset: $2C (44)		;  disconnect if line idle (1) or not (0)
+compressTCPHeaders		 ds.w	1				; offset: $2E (46)		;  Van Jacobsen header compression allowed (1) or not (0)
+idleTimerMilliseconds	 ds.l	1				; offset: $30 (48)		;  ms, if idleTimerEnabled, disconnect if idle for
+sizeof					 EQU *					; size:   $34 (52)
+						ENDR
+
+
+
+;   The OTCfgRemoteLCP preference holds configuration information
+;   for the Link Control Protocol (LCP) layer of PPP.  The contents
+;   of this record only make sense for PPP connections and are
+;   ignored for ARAP connections.
+;   Also used as part of a Remote Access server configuration.
+
+
+OTCfgRemoteLCP			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+reserved				 ds.l	2				; offset: $4 (4)		;  must be 0
+lowerLayerName			 ds.b	36				; offset: $C (12)		;  C string, name of underlying modem port, must be "Script"
+maxConfig				 ds.l	1				; offset: $30 (48)		;  must be 10
+maxTerminate			 ds.l	1				; offset: $34 (52)		;  must be 10
+maxFailureLocal			 ds.l	1				; offset: $38 (56)		;  must be 10
+maxFailureRemote		 ds.l	1				; offset: $3C (60)		;  must be 10
+timerPeriod				 ds.l	1				; offset: $40 (64)		;  ms, must be 10000
+echoTrigger				 ds.l	1				; offset: $44 (68)		;  ms, must be 10000
+echoTimeout				 ds.l	1				; offset: $48 (72)		;  ms, must be 10000
+echoRetries				 ds.l	1				; offset: $4C (76)		;  5
+compressionType			 ds.l	1				; offset: $50 (80)		;  3
+mruSize					 ds.l	1				; offset: $54 (84)		;  must be 1500
+upperMRULimit			 ds.l	1				; offset: $58 (88)		;  must be 4500
+lowerMRULimit			 ds.l	1				; offset: $5C (92)		;  must be 0
+txACCMap				 ds.l	1				; offset: $60 (96)		;  must be 0       
+rcACCMap				 ds.l	1				; offset: $64 (100)		;  must be 0
+isNoLAPB				 ds.l	1				; offset: $68 (104)		;  must be 0
+sizeof					 EQU *					; size:   $6C (108)
+						ENDR
+
+
+;  OTCfgRemoteLogLevel is used as a field in OTCfgRemoteLogOptions.
+
+; typedef UInt32						OTCfgRemoteLogLevel
+kOTCfgRemoteLogLevelNormal		EQU		0
+kOTCfgRemoteLogLevelVerbose		EQU		1
+
+
+
+
+;   The OTCfgRemoteLogOptions preference controls the level
+;   of logging done by ARA.
+
+
+OTCfgRemoteLogOptions	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+fType					 ds.l	1				; offset: $4 (4)		;  must be 'lgop'
+additionalPtr			 ds.l	1				; offset: $8 (8)		;  run-time use only, initialise to 0, read ignore & preserve
+logLevel				 ds.l	1				; offset: $C (12)		;  constants are given above
+launchStatusApp			 ds.l	1				; offset: $10 (16)		;  0 for not launch, 1 for launch, Remote Access 3.5 and higher 
+reserved				 ds.l	3				; offset: $14 (20)		;  must be zero
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+
+;   OTCfgRemotePassword holds the user's dialup password, in a scrambled
+;   form.  You can use OTCfgEncrypt to scramble a password and OTCfgDecrypt
+;   to descramble it.
+
+
+OTCfgRemotePassword		RECORD 0
+data					 ds.b	256				; offset: $0 (0)
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+
+
+;  OTCfgRemoteTerminal holds preferences used by the PPP terminal window.
+OTCfgRemoteTerminal		RECORD 0
+fVersion				 ds.l	1				; offset: $0 (0)		;  must be 1
+fLocalEcho				 ds.b	1				; offset: $4 (4)		;  whether to echo typed characters, default false
+fNonModal				 ds.b	1				; offset: $5 (5)		;  must be false
+fPowerUser				 ds.b	1				; offset: $6 (6)		;  must be false
+fQuitWhenPPPStarts		 ds.b	1				; offset: $7 (7)		;  as set in the options dialog, default true
+fDontAskVarStr			 ds.b	1				; offset: $8 (8)		;  default false
+fNoVarStrReplace		 ds.b	1				; offset: $9 (9)		;  must be false
+fLFAfterCR				 ds.b	1				; offset: $A (10)		;  must be false
+fAskToSaveOnQuit		 ds.b	1				; offset: $B (11)		;  as set in the options dialog, default false
+fWindowRect				 ds		Rect			; offset: $C (12)		;  must be zero
+fTypedCharStyle			 ds.b	1				; offset: $14 (20)		;  style used for characters type,    default to bold   (2)
+fPrintedCharStyle		 ds.b	1				; offset: $15 (21)		;  style used for characters printed, default to normal (0)
+fEchoedCharStyle		 ds.b	1				; offset: $16 (22)		;  style used for characters echoed,  default to italic (1)
+pad						 ds.b	1				; offset: $17 (23)		;  must be zero
+fFontSize				 ds.w	1				; offset: $18 (24)		;  default is 9
+fFontName				 ds		Str255			; offset: $1A (26)		;  default is "\pMonaco" on Roman systems
+sizeof					 EQU *					; size:   $11A (282)
+						ENDR
+
+
+
+;   The OTCfgRemoteUserMode holds user mode preferences, such
+;   as the current user mode and the admin password.
+
+
+
+OTCfgRemoteUserMode		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+userMode				 ds.l	1				; offset: $4 (4)		;  current user mode
+adminPassword			 ds		Str255			; offset: $8 (8)		;  format not to be documented
+sizeof					 EQU *					; size:   $108 (264)
+						ENDR
+
+
+
+;   The OTCfgRemoteX25 preference is used to hold information
+;   about X.25 connections.  For standard dial-up connections,
+;   all fields (except version) must be filled with zeroes.
+
+
+OTCfgRemoteX25			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+fType					 ds.l	1				; offset: $4 (4)		;  this and remaining fields must be 0
+additionalPtr			 ds.l	1				; offset: $8 (8)
+script					 ds		FSSpec			; offset: $C (12)
+address					 ds.b	256				; offset: $52 (82)
+userName				 ds.b	256				; offset: $152 (338)
+closedUserGroup			 ds.b	5				; offset: $252 (594)
+reverseCharge			 ds.b	1				; offset: $257 (599)
+sizeof					 EQU *					; size:   $258 (600)
+						ENDR
+
+
+
+
+;   OTCfgRemoteServer is a meta-preference that points to the other active
+;   preferences for the Remote Access server.
+
+
+OTCfgRemoteServer		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+configCount				 ds.w	1				; offset: $4 (4)		;  number of active configurations, must be 1 for personal server
+configIDs				 ds.w	1				; offset: $6 (6) <-- really an array of length one ;  array of IDs of active configurations, must have one entry containing 0 for personal server
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+;  The following types are used in the OTCfgRemoteServerPort preference.
+
+; typedef UInt32						OTCfgRemoteAnswerMode
+kOTCfgAnswerModeOff				EQU		0					; answering disabled
+kOTCfgAnswerModeNormal			EQU		1					; answering enabled
+kOTCfgAnswerModeTransfer		EQU		2					; answering as a callback server, not valid for personal server
+kOTCfgAnswerModeCallback		EQU		3					; answering enabled in callback mode
+
+; typedef UInt32						OTCfgRemoteNetworkProtocol
+kOTCfgNetProtoNone				EQU		0
+kOTCfgNetProtoIP				EQU		1					; allow IPCP connections
+kOTCfgNetProtoAT				EQU		2					; allow AppleTalk connections (ATCP, ARAP)
+kOTCfgNetProtoAny				EQU		3					; allow connections of either type
+
+; typedef UInt8							OTCfgRemoteNetAccessMode
+kOTCfgNetAccessModeUnrestricted	EQU		0					; connected client can see things on server and things on server's network
+kOTCfgNetAccessModeThisMacOnly	EQU		1					; connected client can only see things on server machine
+
+
+
+
+;   OTCfgRemoteServerPort holds the primary configuration information for
+;   the personal server.
+
+
+OTCfgRemoteServerPort	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  see "Remote Access Versions" note, above
+configID				 ds.w	1				; offset: $4 (4)		;  ID of this port config, matches element of configIDs array in OTCfgRemoteServer, must be 0 for personal server
+password				 ds		Str255			; offset: $6 (6)		;  security zone bypass password, plain text
+answerMode				 ds.l	1				; offset: $106 (262)	;  see values defined above
+limitConnectTime		 ds.b	1				; offset: $10A (266)	;  if true, following field limits duration of client connections
+pad						 ds.b	1				; offset: $10B (267)	;  must be 0
+maxConnectSeconds		 ds.l	1				; offset: $10C (268)	;  seconds, default is 3600
+serialProtoFlags		 ds.l	1				; offset: $110 (272)	;  see values defined above
+networkProtoFlags		 ds.l	1				; offset: $114 (276)	;  see values defined above
+netAccessMode			 ds.b	1				; offset: $118 (280)	;  see values defined above
+requiresCCL				 ds.b	1				; offset: $119 (281)	;  must be true
+portName				 ds.b	64				; offset: $11A (282)	;  C string, must be zero for personal server
+serialLayerName			 ds.b	36				; offset: $15A (346)	;  C string, OT port name of serial port
+localIPAddress			 ds.l	1				; offset: $17E (382)	;  IP address to offer to client
+sizeof					 EQU *					; size:   $182 (386)
+						ENDR
+
+
+
+;   The OTCfgRemoteApplication preference holds preferences for the
+;   Remote Access (or OT/PPP) application.
+
+
+OTCfgRemoteApplication	RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  IMPORTANT: NOT a standard Remote Access version number, must be 3 for ARA, 1 for OT/PPP
+fWindowPosition			 ds		Point			; offset: $4 (4)		;  global coordinates, window position
+tabChoice				 ds.l	1				; offset: $8 (8)		;  currently chosen tab in Options dialog, 1 for Redialing, 2 for Connection, 3 for Protocol
+fUserMode				 ds.l	1				; offset: $C (12)		;  current user mode
+fSetupVisible			 ds.l	1				; offset: $10 (16)		;  "Setup" is disclosed (1) or not (0)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+
+;   ------------------ OLDROUTINENAMES ------------------   
+
+
+
+
+;   Older versions of this header file defined a lot of types and constants
+;   that were inconsistently named and confusing.  This new version of the header
+;   file has tidied up all of these definitions, as shown above.  For the
+;   sake of source code compatibility, the previous definitions are still available,
+;   but you have to define the compiler variable OLDROUTINENAMES to get them.
+;   This is a temporary measure.  Apple will remove these definitions in a future
+;   version of this header file.  You should start transitioning your source code
+;   to the new definitions are soon as possible.
+
+
+
+	IF OLDROUTINENAMES THEN
+
+kOTCfgTypeStruct				EQU		'stru'
+kOTCfgTypeElement				EQU		'elem'
+kOTCfgTypeVector				EQU		'vect'
+;  OLDROUTINENAMES
+
+;  Old, confusing names for common preference types.
+
+
+kOTCfgTypeConfigName			EQU		'cnam'
+kOTCfgTypeConfigSelected		EQU		'ccfg'
+kOTCfgTypeUserLevel				EQU		'ulvl'
+kOTCfgTypeWindowPosition		EQU		'wpos'
+;  OLDROUTINENAMES
+
+
+;   Old, protocol-specific names for common preferences.  If the preference
+;   is still supported, the old name is just an alias for the new name.
+;   If the preference isn't support, the old name is a straight constant,
+;   and you should stop using it.
+
+
+
+
+kOTCfgTypeAppleTalkVersion		EQU		'cvrs'
+kOTCfgTypeTCPcvrs				EQU		'cvrs'
+kOTCfgTypeTCPVersion			EQU		'cvrs'
+kOTCfgTypeTCPPort				EQU		'port'
+kOTCfgTypeAppleTalkPort			EQU		'port'
+kOTCfgTypeTCPProtocol			EQU		'prot'
+kOTCfgTypeAppleTalkProtocol		EQU		'prot'
+kOTCfgTypeAppleTalkPassword		EQU		'pwrd'
+kOTCfgTypeDNSPassword			EQU		'pwrd'
+kOTCfgTypeTCPPassword			EQU		'pwrd'
+kOTCfgTypeRemoteARAP			EQU		'arap'
+kOTCfgTypeRemoteAddress			EQU		'cadr'
+kOTCfgTypeRemoteChat			EQU		'ccha'
+kOTCfgTypeRemoteDialing			EQU		'cdia'
+kOTCfgTypeRemoteExtAddress		EQU		'cead'
+kOTCfgTypeRemoteClientLocks		EQU		'clks'
+kOTCfgTypeRemoteClientMisc		EQU		'cmsc'
+kOTCfgTypeRemoteConnect			EQU		'conn'
+kOTCfgTypeRemoteUser			EQU		'cusr'
+kOTCfgTypeRemoteDialAssist		EQU		'dass'
+kOTCfgTypeRemoteIPCP			EQU		'ipcp'
+kOTCfgTypeRemoteLCP				EQU		'lcp '
+kOTCfgTypeRemoteLogOptions		EQU		'logo'
+kOTCfgTypeRemotePassword		EQU		'pass'
+kOTCfgTypeRemoteServer			EQU		'srvr'
+kOTCfgTypeRemoteTerminal		EQU		'term'
+kOTCfgTypeRemoteUserMode		EQU		'usmd'
+kOTCfgTypeRemoteX25				EQU		'x25 '
+kOTCfgTypeRemoteApp				EQU		'capt'
+kOTCfgTypeRemotePort			EQU		'port'
+kOTCfgTypeAppleTalkPrefs		EQU		'atpf'
+kOTCfgTypeAppleTalkLocks		EQU		'lcks'
+kOTCfgTypeAppleTalkPortFamily	EQU		'ptfm'
+kOTCfgTypeInfraredPrefs			EQU		'atpf'
+kOTCfgTypeInfraredGlobal		EQU		'irgo'
+kOTCfgTypeTCPdclt				EQU		'dclt'
+kOTCfgTypeTCPSearchList			EQU		'ihst'
+kOTCfgTypeTCPihst				EQU		'ihst'
+kOTCfgTypeTCPidns				EQU		'idns'
+kOTCfgTypeTCPServersList		EQU		'idns'
+kOTCfgTypeTCPiitf				EQU		'iitf'
+kOTCfgTypeTCPPrefs				EQU		'iitf'
+kOTCfgTypeTCPisdm				EQU		'isdm'
+kOTCfgTypeTCPDomainsList		EQU		'isdm'
+kOTCfgTypeTCPdcid				EQU		'dcid'
+kOTCfgTypeTCPdtyp				EQU		'dtyp'
+kOTCfgTypeTCPRoutersList		EQU		'irte'
+kOTCfgTypeTCPirte				EQU		'irte'
+kOTCfgTypeTCPstng				EQU		'stng'
+kOTCfgTypeTCPLocks				EQU		'stng'
+kOTCfgTypeTCPunld				EQU		'unld'
+kOTCfgTypeTCPUnloadType			EQU		'unld'
+kOTCfgTypeTCPalis				EQU		'alis'
+kOTCfgTypeTCPara				EQU		'ipcp'				; defining this as 'ipcp' makes no sense,
+															; but changing it to kOTCfgRemoteIPCPPref could break someone
+kOTCfgTypeTCPDevType			EQU		'dvty'
+kOTCfgTypeModemModem			EQU		'ccl '
+kOTCfgTypeModemLocks			EQU		'lkmd'
+kOTCfgTypeModemAdminPswd		EQU		'mdpw'
+kOTCfgTypeModemApp				EQU		'mapt'
+;  OLDROUTINENAMES
+
+
+kOTCfgIndexAppleTalkAARP		EQU		0
+kOTCfgIndexAppleTalkDDP			EQU		1
+kOTCfgIndexAppleTalkNBP			EQU		2
+kOTCfgIndexAppleTalkZIP			EQU		3
+kOTCfgIndexAppleTalkATP			EQU		4
+kOTCfgIndexAppleTalkADSP		EQU		5
+kOTCfgIndexAppleTalkPAP			EQU		6
+kOTCfgIndexAppleTalkASP			EQU		7
+kOTCfgIndexAppleTalkLast		EQU		7
+;  OLDROUTINENAMES
+
+;  See OTCfgATalkGeneral.
+OTCfgAppleTalkPrefs		RECORD 0
+fVersion				 ds.w	1				; offset: $0 (0)
+fNumPrefs				 ds.w	1				; offset: $2 (2)
+fPort					 ds.l	1				; offset: $4 (4)
+fLink					 ds.l	1				; offset: $8 (8)
+fPrefs					 ds.l	8				; offset: $C (12)
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgAARPPrefs			RECORD 0
+f						 ds		OTCfgATalkGeneralAARP
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+
+
+;  OLDROUTINENAMES
+OTCfgDDPPrefs			RECORD 0
+f						 ds		OTCfgATalkGeneralDDP
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+
+
+;  OLDROUTINENAMES
+;  See OTCfgATalkGeneral.
+OTCfgATPFPrefs			RECORD 0
+fAT						 ds		OTCfgAppleTalkPrefs ; offset: $0 (0)
+fAARP					 ds		OTCfgAARPPrefs ; offset: $2C (44)
+fDDP					 ds		OTCfgDDPPrefs	; offset: $54 (84)
+fFill					 ds.b	122				; offset: $98 (152)
+sizeof					 EQU *					; size:   $112 (274)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgIRPrefs			RECORD 0
+fHdr					 ds		CfgPrefsHeader ; offset: $0 (0)
+fPort					 ds.l	1				; offset: $8 (8)
+fPortSetting			 ds.w	1				; offset: $C (12)
+fNotifyOnDisconnect		 ds.b	1				; offset: $E (14)
+fDisplayIRControlStrip	 ds.b	1				; offset: $F (15)
+fWindowPosition			 ds		Point			; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgIRGlobal			RECORD 0
+fHdr					 ds		CfgPrefsHeader ; offset: $0 (0)			;  standard prefererences header
+fOptions				 ds.l	1				; offset: $8 (8)		;  options bitmask
+fNotifyMask				 ds.l	1				; offset: $C (12)		;  Notification options.
+fUnloadTimeout			 ds.l	1				; offset: $10 (16)		;  Unload timeout (in milliseconds)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgDHCPRecord			RECORD 0
+f						 ds		OTCfgTCPDHCPLeaseInfo
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+OTCfgHSTFPrefs			RECORD 0
+f						 ds		OTCfgTCPSearchList
+sizeof					 EQU *					; size:   $202 (514)
+						ENDR
+
+
+OTCfgIRTEEntry			RECORD 0
+f						 ds		OTCfgTCPRoutersListEntry
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+OTCfgIRTEPrefs			RECORD 0
+f						 ds		OTCfgTCPRoutersList
+sizeof					 EQU *					; size:   $E (14)
+						ENDR
+
+
+;  OLDROUTINENAMES
+;  Use OTCfgTCPDNSServersList instead of OTCfgIDNSPrefs.
+
+OTCfgIDNSPrefs			RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fAddressesList			 ds.l	1				; offset: $2 (2)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  OLDROUTINENAMES
+;   This is your worst case, a fixed size structure, tacked on after a variable length string.
+
+;    This structure also contains an IP address and subnet mask that are not aligned on a four byte boundary.  
+;    In order to avoid compiler warnings, and the possibility of code that won't work, 
+;    these fields are defined here as four character arrays.  
+;    It is suggested that BlockMoveData be used to copy to and from a field of type InetHost.  
+
+
+;  OLDROUTINENAMES
+
+OTCfgIITFPrefsPart		RECORD 0
+path					 ds.b	36				; offset: $0 (0)
+module					 ds.b	32				; offset: $24 (36)
+framing					 ds.l	1				; offset: $44 (68)
+sizeof					 EQU *					; size:   $48 (72)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgIITFPrefs			RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fConfigMethod			 ds.b	1				; offset: $2 (2)
+;     this structure IS packed!
+;     Followed by:
+fIPAddress				 ds.b	4				; offset: $3 (3)
+fSubnetMask				 ds.b	4				; offset: $7 (7)
+fAppleTalkZone			 ds.b	256				; offset: $B (11)
+;     this structure IS packed!
+fFiller					 ds.b	1				; offset: $10B (267)
+part					 ds		OTCfgIITFPrefsPart ; offset: $10C (268)
+sizeof					 EQU *					; size:   $154 (340)
+						ENDR
+;  OLDROUTINENAMES
+;  Use OTCfgTCPSearchDomains instead of OTCfgIDNSPrefs.
+
+OTCfgISDMPrefs			RECORD 0
+fCount					 ds.w	1				; offset: $0 (0)
+fDomainsList			 ds		Str255			; offset: $2 (2)
+sizeof					 EQU *					; size:   $102 (258)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteConfigModem	RECORD 0
+f						 ds		OTCfgModemGeneral
+sizeof					 EQU *					; size:   $76 (118)
+						ENDR
+
+
+OTCfgModemAppPrefs		RECORD 0
+f						 ds		OTCfgModemApplication
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+;  OLDROUTINENAMES
+
+kOTCfgRemoteMaxPasswordLength	EQU		255
+kOTCfgRemoteMaxPasswordSize		EQU		256
+kOTCfgRemoteMaxUserNameLength	EQU		255
+kOTCfgRemoteMaxUserNameSize		EQU		256
+kOTCfgRemoteMaxAddressLength	EQU		255
+kOTCfgRemoteMaxAddressSize		EQU		256
+kOTCfgRemoteMaxServerNameLength	EQU		32
+kOTCfgRemoteMaxServerNameSize	EQU		33
+kOTCfgRemoteMaxMessageLength	EQU		255
+kOTCfgRemoteMaxMessageSize		EQU		256
+kOTCfgRemoteMaxX25ClosedUserGroupLength EQU 4
+kOTCfgRemoteInfiniteSeconds		EQU		$FFFFFFFF
+kOTCfgRemoteMinReminderMinutes	EQU		1
+kOTCfgRemoteChatScriptFileCreator EQU	'ttxt'
+kOTCfgRemoteChatScriptFileType	EQU		'TEXT'
+kOTCfgRemoteMaxChatScriptLength	EQU		$8000
+;  OLDROUTINENAMES
+
+OTCfgRemoteAddress		RECORD 0
+f						 ds		OTCfgRemoteAlternateAddress
+sizeof					 EQU *					; size:   $104 (260)
+						ENDR
+
+
+;  OLDROUTINENAMES
+OTCfgRemoteScript		RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+fType					 ds.l	1				; offset: $4 (4)
+additional				 ds.l	1				; offset: $8 (8)
+scriptType				 ds.l	1				; offset: $C (12)
+scriptLength			 ds.l	1				; offset: $10 (16)
+scriptData				 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteX25Info		RECORD 0
+f						 ds		OTCfgRemoteX25
+sizeof					 EQU *					; size:   $258 (600)
+						ENDR
+
+
+;  OLDROUTINENAMES
+OTCfgRemoteConfigCAPT	RECORD 0
+f						 ds		OTCfgRemoteApplication
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+
+;  OLDROUTINENAMES
+
+OTCfgRemoteUserMessage	RECORD 0
+version					 ds.l	1				; offset: $0 (0)
+messageID				 ds.l	1				; offset: $4 (4)
+userMessage				 ds.b	256				; offset: $8 (8)
+userDiagnostic			 ds.b	256				; offset: $108 (264)
+sizeof					 EQU *					; size:   $208 (520)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteDisconnect	RECORD 0
+whenSeconds				 ds.l	1				; offset: $0 (0)
+showStatus				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteIsRemote		RECORD 0
+net						 ds.l	1				; offset: $0 (0)
+node					 ds.l	1				; offset: $4 (4)
+isRemote				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteConnectInfo	RECORD 0
+connectInfo				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  OLDROUTINENAMES
+
+kOTCfgRemoteStatusIdle			EQU		1
+kOTCfgRemoteStatusConnecting	EQU		2
+kOTCfgRemoteStatusConnected		EQU		3
+kOTCfgRemoteStatusDisconnecting	EQU		4
+;  OLDROUTINENAMES
+
+OTCfgRemoteStatus		RECORD 0
+status					 ds.l	1				; offset: $0 (0)
+answerEnabled			 ds.b	1				; offset: $4 (4)
+pad00					 ds.b	1				; offset: $5 (5)
+secondsConnected		 ds.l	1				; offset: $6 (6)
+secondsRemaining		 ds.l	1				; offset: $A (10)
+userName				 ds.b	256				; offset: $E (14)
+serverName				 ds.b	33				; offset: $10E (270)
+pad01					 ds.b	1				; offset: $12F (303)
+messageIndex			 ds.l	1				; offset: $130 (304)
+message					 ds.b	256				; offset: $134 (308)
+serialProtocolMode		 ds.l	1				; offset: $234 (564)
+baudMessage				 ds.b	256				; offset: $238 (568)
+isServer				 ds.b	1				; offset: $338 (824)
+pad02					 ds.b	1				; offset: $339 (825)
+bytesIn					 ds.l	1				; offset: $33A (826)
+bytesOut				 ds.l	1				; offset: $33E (830)
+linkSpeed				 ds.l	1				; offset: $342 (834)
+localIPAddress			 ds.l	1				; offset: $346 (838)
+remoteIPAddress			 ds.l	1				; offset: $34A (842)
+sizeof					 EQU *					; size:   $34E (846)
+						ENDR
+;  OLDROUTINENAMES
+; typedef UInt32 						OTCfgRemoteEventCode
+
+;  OLDROUTINENAMES
+;  OLDROUTINENAMES
+OTCfgRemoteNotifier		RECORD 0
+procPtr					 ds.l	1				; offset: $0 (0)
+contextPtr				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  OLDROUTINENAMES
+OTCfgRemoteRequest		RECORD 0
+reserved1				 ds.b	16				; offset: $0 (0)
+result					 ds.w	1				; offset: $10 (16)
+reserved2				 ds.b	8				; offset: $12 (18)
+requestCode				 ds.w	1				; offset: $1A (26)
+portId					 ds.w	1				; offset: $1C (28)
+Notifier				 ds		OTCfgRemoteNotifier ; offset: $1E (30)
+						 ORG 30
+Connect					 ds		OTCfgRemoteConnect ; offset: $1E (30)
+						 ORG 30
+Disconnect				 ds		OTCfgRemoteDisconnect ; offset: $1E (30)
+						 ORG 30
+Status					 ds		OTCfgRemoteStatus ; offset: $1E (30)
+						 ORG 30
+IsRemote				 ds		OTCfgRemoteIsRemote ; offset: $1E (30)
+						 ORG 30
+ConnectInfo				 ds		OTCfgRemoteConnectInfo ; offset: $1E (30)
+						 ORG 876
+sizeof					 EQU *					; size:   $36C (876)
+						ENDR
+	ENDIF	; OLDROUTINENAMES
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __NETWORKSETUP__ 
+

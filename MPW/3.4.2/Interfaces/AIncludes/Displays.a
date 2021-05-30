@@ -1,0 +1,1028 @@
+;
+;	File:		Displays.a
+;
+;	Contains:	Display Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__DISPLAYS__') = 'UNDEFINED' THEN
+__DISPLAYS__ SET 1
+
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+;		include 'Types.a'											;
+;		include 'MixedMode.a'										;
+
+	IF &TYPE('__VIDEO__') = 'UNDEFINED' THEN
+	include 'Video.a'
+	ENDIF
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+	IF 0 THEN
+
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'Memory.a'											;
+;		include 'OSUtils.a'										;
+;		include 'Events.a'											;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'TextEdit.a'										;
+	ENDIF
+
+
+; AppleEvents Core Suite 
+kAESystemConfigNotice			EQU		'cnfg'
+; Core Suite types 
+kAEDisplayNotice				EQU		'dspl'
+kAEDisplaySummary				EQU		'dsum'
+keyDMConfigVersion				EQU		'dmcv'
+keyDMConfigFlags				EQU		'dmcf'
+keyDMConfigReserved				EQU		'dmcr'
+keyDisplayID					EQU		'dmid'
+keyDisplayComponent				EQU		'dmdc'
+keyDisplayDevice				EQU		'dmdd'
+keyDisplayFlags					EQU		'dmdf'
+keyDisplayMode					EQU		'dmdm'
+keyDisplayModeReserved			EQU		'dmmr'
+keyDisplayReserved				EQU		'dmdr'
+keyDisplayMirroredId			EQU		'dmmi'
+keyDeviceFlags					EQU		'dddf'
+keyDeviceDepthMode				EQU		'dddm'
+keyDeviceRect					EQU		'dddr'
+keyPixMapRect					EQU		'dpdr'
+keyPixMapHResolution			EQU		'dphr'
+keyPixMapVResolution			EQU		'dpvr'
+keyPixMapPixelType				EQU		'dppt'
+keyPixMapPixelSize				EQU		'dpps'
+keyPixMapCmpCount				EQU		'dpcc'
+keyPixMapCmpSize				EQU		'dpcs'
+keyPixMapAlignment				EQU		'dppa'
+keyPixMapResReserved			EQU		'dprr'
+keyPixMapReserved				EQU		'dppr'
+keyPixMapColorTableSeed			EQU		'dpct'
+keySummaryMenubar				EQU		'dsmb'
+keySummaryChanges				EQU		'dsch'
+keyDisplayOldConfig				EQU		'dold'
+keyDisplayNewConfig				EQU		'dnew'
+
+dmOnlyActiveDisplays			EQU		true
+dmAllDisplays					EQU		false
+
+; Switch Flags 
+kNoSwitchConfirmBit				EQU		0					; Flag indicating that there is no need to confirm a switch to this mode 
+kDepthNotAvailableBit			EQU		1					; Current depth not available in new mode 
+kShowModeBit					EQU		3					; Show this mode even though it requires a confirm. 
+kModeNotResizeBit				EQU		4					; Do not use this mode to resize display (for cards that mode drives a different connector). 
+
+;	Summary Change Flags (sticky bits indicating an operation was performed)
+;	For example, moving a display then moving it back will still set the kMovedDisplayBit.
+;
+kBeginEndConfigureBit			EQU		0
+kMovedDisplayBit				EQU		1
+kSetMainDisplayBit				EQU		2
+kSetDisplayModeBit				EQU		3
+kAddDisplayBit					EQU		4
+kRemoveDisplayBit				EQU		5
+kNewDisplayBit					EQU		6
+kDisposeDisplayBit				EQU		7
+kEnabledDisplayBit				EQU		8
+kDisabledDisplayBit				EQU		9
+kMirrorDisplayBit				EQU		10
+kUnMirrorDisplayBit				EQU		11
+
+; Notification Messages for extended call back routines 
+kDMNotifyInstalled				EQU		1					; At install time 
+kDMNotifyEvent					EQU		2					; Post change time 
+kDMNotifyRemoved				EQU		3					; At remove time 
+kDMNotifyPrep					EQU		4					; Pre change time 
+kDMNotifyExtendEvent			EQU		5					; Allow registrees to extend apple event before it is sent 
+kDMNotifyDependents				EQU		6					; Minor notification check without full update 
+; Notification Flags 
+kExtendedNotificationProc		EQU		(1 << 16)
+
+; types for notifyType 
+kFullNotify						EQU		0					; This is the appleevent whole nine yards notify 
+kFullDependencyNotify			EQU		1					; Only sends to those who want to know about interrelated functionality (used for updating UI) 
+
+; DisplayID/DeviceID constants 
+kDummyDeviceID					EQU		$0FF				; This is the ID of the dummy display, used when the last “real” display is disabled.
+kInvalidDisplayID				EQU		$000				; This is the invalid ID
+kFirstDisplayID					EQU		$100
+
+; bits for panelListFlags 
+kAllowDuplicatesBit				EQU		0
+
+; Constants for fidelity checks 
+kNoFidelity						EQU		0
+kMinimumFidelity				EQU		1
+kDefaultFidelity				EQU		500					; I'm just picking a number for Apple default panels and engines
+kDefaultManufacturerFidelity	EQU		1000				; I'm just picking a number for Manufacturer's panels and engines (overrides apple defaults)
+
+kAnyPanelType					EQU		0					; Pass to DMNewEngineList for list of all panels (as opposed to specific types)
+kAnyEngineType					EQU		0					; Pass to DMNewEngineList for list of all engines
+kAnyDeviceType					EQU		0					; Pass to DMNewDeviceList for list of all devices
+kAnyPortType					EQU		0					; Pass to DMNewDevicePortList for list of all devices
+
+; portListFlags for DM_NewDevicePortList 
+; Should offline devices be put into the port list (such as dummy display) 
+kPLIncludeOfflineDevicesBit		EQU		0
+
+; typedef unsigned long 	DMFidelityType
+; AVID is an ID for ports and devices the old DisplayID type
+;	is carried on for compatibility
+;
+; typedef unsigned long 	AVIDType
+; typedef AVIDType 			DisplayIDType
+; typedef void 				*DMListType
+; typedef unsigned long 	DMListIndexType
+; typedef void 				*AVPowerStatePtr
+DMComponentListEntryRec RECORD	0
+itemID					 ds.l   1		; offset: $0 (0)		; DisplayID Manager
+itemComponent			 ds.l   1		; offset: $4 (4)		; Component Manager
+itemDescription			 ds     ComponentDescription ; offset: $8 (8) ; We can always construct this if we use something beyond the compontent mgr.
+itemClass				 ds.l   1		; offset: $1C (28)		; Class of group to put this panel (eg geometry/color/etc for panels, brightness/contrast for engines, video out/sound/etc for devices)
+itemFidelity			 ds.l   1		; offset: $20 (32)		; How good is this item for the specified search?
+itemSubClass			 ds.l   1		; offset: $24 (36)		; Subclass of group to put this panel.  Can use to do sub-grouping (eg volume for volume panel and mute panel)
+itemSort				 ds     Point	; offset: $28 (40)		; Set to 0 - future to sort the items in a sub group.
+itemFlags				 ds.l   1		; offset: $2C (44)		; Set to 0 (future expansion)
+itemReserved			 ds.l   1		; offset: $30 (48)		; What kind of code does the itemReference point to  (right now - kPanelEntryTypeComponentMgr only)
+itemFuture1				 ds.l   1		; offset: $34 (52)		; Set to 0 (future expansion - probably an alternate code style)
+itemFuture2				 ds.l   1		; offset: $38 (56)		; Set to 0 (future expansion - probably an alternate code style)
+itemFuture3				 ds.l   1		; offset: $3C (60)		; Set to 0 (future expansion - probably an alternate code style)
+itemFuture4				 ds.l   1		; offset: $40 (64)		; Set to 0 (future expansion - probably an alternate code style)
+sizeof					 EQU *			; size:   $44 (68)
+						ENDR
+
+; typedef struct DMComponentListEntryRec  DMComponentListEntryRec
+; typedef DMComponentListEntryRec  *DMComponentListEntryPtr
+; ••• Move AVLocationRec to AVComponents.i AFTER AVComponents.i is created
+AVLocationRec 			RECORD	0
+locationConstant		 ds.l   1		; offset: $0 (0)		; Set to 0 (future expansion - probably an alternate code style)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct AVLocationRec  AVLocationRec
+; typedef AVLocationRec 	*AVLocationPtr
+DMDepthInfoRec 			RECORD	0
+depthSwitchInfo			 ds.l   1		; offset: $0 (0)		; This is the switch mode to choose this timing/depth 
+depthVPBlock			 ds.l   1		; offset: $4 (4)		; VPBlock (including size, depth and format) 
+depthFlags				 ds.l   1		; offset: $8 (8)		; Reserved 
+depthReserved1			 ds.l   1		; offset: $C (12)		; Reserved 
+depthReserved2			 ds.l   1		; offset: $10 (16)		; Reserved 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct DMDepthInfoRec  DMDepthInfoRec
+; typedef DMDepthInfoRec 	*DMDepthInfoPtr
+DMDepthInfoBlockRec 	RECORD	0
+depthBlockCount			 ds.l   1		; offset: $0 (0)		; How many depths are there? 
+depthVPBlock			 ds.l   1		; offset: $4 (4)		; Array of DMDepthInfoRec 
+depthBlockFlags			 ds.l   1		; offset: $8 (8)		; Reserved 
+depthBlockReserved1		 ds.l   1		; offset: $C (12)		; Reserved 
+depthBlockReserved2		 ds.l   1		; offset: $10 (16)		; Reserved 
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct DMDepthInfoBlockRec  DMDepthInfoBlockRec
+; typedef DMDepthInfoBlockRec  *DMDepthInfoBlockPtr
+DMDisplayModeListEntryRec RECORD	0
+displayModeFlags		 ds.l   1		; offset: $0 (0)
+displayModeSwitchInfo	 ds.l   1		; offset: $4 (4)
+displayModeResolutionInfo ds.l   1		; offset: $8 (8)
+displayModeTimingInfo	 ds.l   1		; offset: $C (12)
+displayModeDepthBlockInfo ds.l   1		; offset: $10 (16)		; Information about all the depths
+displayModeReserved		 ds.l   1		; offset: $14 (20)		; Reserved
+displayModeName			 ds.l   1		; offset: $18 (24)		; Name of the timing mode
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct DMDisplayModeListEntryRec  DMDisplayModeListEntryRec
+; typedef DMDisplayModeListEntryRec  *DMDisplayModeListEntryPtr
+DependentNotifyRec 		RECORD	0
+notifyType				 ds.l   1		; offset: $0 (0)		; What type was the engine that made the change (may be zero)
+notifyClass				 ds.l   1		; offset: $4 (4)		; What class was the change (eg geometry, color etc)
+notifyPortID			 ds.l   1		; offset: $8 (8)		; Which device was touched (kInvalidDisplayID -> all or none)
+notifyComponent			 ds.l   1		; offset: $C (12)		; What engine did it (may be 0)?
+notifyVersion			 ds.l   1		; offset: $10 (16)		; Set to 0 (future expansion)
+notifyFlags				 ds.l   1		; offset: $14 (20)		; Set to 0 (future expansion)
+notifyReserved			 ds.l   1		; offset: $18 (24)		; Set to 0 (future expansion)
+notifyFuture			 ds.l   1		; offset: $1C (28)		; Set to 0 (future expansion)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct DependentNotifyRec  DependentNotifyRec
+; typedef DependentNotifyRec  *DependentNotifyPtr
+; Exports to support Interfaces library containing unused calls 
+;
+; pascal GDHandle DMGetFirstScreenDevice(Boolean activeOnly)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetFirstScreenDevice
+			moveq	#0,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetFirstScreenDevice
+	ENDIF
+
+;
+; pascal GDHandle DMGetNextScreenDevice(GDHandle theDevice, Boolean activeOnly)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetNextScreenDevice
+			moveq	#1,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetNextScreenDevice
+	ENDIF
+
+;
+; pascal void DMDrawDesktopRect(Rect *globalRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDrawDesktopRect
+			moveq	#2,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDrawDesktopRect
+	ENDIF
+
+;
+; pascal void DMDrawDesktopRegion(RgnHandle globalRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDrawDesktopRegion
+			moveq	#3,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDrawDesktopRegion
+	ENDIF
+
+;
+; pascal OSErr DMBeginConfigureDisplays(Handle *displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMBeginConfigureDisplays
+			move.w	#$0206,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMBeginConfigureDisplays
+	ENDIF
+
+;
+; pascal OSErr DMEndConfigureDisplays(Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMEndConfigureDisplays
+			move.w	#$0207,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMEndConfigureDisplays
+	ENDIF
+
+;
+; pascal OSErr DMAddDisplay(GDHandle newDevice, short driver, unsigned long mode, unsigned long reserved, unsigned long displayID, Component displayComponent, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMAddDisplay
+			move.w	#$0D08,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMAddDisplay
+	ENDIF
+
+;
+; pascal OSErr DMMoveDisplay(GDHandle moveDevice, short x, short y, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMMoveDisplay
+			move.w	#$0609,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMMoveDisplay
+	ENDIF
+
+;
+; pascal OSErr DMDisableDisplay(GDHandle disableDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDisableDisplay
+			move.w	#$040A,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDisableDisplay
+	ENDIF
+
+;
+; pascal OSErr DMEnableDisplay(GDHandle enableDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMEnableDisplay
+			move.w	#$040B,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMEnableDisplay
+	ENDIF
+
+;
+; pascal OSErr DMRemoveDisplay(GDHandle removeDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMRemoveDisplay
+			move.w	#$040C,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMRemoveDisplay
+	ENDIF
+
+;
+; pascal OSErr DMSetMainDisplay(GDHandle newMainDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSetMainDisplay
+			move.w	#$0410,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSetMainDisplay
+	ENDIF
+
+;
+; pascal OSErr DMSetDisplayMode(GDHandle theDevice, unsigned long mode, unsigned long *depthMode, unsigned long reserved, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSetDisplayMode
+			move.w	#$0A11,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSetDisplayMode
+	ENDIF
+
+;
+; pascal OSErr DMCheckDisplayMode(GDHandle theDevice, unsigned long mode, unsigned long depthMode, unsigned long *switchFlags, unsigned long reserved, Boolean *modeOk)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMCheckDisplayMode
+			move.w	#$0C12,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMCheckDisplayMode
+	ENDIF
+
+;
+; pascal OSErr DMGetDeskRegion(RgnHandle *desktopRegion)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDeskRegion
+			move.w	#$0213,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDeskRegion
+	ENDIF
+
+;
+; pascal OSErr DMRegisterNotifyProc(DMNotificationUPP notificationProc, ProcessSerialNumberPtr whichPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMRegisterNotifyProc
+			move.w	#$0414,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMRegisterNotifyProc
+	ENDIF
+
+;
+; pascal OSErr DMRemoveNotifyProc(DMNotificationUPP notificationProc, ProcessSerialNumberPtr whichPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMRemoveNotifyProc
+			move.w	#$0415,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMRemoveNotifyProc
+	ENDIF
+
+;
+; pascal OSErr DMQDIsMirroringCapable(Boolean *qdIsMirroringCapable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMQDIsMirroringCapable
+			move.w	#$0216,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMQDIsMirroringCapable
+	ENDIF
+
+;
+; pascal OSErr DMCanMirrorNow(Boolean *canMirrorNow)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMCanMirrorNow
+			move.w	#$0217,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMCanMirrorNow
+	ENDIF
+
+;
+; pascal OSErr DMIsMirroringOn(Boolean *isMirroringOn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMIsMirroringOn
+			move.w	#$0218,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMIsMirroringOn
+	ENDIF
+
+;
+; pascal OSErr DMMirrorDevices(GDHandle gD1, GDHandle gD2, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMMirrorDevices
+			move.w	#$0619,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMMirrorDevices
+	ENDIF
+
+;
+; pascal OSErr DMUnmirrorDevice(GDHandle gDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMUnmirrorDevice
+			move.w	#$041A,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMUnmirrorDevice
+	ENDIF
+
+;
+; pascal OSErr DMGetNextMirroredDevice(GDHandle gDevice, GDHandle *mirroredDevice)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetNextMirroredDevice
+			move.w	#$041B,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetNextMirroredDevice
+	ENDIF
+
+;
+; pascal OSErr DMBlockMirroring(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMBlockMirroring
+			moveq	#28,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMBlockMirroring
+	ENDIF
+
+;
+; pascal OSErr DMUnblockMirroring(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMUnblockMirroring
+			moveq	#29,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMUnblockMirroring
+	ENDIF
+
+;
+; pascal OSErr DMGetDisplayMgrA5World(Ptr *dmA5)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDisplayMgrA5World
+			move.w	#$021E,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDisplayMgrA5World
+	ENDIF
+
+;
+; pascal OSErr DMGetDisplayIDByGDevice(GDHandle displayDevice, DisplayIDType *displayID, Boolean failToMain)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDisplayIDByGDevice
+			move.w	#$051F,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDisplayIDByGDevice
+	ENDIF
+
+;
+; pascal OSErr DMGetGDeviceByDisplayID(DisplayIDType displayID, GDHandle *displayDevice, Boolean failToMain)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetGDeviceByDisplayID
+			move.w	#$0520,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetGDeviceByDisplayID
+	ENDIF
+
+;
+; pascal OSErr DMSetDisplayComponent(GDHandle theDevice, Component displayComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSetDisplayComponent
+			move.w	#$0421,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSetDisplayComponent
+	ENDIF
+
+;
+; pascal OSErr DMGetDisplayComponent(GDHandle theDevice, Component *displayComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDisplayComponent
+			move.w	#$0422,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDisplayComponent
+	ENDIF
+
+;
+; pascal OSErr DMNewDisplay(GDHandle *newDevice, short driverRefNum, unsigned long mode, unsigned long reserved, DisplayIDType displayID, Component displayComponent, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewDisplay
+			move.w	#$0D23,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewDisplay
+	ENDIF
+
+;
+; pascal OSErr DMDisposeDisplay(GDHandle disposeDevice, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDisposeDisplay
+			move.w	#$0424,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDisposeDisplay
+	ENDIF
+
+;
+; pascal OSErr DMResolveDisplayComponents(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMResolveDisplayComponents
+			moveq	#37,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMResolveDisplayComponents
+	ENDIF
+
+;
+; pascal OSErr DMRegisterExtendedNotifyProc(DMExtendedNotificationUPP notifyProc, void *notifyUserData, unsigned short nofifyOnFlags, ProcessSerialNumberPtr whichPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMRegisterExtendedNotifyProc
+			move.w	#$07EF,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMRegisterExtendedNotifyProc
+	ENDIF
+
+;
+; pascal OSErr DMRemoveExtendedNotifyProc(DMExtendedNotificationUPP notifyProc, void *notifyUserData, ProcessSerialNumberPtr whichPSN, unsigned short removeFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMRemoveExtendedNotifyProc
+			move.w	#$0726,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMRemoveExtendedNotifyProc
+	ENDIF
+
+;
+; pascal OSErr DMNewAVPanelList(DisplayIDType displayID, ResType panelType, DMFidelityType minimumFidelity, unsigned long panelListFlags, unsigned long reserved, DMListIndexType *thePanelCount, DMListType *thePanelList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVPanelList
+			move.w	#$0C27,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVPanelList
+	ENDIF
+
+;
+; pascal OSErr DMNewAVEngineList(DisplayIDType displayID, ResType engineType, DMFidelityType minimumFidelity, unsigned long engineListFlags, unsigned long reserved, DMListIndexType *engineCount, DMListType *engineList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVEngineList
+			move.w	#$0C28,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVEngineList
+	ENDIF
+
+;
+; pascal OSErr DMNewAVDeviceList(ResType deviceType, unsigned long deviceListFlags, unsigned long reserved, DMListIndexType *deviceCount, DMListType *deviceList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVDeviceList
+			move.w	#$0A29,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVDeviceList
+	ENDIF
+
+;
+; pascal OSErr DMNewAVPortListByPortType(ResType subType, unsigned long portListFlags, unsigned long reserved, DMListIndexType *devicePortCount, DMListType *theDevicePortList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVPortListByPortType
+			move.w	#$0A2A,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVPortListByPortType
+	ENDIF
+
+;
+; pascal OSErr DMGetIndexedComponentFromList(DMListType panelList, DMListIndexType itemIndex, unsigned long reserved, DMComponentListIteratorUPP listIterator, void *userData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetIndexedComponentFromList
+			move.w	#$0A2B,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetIndexedComponentFromList
+	ENDIF
+
+;
+; pascal OSErr DMDisposeList(DMListType panelList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDisposeList
+			move.w	#$022C,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDisposeList
+	ENDIF
+
+;
+; pascal OSErr DMGetNameByAVID(AVIDType theID, unsigned long nameFlags, Str255 *name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetNameByAVID
+			move.w	#$062D,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetNameByAVID
+	ENDIF
+
+;
+; pascal OSErr DMNewAVIDByPortComponent(Component thePortComponent, ResType portKind, unsigned long reserved, AVIDType *newID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVIDByPortComponent
+			move.w	#$082E,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVIDByPortComponent
+	ENDIF
+
+;
+; pascal OSErr DMGetPortComponentByAVID(DisplayIDType thePortID, Component *thePortComponent, ComponentDescription *theDesciption, ResType *thePortKind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetPortComponentByAVID
+			move.w	#$082F,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetPortComponentByAVID
+	ENDIF
+
+;
+; pascal OSErr DMSendDependentNotification(ResType notifyType, ResType notifyClass, AVIDType displayID, ComponentInstance notifyComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSendDependentNotification
+			move.w	#$0A30,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSendDependentNotification
+	ENDIF
+
+;
+; pascal OSErr DMDisposeAVComponent(Component theAVComponent)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMDisposeAVComponent
+			move.w	#$0231,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMDisposeAVComponent
+	ENDIF
+
+;
+; pascal OSErr DMSaveScreenPrefs(unsigned long reserved1, unsigned long saveFlags, unsigned long reserved2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSaveScreenPrefs
+			move.w	#$0632,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSaveScreenPrefs
+	ENDIF
+
+;
+; pascal OSErr DMNewAVIDByDeviceComponent(Component theDeviceComponent, ResType portKind, unsigned long reserved, DisplayIDType *newID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVIDByDeviceComponent
+			move.w	#$0833,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVIDByDeviceComponent
+	ENDIF
+
+;
+; pascal OSErr DMNewAVPortListByDeviceAVID(AVIDType theID, DMFidelityType minimumFidelity, unsigned long portListFlags, unsigned long reserved, DMListIndexType *devicePortCount, DMListType *theDevicePortList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewAVPortListByDeviceAVID
+			move.w	#$0C34,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewAVPortListByDeviceAVID
+	ENDIF
+
+;
+; pascal OSErr DMGetDeviceComponentByAVID(AVIDType theDeviceID, Component *theDeviceComponent, ComponentDescription *theDesciption, ResType *theDeviceKind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDeviceComponentByAVID
+			move.w	#$0835,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDeviceComponentByAVID
+	ENDIF
+
+;
+; pascal OSErr DMNewDisplayModeList(DisplayIDType displayID, unsigned long modeListFlags, unsigned long reserved, DMListIndexType *thePanelCount, DMListType *thePanelList)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMNewDisplayModeList
+			move.w	#$0A36,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMNewDisplayModeList
+	ENDIF
+
+;
+; pascal OSErr DMGetIndexedDisplayModeFromList(DMListType panelList, DMListIndexType itemIndex, unsigned long reserved, DMDisplayModeListIteratorUPP listIterator, void *userData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetIndexedDisplayModeFromList
+			move.w	#$0A37,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetIndexedDisplayModeFromList
+	ENDIF
+
+;
+; pascal OSErr DMGetGraphicInfoByAVID(AVIDType theID, PicHandle *theAVPcit, Handle *theAVIconSuite, AVLocationRec *theAVLocation)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetGraphicInfoByAVID
+			move.w	#$0838,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetGraphicInfoByAVID
+	ENDIF
+
+;
+; pascal OSErr DMGetAVPowerState(AVIDType theID, AVPowerStatePtr getPowerState, unsigned long reserved1)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetAVPowerState
+			move.w	#$0839,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetAVPowerState
+	ENDIF
+
+;
+; pascal OSErr DMSetAVPowerState(AVIDType theID, AVPowerStatePtr setPowerState, unsigned long powerFlags, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSetAVPowerState
+			move.w	#$083A,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSetAVPowerState
+	ENDIF
+
+;
+; pascal OSErr DMGetDeviceAVIDByPortAVID(AVIDType portAVID, AVIDType *deviceAVID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDeviceAVIDByPortAVID
+			move.w	#$043B,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDeviceAVIDByPortAVID
+	ENDIF
+
+;
+; pascal OSErr DMGetEnableByAVID(AVIDType theAVID, Boolean *isAVIDEnabledNow, Boolean *canChangeEnableNow)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetEnableByAVID
+			move.w	#$063C,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetEnableByAVID
+	ENDIF
+
+;
+; pascal OSErr DMSetEnableByAVID(AVIDType theAVID, Boolean doEnable, Handle displayState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMSetEnableByAVID
+			move.w	#$053D,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMSetEnableByAVID
+	ENDIF
+
+;
+; pascal OSErr DMGetDisplayMode(GDHandle theDevice, VDSwitchInfoPtr switchInfo)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DMGetDisplayMode
+			move.w	#$043E,d0
+			dc.w 	$ABEB
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DMGetDisplayMode
+	ENDIF
+
+	ENDIF ; __DISPLAYS__

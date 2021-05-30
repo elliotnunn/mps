@@ -1,0 +1,1219 @@
+;
+;	File:		FSM.a
+;
+;	Contains:	HFS External File System Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__FSM__') = 'UNDEFINED' THEN
+__FSM__ SET 1
+
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'MixedMode.a'										;
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+;		include 'Finder.a'											;
+	IF OLDROUTINELOCATIONS  THEN
+
+volMountInteractBit				EQU		15					; Input to VolumeMount: If set, it's OK for the file system 
+volMountInteractMask			EQU		$8000				; to perform user interaction to mount the volume 
+volMountChangedBit				EQU		14					; Output from VoumeMount: If set, the volume was mounted, but 
+volMountChangedMask				EQU		$4000				; the volume mounting information record needs to be updated. 
+volMountFSReservedMask			EQU		$00ff				; bits 0-7 are defined by each file system for its own use 
+volMountSysReservedMask			EQU		$ff00				; bits 8-15 are reserved for Apple system use 
+
+;
+; * additional volume mount info record
+; 
+VolumeMountInfoHeader 	RECORD	0
+length					 ds.w   1		; offset: $0 (0)		; length of location data (including self) 
+media					 ds.l   1		; offset: $2 (2)		; type of media (must be registered with Apple) 
+flags					 ds.w   1		; offset: $6 (6)		; volume mount flags. Variable length data follows 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct VolumeMountInfoHeader  VolumeMountInfoHeader
+; typedef VolumeMountInfoHeader  *VolumeMountInfoHeaderPtr
+
+gestaltFSMVersion				EQU		'fsm '
+
+; typedef VCB 				*VCBPtr
+	ENDIF
+
+fsUsrCNID						EQU		16					; First assignable directory or file number 
+;	File system trap word attribute bits 
+kHFSBit							EQU		9					; HFS call: bit 9 
+kHFSMask						EQU		$0200
+kAsyncBit						EQU		10					; Asynchronous call: bit 10 
+kAsyncMask						EQU		$0400
+
+;
+; * HFSCIProc selectCode values
+; * Note: The trap attribute bits (the HFS bit and the asynchronous bit)
+; * may be set in these selectCode values.
+; 
+kFSMOpen						EQU		$A000
+kFSMClose						EQU		$A001
+kFSMRead						EQU		$A002
+kFSMWrite						EQU		$A003
+kFSMGetVolInfo					EQU		$A007
+kFSMCreate						EQU		$A008
+kFSMDelete						EQU		$A009
+kFSMOpenRF						EQU		$A00A
+kFSMRename						EQU		$A00B
+kFSMGetFileInfo					EQU		$A00C
+kFSMSetFileInfo					EQU		$A00D
+kFSMUnmountVol					EQU		$A00E
+kFSMMountVol					EQU		$A00F
+kFSMAllocate					EQU		$A010
+kFSMGetEOF						EQU		$A011
+kFSMSetEOF						EQU		$A012
+kFSMFlushVol					EQU		$A013
+kFSMGetVol						EQU		$A014
+kFSMSetVol						EQU		$A015
+kFSMEject						EQU		$A017
+kFSMGetFPos						EQU		$A018
+kFSMOffline						EQU		$A035
+kFSMSetFilLock					EQU		$A041
+kFSMRstFilLock					EQU		$A042
+kFSMSetFilType					EQU		$A043
+kFSMSetFPos						EQU		$A044
+kFSMFlushFile					EQU		$A045
+;	The File System HFSDispatch selectCodes 
+kFSMOpenWD						EQU		$0001
+kFSMCloseWD						EQU		$0002
+kFSMCatMove						EQU		$0005
+kFSMDirCreate					EQU		$0006
+kFSMGetWDInfo					EQU		$0007
+kFSMGetFCBInfo					EQU		$0008
+kFSMGetCatInfo					EQU		$0009
+kFSMSetCatInfo					EQU		$000A
+kFSMSetVolInfo					EQU		$000B
+kFSMLockRng						EQU		$0010
+kFSMUnlockRng					EQU		$0011
+kFSMCreateFileIDRef				EQU		$0014
+kFSMDeleteFileIDRef				EQU		$0015
+kFSMResolveFileIDRef			EQU		$0016
+kFSMExchangeFiles				EQU		$0017
+kFSMCatSearch					EQU		$0018
+kFSMOpenDF						EQU		$001A
+kFSMMakeFSSpec					EQU		$001B
+;	The Desktop Manager HFSDispatch selectCodes 
+kFSMDTGetPath					EQU		$0020
+kFSMDTCloseDown					EQU		$0021
+kFSMDTAddIcon					EQU		$0022
+kFSMDTGetIcon					EQU		$0023
+kFSMDTGetIconInfo				EQU		$0024
+kFSMDTAddAPPL					EQU		$0025
+kFSMDTRemoveAPPL				EQU		$0026
+kFSMDTGetAPPL					EQU		$0027
+kFSMDTSetComment				EQU		$0028
+kFSMDTRemoveComment				EQU		$0029
+kFSMDTGetComment				EQU		$002A
+kFSMDTFlush						EQU		$002B
+kFSMDTReset						EQU		$002C
+kFSMDTGetInfo					EQU		$002D
+kFSMDTOpenInform				EQU		$002E
+kFSMDTDelete					EQU		$002F
+;	The AppleShare HFSDispatch selectCodes 
+kFSMGetVolParms					EQU		$0030
+kFSMGetLogInInfo				EQU		$0031
+kFSMGetDirAccess				EQU		$0032
+kFSMSetDirAccess				EQU		$0033
+kFSMMapID						EQU		$0034
+kFSMMapName						EQU		$0035
+kFSMCopyFile					EQU		$0036
+kFSMMoveRename					EQU		$0037
+kFSMOpenDeny					EQU		$0038
+kFSMOpenRFDeny					EQU		$0039
+kFSMGetXCatInfo					EQU		$003A
+kFSMGetVolMountInfoSize			EQU		$003F
+kFSMGetVolMountInfo				EQU		$0040
+kFSMVolumeMount					EQU		$0041
+kFSMShare						EQU		$0042
+kFSMUnShare						EQU		$0043
+kFSMGetUGEntry					EQU		$0044
+kFSMGetForeignPrivs				EQU		$0060
+kFSMSetForeignPrivs				EQU		$0061
+
+;
+; * UTDetermineVol status values
+; 
+dtmvError						EQU		0					; param error 
+dtmvFullPathame					EQU		1					; determined by full pathname 
+dtmvVRefNum						EQU		2					; determined by volume refNum 
+dtmvWDRefNum					EQU		3					; determined by working directory refNum 
+dtmvDriveNum					EQU		4					; determined by drive number 
+dtmvDefault						EQU		5					; determined by default volume 
+
+;
+; * UTGetBlock options
+; 
+gbDefault						EQU		0					; default value - read if not found 
+;	bits and masks 
+gbReadBit						EQU		0					; read block from disk (forced read) 
+gbReadMask						EQU		$0001
+gbExistBit						EQU		1					; get existing cache block 
+gbExistMask						EQU		$0002
+gbNoReadBit						EQU		2					; don't read block from disk if not found in cache 
+gbNoReadMask					EQU		$0004
+gbReleaseBit					EQU		3					; release block immediately after GetBlock 
+gbReleaseMask					EQU		$0008
+
+;
+; * UTReleaseBlock options
+; 
+rbDefault						EQU		0					; default value - just mark the buffer not in-use 
+;	bits and masks 
+rbWriteBit						EQU		0					; force write buffer to disk 
+rbWriteMask						EQU		$0001
+rbTrashBit						EQU		1					; trash buffer contents after release 
+rbTrashMask						EQU		$0002
+rbDirtyBit						EQU		2					; mark buffer dirty 
+rbDirtyMask						EQU		$0004
+rbFreeBit						EQU		3					; free the buffer (save in the hash) 
+;
+; *	rbFreeMask (rbFreeBit + rbTrashBit) works as rbTrash on < System 7.0 RamCache;
+; *	on >= System 7.0, rbfreeMask overrides rbTrash
+; 
+rbFreeMask						EQU		$000A
+
+;
+; * UTFlushCache options
+; 
+fcDefault						EQU		0					; default value - just flush any dirty buffers 
+;	bits and masks 
+fcTrashBit						EQU		1					; trash buffers after flushing 
+fcTrashMask						EQU		$0002
+fcFreeBit						EQU		3					; free buffers after flushing 
+fcFreeMask						EQU		$0008				; fcFreeMask works as fcTrash on < System 7.0 RamCache 
+
+;
+; * UTCacheReadIP and UTCacheWriteIP cacheOption
+; 
+noCacheBit						EQU		5					; don't cache this please 
+noCacheMask						EQU		$0020
+rdVerifyBit						EQU		6					; read verify 
+rdVerifyMask					EQU		$0040
+
+;
+; * Cache routine internal error codes
+; 
+chNoBuf							EQU		1					; no free cache buffers (all in use) 
+chInUse							EQU		2					; requested block in use 
+chnotfound						EQU		3					; requested block not found 
+chNotInUse						EQU		4					; block being released was not in use 
+
+;
+; * FCBRec.fcbFlags bits
+; 
+fcbWriteBit						EQU		0					; Data can be written to this file 
+fcbWriteMask					EQU		$01
+fcbResourceBit					EQU		1					; This file is a resource fork 
+fcbResourceMask					EQU		$02
+fcbWriteLockedBit				EQU		2					; File has a locked byte range 
+fcbWriteLockedMask				EQU		$04
+fcbSharedWriteBit				EQU		4					; File is open for shared write access 
+fcbSharedWriteMask				EQU		$10
+fcbFileLockedBit				EQU		5					; File is locked (write-protected) 
+fcbFileLockedMask				EQU		$20
+fcbOwnClumpBit					EQU		6					; File has clump size specified in FCB 
+fcbOwnClumpMask					EQU		$40
+fcbModifiedBit					EQU		7					; File has changed since it was last flushed 
+fcbModifiedMask					EQU		$80
+
+;
+; * ExtFileProc options
+; 
+extendFileAllBit				EQU		0					; allocate all requested bytes or none 
+extendFileAllMask				EQU		$0001
+extendFileContigBit				EQU		1					; force contiguous allocation 
+extendFileContigMask			EQU		$0002
+
+;
+; *	HFS Component Interface constants
+; 
+;
+; * compInterfMask bits specific to HFS component
+; 
+hfsCIDoesHFSBit					EQU		23					; set if file system supports HFS calls 
+hfsCIDoesHFSMask				EQU		$00800000
+hfsCIDoesAppleShareBit			EQU		22					; set if AppleShare calls supported 
+hfsCIDoesAppleShareMask			EQU		$00400000
+hfsCIDoesDeskTopBit				EQU		21					; set if Desktop Database calls supported 
+hfsCIDoesDeskTopMask			EQU		$00200000
+hfsCIDoesDynamicLoadBit			EQU		20					; set if dynamically loading code resource 
+hfsCIDoesDynamicLoadMask		EQU		$00100000			;		supported 
+hfsCIResourceLoadedBit			EQU		19					; set if code resource already loaded 
+hfsCIResourceLoadedMask			EQU		$00080000
+hfsCIHasHLL2PProcBit			EQU		18					; set if FFS' log2PhyProc and Extendfile proc 
+hfsCIHasHLL2PProcMask			EQU		$00040000			; is written in a high level language. (i.e., uses Pascal calling convention) 
+
+;
+; *	Disk Initialization Component Interface constants
+; 
+;
+; * compInterfMask bits specific to Disk Initialization component
+; 
+diCIHasExtFormatParamsBit		EQU		18					; set if file system needs extended format 
+diCIHasExtFormatParamsMask		EQU		$00040000			;		parameters 
+diCIHasMultiVolTypesBit			EQU		17					; set if file system supports more than one 
+diCIHasMultiVolTypesMask		EQU		$00020000			;		volume type 
+diCIDoesSparingBit				EQU		16					; set if file system supports disk sparing 
+diCIDoesSparingMask				EQU		$00010000
+diCILiveBit						EQU		0					; set if file system is candidate for current 
+diCILiveMask					EQU		$00000001			;		formatting operation (set by PACK2) 
+
+;
+; * Disk Initialization Component Function selectors
+; 
+diCILoad						EQU		1					; Make initialization code memory resident 
+diCIUnload						EQU		2					; Make initialization code purgeable 
+diCIEvaluateSizeChoices			EQU		3					; Evaluate size choices 
+diCIExtendedZero				EQU		4					; Write an empty volume directory 
+diCIValidateVolName				EQU		5					; Validate volume name 
+diCIGetVolTypeInfo				EQU		6					; get volume type info 
+diCIGetFormatString				EQU		7					; get dialog format string 
+diCIGetExtFormatParams			EQU		8					; get extended format parameters 
+diCIGetDefectList				EQU		9					; return the defect list for the indicated disk - reserved for future use 
+
+;
+; * Constants used in the DICIEvaluateSizeRec and FormatListRec
+; 
+diCIFmtListMax					EQU		8					; maximum number of format list entries in DICIEvaluateSizeRec.numSizeEntries 
+;	bits in FormatListRec.formatFlags: 
+diCIFmtFlagsValidBit			EQU		7					; set if sec, side, tracks valid 
+diCIFmtFlagsValidMask			EQU		$80
+diCIFmtFlagsCurrentBit			EQU		6					; set if current disk has this fmt 
+diCIFmtFlagsCurrentMask			EQU		$40
+;	bits in FormatListRec.sizeListFlags: 
+diCISizeListOKBit				EQU		15					; set if this disk size usable 
+diCISizeListOKMask				EQU		$8000
+
+;
+; * DICIGetFormatStringRec.stringKind format strings
+; 
+diCIAlternateFormatStr			EQU		1					; get alternate format  string (Balloon Help) 
+diCISizePresentationStr			EQU		2					; get size presentation string (for dialog) 
+
+;
+; * Error codes returned by Disk Sparing
+; 
+diCIUserCancelErr				EQU		1					; user cancelled the disk init 
+diCICriticalSectorBadErr		EQU		20					; critical sectors are bad (hopeless)	
+diCISparingFailedErr			EQU		21					; disk cannot be spared 
+diCITooManyBadSectorsErr		EQU		22					; too many bad sectors 
+diCIUnknownVolTypeErr			EQU		23					; the volume type passed in diCIExtendedZero paramBlock is not supported 
+diCIVolSizeMismatchErr			EQU		24					; specified volume size doesn’t match with formatted disk size 
+diCIUnknownDICallErr			EQU		25					; bogus DI function call selector 
+diCINoSparingErr				EQU		26					; disk is bad but the target FS doesn't do disk sparing 
+diCINoExtendInfoErr				EQU		27					; missing file system specific extra parameter in diCIExtendedZero call 
+diCINoMessageTextErr			EQU		28					; missing message text in DIReformat call 
+
+;
+; *	File System Manager constants
+; 
+;
+; * Miscellaneous constants used by FSM
+; 
+fsdVersion1						EQU		1					; current version of FSD record 
+fsmIgnoreFSID					EQU		$fffe				; this FSID should be ignored by the driver 
+fsmGenericFSID					EQU		$ffff				; unknown foreign file system ID 
+
+;
+; * compInterfMask bits common to all FSM components
+; 
+fsmComponentEnableBit			EQU		31					; set if FSM component interface is enabled 
+fsmComponentEnableMask			EQU		$80000000
+fsmComponentBusyBit				EQU		30					; set if FSM component interface is busy 
+fsmComponentBusyMask			EQU		$40000000
+
+;
+; * Selectors for GetFSInfo
+; 
+fsmGetFSInfoByIndex				EQU		-1					; get fs info by index 
+fsmGetFSInfoByFSID				EQU		0					; get fs info by FSID 
+fsmGetFSInfoByRefNum			EQU		1					; get fs info by file/vol refnum 
+
+;
+; * InformFSM messages
+; 
+fsmNopMessage					EQU		0					; nop 
+fsmDrvQElChangedMessage			EQU		1					; DQE has changed 
+fsmGetFSIconMessage				EQU		2					; Get FFS's disk icon 
+
+;
+; * Messages passed to the fileSystemCommProc
+; 
+ffsNopMessage					EQU		0					; nop, should always return noErr 
+ffsGetIconMessage				EQU		1					; return disk icon and mask 
+ffsIDDiskMessage				EQU		2					; identify the about-to-be-mounted volume 
+ffsLoadMessage					EQU		3					; load in the FFS 
+ffsUnloadMessage				EQU		4					; unload the FFS 
+ffsIDVolMountMessage			EQU		5					; identify a VolMountInfo record 
+ffsInformMessage				EQU		6					; FFS defined message 
+ffsGetIconInfoMessage			EQU		7
+
+;
+; * Error codes from FSM functions
+; 
+fsmFFSNotFoundErr				EQU		-431				; Foreign File system does not exist - new Pack2 could return this error too 
+fsmBusyFFSErr					EQU		-432				; File system is busy, cannot be removed 
+fsmBadFFSNameErr				EQU		-433				; Name length not 1 <= length <= 31 
+fsmBadFSDLenErr					EQU		-434				; FSD size incompatible with current FSM vers 
+fsmDuplicateFSIDErr				EQU		-435				; FSID already exists on InstallFS 
+fsmBadFSDVersionErr				EQU		-436				; FSM version incompatible with FSD 
+fsmNoAlternateStackErr			EQU		-437				; no alternate stack for HFS CI 
+fsmUnknownFSMMessageErr			EQU		-438				; unknown message passed to FSM 
+
+;
+; *	HFS Utility routine records
+; 
+;
+; * record used by UTGetPathComponentName
+; 
+ParsePathRec 			RECORD	0
+namePtr					 ds.l   1		; offset: $0 (0)		; pathname to parse 
+startOffset				 ds.w   1		; offset: $4 (4)		; where to start parsing 
+componentLength			 ds.w   1		; offset: $6 (6)		; the length of the pathname component parsed 
+moreName				 ds.b   1		; offset: $8 (8)		; non-zero if there are more components after this one 
+foundDelimiter			 ds.b   1		; offset: $9 (9)		; non-zero if parsing stopped because a colon (:) delimiter was found 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct ParsePathRec  ParsePathRec
+; typedef ParsePathRec 		*ParsePathRecPtr
+WDCBRec 				RECORD	0
+wdVCBPtr				 ds.l   1		; offset: $0 (0)		; Pointer to VCB of this working directory 
+wdDirID					 ds.l   1		; offset: $4 (4)		; Directory ID number of this working directory 
+wdCatHint				 ds.l   1		; offset: $8 (8)		; Hint for finding this working directory 
+wdProcID				 ds.l   1		; offset: $C (12)		; Process that created this working directory 
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct WDCBRec 	WDCBRec
+; typedef WDCBRec 			*WDCBRecPtr
+FCBRec 					RECORD	0
+fcbFlNm					 ds.l   1		; offset: $0 (0)		; FCB file number. Non-zero marks FCB used 
+fcbFlags				 ds.b   1		; offset: $4 (4)		; FCB flags 
+fcbTypByt				 ds.b   1		; offset: $5 (5)		; File type byte 
+fcbSBlk					 ds.w   1		; offset: $6 (6)		; File start block (in alloc size blks) 
+fcbEOF					 ds.l   1		; offset: $8 (8)		; Logical length or EOF in bytes 
+fcbPLen					 ds.l   1		; offset: $C (12)		; Physical file length in bytes 
+fcbCrPs					 ds.l   1		; offset: $10 (16)		; Current position within file 
+fcbVPtr					 ds.l   1		; offset: $14 (20)		; Pointer to the corresponding VCB 
+fcbBfAdr				 ds.l   1		; offset: $18 (24)		; File's buffer address 
+fcbFlPos				 ds.w   1		; offset: $1C (28)		; Directory block this file is in 
+; FCB Extensions for HFS 
+fcbClmpSize				 ds.l   1		; offset: $1E (30)		; Number of bytes per clump 
+fcbBTCBPtr				 ds.l   1		; offset: $22 (34)		; Pointer to B*-Tree control block for file 
+fcbExtRec				 ds.l   3		; offset: $26 (38)		; First 3 file extents 
+fcbFType				 ds.l   1		; offset: $32 (50)		; File's 4 Finder Type bytes 
+fcbCatPos				 ds.l   1		; offset: $36 (54)		; Catalog hint for use on Close 
+fcbDirID				 ds.l   1		; offset: $3A (58)		; Parent Directory ID 
+fcbCName				 ds.l   8		; offset: $3E (62)		; CName of open file 
+sizeof					 EQU *			; size:   $5E (94)
+						ENDR
+
+; typedef struct FCBRec 	FCBRec
+; typedef FCBRec 			*FCBRecPtr
+;
+; *	HFS Component Interface records
+; 
+HFSCIRec 				RECORD	0
+compInterfMask			 ds.l   1		; offset: $0 (0)		; component flags 
+compInterfProc			 ds.l   1		; offset: $4 (4)		; pointer to file system call processing code 
+log2PhyProc				 ds.l   1		; offset: $8 (8)		; pointer to Lg2PhysProc() code 
+stackTop				 ds.l   1		; offset: $C (12)		; file system stack top 
+stackSize				 ds.l   1		; offset: $10 (16)		; file system stack size 
+stackPtr				 ds.l   1		; offset: $14 (20)		; current file system stack pointer 
+reserved3				 ds.l   1		; offset: $18 (24)		; --reserved, must be zero-- 
+idSector				 ds.l   1		; offset: $1C (28)		; Sector you need to ID a local volume. For networked volumes, this must be -1 
+reserved2				 ds.l   1		; offset: $20 (32)		; --reserved, must be zero-- 
+reserved1				 ds.l   1		; offset: $24 (36)		; --reserved, must be zero-- 
+sizeof					 EQU *			; size:   $28 (40)
+						ENDR
+
+; typedef struct HFSCIRec 	HFSCIRec
+; typedef HFSCIRec 			*HFSCIRecPtr
+;
+; *	Disk Initialization Component Interface records
+; 
+DICIRec 				RECORD	0
+compInterfMask			 ds.l   1		; offset: $0 (0)		; component flags 
+compInterfProc			 ds.l   1		; offset: $4 (4)		; pointer to call processing code 
+maxVolNameLength		 ds.w   1		; offset: $8 (8)		; maximum length of your volume name 
+blockSize				 ds.w   1		; offset: $A (10)		; your file system's block size 
+reserved3				 ds.l   1		; offset: $C (12)		; --reserved, must be zero-- 
+reserved2				 ds.l   1		; offset: $10 (16)		; --reserved, must be zero-- 
+reserved1				 ds.l   1		; offset: $14 (20)		; --reserved, must be zero-- 
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct DICIRec 	DICIRec
+; typedef DICIRec 			*DICIRecPtr
+;
+; * FormatListRec as returned by the .Sony disk driver's
+; * Return Format List status call (csCode = 6).
+; * If the status call to get this list for a drive is not
+; * implemented by the driver, then a list with one entry
+; * is contructed from the drive queue element for the drive.
+; 
+FormatListRec 			RECORD	0
+volSize					 ds.l   1		; offset: $0 (0)		; disk capacity in SECTORs 
+formatFlags				 ds.b   1		; offset: $4 (4)		; flags 
+sectorsPerTrack			 ds.b   1		; offset: $5 (5)		; sectors per track side 
+tracks					 ds.w   1		; offset: $6 (6)		; number of tracks 
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct FormatListRec  FormatListRec
+; typedef FormatListRec 	*FormatListRecPtr
+;
+; * SizeListRec built from FormatListRecs as described above.
+; 
+SizeListRec 			RECORD	0
+sizeListFlags			 ds.w   1		; offset: $0 (0)		; flags as set by external file system 
+sizeEntry				 ds     FormatListRec ; offset: $2 (2)	; disk driver format list record 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct SizeListRec  SizeListRec
+; typedef SizeListRec 		*SizeListRecPtr
+;
+; * paramBlock for the diCIEvaluateSize call
+; 
+DICIEvaluateSizeRec 	RECORD	0
+defaultSizeIndex		 ds.w   1		; offset: $0 (0)		; default size for this FS 
+numSizeEntries			 ds.w   1		; offset: $2 (2)		; number of size entries 
+driveNumber				 ds.w   1		; offset: $4 (4)		; drive number 
+sizeListPtr				 ds.l   1		; offset: $6 (6)		; ptr to size entry table 
+sectorSize				 ds.w   1		; offset: $A (10)		; bytes per sector 
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct DICIEvaluateSizeRec  DICIEvaluateSizeRec
+; typedef DICIEvaluateSizeRec  *DICIEvaluateSizeRecPtr
+;
+; * paramBlock for the diCIExtendedZero call
+; 
+DICIExtendedZeroRec 	RECORD	0
+driveNumber				 ds.w   1		; offset: $0 (0)		; drive number 
+volNamePtr				 ds.l   1		; offset: $2 (2)		; ptr to volume name string 
+fsid					 ds.w   1		; offset: $6 (6)		; file system ID 
+volTypeSelector			 ds.w   1		; offset: $8 (8)		; volume type selector, if supports more than 1 type 
+numDefectBlocks			 ds.w   1		; offset: $A (10)		; number of bad logical blocks 
+defectListSize			 ds.w   1		; offset: $C (12)		; size of the defect list buffer in bytes 
+defectListPtr			 ds.l   1		; offset: $E (14)		; pointer to defect list buffer 
+volSize					 ds.l   1		; offset: $12 (18)		; size of volume in SECTORs 
+sectorSize				 ds.w   1		; offset: $16 (22)		; bytes per sector 
+extendedInfoPtr			 ds.l   1		; offset: $18 (24)		; ptr to extended info 
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct DICIExtendedZeroRec  DICIExtendedZeroRec
+; typedef DICIExtendedZeroRec  *DICIExtendedZeroRecPtr
+;
+; * paramBlock for the diCIValidateVolName call
+; 
+DICIValidateVolNameRec 	RECORD	0
+theChar					 ds.b   1		; offset: $0 (0)		; the character to validate 
+hasMessageBuffer		 ds.b   1		; offset: $1 (1)		; false if no message 
+charOffset				 ds.w   1		; offset: $2 (2)		; position of the current character (first char = 1) 
+messageBufferPtr		 ds.l   1		; offset: $4 (4)		; pointer to message buffer or nil 
+charByteType			 ds.w   1		; offset: $8 (8)		; theChar's byte type (smSingleByte, smFirstByte, or smLastByte) 
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+; typedef struct DICIValidateVolNameRec  DICIValidateVolNameRec
+; typedef DICIValidateVolNameRec  *DICIValidateVolNameRecPtr
+;
+; * paramBlock for the diCIGetVolTypeInfo call
+; 
+DICIGetVolTypeInfoRec 	RECORD	0
+volSize					 ds.l   1		; offset: $0 (0)		; size of volume in SECTORs 
+sectorSize				 ds.w   1		; offset: $4 (4)		; bytes per sector 
+numVolTypes				 ds.w   1		; offset: $6 (6)		; number of volume types supported 
+volTypesBuffer			 ds.l   32		; offset: $8 (8)		; 4 string buffers 
+sizeof					 EQU *			; size:   $88 (136)
+						ENDR
+
+; typedef struct DICIGetVolTypeInfoRec  DICIGetVolTypeInfoRec
+; typedef DICIGetVolTypeInfoRec  *DICIGetVolTypeInfoRecPtr
+;
+; * paramBlock for the diCIGetFormatString call
+; 
+DICIGetFormatStringRec 	RECORD	0
+volSize					 ds.l   1		; offset: $0 (0)		; volume size in SECTORs 
+sectorSize				 ds.w   1		; offset: $4 (4)		; sector size 
+volTypeSelector			 ds.w   1		; offset: $6 (6)		; volume type selector 
+stringKind				 ds.w   1		; offset: $8 (8)		; sub-function = type of string 
+stringBuffer			 ds.l   64		; offset: $A (10)		; string buffer 
+sizeof					 EQU *			; size:   $10A (266)
+						ENDR
+
+; typedef struct DICIGetFormatStringRec  DICIGetFormatStringRec
+; typedef DICIGetFormatStringRec  *DICIGetFormatStringRecPtr
+;
+; * paramBlock for the diCIGetExtendedFormatParams call
+; 
+DICIGetExtendedFormatRec RECORD	0
+driveNumber				 ds.w   1		; offset: $0 (0)		; drive number 
+volTypeSelector			 ds.w   1		; offset: $2 (2)		; volume type selector or 0 
+volSize					 ds.l   1		; offset: $4 (4)		; size of volume in SECTORs 
+sectorSize				 ds.w   1		; offset: $8 (8)		; bytes per sector 
+fileSystemSpecPtr		 ds.l   1		; offset: $A (10)		; pointer to the foreign file system's FSSpec 
+extendedInfoPtr			 ds.l   1		; offset: $E (14)		; pointer to extended parameter structure 
+sizeof					 EQU *			; size:   $12 (18)
+						ENDR
+
+; typedef struct DICIGetExtendedFormatRec  DICIGetExtendedFormatRec
+; typedef DICIGetExtendedFormatRec  *DICIGetExtendedFormatRecPtr
+;
+; *	File System Manager records
+; 
+FSDRec 					RECORD	0
+fsdLink					 ds.l   1		; offset: $0 (0)		; ptr to next 
+fsdLength				 ds.w   1		; offset: $4 (4)		; length of this FSD in BYTES 
+fsdVersion				 ds.w   1		; offset: $6 (6)		; version number 
+fileSystemFSID			 ds.w   1		; offset: $8 (8)		; file system id 
+fileSystemName			 ds.l   8		; offset: $A (10)		; file system name 
+fileSystemSpec			 ds     FSSpec	; offset: $2A (42)		; foreign file system's FSSpec 
+fileSystemGlobalsPtr	 ds.l   1		; offset: $70 (112)		; ptr to file system globals 
+fileSystemCommProc		 ds.l   1		; offset: $74 (116)		; communication proc with the FFS 
+reserved3				 ds.l   1		; offset: $78 (120)		; --reserved, must be zero-- 
+reserved2				 ds.l   1		; offset: $7C (124)		; --reserved, must be zero-- 
+reserved1				 ds.l   1		; offset: $80 (128)		; --reserved, must be zero-- 
+fsdHFSCI				 ds     HFSCIRec ; offset: $84 (132)	; HFS component interface    
+fsdDICI					 ds     DICIRec	; offset: $AC (172)		; Disk Initialization component interface 
+sizeof					 EQU *			; size:   $C4 (196)
+						ENDR
+
+; typedef struct FSDRec 	FSDRec
+; typedef FSDRec 			*FSDRecPtr
+FSMGetIconInfoRec 		RECORD	0
+theIcon					 ds.l   32		; offset: $0 (0)		; The ICN# structure 
+theMask					 ds.l   32		; offset: $80 (128)		; The mask for the icon above 
+whereStr				 ds.l   64		; offset: $100 (256)
+sizeof					 EQU *			; size:   $200 (512)
+						ENDR
+
+; typedef struct FSMGetIconInfoRec  FSMGetIconInfoRec
+; typedef FSMGetIconInfoRec  *FSMGetIconInfoRecPtr
+;
+; * paramBlock for ffsGetIconMessage and fsmGetFSIconMessage
+; 
+FSMGetIconRec 			RECORD	0
+refNum					 ds.w   1		; offset: $0 (0)		; target drive num or volume refnum 
+iconBufferPtr			 ds.l   1		; offset: $2 (2)		; pointer to icon buffer 
+requestSize				 ds.l   1		; offset: $6 (6)		; requested size of the icon buffer 
+actualSize				 ds.l   1		; offset: $A (10)		; actual size of the icon data returned 
+iconType				 ds.b   1		; offset: $E (14)		; kind of icon 
+isEjectable				 ds.b   1		; offset: $F (15)		; true if the device is ejectable 
+driveQElemPtr			 ds.l   1		; offset: $10 (16)		; pointer to DQE 
+fileSystemSpecPtr		 ds.l   1		; offset: $14 (20)		; pointer to foreign file system's FSSpec 
+reserved1				 ds.l   1		; offset: $18 (24)		; --reserved, must be zero-- 
+sizeof					 EQU *			; size:   $1C (28)
+						ENDR
+
+; typedef struct FSMGetIconRec  FSMGetIconRec
+; typedef FSMGetIconRec 	*FSMGetIconRecPtr
+;
+; *	HFS Utility routine prototypes
+; 
+;
+; pascal OSErr UTAllocateFCB(short *fileRefNum, FCBRecPtr *fileCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTAllocateFCB
+			moveq	#0,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTAllocateFCB
+	ENDIF
+
+;
+; pascal OSErr UTReleaseFCB(short fileRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTReleaseFCB
+			moveq	#1,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTReleaseFCB
+	ENDIF
+
+;
+; pascal OSErr UTLocateFCB(VCBPtr volCtrlBlockPtr, unsigned long fileNum, StringPtr namePtr, short *fileRefNum, FCBRecPtr *fileCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTLocateFCB
+			moveq	#2,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTLocateFCB
+	ENDIF
+
+;
+; pascal OSErr UTLocateNextFCB(VCBPtr volCtrlBlockPtr, unsigned long fileNum, StringPtr namePtr, short *fileRefNum, FCBRecPtr *fileCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTLocateNextFCB
+			moveq	#3,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTLocateNextFCB
+	ENDIF
+
+;
+; pascal OSErr UTIndexFCB(VCBPtr volCtrlBlockPtr, short *fileRefNum, FCBRecPtr *fileCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTIndexFCB
+			moveq	#4,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTIndexFCB
+	ENDIF
+
+;
+; pascal OSErr UTResolveFCB(short fileRefNum, FCBRecPtr *fileCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTResolveFCB
+			moveq	#5,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTResolveFCB
+	ENDIF
+
+;
+; pascal OSErr UTAllocateVCB(unsigned short *sysVCBLength, VCBPtr *volCtrlBlockPtr, unsigned short addSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTAllocateVCB
+			moveq	#6,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTAllocateVCB
+	ENDIF
+
+;
+; pascal OSErr UTAddNewVCB(short driveNum, short *vRefNum, VCBPtr volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTAddNewVCB
+			moveq	#7,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTAddNewVCB
+	ENDIF
+
+;
+; pascal OSErr UTDisposeVCB(VCBPtr volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTDisposeVCB
+			moveq	#8,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTDisposeVCB
+	ENDIF
+
+;
+; pascal OSErr UTLocateVCBByRefNum(short refNum, short *vRefNum, VCBPtr *volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTLocateVCBByRefNum
+			moveq	#9,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTLocateVCBByRefNum
+	ENDIF
+
+;
+; pascal OSErr UTLocateVCBByName(StringPtr namePtr, short *moreMatches, short *vRefNum, VCBPtr *volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTLocateVCBByName
+			moveq	#10,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTLocateVCBByName
+	ENDIF
+
+;
+; pascal OSErr UTLocateNextVCB(StringPtr namePtr, short *moreMatches, short *vRefNum, VCBPtr *volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTLocateNextVCB
+			moveq	#11,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTLocateNextVCB
+	ENDIF
+
+;
+; pascal OSErr UTAllocateWDCB(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTAllocateWDCB
+			moveq	#12,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTAllocateWDCB
+	ENDIF
+
+;
+; pascal OSErr UTReleaseWDCB(short wdRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTReleaseWDCB
+			moveq	#13,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTReleaseWDCB
+	ENDIF
+
+;
+; pascal OSErr UTResolveWDCB(long procID, short wdIndex, short wdRefNum, WDCBRecPtr *wdCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTResolveWDCB
+			moveq	#14,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTResolveWDCB
+	ENDIF
+
+;
+; pascal OSErr UTFindDrive(short driveNum, DrvQElPtr *driveQElementPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTFindDrive
+			moveq	#15,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTFindDrive
+	ENDIF
+
+;
+; pascal OSErr UTAdjustEOF(short fileRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTAdjustEOF
+			moveq	#16,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTAdjustEOF
+	ENDIF
+
+;
+; pascal OSErr UTSetDefaultVol(long nodeHint, unsigned long dirID, short refNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTSetDefaultVol
+			moveq	#17,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTSetDefaultVol
+	ENDIF
+
+;
+; pascal OSErr UTGetDefaultVol(WDPBPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTGetDefaultVol
+			moveq	#18,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTGetDefaultVol
+	ENDIF
+
+;
+; pascal OSErr UTEjectVol(VCBPtr volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTEjectVol
+			moveq	#43,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTEjectVol
+	ENDIF
+
+;
+; pascal OSErr UTCheckWDRefNum(short wdRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckWDRefNum
+			moveq	#19,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckWDRefNum
+	ENDIF
+
+;
+; pascal OSErr UTCheckFileRefNum(short fileRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckFileRefNum
+			moveq	#20,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckFileRefNum
+	ENDIF
+
+;
+; pascal OSErr UTCheckVolRefNum(short vRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckVolRefNum
+			moveq	#21,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckVolRefNum
+	ENDIF
+
+;
+; pascal OSErr UTCheckPermission(VCBPtr volCtrlBlockPtr, short *modByte, unsigned long fileNum, ParmBlkPtr paramBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckPermission
+			moveq	#22,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckPermission
+	ENDIF
+
+;
+; pascal OSErr UTCheckVolOffline(short vRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckVolOffline
+			moveq	#23,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckVolOffline
+	ENDIF
+
+;
+; pascal OSErr UTCheckVolModifiable(short vRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckVolModifiable
+			moveq	#24,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckVolModifiable
+	ENDIF
+
+;
+; pascal OSErr UTCheckFileModifiable(short fileRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckFileModifiable
+			moveq	#25,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckFileModifiable
+	ENDIF
+
+;
+; pascal OSErr UTCheckDirBusy(VCBPtr volCtrlBlockPtr, unsigned long dirID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCheckDirBusy
+			moveq	#26,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCheckDirBusy
+	ENDIF
+
+;
+; pascal OSErr UTParsePathname(short *volNamelength, StringPtr namePtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTParsePathname
+			moveq	#27,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTParsePathname
+	ENDIF
+
+;
+; pascal OSErr UTGetPathComponentName(ParsePathRecPtr parseRec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTGetPathComponentName
+			moveq	#28,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTGetPathComponentName
+	ENDIF
+
+;
+; pascal OSErr UTDetermineVol(ParmBlkPtr paramBlock, short *status, short *moreMatches, short *vRefNum, VCBPtr *volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTDetermineVol
+			moveq	#29,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTDetermineVol
+	ENDIF
+
+;
+; pascal OSErr UTGetBlock(short refNum, void *log2PhyProc, unsigned long blockNum, short gbOption, Ptr *buffer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTGetBlock
+			moveq	#31,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTGetBlock
+	ENDIF
+
+;
+; pascal OSErr UTReleaseBlock(Ptr buffer, short rbOption)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTReleaseBlock
+			moveq	#32,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTReleaseBlock
+	ENDIF
+
+;
+; pascal OSErr UTFlushCache(short refNum, short fcOption)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTFlushCache
+			moveq	#33,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTFlushCache
+	ENDIF
+
+;
+; pascal OSErr UTMarkDirty(Ptr buffer)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTMarkDirty
+			moveq	#35,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTMarkDirty
+	ENDIF
+
+;
+; pascal OSErr UTTrashVolBlocks(VCBPtr volCtrlBlockPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTTrashVolBlocks
+			moveq	#36,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTTrashVolBlocks
+	ENDIF
+
+;
+; pascal OSErr UTTrashFileBlocks(VCBPtr volCtrlBlockPtr, unsigned long fileNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTTrashFileBlocks
+			moveq	#37,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTTrashFileBlocks
+	ENDIF
+
+;
+; pascal OSErr UTTrashBlocks(unsigned long beginPosition, unsigned long byteCount, VCBPtr volCtrlBlockPtr, short fileRefNum, short tbOption)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTTrashBlocks
+			moveq	#38,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTTrashBlocks
+	ENDIF
+
+;
+; pascal OSErr UTCacheReadIP(void *log2PhyProc, unsigned long filePosition, Ptr ioBuffer, short fileRefNum, unsigned long reqCount, unsigned long *actCount, short cacheOption)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCacheReadIP
+			moveq	#39,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCacheReadIP
+	ENDIF
+
+;
+; pascal OSErr UTCacheWriteIP(void *log2PhyProc, unsigned long filePosition, Ptr ioBuffer, short fileRefNum, unsigned long reqCount, unsigned long *actCount, short cacheOption)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTCacheWriteIP
+			moveq	#40,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTCacheWriteIP
+	ENDIF
+
+;
+; pascal OSErr UTBlockInFQHashP(short vRefNum, unsigned long diskBlock)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_UTBlockInFQHashP
+			moveq	#44,d0
+			dc.w 	$A824
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	UTBlockInFQHashP
+	ENDIF
+
+;
+; *	File System Manager call prototypes
+; 
+;
+; pascal OSErr InstallFS(FSDRecPtr fsdPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	InstallFS
+	ENDIF
+
+;
+; pascal OSErr RemoveFS(short fsid)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	RemoveFS
+	ENDIF
+
+;
+; pascal OSErr SetFSInfo(short fsid, short bufSize, FSDRecPtr fsdPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	SetFSInfo
+	ENDIF
+
+;
+; pascal OSErr GetFSInfo(short selector, short key, short *bufSize, FSDRecPtr fsdPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetFSInfo
+	ENDIF
+
+;
+; pascal OSErr InformFSM(short theMessage, void *paramBlock)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	InformFSM
+	ENDIF
+
+;
+; pascal OSErr InformFFS(short fsid, void *paramBlock)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	InformFFS
+	ENDIF
+
+	ENDIF ; __FSM__

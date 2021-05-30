@@ -1,0 +1,1512 @@
+;
+;    File:       SoundSprocket.a
+;
+;    Contains:   SoundSprocket interfaces
+;
+;    Version:    Technology: 1.7
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SOUNDSPROCKET__') = 'UNDEFINED' THEN
+__SOUNDSPROCKET__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__QD3D__') = 'UNDEFINED' THEN
+	include 'QD3D.a'
+	ENDIF
+	IF &TYPE('__QD3DCAMERA__') = 'UNDEFINED' THEN
+	include 'QD3DCamera.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+; *******************************************************************************
+; *  SndSetInfo/SndGetInfo Messages
+; *****************************************************************************
+
+;   The siSSpCPULoadLimit = '3dll' selector for SndGetInfo fills in a value of  
+;   type UInt32.                                                                
+
+
+kSSpSpeakerKind_Stereo			EQU		0
+kSSpSpeakerKind_Mono			EQU		1
+kSSpSpeakerKind_Headphones		EQU		2
+
+;   This is the data type is used with the SndGet/SetInfo selector              
+;   siSSpSpeakerSetup = '3dst'                                                  
+SSpSpeakerSetupData		RECORD 0
+speakerKind				 ds.l	1				; offset: $0 (0)		;  Speaker configuration          
+speakerAngle			 ds		Float32			; offset: $4 (4)		;  Angle formed by user and speakers  
+reserved0				 ds.l	1				; offset: $8 (8)		;  Reserved for future use -- set to 0    
+reserved1				 ds.l	1				; offset: $C (12)		;  Reserved for future use -- set to 0    
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+kSSpMedium_Air					EQU		0
+kSSpMedium_Water				EQU		1
+
+
+kSSpSourceMode_Unfiltered		EQU		0					; No filtering applied             
+kSSpSourceMode_Localized		EQU		1					; Localized by source position      
+kSSpSourceMode_Ambient			EQU		2					; Coming from all around          
+kSSpSourceMode_Binaural			EQU		3					; Already binaurally localized      
+
+SSpLocationData			RECORD 0
+elevation				 ds		Float32			; offset: $0 (0)		;  Angle of the meridian -- pos is up 
+azimuth					 ds		Float32			; offset: $4 (4)		;  Angle of the parallel -- pos is left   
+distance				 ds		Float32			; offset: $8 (8)		;  Distance between source and listener   
+projectionAngle			 ds		Float32			; offset: $C (12)		;  Cos(angle) between cone and listener   
+sourceVelocity			 ds		Float32			; offset: $10 (16)		;  Speed of source toward the listener    
+listenerVelocity		 ds		Float32			; offset: $14 (20)		; Speed of listener toward the source 
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+SSpVirtualSourceData	RECORD 0
+attenuation				 ds		Float32			; offset: $0 (0)		;  Attenuation factor           
+location				 ds		SSpLocationData ; offset: $4 (4)		;  Location of virtual source        
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;   This is the data type is used with the SndGet/SetInfo selector              
+;   siSSpLocalization = '3dif'                                                  
+SSpLocalizationData		RECORD 0
+cpuLoad					 ds.l	1				; offset: $0 (0)		;  CPU load vs. quality -- 0 is best  
+medium					 ds.l	1				; offset: $4 (4)		;  Medium for sound propagation      
+humidity				 ds		Float32			; offset: $8 (8)		;  Humidity when medium is air         
+roomSize				 ds		Float32			; offset: $C (12)		;  Reverb model -- distance bet. walls    
+roomReflectivity		 ds		Float32			; offset: $10 (16)		; Reverb model -- bounce attenuation  
+reverbAttenuation		 ds		Float32			; offset: $14 (20)		; Reverb model -- mix level      
+sourceMode				 ds.l	1				; offset: $18 (24)		;  Type of filtering to apply        
+referenceDistance		 ds		Float32			; offset: $1C (28)		; Nominal distance for recording   
+coneAngleCos			 ds		Float32			; offset: $20 (32)		;  Cos(angle/2) of attenuation cone     
+coneAttenuation			 ds		Float32			; offset: $24 (36)		;  Attenuation outside the cone      
+currentLocation			 ds		SSpLocationData ; offset: $28 (40)		;  Location of the sound           
+reserved0				 ds.l	1				; offset: $40 (64)		;  Reserved for future use -- set to 0    
+reserved1				 ds.l	1				; offset: $44 (68)		;  Reserved for future use -- set to 0    
+reserved2				 ds.l	1				; offset: $48 (72)		;  Reserved for future use -- set to 0    
+reserved3				 ds.l	1				; offset: $4C (76)		;  Reserved for future use -- set to 0    
+virtualSourceCount		 ds.l	1				; offset: $50 (80)		; Number of reflections          
+virtualSource			 ds.b	4 * SSpVirtualSourceData.sizeof ; offset: $54 (84) ; The reflections               
+sizeof					 EQU *					; size:   $C4 (196)
+						ENDR
+	IF TARGET_CPU_PPC THEN
+
+; *******************************************************************************
+; *  Global functions
+; *****************************************************************************
+
+
+; *  SSpConfigureSpeakerSetup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpConfigureSpeakerSetup(SSpEventProcPtr inEventProcPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpConfigureSpeakerSetup
+	ENDIF
+
+
+; *  SSpGetCPULoadLimit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpGetCPULoadLimit(UInt32 *outCPULoadLimit)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpGetCPULoadLimit
+	ENDIF
+
+
+; *******************************************************************************
+; *  Routines for Maniulating Listeners
+; *****************************************************************************
+
+
+
+
+; *  SSpListener_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_New(SSpListenerReference *outListenerReference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_New
+	ENDIF
+
+
+; *  SSpListener_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_Dispose(SSpListenerReference inListenerReference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_Dispose
+	ENDIF
+
+
+; *  SSpListener_SetTransform()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetTransform(SSpListenerReference inListenerReference, const TQ3Matrix4x4 *inTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetTransform
+	ENDIF
+
+
+; *  SSpListener_GetTransform()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetTransform(SSpListenerReference inListenerReference, TQ3Matrix4x4 *outTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetTransform
+	ENDIF
+
+
+; *  SSpListener_SetPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetPosition(SSpListenerReference inListenerReference, const TQ3Point3D *inPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetPosition
+	ENDIF
+
+
+; *  SSpListener_GetPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetPosition(SSpListenerReference inListenerReference, TQ3Point3D *outPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetPosition
+	ENDIF
+
+
+; *  SSpListener_SetOrientation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetOrientation(SSpListenerReference inListenerReference, const TQ3Vector3D *inOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetOrientation
+	ENDIF
+
+
+; *  SSpListener_GetOrientation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetOrientation(SSpListenerReference inListenerReference, TQ3Vector3D *outOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetOrientation
+	ENDIF
+
+
+; *  SSpListener_SetUpVector()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetUpVector(SSpListenerReference inListenerReference, const TQ3Vector3D *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetUpVector
+	ENDIF
+
+
+; *  SSpListener_GetUpVector()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetUpVector(SSpListenerReference inListenerReference, TQ3Vector3D *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetUpVector
+	ENDIF
+
+
+; *  SSpListener_SetCameraPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetCameraPlacement(SSpListenerReference inListenerReference, const TQ3CameraPlacement *inCameraPlacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetCameraPlacement
+	ENDIF
+
+
+; *  SSpListener_GetCameraPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetCameraPlacement(SSpListenerReference inListenerReference, TQ3CameraPlacement *outCameraPlacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetCameraPlacement
+	ENDIF
+
+
+; *  SSpListener_SetVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetVelocity(SSpListenerReference inListenerReference, const TQ3Vector3D *inVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetVelocity
+	ENDIF
+
+
+; *  SSpListener_GetVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetVelocity(SSpListenerReference inListenerReference, TQ3Vector3D *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetVelocity
+	ENDIF
+
+
+; *  SSpListener_GetActualVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetActualVelocity(SSpListenerReference inListenerReference, TQ3Vector3D *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetActualVelocity
+	ENDIF
+
+
+; *  SSpListener_SetMedium()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetMedium(SSpListenerReference inListenerReference, UInt32 inMedium, float inHumidity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetMedium
+	ENDIF
+
+
+; *  SSpListener_GetMedium()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetMedium(SSpListenerReference inListenerReference, UInt32 *outMedium, float *outHumidity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetMedium
+	ENDIF
+
+
+; *  SSpListener_SetReverb()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetReverb(SSpListenerReference inListenerReference, float inRoomSize, float inRoomReflectivity, float inReverbAttenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetReverb
+	ENDIF
+
+
+; *  SSpListener_GetReverb()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetReverb(SSpListenerReference inListenerReference, float *outRoomSize, float *outRoomReflectivity, float *outReverbAttenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetReverb
+	ENDIF
+
+
+; *  SSpListener_SetMetersPerUnit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetMetersPerUnit(SSpListenerReference inListenerReference, float inMetersPerUnit)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetMetersPerUnit
+	ENDIF
+
+
+; *  SSpListener_GetMetersPerUnit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetMetersPerUnit(SSpListenerReference inListenerReference, float *outMetersPerUnit)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetMetersPerUnit
+	ENDIF
+
+
+; *******************************************************************************
+; *  Routines for Manipulating Sources
+; *****************************************************************************
+
+
+
+
+; *  SSpSource_New()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_New(SSpSourceReference *outSourceReference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_New
+	ENDIF
+
+
+; *  SSpSource_Dispose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_Dispose(SSpSourceReference inSourceReference)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_Dispose
+	ENDIF
+
+
+; *  SSpSource_CalcLocalization()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_CalcLocalization(SSpSourceReference inSourceReference, SSpListenerReference inListenerReference, SSpLocalizationData *out3DInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_CalcLocalization
+	ENDIF
+
+
+; *  SSpSource_SetTransform()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetTransform(SSpSourceReference inSourceReference, const TQ3Matrix4x4 *inTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetTransform
+	ENDIF
+
+
+; *  SSpSource_GetTransform()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetTransform(SSpSourceReference inSourceReference, TQ3Matrix4x4 *outTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetTransform
+	ENDIF
+
+
+; *  SSpSource_SetPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetPosition(SSpSourceReference inSourceReference, const TQ3Point3D *inPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetPosition
+	ENDIF
+
+
+; *  SSpSource_GetPosition()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetPosition(SSpSourceReference inSourceReference, TQ3Point3D *outPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetPosition
+	ENDIF
+
+
+; *  SSpSource_SetOrientation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetOrientation(SSpSourceReference inSourceReference, const TQ3Vector3D *inOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetOrientation
+	ENDIF
+
+
+; *  SSpSource_GetOrientation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetOrientation(SSpSourceReference inSourceReference, TQ3Vector3D *outOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetOrientation
+	ENDIF
+
+
+; *  SSpSource_SetUpVector()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetUpVector(SSpSourceReference inSourceReference, const TQ3Vector3D *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetUpVector
+	ENDIF
+
+
+; *  SSpSource_GetUpVector()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetUpVector(SSpSourceReference inSourceReference, TQ3Vector3D *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetUpVector
+	ENDIF
+
+
+; *  SSpSource_SetCameraPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetCameraPlacement(SSpSourceReference inSourceReference, const TQ3CameraPlacement *inCameraPlacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetCameraPlacement
+	ENDIF
+
+
+; *  SSpSource_GetCameraPlacement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetCameraPlacement(SSpSourceReference inSourceReference, TQ3CameraPlacement *outCameraPlacement)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetCameraPlacement
+	ENDIF
+
+
+; *  SSpSource_SetVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetVelocity(SSpSourceReference inSourceReference, const TQ3Vector3D *inVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetVelocity
+	ENDIF
+
+
+; *  SSpSource_GetVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetVelocity(SSpSourceReference inSourceReference, TQ3Vector3D *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetVelocity
+	ENDIF
+
+
+; *  SSpSource_GetActualVelocity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetActualVelocity(SSpSourceReference inSourceReference, TQ3Vector3D *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetActualVelocity
+	ENDIF
+
+
+; *  SSpSource_SetCPULoad()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetCPULoad(SSpSourceReference inSourceReference, UInt32 inCPULoad)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetCPULoad
+	ENDIF
+
+
+; *  SSpSource_GetCPULoad()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetCPULoad(SSpSourceReference inSourceReference, UInt32 *outCPULoad)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetCPULoad
+	ENDIF
+
+
+; *  SSpSource_SetMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetMode(SSpSourceReference inSourceReference, UInt32 inMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetMode
+	ENDIF
+
+
+; *  SSpSource_GetMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetMode(SSpSourceReference inSourceReference, UInt32 *outMode)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetMode
+	ENDIF
+
+
+; *  SSpSource_SetReferenceDistance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetReferenceDistance(SSpSourceReference inSourceReference, float inReferenceDistance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetReferenceDistance
+	ENDIF
+
+
+; *  SSpSource_GetReferenceDistance()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetReferenceDistance(SSpSourceReference inSourceReference, float *outReferenceDistance)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetReferenceDistance
+	ENDIF
+
+
+; *  SSpSource_SetSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetSize(SSpSourceReference inSourceReference, float inLength, float inWidth, float inHeight)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetSize
+	ENDIF
+
+
+; *  SSpSource_GetSize()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetSize(SSpSourceReference inSourceReference, float *outLength, float *outWidth, float *outHeight)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetSize
+	ENDIF
+
+
+; *  SSpSource_SetAngularAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetAngularAttenuation(SSpSourceReference inSourceReference, float inConeAngle, float inConeAttenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetAngularAttenuation
+	ENDIF
+
+
+; *  SSpSource_GetAngularAttenuation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.0 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetAngularAttenuation(SSpSourceReference inSourceReference, float *outConeAngle, float *outConeAttenuation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetAngularAttenuation
+	ENDIF
+
+; *******************************************************************************
+; *  OpenGL Calling Convention Call Variants
+; *****************************************************************************
+
+
+; *  SSpListener_SetTransformfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetTransformfv(SSpListenerReference inListenerReference, const float *inTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetTransformfv
+	ENDIF
+
+
+; *  SSpListener_GetTransformfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetTransformfv(SSpListenerReference inListenerReference, float *outTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetTransformfv
+	ENDIF
+
+
+; *  SSpListener_SetPosition3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetPosition3f(SSpListenerReference inListenerReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetPosition3f
+	ENDIF
+
+
+; *  SSpListener_SetPositionfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetPositionfv(SSpListenerReference inListenerReference, const float *inPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetPositionfv
+	ENDIF
+
+
+; *  SSpListener_GetPositionfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetPositionfv(SSpListenerReference inListenerReference, float *outPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetPositionfv
+	ENDIF
+
+
+; *  SSpListener_SetOrientation3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetOrientation3f(SSpListenerReference inListenerReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetOrientation3f
+	ENDIF
+
+
+; *  SSpListener_SetOrientationfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetOrientationfv(SSpListenerReference inListenerReference, const float *inOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetOrientationfv
+	ENDIF
+
+
+; *  SSpListener_GetOrientationfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetOrientationfv(SSpListenerReference inListenerReference, float *outOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetOrientationfv
+	ENDIF
+
+
+; *  SSpListener_SetUpVector3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetUpVector3f(SSpListenerReference inListenerReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetUpVector3f
+	ENDIF
+
+
+; *  SSpListener_SetUpVectorfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetUpVectorfv(SSpListenerReference inListenerReference, const float *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetUpVectorfv
+	ENDIF
+
+
+; *  SSpListener_GetUpVectorfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetUpVectorfv(SSpListenerReference inListenerReference, float *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetUpVectorfv
+	ENDIF
+
+
+; *  SSpListener_SetCameraPlacementfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetCameraPlacementfv(SSpListenerReference inListenerReference, const float *inCameraLocation, const float *inPointOfInterest, const float *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetCameraPlacementfv
+	ENDIF
+
+
+; *  SSpListener_GetCameraPlacementfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetCameraPlacementfv(SSpListenerReference inListenerReference, float *outCameraPlacement, float *outPointOfInterest, float *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetCameraPlacementfv
+	ENDIF
+
+
+; *  SSpListener_SetVelocity3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetVelocity3f(SSpListenerReference inListenerReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetVelocity3f
+	ENDIF
+
+
+; *  SSpListener_SetVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_SetVelocityfv(SSpListenerReference inListenerReference, const float *inVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_SetVelocityfv
+	ENDIF
+
+
+; *  SSpListener_GetVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetVelocityfv(SSpListenerReference inListenerReference, float *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetVelocityfv
+	ENDIF
+
+
+; *  SSpListener_GetActualVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpListener_GetActualVelocityfv(SSpListenerReference inListenerReference, float *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpListener_GetActualVelocityfv
+	ENDIF
+
+
+; *  SSpSource_SetTransformfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetTransformfv(SSpSourceReference inSourceReference, const float *inTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetTransformfv
+	ENDIF
+
+
+; *  SSpSource_GetTransformfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetTransformfv(SSpSourceReference inSourceReference, float *outTransform)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetTransformfv
+	ENDIF
+
+
+; *  SSpSource_SetPosition3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetPosition3f(SSpSourceReference inSourceReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetPosition3f
+	ENDIF
+
+
+; *  SSpSource_SetPositionfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetPositionfv(SSpSourceReference inSourceReference, const float *inPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetPositionfv
+	ENDIF
+
+
+; *  SSpSource_GetPositionfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetPositionfv(SSpSourceReference inSourceReference, float *outPosition)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetPositionfv
+	ENDIF
+
+
+; *  SSpSource_SetOrientation3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetOrientation3f(SSpSourceReference inSourceReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetOrientation3f
+	ENDIF
+
+
+; *  SSpSource_SetOrientationfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetOrientationfv(SSpSourceReference inSourceReference, const float *inOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetOrientationfv
+	ENDIF
+
+
+; *  SSpSource_GetOrientationfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetOrientationfv(SSpSourceReference inSourceReference, float *outOrientation)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetOrientationfv
+	ENDIF
+
+
+; *  SSpSource_SetUpVector3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetUpVector3f(SSpSourceReference inSourceReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetUpVector3f
+	ENDIF
+
+
+; *  SSpSource_SetUpVectorfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetUpVectorfv(SSpSourceReference inSourceReference, const float *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetUpVectorfv
+	ENDIF
+
+
+; *  SSpSource_GetUpVectorfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetUpVectorfv(SSpSourceReference inSourceReference, float *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetUpVectorfv
+	ENDIF
+
+
+; *  SSpSource_SetCameraPlacementfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetCameraPlacementfv(SSpSourceReference inSourceReference, const float *inCameraLocation, const float *inPointOfInterest, const float *inUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetCameraPlacementfv
+	ENDIF
+
+
+; *  SSpSource_GetCameraPlacementfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetCameraPlacementfv(SSpSourceReference inSourceReference, float *outCameraPlacement, float *outPointOfInterest, float *outUpVector)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetCameraPlacementfv
+	ENDIF
+
+
+; *  SSpSource_SetVelocity3f()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetVelocity3f(SSpSourceReference inSourceReference, float inX, float inY, float inZ)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetVelocity3f
+	ENDIF
+
+
+; *  SSpSource_SetVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_SetVelocityfv(SSpSourceReference inSourceReference, const float *inVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_SetVelocityfv
+	ENDIF
+
+
+; *  SSpSource_GetVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetVelocityfv(SSpSourceReference inSourceReference, float *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetVelocityfv
+	ENDIF
+
+
+; *  SSpSource_GetActualVelocityfv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in SoundSprocketLib 1.7 and later
+; *    CarbonLib:        not in Carbon, but SoundSprocketLib is compatible with Carbon
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SSpSource_GetActualVelocityfv(SSpSourceReference inSourceReference, float *outVelocity)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SSpSource_GetActualVelocityfv
+	ENDIF
+
+	ENDIF	; TARGET_CPU_PPC
+
+; *******************************************************************************
+; *  MORE LATE-BREAKING NEWS
+; *
+; *  The SndGetInfo selector siSSpFilterVersion and datatype SSpFilterVersionData
+; *  have been removed in favor of an alternate way of accessing filter version
+; *  information.  The following function may be used for this purpose.
+; *******************************************************************************
+;// **************************** GetSSpFilterVersion ****************************
+;// Finds the manufacturer and version number of the SoundSprocket filter that
+;// may be installed.  inManufacturer should be the manufacturer code specified
+;// at the installation time, which may be zero to allow any manufacturer.
+;// If no error is encountered, outManufacturer is set to the actual manufacturer
+;// code and outMajorVersion and outMinorVersion are set to the component
+;// specification level and manufacturer's implementation revision, respectively.
+;OSStatus GetSSpFilterVersion(
+;    OSType                  inManufacturer,
+;    OSType*                 outManufacturer,
+;    UInt32*                 outMajorVersion,
+;    UInt32*                 outMinorVersion)
+;{
+;    OSStatus                err;
+;    ComponentDescription    description;
+;    Component               componentRef;
+;    UInt32                  vers;
+;    
+;    // Set up the component description
+;    description.componentType           = kSoundEffectsType;
+;    description.componentSubType        = kSSpLocalizationSubType;
+;    description.componentManufacturer   = inManufacturer;
+;    description.componentFlags          = 0;        
+;    description.componentFlagsMask      = 0;    
+;    
+;    // Find a component matching the description
+;    componentRef = FindNextComponent(nil, &description);
+;    if (componentRef == nil)  return couldntGetRequiredComponent;
+;    
+;    // Get the component description (for the manufacturer code)
+;    err = GetComponentInfo(componentRef, &description, nil, nil, nil);
+;    if (err != noErr)  return err;
+;    
+;    // Get the version composite
+;    vers = (UInt32) GetComponentVersion((ComponentInstance) componentRef);
+;    
+;    // Return the results
+;    *outManufacturer = description.componentManufacturer;
+;    *outMajorVersion = HiWord(vers);
+;    *outMinorVersion = LoWord(vers);
+;    
+;    return noErr;
+;}
+;******************************************************************************
+
+
+
+	ENDIF ; __SOUNDSPROCKET__ 
+

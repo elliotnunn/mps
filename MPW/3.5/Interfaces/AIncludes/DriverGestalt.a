@@ -1,0 +1,663 @@
+;
+;    File:       DriverGestalt.a
+;
+;    Contains:   Driver Gestalt interfaces
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DRIVERGESTALT__') = 'UNDEFINED' THEN
+__DRIVERGESTALT__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__SCSI__') = 'UNDEFINED' THEN
+	include 'SCSI.a'
+	ENDIF
+	IF &TYPE('__USB__') = 'UNDEFINED' THEN
+	include 'USB.a'
+	ENDIF
+	IF &TYPE('__DISKS__') = 'UNDEFINED' THEN
+	include 'Disks.a'
+	ENDIF
+
+; __________________________________________________________________________________
+;  The Driver Gestalt bit in the dCtlFlags 
+
+kbDriverGestaltEnable			EQU		2
+kmDriverGestaltEnableMask		EQU		$04
+; __________________________________________________________________________________
+;  Driver Gestalt related csCodes 
+
+kDriverGestaltCode				EQU		43					; various uses 
+kDriverConfigureCode			EQU		43					; various uses 
+kcsSetBootPartitionCode			EQU		44					; Set Startup Partition Control Call 
+kcsGetBootPartitionStatus		EQU		44					; Get Startup Partition Status Call 
+kdgLowPowerMode					EQU		70					; Sets/Returns the current energy consumption level 
+kdgReturnDeviceID				EQU		120					; returns SCSI DevID in csParam[0] 
+kdgGetCDDeviceInfo				EQU		121					; returns CDDeviceCharacteristics in csParam[0] 
+; __________________________________________________________________________________
+;  Driver Gestalt selectors 
+
+kdgVersion						EQU		'vers'				; Version number of the driver in standard Apple format 
+kdgDeviceType					EQU		'devt'				; The type of device the driver is driving. 
+kdgInterface					EQU		'intf'				; The underlying interface that the driver is using (if any) 
+kdgSync							EQU		'sync'				; True if driver only behaves synchronously. 
+kdgBoot							EQU		'boot'				; value to place in PRAM for this drive (long) 
+kdgWide							EQU		'wide'				; True if driver supports ioWPosOffset 
+kdgPurge						EQU		'purg'				; Driver purge permission (True = purge; False = no purge) 
+kdgSupportsSwitching			EQU		'lpwr'				; True if driver supports power switching 
+kdgMin3VPower					EQU		'pmn3'				; Minimum 3.3V power consumption in microWatts 
+kdgMin5VPower					EQU		'pmn5'				; Minimum 5V power consumption in microWatts 
+kdgMax3VPower					EQU		'pmx3'				; Maximum 3.3V power consumption in microWatts 
+kdgMax5VPower					EQU		'pmx5'				; Maximum 5V power consumption in microWatts 
+kdgInHighPower					EQU		'psta'				; True if device is currently in high power mode 
+kdgSupportsPowerCtl				EQU		'psup'				; True if driver supports following five calls 
+kdgAPI							EQU		'dAPI'				; API support for PC Exchange 
+kdgEject						EQU		'ejec'				; Eject options for shutdown/restart (Shutdown Mgr) 
+kdgFlush						EQU		'flus'				; Determine if disk driver supports flush and if it needs a flush 
+kdgVMOptions					EQU		'vmop'				; Disk drive's Virtual Memory options 
+kdgMediaInfo					EQU		'minf'				; return media specific information 
+kdgPhysDriveIconSuite			EQU		'dics'				; Return a pointer to a IconFamily ('icns') data structure for 
+															; Disk Driver physical drive (formerly in csCode 21) in driverGestaltResponse. 
+kdgMediaIconSuite				EQU		'mics'				; Return a pointer to a IconFamily ('icns') data structure for 
+															; Disk Driver media (formerly in csCode 22) in driverGestaltResponse. 
+															; See IconServices.r for information detailing the 'icns' resource data format 
+kdgMediaName					EQU		'mnam'				; Return a pointer to a pascal string describing the Disk Driver (formerly in csCode 21) in driverGestaltResponse. 
+kdgGetDriveAddInfo				EQU		'digt'				; Get a disk driver's add-drive information record 
+kdcAddDriveWithInfo				EQU		'diad'				; Tell disk driver to add the drive specified with the drive information record 
+															; DriverGestalt selector for ATA drivers to signify that they are device 0/1 compliant. 
+															; see http://developer.apple.com/techpubs/hardware/Developer_Notes/System_Software/ATA_Device_Zero_One.pdf 
+kdgATADev1						EQU		'dev1'
+kdgDeviceReference				EQU		'dvrf'				; Returns a 32-bit reference number for the device, format is interface specific 
+kdgNameRegistryEntry			EQU		'nmrg'				; Returns a pointer to the Name Registry ID for the device 
+kdgDeviceModelInfo				EQU		'info'				; Returns a pointer to a Device Model Info structure 
+kdgSupportedMediaTypes			EQU		'mdty'				; Returns a count and a pointer to list of all media types supported by the device 
+kdgOpenFirmwareBootSupport		EQU		'ofpt'				; Returns information that Open Firmware needs to support booting from the device 
+kdgOpenFirmwareBootingSupport	EQU		'ofbt'				; Returns same information as kdgOpenFirmwareBootSupport, but is only used during booting
+; __________________________________________________________________________________
+;  Driver Configure selectors 
+
+kdcFlush						EQU		'flus'				; Tell a disk driver to flush its cache and any hardware caches 
+kdcVMOptions					EQU		'vmop'				; Change the disk driver's Virtual Memory options 
+; __________________________________________________________________________________
+;  control parameter block for Driver Configure calls 
+DriverConfigParam		RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)
+qType					 ds.w	1				; offset: $4 (4)
+ioTrap					 ds.w	1				; offset: $6 (6)
+ioCmdAddr				 ds.l	1				; offset: $8 (8)
+ioCompletion			 ds.l	1				; offset: $C (12)
+ioResult				 ds.w	1				; offset: $10 (16)
+ioNamePtr				 ds.l	1				; offset: $12 (18)
+ioVRefNum				 ds.w	1				; offset: $16 (22)
+ioCRefNum				 ds.w	1				; offset: $18 (24)		;  refNum for I/O operation 
+csCode					 ds.w	1				; offset: $1A (26)		;  == kDriverConfigureCode 
+driverConfigureSelector	 ds.l	1				; offset: $1C (28)
+driverConfigureParameter  ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+; __________________________________________________________________________________
+;  status parameter block for Driver Gestalt calls 
+DriverGestaltParam		RECORD 0
+qLink					 ds.l	1				; offset: $0 (0)
+qType					 ds.w	1				; offset: $4 (4)
+ioTrap					 ds.w	1				; offset: $6 (6)
+ioCmdAddr				 ds.l	1				; offset: $8 (8)
+ioCompletion			 ds.l	1				; offset: $C (12)
+ioResult				 ds.w	1				; offset: $10 (16)
+ioNamePtr				 ds.l	1				; offset: $12 (18)
+ioVRefNum				 ds.w	1				; offset: $16 (22)
+ioCRefNum				 ds.w	1				; offset: $18 (24)		;  refNum for I/O operation 
+csCode					 ds.w	1				; offset: $1A (26)		;     == kDriverGestaltCode 
+driverGestaltSelector	 ds.l	1				; offset: $1C (28)		;  'sync', 'vers', etc. 
+driverGestaltResponse	 ds.l	1				; offset: $20 (32)		;  Could be a pointer, bit field or other format 
+driverGestaltResponse1	 ds.l	1				; offset: $24 (36)		;  Could be a pointer, bit field or other format 
+driverGestaltResponse2	 ds.l	1				; offset: $28 (40)		;  Could be a pointer, bit field or other format 
+driverGestaltResponse3	 ds.l	1				; offset: $2C (44)		;  Could be a pointer, bit field or other format 
+driverGestaltfiller		 ds.w	1				; offset: $30 (48)		;  To pad out to the size of a controlPB 
+sizeof					 EQU *					; size:   $32 (50)
+						ENDR
+; __________________________________________________________________________________
+;  Device Types response 
+DriverGestaltDevTResponse RECORD 0
+deviceType				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+kdgDiskType						EQU		'disk'				; standard r/w disk drive 
+kdgTapeType						EQU		'tape'				; tape drive 
+kdgPrinterType					EQU		'prnt'				; printer 
+kdgProcessorType				EQU		'proc'				; processor 
+kdgWormType						EQU		'worm'				; write-once 
+kdgCDType						EQU		'cdrm'				; cd-rom drive 
+kdgFloppyType					EQU		'flop'				; floppy disk drive 
+kdgScannerType					EQU		'scan'				; scanner 
+kdgFileType						EQU		'file'				; Logical Partition type based on a file (Drive Container) 
+kdgRemovableType				EQU		'rdsk'				; A removable media hard disk drive ie. Syquest, Bernioulli 
+; __________________________________________________________________________________
+;  Device Interfaces response 
+DriverGestaltIntfResponse RECORD 0
+interfaceType			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+kdgScsiIntf						EQU		'scsi'
+kdgPcmciaIntf					EQU		'pcmc'
+kdgATAIntf						EQU		'ata '
+kdgUSBIntf						EQU		'usb '
+kdgFireWireIntf					EQU		'fire'
+kdgExtBus						EQU		'card'
+kdgNetworkIntf					EQU		'net '
+; __________________________________________________________________________________
+;  Power Saving 
+DriverGestaltPowerResponse RECORD 0
+powerValue				 ds.l	1				; offset: $0 (0)		;  Power consumed in µWatts 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; __________________________________________________________________________________
+;  Disk Specific 
+DriverGestaltSyncResponse RECORD 0
+behavesSynchronously	 ds.b	1				; offset: $0 (0)
+pad						 ds.b	3				; offset: $1 (1)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+DriverGestaltBootResponse RECORD 0
+extDev					 ds.b	1				; offset: $0 (0)		;   Packed target (upper 5 bits) LUN (lower 3 bits) 
+partition				 ds.b	1				; offset: $1 (1)		;   Unused 
+SIMSlot					 ds.b	1				; offset: $2 (2)		;   Slot 
+SIMsRSRC				 ds.b	1				; offset: $3 (3)		;   sRsrcID 
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+DriverGestaltAPIResponse RECORD 0
+partitionCmds			 ds.w	1				; offset: $0 (0)		;  if bit 0 is nonzero, supports partition control and status calls 
+;        prohibitMounting (control, kProhibitMounting) 
+;       partitionToVRef (status, kGetPartitionStatus) 
+;       getPartitionInfo (status, kGetPartInfo) 
+unused1					 ds.w	1				; offset: $2 (2)		;  all the unused fields should be zero 
+unused2					 ds.w	1				; offset: $4 (4)
+unused3					 ds.w	1				; offset: $6 (6)
+unused4					 ds.w	1				; offset: $8 (8)
+unused5					 ds.w	1				; offset: $A (10)
+unused6					 ds.w	1				; offset: $C (12)
+unused7					 ds.w	1				; offset: $E (14)
+unused8					 ds.w	1				; offset: $10 (16)
+unused9					 ds.w	1				; offset: $12 (18)
+unused10				 ds.w	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $16 (22)
+						ENDR
+DriverGestaltFlushResponse RECORD 0
+canFlush				 ds.b	1				; offset: $0 (0)		;  Return true if driver supports the 
+;  kdcFlush Driver Configure _Control call 
+needsFlush				 ds.b	1				; offset: $1 (1)		;  Return true if driver/device has data cached 
+;  and needs to be flushed when the disk volume 
+;  is flushed by the File Manager 
+pad						 ds.b	2				; offset: $2 (2)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  Flags for purge permissions 
+
+kbCloseOk						EQU		0					; Ok to call Close 
+kbRemoveOk						EQU		1					; Ok to call RemoveDrvr 
+kbPurgeOk						EQU		2					; Ok to call DisposePtr 
+kmNoCloseNoPurge				EQU		0
+kmOkCloseNoPurge				EQU		$03
+kmOkCloseOkPurge				EQU		$07
+;  Driver purge permission structure 
+DriverGestaltPurgeResponse RECORD 0
+purgePermission			 ds.w	1				; offset: $0 (0)		;  0 = Do not change the state of the driver 
+;  3 = Do Close() and DrvrRemove() this driver 
+;  but don't deallocate driver code 
+;  7 = Do Close(), DrvrRemove(), and DisposePtr() 
+purgeReserved			 ds.w	1				; offset: $2 (2)
+purgeDriverPointer		 ds.l	1				; offset: $4 (4)		;  pointer to the start of the driver block (valid 
+;  only of DisposePtr permission is given 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+DriverGestaltEjectResponse RECORD 0
+ejectFeatures			 ds.l	1				; offset: $0 (0)		;   
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  Flags for Ejection Features field 
+
+kRestartDontEject				EQU		0					; Dont Want eject during Restart 
+kShutDownDontEject				EQU		1					; Dont Want eject during Shutdown 
+kRestartDontEject_Mask			EQU		$01
+kShutDownDontEject_Mask			EQU		$02
+; 
+;    The DriverGestaltVMOptionsResponse is returned by a disk driver in response to a
+;    kdgVMOptions Driver Gestalt request. This allows a disk driver to tell VM a few
+;    things about a disk drive. For example:
+;    
+;    • A drive that should never be in the page fault path should return kAllowVMNoneMask.
+;      Examples of this are drives that have manual eject buttons that are not disabled by
+;      software, drives with very slow throughput, or drives that depend on
+;      a network connection.
+;    • A drive that should never be written to but is safe for read-only file mapping
+;      should return kAllowVMReadOnlyMask. Examples of this are WORM drives where each write
+;      eats write-once space on the disk and CD-ROM drives which are read-only media.
+;    • A drive that should allow VM to create its main backing store file should return
+;      kAllowVMReadWriteMask. Examples of this are fast read/write drives that don't allow
+;      manual eject and don't use a network connection.
+;    
+;    A disk driver must look at the ioVRefNum field of the DriverGestaltParam to determine
+;    what disk drive this call is for. This is a per-drive call, not a per-driver call.
+;    
+;    The only three valid responses to kdgVMOptions at this time are kAllowVMNoneMask,
+;    kAllowVMReadOnlyMask, and kAllowVMReadWriteMask (i.e., setting only kAllowVMWriteBit
+;    is not valid).
+;    
+;    Important: All bits not defined here are reserved and should be set to zero until
+;    they are defined for a specific purpose.
+;    
+;    The kdcVMOptions Driver Configure _Control call provides the ability to change a driver's
+;    response to kdgVMOptions Driver Gestalt requests. A driver should return controlErr if
+;    it doesn't want to provide the ability to change the kdgVMOptions response. If a driver
+;    supports the kdcVMOptions Driver Configure _Control call, but is asked to set an option bit
+;    that it doesn't support (for example, if a read-only device is asked to set the kAllowVMWriteBit),
+;    it should return paramErr.
+;
+
+DriverGestaltVMOptionsResponse RECORD 0
+vmOptions				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  Bits and masks for DriverGestaltVMOptionsResponse.vmOptions field 
+
+kAllowVMReadBit					EQU		0					; Allow VM to use this drive for read access 
+kAllowVMWriteBit				EQU		1					; Allow VM to use this drive for write access 
+kAllowVMNoneMask				EQU		0
+kAllowVMReadOnlyMask			EQU		$01
+kAllowVMReadWriteMask			EQU		$03
+;  
+;kdgGetDriveAddInfo/kdcAddDriveWithInfo is used by the Alias Manager to
+;assist in the  remounting of container files. eg DiskCopy.  The driver
+;can use it to store whatever information it needs to remount a drive
+;For example the Volume name and FileID..  What is in here is entirely 
+;dependant on the driver, we never interpret it.
+;
+;This extension to the Alias Manager works as such:
+;   
+;When creating an alias 
+;----------------------
+;    
+;If driver supports Driver Gestalt, the Alias Mgr calls the driver with a 
+; kdgGetDriveAddInfo DriverGestalt request. 
+;        
+;Inputs to DriverGestalt:
+;    ioVRefNum   = drive number
+;    ioCRefNum   = driver refNum
+;    csCode      = kDriverGestaltCode
+;    driverGestaltSelector = kdgGetDriveAddInfo
+; 
+;If the driver supports kdgGetDriveAddInfo, it returns a pointer to the drive's
+;drive  information record (DriverGestaltDriveAddInfoResponse*) in the 
+;driverGestaltResponse field and returns noErr. 
+;
+;  The memory used by the DriverGestaltDriveAddInfoResponse and it's pointed 
+;to data, must be previously held by the disk driver with HoldMemory. 
+;        
+;If the driver doesn't support kdgGetDriveAddInfo,  it returns statusErr.
+;
+;If noErr, the Alias Mgr stores the drive information record in the alias record 
+;(the length of the drive information record data is in the length field).
+;
+;
+;When resolving an alias:
+;------------------------
+;
+;If driver supports Driver Gestalt, the Alias Mgr holds the drive information record 
+;in the alias with HoldMemory and then calls the driver with a kdcAddDriveWithInfo
+;DriverConfigure request. 
+;        
+;Inputs to DriverConfigure:
+;    ioCRefNum   = driver refNum
+;    csCode      = kDriverConfigureCode
+;    driverGestaltSelector = pointer to DriverGestaltDriveAddInfoResponse
+;            
+;
+;If the driver supports kdcAddDriveWithInfo, it uses the information in the drive 
+;information record to add a drive to the drive queue. If the drive is added,
+;the driver returns noErr and returns the drive number in the ioVRefNum field of 
+;the parameter block. 
+;
+;If the drive cannot be added  (but kdcAddDriveWithInfo is supported), the driver 
+;returns nsDrvErr. 
+;
+;If the driver doesn't  support kdcAddDriveWithInfo, it returns controlErr. 
+;
+;If noErr is returned, but the data in the  drive information record is not 
+;up-to-date, the driver should set driveInfoChangedBit in the options field of the 
+;drive information record. 
+;
+;If driveInfoInteractBit in the options field  is set at input, the driver 
+;may perform user interaction to mount the drive.
+;
+;If noErr, the Alias Mgr tries to resolve the alias the rest of the way.
+; 
+
+;  drive info option flags 
+
+driveInfoInteractBit			EQU		31					; Input to kdcAddDriveWithInfo: If set, it's OK for the driver 
+driveInfoInteractMask			EQU		$80000000			;  to perform user interaction to add the drive 
+driveInfoChangedBit				EQU		30					; Output from kdgGetDriveInfo: If set, the drive was mounted, but 
+driveInfoChangedMask			EQU		$40000000			;  the drive information record needs to be updated. 
+driveInfoDriverReservedMask		EQU		$0000FFFF			; bits 0-15 are defined by each driver for its own use 
+driveInfoSystemReservedMask		EQU		$FFFF0000			; bits 16-31 are reserved for Apple system use 
+
+DriverGestaltDriveAddInfoResponse RECORD 0
+options					 ds.l	1				; offset: $0 (0)		;  option flags. 
+length					 ds.l	1				; offset: $4 (4)		;  length of data 
+data					 ds.l	1				; offset: $8 (8)		;  this data must be held with HoldMemory 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; 
+;    The DriverGestaltMediaInfoResponse is returned by a disk driver in response to a
+;    kdgMediaInfo DriverGestalt request. This allows a disk driver to tell callers the
+;    physical block size, the number of blocks that are of that size, and the media type
+;    for a given device.
+;    
+;    A disk driver must look at the ioVRefNum field of the DriverGestaltParam to determine
+;    what disk drive this call is for. This is a per-drive call, not a per-driver call.
+;    
+;    On drives that support ejectable media, the response can change depending on what
+;    media is currently in the drive.
+;
+
+DriverGestaltMediaInfoResponse RECORD 0
+numberBlocks			 ds.l	1				; offset: $0 (0)		;  number of blocks 
+blockSize				 ds.l	1				; offset: $4 (4)		;  physical size of blocks 
+mediaType				 ds.w	1				; offset: $8 (8)		;  media type identifier 
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+;  DriverGestaltMediaInfoResponse.mediaType constants 
+
+kMediaTypeUnknown				EQU		128					; media type is unknown 
+kMediaTypeCDROM					EQU		129					; media type is a CD-ROM 
+kMediaTypeDVDROM				EQU		130					; media type is a DVD-ROM 
+kMediaTypeDVDRAM				EQU		131					; media type is a DVD-RAM 
+kMediaTypeDVDR					EQU		132					; media type is a DVD-RW 
+kMediaTypeReadOnly				EQU		133					; basic read only type 
+kMediaTypeWriteOnce				EQU		134					; basic write once type 
+kMediaTypeRewritable			EQU		135					; rewritable media, i.e CD-RW 
+kMediaTypeOverwritable			EQU		136					; random access read write media 
+kMediaTypeNoMedia				EQU		-1					; no media is present 
+DriverGestaltATADev1Response RECORD 0
+dev1Support				 ds.l	1				; offset: $0 (0)		;  1 = supports devices 0 and 1
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; __________________________________________________________________________________
+;  Device Reference 
+; 
+;    The driver will return a 32-bit device reference number in the driverGestaltResponse
+;    field of the DriverGestaltParam structure. The device refernce number will be interpreted 
+;    differently depending on the interface retrieved by using the 'intf' Driver Gestalt call.
+;
+
+; The union for the kdgDeviceReference Gestalt 
+DriverGestaltDeviceReferenceResponse RECORD 0
+devRef					 ds.l	1				; offset: $0 (0)		;  Generic reference number for interfaces not specified 
+						 ORG 0
+scsiID					 ds		DeviceIdent		; offset: $0 (0)		;  kdgScsiIntf devices will return a DeviceIdent 
+						 ORG 0
+ataID					 ds		DeviceIdent		; offset: $0 (0)		;  kdgATAIntf devices will return a DeviceIdent 
+						 ORG 0
+usbRef					 ds.l	1				; offset: $0 (0)		;  kdgUSBIntf devices will return a USBDeviceRef
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; __________________________________________________________________________________
+;  Name Registry ID 
+; 
+;    The driver will pass back in the driverGestaltResponse field of the DriverGestaltParam
+;    a pointer to the Name Registry Entry ID for the device that it controls
+;
+
+;  The structure for the kdgNameRegistryEntry Gestalt 
+DriverGestaltNameRegistryResponse RECORD 0
+entryID					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; __________________________________________________________________________________
+;  Device Model Information 
+; 
+;    The driver will pass a pointer to the DriverGestaltDeviceModelInfoResponse in the
+;    driverGestaltResponse field of the DriverGestaltParam structure
+;
+;    The structure for the kdgDeviceModelInfo Gestalt
+;    If any of theses pointers are nil, that means that the device doesn't provide that information
+;
+
+DriverGestaltDeviceModelInfoResponse RECORD 0
+infoStructVersion		 ds.l	1				; offset: $0 (0)
+vendorName				 ds.l	1				; offset: $4 (4)
+productName				 ds.l	1				; offset: $8 (8)
+revisionNumber			 ds.l	1				; offset: $C (12)
+subRevisionNumber		 ds.l	1				; offset: $10 (16)
+serialNumber			 ds.l	1				; offset: $14 (20)
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+;  infoStructVersion field values 
+;  NOTE: May need/want to add a UniCode version of the InfoStruct at some point 
+
+kInfoStructStringPtrsVers1		EQU		1
+
+; __________________________________________________________________________________
+;  Supported Media Types 
+; 
+;    The driver will return the number of media types supported by the device in the 
+;    driverGestaltResponse field of the DriverGestaltParam structure and an array of 
+;    'devt' values for the supported media types will be returned in the driverGestaltResponse1
+;    field of the DriverGestaltParam.
+;
+;    This call will return the number of media types supported by the device, and an array
+;    of 'devt' values for the media types (i.e. if a device supports floppy disks
+;    and large capacity removables, the driver would return that 2 media types are supported,
+;    and the array would contain kdgFloppyType ('flop') and kdgRemovableType ('rdsk')).
+;
+
+;  The structure for the kdgSupportedMediaTypes Gestalt 
+DriverGestaltSupportedMediaTypesResponse RECORD 0
+supportTypesCount		 ds.l	1				; offset: $0 (0)		;  The number of Media Types in the array 
+supportedTypesArray		 ds.l	1				; offset: $4 (4) <-- really an array of length one ;  Array of supported media types  
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; __________________________________________________________________________________
+;  Open Firmware Boot support  and Open Firmware Booting support 
+; 
+;    The kdgOpenFirmwareBootSupport selector is used to get information about boot support 
+;    for the driver/device.  The kdgOpenFirmwareBootingSupport is used during the boot
+;    process to allow booting from partitions that Open Firmware may not be able to read
+;    directly (i.e. Disk Array partitions, encrypted partitions, compressed partitions, etc..)
+;    
+;    The driver will return the bootPartitionQualifier value in the driverGestaltResponse 
+;    field of the DriverGestaltParam and will return the exact partition map entry for
+;    the boot partition in the driverGestaltResponse1 field of the DriverGestaltParam if
+;    kOFBootSpecifiedPartition is returned in the driverGestaltResponse.
+;    The number that is returned for the bootPartitionMapEntry field if the kOFBootSpecifiedPartition 
+;    is returned is the partition map entry number for the partition. (i.e. If the partition map entry
+;    for the boot partition is the 2nd partition entry in the partition map, the bootPartitionMapEntry
+;    field would be set to 2.  If the partition map entry for the boot partition is the 3rd partition 
+;    map, the bootPartitionMapEntry field would be set to 3 and etc.)
+;
+
+DriverGestaltOFBootSupportResponse RECORD 0
+bootPartitionQualifier	 ds.l	1				; offset: $0 (0)		;     The exact level of booting that the driver and device supports 
+bootPartitionMapEntry	 ds.l	1				; offset: $4 (4)		;     The Partition Map entry for the boot partition if applicable 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  Levels of boot support that the driver/device supports 
+;  These values are used in the bootPartitionQualifier field of the DriverGestaltOFBootSupportResponse 
+
+kOFBootAnyPartition				EQU		1
+kOFBootSpecifiedPartition		EQU		2
+kOFBootNotBootable				EQU		3
+kOFBootNotPartitioned			EQU		4
+; __________________________________________________________________________________
+;  CD-ROM Specific 
+;  The CDDeviceCharacteristics result is returned in csParam[0..2] of a 
+;   standard CntrlParam parameter block called with csCode kdgGetCDDeviceInfo.
+;
+
+CDDeviceCharacteristics	RECORD 0
+speedMajor				 ds.b	1				; offset: $0 (0)		;  High byte of fixed point number containing drive speed 
+speedMinor				 ds.b	1				; offset: $1 (1)		;  Low byte of "" CD 300 == 2.2, CD_SC == 1.0 etc. 
+cdFeatures				 ds.w	1				; offset: $2 (2)		;  Flags field for features and transport type of this CD-ROM 
+extendedCdFeatures		 ds.w	1				; offset: $4 (4)		;  extended flags to support new DVD-ROM/DVD-R etc. 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+cdFeatureFlagsMask				EQU		$FFFC				; The Flags are in the first 14 bits of the cdFeatures field 
+cdTransportMask					EQU		$0003				; The transport type is in the last 2 bits of the cdFeatures field 
+
+;  Flags for cdFeatures field 
+
+cdPowerInject					EQU		0					; device supports power inject of media
+cdNotPowerEject					EQU		1					; device does not support power eject of media
+cdMute							EQU		2					; device supports audio channels muting
+cdLeftToChannel					EQU		3					; device supports left channel only mono audio
+cdRightToChannel				EQU		4					; device supports right channel only mono audio
+cdLeftPlusRight					EQU		5					; device supports left + right channels mono audio
+cdSCSI_2						EQU		10					; device supports SCSI2 command set (SCSI only)
+cdStereoVolume					EQU		11					; device supports independent volume per channel
+cdDisconnect					EQU		12					; device supports disconnect / reconnect (SCSI only)
+cdWriteOnce						EQU		13					; device is a write-once type of drive
+cdLockableButton				EQU		14					; device drawer/tray can be locked
+cdExtendedFeatures				EQU		15					; extendedCdFeatures field is used
+cdPowerInject_Mask				EQU		$01
+cdNotPowerEject_Mask			EQU		$02
+cdMute_Mask						EQU		$04
+cdLeftToChannel_Mask			EQU		$08
+cdRightToChannel_Mask			EQU		$10
+cdLeftPlusRight_Mask			EQU		$20
+cdSCSI_2_Mask					EQU		$0400
+cdStereoVolume_Mask				EQU		$0800
+cdDisconnect_Mask				EQU		$1000
+cdWriteOnce_Mask				EQU		$2000
+cdLockableButton_Mask			EQU		$4000
+cdExtendedFeatures_Mask			EQU		$8000
+;  Transport types 
+
+cdCaddy							EQU		0					; CD_SC,CD_SC_PLUS,CD-300 etc. - power eject only
+cdTray							EQU		$01					; CD_300_PLUS etc. - power inject only
+cdLid							EQU		$02					; Power CD - no power inject/no power eject
+
+;    Flags for extendedCdFeatures field
+;    Only valid when cdExtendedFeatures_Mask bit of cdFeatures field is set
+
+
+
+cdDVDROM						EQU		0					; device reads DVD-ROM media
+cdDVDR							EQU		1					; device writes DVD-R media
+cdDVDRAM						EQU		2					; device writes DVD-RAM media
+cdDVDAudio						EQU		3					; device reads DVD-Audio media
+cdDVDRW							EQU		4					; device writes DVD-RW media
+cdCDRom							EQU		5					; device reads CD-ROM media
+cdCDR							EQU		6					; device writes CD-R media
+cdCDRW							EQU		7					; device writes CD-RW media
+cdDVDROM_Mask					EQU		$01
+cdDVDR_Mask						EQU		$02
+cdDVDRAM_Mask					EQU		$04
+cdDVDAudio_Mask					EQU		$08
+cdDVDRW_Mask					EQU		$10
+cdCDRom_Mask					EQU		$20
+cdCDR_Mask						EQU		$40
+cdCDRW_Mask						EQU		$80
+
+
+;  the following are used by PC Exchange (and Apple DOS/PC Compatibility Card)
+
+;  Control Codes
+
+kRegisterPartition				EQU		50					; PCX needs a new Drive (for a non-macintosh partition found on the disk)
+OLD_REGISTER_PARTITION			EQU		301					; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+THE_DRIVE						EQU		0					; DrvQElPtr for the partition to register
+THE_PHYS_START					EQU		1					; The start of the partition in logical blocks
+THE_PHYS_SIZE					EQU		2					; The size of the partition in logical blocks
+kGetADrive						EQU		51					; control call to ask the driver to create a drive
+OLD_GET_A_DRIVE					EQU		302					; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+THE_VAR_QUEL					EQU		0					; a VAR parameter for the returned DrvQElPtr
+kProhibitMounting				EQU		52					; Dont allow mounting of the following drives
+kOldProhibitMounting			EQU		2100				; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+kProhibitDevice					EQU		0					; CS Param 0 and 1 (partInfoRecPtr)
+kIsContainerMounted				EQU		53
+kOldIsContainerMounted			EQU		2201				; left in for compatibility with shipping Apple DOS/PC Compatibility Card         
+kContainerVRef					EQU		0					; CS Param 0 and 1 (VRefNum)
+kContainerParID					EQU		1					; CS Param 2 and 3 (Parent ID)
+kContainerName					EQU		2					; CS Param 4 and 5 (File Name)
+kContainerResponse				EQU		3					; CS Param 6 and 7 (VAR pointer to short result)
+kMountVolumeImg					EQU		54
+OLD_MOUNT_VOLUME_IMG			EQU		2000
+MV_HOST_VREFNUM					EQU		0
+MV_HOST_PAR_ID					EQU		1
+MV_HOST_NAME					EQU		2
+MV_REQ_PERM						EQU		3
+;  Status Codes
+
+
+kGetPartitionStatus				EQU		50					; what is the status of this partition?
+kOldGetPartitionStatus			EQU		2200				; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+kDeviceToQuery					EQU		0					; CS Param 0 and 1 (partInfoRecPtr)
+kDeviceResponse					EQU		1					; CS Param 2 and 3 (VAR pointer to short result)
+kGetPartInfo					EQU		51					; Get a partition info record based on the provided vrefnum
+kOldGetPartInfo					EQU		2300				; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+kPartInfoResponse				EQU		0					; var parameter (pointer to partInfoRec) CSParam [0-1]
+kGetContainerAlias				EQU		52					; Get the alias that describes the file this drive was mounted from.
+kOldGetContainerAlias			EQU		2400				; left in for compatibility with shipping Apple DOS/PC Compatibility Card
+kGetAliasResponse				EQU		0					;    var parameter (pointer to a Handle) CSParam [0-1]
+;  the result codes to come from the driver interface 
+
+
+DRIVER_NOT_INSTALLED			EQU		-1
+DRIVER_BUSY						EQU		-2
+CANT_MOUNT_WITHIN_THIS_FS		EQU		-3					; can only mount container within residing on HFS volume
+VOLUME_ALREADY_MOUNTED			EQU		-4					; Already Mounted
+;  requisite structures for PCX control and status calls
+
+
+kMaxProhibted					EQU		2					; the max number of volumes the PC can possibly have mounted
+;  GestaltSelector for Finding Driver information
+
+
+kGetDriverInfo					EQU		'vdrc'
+;  VerifyCmd, FormatCmd and EjectCmd are now defined in Disks.h/p/a 
+;  Partition information passed back and forth between PCX and the driver
+partInfoRec				RECORD 0
+SCSIID					 ds		DeviceIdent		; offset: $0 (0)		;  DeviceIdent for the device
+physPartitionLoc		 ds.l	1				; offset: $4 (4)		;  physical block number of beginning of partition
+partitionNumber			 ds.l	1				; offset: $8 (8)		;  the partition number of this partition
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct partInfoRec *			partInfoRecPtr
+
+vPartInfoRec			RECORD 0
+VPRTVers				 ds.b	1				; offset: $0 (0)		;  Virtual partition version number
+VPRTType				 ds.b	1				; offset: $1 (1)		;  virtual partition type (DOS, HFS, etc)
+drvrRefNum				 ds.w	1				; offset: $2 (2)		;  Driver Reference number of partition driver
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct vPartInfoRec *			vPartInfoRecPtr
+
+;  Information related to DOS partitions
+
+kDOSSigLow						EQU		$01FE				; offset into boot block for DOS signature
+kDOSSigHi						EQU		$01FF				; offset into boot block for DOS signature
+kDOSSigValLo					EQU		$55					; DOS signature value in low byte
+kDOSSigValHi					EQU		$AA					; DOS signature value in high byte
+
+	ENDIF ; __DRIVERGESTALT__ 
+

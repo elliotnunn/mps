@@ -1,0 +1,1106 @@
+;
+;	File:		AppleTalk.a
+;
+;	Contains:	AppleTalk Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__APPLETALK__') = 'UNDEFINED' THEN
+__APPLETALK__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'Memory.a'											;
+
+; Driver unit and reference numbers (ADSP is dynamic) 
+mppUnitNum						EQU		9					; MPP unit number 
+atpUnitNum						EQU		10					; ATP unit number 
+xppUnitNum						EQU		40					; XPP unit number 
+mppRefNum						EQU		-10					; MPP reference number 
+atpRefNum						EQU		-11					; ATP reference number 
+xppRefNum						EQU		-41					; XPP reference number 
+; .MPP csCodes 
+lookupReply						EQU		242					; This command queued to ourself 
+writeLAP						EQU		243					; Write out LAP packet 
+detachPH						EQU		244					; Detach LAP protocol handler 
+attachPH						EQU		245					; Attach LAP protocol handler 
+writeDDP						EQU		246					; Write out DDP packet 
+closeSkt						EQU		247					; Close DDP socket 
+openSkt							EQU		248					; Open DDP socket 
+loadNBP							EQU		249					; Load NBP command-executing code 
+lastResident					EQU		249					; Last resident command 
+confirmName						EQU		250					; Confirm name 
+lookupName						EQU		251					; Look up name on internet 
+removeName						EQU		252					; Remove name from Names Table 
+registerName					EQU		253					; Register name in Names Table 
+killNBP							EQU		254					; Kill outstanding NBP request 
+
+unloadNBP						EQU		255					; Unload NBP command code 
+setSelfSend						EQU		256					; MPP: Set to allow writes to self 
+SetMyZone						EQU		257					; Set my zone name 
+GetATalkInfo					EQU		258					; get AppleTalk information 
+ATalkClosePrep					EQU		259					; AppleTalk close query 
+; .ATP csCodes 
+nSendRequest					EQU		248					; NSendRequest code 
+relRspCB						EQU		249					; Release RspCB 
+closeATPSkt						EQU		250					; Close ATP socket 
+addResponse						EQU		251					; Add response code | Require open skt 
+sendResponse					EQU		252					; Send response code 
+getRequest						EQU		253					; Get request code 
+openATPSkt						EQU		254					; Open ATP socket 
+sendRequest						EQU		255					; Send request code 
+relTCB							EQU		256					; Release TCB 
+killGetReq						EQU		257					; Kill GetRequest 
+killSendReq						EQU		258					; Kill SendRequest 
+killAllGetReq					EQU		259					; Kill all getRequests for a skt 
+; .XPP csCodes 
+openSess						EQU		255					; Open session 
+closeSess						EQU		254					; Close session 
+userCommand						EQU		253					; User command 
+
+userWrite						EQU		252					; User write 
+getStatus						EQU		251					; Get status 
+afpCall							EQU		250					; AFP command (buffer has command code) 
+getParms						EQU		249					; Get parameters 
+abortOS							EQU		248					; Abort open session request 
+closeAll						EQU		247					; Close all open sessions 
+xCall							EQU		246					; .XPP extended calls 
+; Transition Queue transition types 
+ATTransOpen						EQU		0					;AppleTalk has opened
+ATTransClose					EQU		2					;AppleTalk is about to close
+ATTransClosePrep				EQU		3					;Is it OK to close AppleTalk ?
+ATTransCancelClose				EQU		4					;Cancel the ClosePrep transition
+afpByteRangeLock				EQU		1					;AFPCall command codes
+afpVolClose						EQU		2					;AFPCall command codes
+afpDirClose						EQU		3					;AFPCall command codes
+afpForkClose					EQU		4					;AFPCall command codes
+afpCopyFile						EQU		5					;AFPCall command codes
+afpDirCreate					EQU		6					;AFPCall command codes
+afpFileCreate					EQU		7					;AFPCall command codes
+afpDelete						EQU		8					;AFPCall command codes
+afpEnumerate					EQU		9					;AFPCall command codes
+
+afpFlush						EQU		10					;AFPCall command codes
+afpForkFlush					EQU		11					;AFPCall command codes
+afpGetDirParms					EQU		12					;AFPCall command codes
+afpGetFileParms					EQU		13					;AFPCall command codes
+afpGetForkParms					EQU		14					;AFPCall command codes
+afpGetSInfo						EQU		15					;AFPCall command codes
+afpGetSParms					EQU		16					;AFPCall command codes
+afpGetVolParms					EQU		17					;AFPCall command codes
+afpLogin						EQU		18					;AFPCall command codes
+afpContLogin					EQU		19					;AFPCall command codes
+afpLogout						EQU		20					;AFPCall command codes
+afpMapID						EQU		21					;AFPCall command codes
+afpMapName						EQU		22					;AFPCall command codes
+afpMove							EQU		23					;AFPCall command codes
+afpOpenVol						EQU		24					;AFPCall command codes
+afpOpenDir						EQU		25					;AFPCall command codes
+afpOpenFork						EQU		26					;AFPCall command codes
+afpRead							EQU		27					;AFPCall command codes
+afpRename						EQU		28					;AFPCall command codes
+afpSetDirParms					EQU		29					;AFPCall command codes
+
+afpSetFileParms					EQU		30					;AFPCall command codes
+afpSetForkParms					EQU		31					;AFPCall command codes
+afpSetVolParms					EQU		32					;AFPCall command codes
+afpWrite						EQU		33					;AFPCall command codes
+afpGetFlDrParms					EQU		34					;AFPCall command codes
+afpSetFlDrParms					EQU		35					;AFPCall command codes
+afpDTOpen						EQU		48					;AFPCall command codes
+afpDTClose						EQU		49					;AFPCall command codes
+afpGetIcon						EQU		51					;AFPCall command codes
+afpGtIcnInfo					EQU		52					;AFPCall command codes
+afpAddAPPL						EQU		53					;AFPCall command codes
+afpRmvAPPL						EQU		54					;AFPCall command codes
+afpGetAPPL						EQU		55					;AFPCall command codes
+afpAddCmt						EQU		56					;AFPCall command codes
+afpRmvCmt						EQU		57					;AFPCall command codes
+afpGetCmt						EQU		58					;AFPCall command codes
+afpAddIcon						EQU		192					;Special code for ASP Write commands
+xppLoadedBit					EQU		5					; XPP bit in PortBUse 
+scbMemSize						EQU		192					; Size of memory for SCB 
+xppFlagClr						EQU		0					; Cs for AFPCommandBlock 
+
+xppFlagSet						EQU		128					; StartEndFlag & NewLineFlag fields. 
+lapSize							EQU		20
+ddpSize							EQU		26
+nbpSize							EQU		26
+atpSize							EQU		56
+atpXOvalue						EQU		32					;ATP exactly-once bit 
+atpEOMvalue						EQU		16					;ATP End-Of-Message bit 
+atpSTSvalue						EQU		8					;ATP Send-Transmission-Status bit 
+atpTIDValidvalue				EQU		2					;ATP trans. ID valid bit 
+atpSendChkvalue					EQU		1					;ATP send checksum bit 
+zipGetLocalZones				EQU		5
+zipGetZoneList					EQU		6
+zipGetMyZone					EQU		7
+LAPMgrPtr						EQU		$B18				;Entry point for LAP Manager
+LAPMgrCall						EQU		2					;Offset to LAP routines
+LAddAEQ							EQU		23					;LAPAddATQ routine selector
+LRmvAEQ							EQU		24					;LAPRmvATQ routine selector
+
+tLAPRead						EQU		0
+tLAPWrite						EQU		1
+tDDPRead						EQU		2
+tDDPWrite						EQU		3
+tNBPLookup						EQU		4
+tNBPConfirm						EQU		5
+tNBPRegister					EQU		6
+tATPSndRequest					EQU		7
+tATPGetRequest					EQU		8
+tATPSdRsp						EQU		9
+tATPAddRsp						EQU		10
+tATPRequest						EQU		11
+tATPResponse					EQU		12
+
+; typedef SInt8 			ABCallType
+
+lapProto						EQU		0
+ddpProto						EQU		1
+nbpProto						EQU		2
+atpProto						EQU		3
+
+; typedef UInt8 			ABProtoType
+; typedef Byte 				ABByte
+LAPAdrBlock 			RECORD	0
+dstNodeID				 ds.b   1		; offset: $0 (0)
+srcNodeID				 ds.b   1		; offset: $1 (1)
+lapProtType				 ds.b   1		; offset: $2 (2)
+filler					 ds.b   1		; offset: $3 (3)		;	Filler for proper byte alignment
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct LAPAdrBlock  LAPAdrBlock
+; typedef struct ATQEntry 	ATQEntry, *ATQEntryPtr
+; typedef ATalkTransitionEventUPP  ATalkTransitionEvent
+ATQEntry 				RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)		;next queue entry
+qType					 ds.w   1		; offset: $4 (4)		;queue type
+CallAddr				 ds.l   1		; offset: $6 (6)		;your routine descriptor
+sizeof					 EQU *			; size:   $A (10)
+						ENDR
+
+AddrBlock 				RECORD	0
+aNet					 ds.w   1		; offset: $0 (0)
+aNode					 ds.b   1		; offset: $2 (2)
+aSocket					 ds.b   1		; offset: $3 (3)
+sizeof					 EQU *			; size:   $4 (4)
+						ENDR
+
+; typedef struct AddrBlock 	AddrBlock
+; 
+;	Real definition of EntityName is 3 PACKED strings of any length (32 is just an example). No
+;	offests for Asm since each String address must be calculated by adding length byte to last string ptr.
+;	In Pascal, String(32) will be 34 bytes long since fields never start on an odd byte unless they are 
+;	only a byte long. So this will generate correct looking interfaces for Pascal and C, but they will not
+;	be the same, which is OK since they are not used. 
+;
+EntityName 				RECORD	0
+objStr					 ds.b   33		; offset: $0 (0)
+pad1					 ds.b   1		; offset: $21 (33)
+typeStr					 ds.b   33		; offset: $22 (34)
+pad2					 ds.b   1		; offset: $43 (67)
+zoneStr					 ds.b   33		; offset: $44 (68)
+						 ORG 102
+sizeof					 EQU *			; size:   $66 (102)
+						ENDR
+
+; typedef struct EntityName  EntityName
+; typedef EntityName 		*EntityPtr
+RetransType 			RECORD	0
+retransInterval			 ds.b   1		; offset: $0 (0)
+retransCount			 ds.b   1		; offset: $1 (1)
+sizeof					 EQU *			; size:   $2 (2)
+						ENDR
+
+; typedef struct RetransType  RetransType
+BDSElement 				RECORD	0
+buffSize				 ds.w   1		; offset: $0 (0)
+buffPtr					 ds.l   1		; offset: $2 (2)
+dataSize				 ds.w   1		; offset: $6 (6)
+userBytes				 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct BDSElement  BDSElement
+; typedef BDSElement 		BDSType[8]
+; typedef BDSElement 		*BDSPtr
+; typedef char 				BitMapType
+ATLAPRec 				RECORD	0
+abOpcode				 ds.b   1		; offset: $0 (0)
+filler					 ds.b   1		; offset: $1 (1)		;	Filler for proper byte alignment
+abResult				 ds.w   1		; offset: $2 (2)
+abUserReference			 ds.l   1		; offset: $4 (4)
+lapAddress				 ds     LAPAdrBlock ; offset: $8 (8)
+lapReqCount				 ds.w   1		; offset: $C (12)
+lapActCount				 ds.w   1		; offset: $E (14)
+lapDataPtr				 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct ATLAPRec 	ATLAPRec
+; typedef ATLAPRec 			*ATLAPRecPtr, **ATLAPRecHandle
+ATDDPRec 				RECORD	0
+abOpcode				 ds.b   1		; offset: $0 (0)
+filler					 ds.b   1		; offset: $1 (1)		;	Filler for proper byte alignment
+abResult				 ds.w   1		; offset: $2 (2)
+abUserReference			 ds.l   1		; offset: $4 (4)
+ddpType					 ds.w   1		; offset: $8 (8)
+ddpSocket				 ds.w   1		; offset: $A (10)
+ddpAddress				 ds     AddrBlock ; offset: $C (12)
+ddpReqCount				 ds.w   1		; offset: $10 (16)
+ddpActCount				 ds.w   1		; offset: $12 (18)
+ddpDataPtr				 ds.l   1		; offset: $14 (20)
+ddpNodeID				 ds.w   1		; offset: $18 (24)
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct ATDDPRec 	ATDDPRec
+; typedef ATDDPRec 			*ATDDPRecPtr, **ATDDPRecHandle
+ATNBPRec 				RECORD	0
+abOpcode				 ds.b   1		; offset: $0 (0)
+filler					 ds.b   1		; offset: $1 (1)		;	Filler for proper byte alignment
+abResult				 ds.w   1		; offset: $2 (2)
+abUserReference			 ds.l   1		; offset: $4 (4)
+nbpEntityPtr			 ds.l   1		; offset: $8 (8)
+nbpBufPtr				 ds.l   1		; offset: $C (12)
+nbpBufSize				 ds.w   1		; offset: $10 (16)
+nbpDataField			 ds.w   1		; offset: $12 (18)
+nbpAddress				 ds     AddrBlock ; offset: $14 (20)
+nbpRetransmitInfo		 ds     RetransType ; offset: $18 (24)
+sizeof					 EQU *			; size:   $1A (26)
+						ENDR
+
+; typedef struct ATNBPRec 	ATNBPRec
+; typedef ATNBPRec 			*ATNBPRecPtr, **ATNBPRecHandle
+ATATPRec 				RECORD	0
+abOpcode				 ds.b   1		; offset: $0 (0)
+filler1					 ds.b   1		; offset: $1 (1)		;	Filler for proper byte alignment
+abResult				 ds.w   1		; offset: $2 (2)
+abUserReference			 ds.l   1		; offset: $4 (4)
+atpSocket				 ds.w   1		; offset: $8 (8)
+atpAddress				 ds     AddrBlock ; offset: $A (10)
+atpReqCount				 ds.w   1		; offset: $E (14)
+atpDataPtr				 ds.l   1		; offset: $10 (16)
+atpRspBDSPtr			 ds.l   1		; offset: $14 (20)
+atpBitMap				 ds.b   1		; offset: $18 (24)
+filler2					 ds.b   1		; offset: $19 (25)		;	Filler for proper byte alignment
+atpTransID				 ds.w   1		; offset: $1A (26)
+atpActCount				 ds.w   1		; offset: $1C (28)
+atpUserData				 ds.l   1		; offset: $1E (30)
+atpXO					 ds.b   1		; offset: $22 (34)
+atpEOM					 ds.b   1		; offset: $23 (35)
+atpTimeOut				 ds.w   1		; offset: $24 (36)
+atpRetries				 ds.w   1		; offset: $26 (38)
+atpNumBufs				 ds.w   1		; offset: $28 (40)
+atpNumRsp				 ds.w   1		; offset: $2A (42)
+atpBDSSize				 ds.w   1		; offset: $2C (44)
+atpRspUData				 ds.l   1		; offset: $2E (46)
+atpRspBuf				 ds.l   1		; offset: $32 (50)
+atpRspSize				 ds.w   1		; offset: $36 (54)
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct ATATPRec 	ATATPRec
+; typedef ATATPRec 			*ATATPRecPtr, **ATATPRecHandle
+AFPCommandBlock 		RECORD	0
+cmdByte					 ds.b   1		; offset: $0 (0)
+startEndFlag			 ds.b   1		; offset: $1 (1)
+forkRefNum				 ds.w   1		; offset: $2 (2)
+rwOffset				 ds.l   1		; offset: $4 (4)
+reqCount				 ds.l   1		; offset: $8 (8)
+newLineFlag				 ds.b   1		; offset: $C (12)
+newLineChar				 ds.b   1		; offset: $D (13)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct AFPCommandBlock  AFPCommandBlock
+; typedef union MPPParamBlock  MPPParamBlock, *MPPPBPtr
+; typedef union ATPParamBlock  ATPParamBlock, *ATPPBPtr
+; typedef union XPPParamBlock  XPPParamBlock, *XPPParmBlkPtr
+WDSElement 				RECORD	0
+entryLength				 ds.w   1		; offset: $0 (0)
+entryPtr				 ds.l   1		; offset: $2 (2)
+sizeof					 EQU *			; size:   $6 (6)
+						ENDR
+
+; typedef struct WDSElement  WDSElement
+NTElement 				RECORD	0
+nteAddress				 ds     AddrBlock ; offset: $0 (0)		;network address of entity
+filler					 ds.b   1		; offset: $4 (4)
+entityData				 ds.b   99		; offset: $5 (5)		;Object, Type & Zone
+sizeof					 EQU *			; size:   $68 (104)
+						ENDR
+
+; typedef struct NTElement 	NTElement
+NamesTableEntry 		RECORD	0
+qNext					 ds.l   1		; offset: $0 (0)		;ptr to next NTE
+nt						 ds     NTElement ; offset: $4 (4)
+sizeof					 EQU *			; size:   $6C (108)
+						ENDR
+
+; typedef struct NamesTableEntry  NamesTableEntry
+MPPParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+userData				 ds.l   1		; offset: $12 (18)
+reqTID					 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+filler0					 ds.w   1		; offset: $1C (28)
+wdsPointer				 ds.l   1		; offset: $1E (30)
+						 ORG 28
+protType				 ds.b   1		; offset: $1C (28)
+filler					 ds.b   1		; offset: $1D (29)
+handler					 ds.l   1		; offset: $1E (30)
+						 ORG 28
+socket					 ds.b   1		; offset: $1C (28)
+checksumFlag			 ds.b   1		; offset: $1D (29)
+listener				 ds.l   1		; offset: $1E (30)
+						 ORG 28
+interval				 ds.b   1		; offset: $1C (28)		;retry interval 
+count					 ds.b   1		; offset: $1D (29)		;retry count 
+nbpPtrs					 ds.l   1		; offset: $1E (30)
+verifyFlag				 ds.b   1		; offset: $22 (34)
+filler3					 ds.b   1		; offset: $23 (35)
+						 ORG 34
+retBuffPtr				 ds.l   1		; offset: $22 (34)
+retBuffSize				 ds.w   1		; offset: $26 (38)
+maxToGet				 ds.w   1		; offset: $28 (40)
+numGotten				 ds.w   1		; offset: $2A (42)
+						 ORG 34
+confirmAddr				 ds     AddrBlock ; offset: $22 (34)
+newSocket				 ds.b   1		; offset: $26 (38)
+filler4					 ds.b   1		; offset: $27 (39)
+						 ORG 28
+newSelfFlag				 ds.b   1		; offset: $1C (28)		;self-send toggle flag 
+oldSelfFlag				 ds.b   1		; offset: $1D (29)		;previous self-send state 
+						 ORG 28
+nKillQEl				 ds.l   1		; offset: $1C (28)		;ptr to i/o queue element to cancel 
+						 ORG 28
+version					 ds.w   1		; offset: $1C (28)
+varsPtr					 ds.l   1		; offset: $1E (30)
+DCEPtr					 ds.l   1		; offset: $22 (34)
+portID					 ds.w   1		; offset: $26 (38)
+configuration			 ds.l   1		; offset: $28 (40)
+selfSend				 ds.w   1		; offset: $2C (44)
+netLo					 ds.w   1		; offset: $2E (46)
+netHi					 ds.w   1		; offset: $30 (48)
+ourAdd					 ds.l   1		; offset: $32 (50)
+routerAddr				 ds.l   1		; offset: $36 (54)
+numOfPHs				 ds.w   1		; offset: $3A (58)
+numOfSkts				 ds.w   1		; offset: $3C (60)
+numNBPEs				 ds.w   1		; offset: $3E (62)
+nTQueue					 ds.l   1		; offset: $40 (64)
+LAlength				 ds.w   1		; offset: $44 (68)
+linkAddr				 ds.l   1		; offset: $46 (70)
+zoneName				 ds.l   1		; offset: $4A (74)
+						 ORG 28
+appName					 ds.l   1		; offset: $1C (28)		;pointer to application name in buffer
+						 ORG 78
+sizeof					 EQU *			; size:   $4E (78)
+						ENDR
+
+XPPParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+cmdResult				 ds.l   1		; offset: $12 (18)
+ioVRefNum				 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+abortSCBPtr				 ds.l   1		; offset: $1C (28)		; SCB pointer for AbortOS
+						 ORG 28
+aspMaxCmdSize			 ds.w   1		; offset: $1C (28)
+aspQuantumSize			 ds.w   1		; offset: $1E (30)
+numSesss				 ds.w   1		; offset: $20 (32)
+						 ORG 28
+sessRefnum				 ds.w   1		; offset: $1C (28)
+aspTimeout				 ds.b   1		; offset: $1E (30)
+aspRetry				 ds.b   1		; offset: $1F (31)
+serverAddr				 ds     AddrBlock ; offset: $20 (32)
+scbPointer				 ds.l   1		; offset: $24 (36)
+attnRoutine				 ds.l   1		; offset: $28 (40)
+						 ORG 32
+cbSize					 ds.w   1		; offset: $20 (32)
+cbPtr					 ds.l   1		; offset: $22 (34)
+rbSize					 ds.w   1		; offset: $26 (38)
+rbPtr					 ds.l   1		; offset: $28 (40)
+afpAddrBlock			 ds     AddrBlock ; offset: $2C (44)
+afpSCBPtr				 ds.l   1		; offset: $30 (48)
+afpAttnRoutine			 ds.l   1		; offset: $34 (52)
+						 ORG 44
+wdSize					 ds.w   1		; offset: $2C (44)
+wdPtr					 ds.l   1		; offset: $2E (46)
+ccbStart				 ds.b   296		; offset: $32 (50)
+						 ORG 28
+xppSubCode				 ds.w   1		; offset: $1C (28)
+xppTimeout				 ds.b   1		; offset: $1E (30)
+xppRetry				 ds.b   1		; offset: $1F (31)
+filler1					 ds.w   1		; offset: $20 (32)
+zipBuffPtr				 ds.l   1		; offset: $22 (34)
+zipNumZones				 ds.w   1		; offset: $26 (38)
+zipLastFlag				 ds.b   1		; offset: $28 (40)
+filler2					 ds.b   1		; offset: $29 (41)
+zipInfoField			 ds.b   70		; offset: $2A (42)
+						 ORG 346
+sizeof					 EQU *			; size:   $15A (346)
+						ENDR
+
+ATPParamBlock 			RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)
+ioTrap					 ds.w   1		; offset: $6 (6)
+ioCmdAddr				 ds.l   1		; offset: $8 (8)
+ioCompletion			 ds.l   1		; offset: $C (12)
+ioResult				 ds.w   1		; offset: $10 (16)
+userData				 ds.l   1		; offset: $12 (18)
+reqTID					 ds.w   1		; offset: $16 (22)
+ioRefNum				 ds.w   1		; offset: $18 (24)
+csCode					 ds.w   1		; offset: $1A (26)
+atpSocket				 ds.b   1		; offset: $1C (28)
+atpFlags				 ds.b   1		; offset: $1D (29)
+addrBlock				 ds     AddrBlock ; offset: $1E (30)
+reqLength				 ds.w   1		; offset: $22 (34)
+reqPointer				 ds.l   1		; offset: $24 (36)
+bdsPointer				 ds.l   1		; offset: $28 (40)
+numOfBuffs				 ds.b   1		; offset: $2C (44)
+timeOutVal				 ds.b   1		; offset: $2D (45)
+numOfResps				 ds.b   1		; offset: $2E (46)
+retryCount				 ds.b   1		; offset: $2F (47)
+intBuff					 ds.w   1		; offset: $30 (48)
+TRelTime				 ds.b   1		; offset: $32 (50)
+filler0					 ds.b   1		; offset: $33 (51)
+						 ORG 44
+filler					 ds.b   1		; offset: $2C (44)
+bdsSize					 ds.b   1		; offset: $2D (45)
+transID					 ds.w   1		; offset: $2E (46)
+						 ORG 44
+bitMap					 ds.b   1		; offset: $2C (44)
+filler2					 ds.b   1		; offset: $2D (45)
+						 ORG 44
+rspNum					 ds.b   1		; offset: $2C (44)
+filler3					 ds.b   1		; offset: $2D (45)
+						 ORG 44
+aKillQEl				 ds.l   1		; offset: $2C (44)
+						 ORG 52
+sizeof					 EQU *			; size:   $34 (52)
+						ENDR
+
+;
+; pascal OSErr OpenXPP(short *xppRefnum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	OpenXPP
+	ENDIF
+
+;
+; pascal OSErr ASPOpenSession(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPOpenSession
+	ENDIF
+
+;
+; pascal OSErr ASPCloseSession(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPCloseSession
+	ENDIF
+
+;
+; pascal OSErr ASPAbortOS(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPAbortOS
+	ENDIF
+
+;
+; pascal OSErr ASPGetParms(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPGetParms
+	ENDIF
+
+;
+; pascal OSErr ASPCloseAll(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPCloseAll
+	ENDIF
+
+;
+; pascal OSErr ASPUserWrite(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPUserWrite
+	ENDIF
+
+;
+; pascal OSErr ASPUserCommand(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPUserCommand
+	ENDIF
+
+;
+; pascal OSErr ASPGetStatus(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ASPGetStatus
+	ENDIF
+
+;
+; pascal OSErr AFPCommand(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	AFPCommand
+	ENDIF
+
+;
+; pascal OSErr GetLocalZones(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetLocalZones
+	ENDIF
+
+;
+; pascal OSErr GetZoneList(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetZoneList
+	ENDIF
+
+;
+; pascal OSErr GetMyZone(XPPParmBlkPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetMyZone
+	ENDIF
+
+;
+; pascal OSErr PAttachPH(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PAttachPH
+	ENDIF
+
+;
+; pascal OSErr PDetachPH(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PDetachPH
+	ENDIF
+
+;
+; pascal OSErr PWriteLAP(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PWriteLAP
+	ENDIF
+
+;
+; pascal OSErr POpenSkt(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	POpenSkt
+	ENDIF
+
+;
+; pascal OSErr PCloseSkt(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PCloseSkt
+	ENDIF
+
+;
+; pascal OSErr PWriteDDP(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PWriteDDP
+	ENDIF
+
+;
+; pascal OSErr PRegisterName(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PRegisterName
+	ENDIF
+
+;
+; pascal OSErr PLookupName(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PLookupName
+	ENDIF
+
+;
+; pascal OSErr PConfirmName(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PConfirmName
+	ENDIF
+
+;
+; pascal OSErr PRemoveName(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PRemoveName
+	ENDIF
+
+;
+; pascal OSErr PSetSelfSend(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PSetSelfSend
+	ENDIF
+
+;
+; pascal OSErr PKillNBP(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PKillNBP
+	ENDIF
+
+;
+; pascal OSErr PGetAppleTalkInfo(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PGetAppleTalkInfo
+	ENDIF
+
+;
+; pascal OSErr PATalkClosePrep(MPPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PATalkClosePrep
+	ENDIF
+
+;
+; pascal OSErr POpenATPSkt(ATPPBPtr thePBptr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	POpenATPSkt
+	ENDIF
+
+;
+; pascal OSErr PCloseATPSkt(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PCloseATPSkt
+	ENDIF
+
+;
+; pascal OSErr PSendRequest(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PSendRequest
+	ENDIF
+
+;
+; pascal OSErr PGetRequest(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PGetRequest
+	ENDIF
+
+;
+; pascal OSErr PSendResponse(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PSendResponse
+	ENDIF
+
+;
+; pascal OSErr PAddResponse(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PAddResponse
+	ENDIF
+
+;
+; pascal OSErr PRelTCB(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PRelTCB
+	ENDIF
+
+;
+; pascal OSErr PRelRspCB(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PRelRspCB
+	ENDIF
+
+;
+; pascal OSErr PNSendRequest(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PNSendRequest
+	ENDIF
+
+;
+; pascal OSErr PKillSendReq(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PKillSendReq
+	ENDIF
+
+;
+; pascal OSErr PKillGetReq(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	PKillGetReq
+	ENDIF
+
+;
+; pascal OSErr ATPKillAllGetReq(ATPPBPtr thePBPtr, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPKillAllGetReq
+	ENDIF
+
+;
+; pascal void BuildLAPwds(Ptr wdsPtr, Ptr dataPtr, short destHost, short prototype, short frameLen)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	BuildLAPwds
+	ENDIF
+
+;
+; pascal void BuildDDPwds(Ptr wdsPtr, Ptr headerPtr, Ptr dataPtr, AddrBlock netAddr, short ddpType, short dataLen)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	BuildDDPwds
+	ENDIF
+
+;
+; pascal void NBPSetEntity(Ptr buffer, ConstStr32Param nbpObject, ConstStr32Param nbpType, ConstStr32Param nbpZone)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPSetEntity
+	ENDIF
+
+;
+; pascal void NBPSetNTE(Ptr ntePtr, ConstStr32Param nbpObject, ConstStr32Param nbpType, ConstStr32Param nbpZone, short socket)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPSetNTE
+	ENDIF
+
+;
+; pascal short GetBridgeAddress(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetBridgeAddress
+	ENDIF
+
+;
+; pascal short BuildBDS(Ptr buffPtr, Ptr bdsPtr, short buffSize)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	BuildBDS
+	ENDIF
+
+;
+; pascal OSErr MPPOpen(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	MPPOpen
+	ENDIF
+
+;
+; pascal OSErr LAPAddATQ(ATQEntryPtr theATQEntry)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPAddATQ
+	ENDIF
+
+;
+; pascal OSErr LAPRmvATQ(ATQEntryPtr theATQEntry)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPRmvATQ
+	ENDIF
+
+;
+; pascal OSErr ATPLoad(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPLoad
+	ENDIF
+
+;
+; pascal OSErr ATPUnload(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPUnload
+	ENDIF
+
+;
+; pascal OSErr NBPExtract(Ptr theBuffer, short numInBuf, short whichOne, EntityName *abEntity, AddrBlock *address)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPExtract
+	ENDIF
+
+;
+; pascal OSErr GetNodeAddress(short *myNode, short *myNet)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetNodeAddress
+	ENDIF
+
+;
+; pascal Boolean IsMPPOpen(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	IsMPPOpen
+	ENDIF
+
+;
+; pascal Boolean IsATPOpen(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	IsATPOpen
+	ENDIF
+
+;
+; pascal void ATEvent(long event, Ptr infoPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATEvent
+	ENDIF
+
+;
+; pascal OSErr ATPreFlightEvent(long event, long cancel, Ptr infoPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPreFlightEvent
+	ENDIF
+
+;
+;	The following routines are obsolete and will not be supported on
+;	PowerPC. Equivalent functionality is provided by the routines
+;	above.
+;
+	IF OLDROUTINENAMES  ** ¬ GENERATINGCFM  THEN
+;
+; pascal OSErr MPPClose(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	MPPClose
+	ENDIF
+
+;
+; pascal OSErr LAPOpenProtocol(ABByte theLAPType, Ptr protoPtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPOpenProtocol
+	ENDIF
+
+;
+; pascal OSErr LAPCloseProtocol(ABByte theLAPType)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPCloseProtocol
+	ENDIF
+
+;
+; pascal OSErr LAPWrite(ATLAPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPWrite
+	ENDIF
+
+;
+; pascal OSErr LAPRead(ATLAPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPRead
+	ENDIF
+
+;
+; pascal OSErr LAPRdCancel(ATLAPRecHandle abRecord)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	LAPRdCancel
+	ENDIF
+
+;
+; pascal OSErr DDPOpenSocket(short *theSocket, Ptr sktListener)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DDPOpenSocket
+	ENDIF
+
+;
+; pascal OSErr DDPCloseSocket(short theSocket)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DDPCloseSocket
+	ENDIF
+
+;
+; pascal OSErr DDPRead(ATDDPRecHandle abRecord, Boolean retCksumErrs, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DDPRead
+	ENDIF
+
+;
+; pascal OSErr DDPWrite(ATDDPRecHandle abRecord, Boolean doChecksum, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DDPWrite
+	ENDIF
+
+;
+; pascal OSErr DDPRdCancel(ATDDPRecHandle abRecord)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	DDPRdCancel
+	ENDIF
+
+;
+; pascal OSErr ATPOpenSocket(AddrBlock addrRcvd, short *atpSocket)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPOpenSocket
+	ENDIF
+
+;
+; pascal OSErr ATPCloseSocket(short atpSocket)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPCloseSocket
+	ENDIF
+
+;
+; pascal OSErr ATPSndRequest(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPSndRequest
+	ENDIF
+
+;
+; pascal OSErr ATPRequest(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPRequest
+	ENDIF
+
+;
+; pascal OSErr ATPReqCancel(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPReqCancel
+	ENDIF
+
+;
+; pascal OSErr ATPGetRequest(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPGetRequest
+	ENDIF
+
+;
+; pascal OSErr ATPSndRsp(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPSndRsp
+	ENDIF
+
+;
+; pascal OSErr ATPAddRsp(ATATPRecHandle abRecord)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPAddRsp
+	ENDIF
+
+;
+; pascal OSErr ATPResponse(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPResponse
+	ENDIF
+
+;
+; pascal OSErr ATPRspCancel(ATATPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ATPRspCancel
+	ENDIF
+
+;
+; pascal OSErr NBPRegister(ATNBPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPRegister
+	ENDIF
+
+;
+; pascal OSErr NBPLookup(ATNBPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPLookup
+	ENDIF
+
+;
+; pascal OSErr NBPConfirm(ATNBPRecHandle abRecord, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPConfirm
+	ENDIF
+
+;
+; pascal OSErr NBPRemove(EntityPtr abEntity)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPRemove
+	ENDIF
+
+;
+; pascal OSErr NBPLoad(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPLoad
+	ENDIF
+
+;
+; pascal OSErr NBPUnload(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	NBPUnload
+	ENDIF
+
+	ENDIF
+	ENDIF ; __APPLETALK__

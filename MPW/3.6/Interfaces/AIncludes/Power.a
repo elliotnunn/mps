@@ -1,0 +1,2358 @@
+;
+;    File:       Power.a
+;
+;    Contains:   Power Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1990-2001 by Apple Computer, Inc.  All rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__POWER__') = 'UNDEFINED' THEN
+__POWER__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__MULTIPROCESSING__') = 'UNDEFINED' THEN
+	include 'Multiprocessing.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+
+															; Bit positions for ModemByte 
+modemOnBit						EQU		0
+ringWakeUpBit					EQU		2
+modemInstalledBit				EQU		3
+ringDetectBit					EQU		4
+modemOnHookBit					EQU		5
+
+															; masks for ModemByte 
+modemOnMask						EQU		$01
+ringWakeUpMask					EQU		$04
+modemInstalledMask				EQU		$08
+ringDetectMask					EQU		$10
+modemOnHookMask					EQU		$20
+
+															; bit positions for BatteryByte 
+chargerConnBit					EQU		0
+hiChargeBit						EQU		1
+chargeOverFlowBit				EQU		2
+batteryDeadBit					EQU		3
+batteryLowBit					EQU		4
+connChangedBit					EQU		5
+
+															; masks for BatteryByte 
+chargerConnMask					EQU		$01
+hiChargeMask					EQU		$02
+chargeOverFlowMask				EQU		$04
+batteryDeadMask					EQU		$08
+batteryLowMask					EQU		$10
+connChangedMask					EQU		$20
+
+															; bit positions for SoundMixerByte 
+MediaBaySndEnBit				EQU		0
+PCISndEnBit						EQU		1
+ZVSndEnBit						EQU		2
+PCCardSndEnBit					EQU		3
+
+															; masks for SoundMixerByte 
+MediaBaySndEnMask				EQU		$01
+PCISndEnMask					EQU		$02
+ZVSndEnMask						EQU		$04
+PCCardSndEnMask					EQU		$08
+
+															; commands to SleepQRec sleepQProc 
+kSleepRequest					EQU		1
+kSleepDemand					EQU		2
+kSleepWakeUp					EQU		3
+kSleepRevoke					EQU		4
+kSleepUnlock					EQU		4
+kSleepDeny						EQU		5
+kSleepNow						EQU		6
+kDozeDemand						EQU		7
+kDozeWakeUp						EQU		8
+kDozeRequest					EQU		9					; additional messages for Power Mgr 2.0
+kEnterStandby					EQU		10
+kEnterRun						EQU		11
+kSuspendRequest					EQU		12
+kSuspendDemand					EQU		13
+kSuspendRevoke					EQU		14
+kSuspendWakeUp					EQU		15
+kGetPowerLevel					EQU		16
+kSetPowerLevel					EQU		17
+kDeviceInitiatedWake			EQU		18
+kWakeToDoze						EQU		19
+kDozeToFullWakeUp				EQU		20
+kGetPowerInfo					EQU		21
+kGetWakeOnNetInfo				EQU		22
+
+															; depreciated commands to SleepQRec sleepQProc 
+sleepRequest					EQU		1
+sleepDemand						EQU		2
+sleepWakeUp						EQU		3
+sleepRevoke						EQU		4
+sleepUnlock						EQU		4
+sleepDeny						EQU		5
+sleepNow						EQU		6
+dozeDemand						EQU		7
+dozeWakeUp						EQU		8
+dozeRequest						EQU		9
+enterStandby					EQU		10
+enterRun						EQU		11
+suspendRequestMsg				EQU		12
+suspendDemandMsg				EQU		13
+suspendRevokeMsg				EQU		14
+suspendWakeUpMsg				EQU		15
+getPowerLevel					EQU		16
+setPowerLevel					EQU		17
+;  Power Handler func messages 
+; typedef UInt32 						PowerLevel
+
+;  Power levels corresponding to PCI Bus Power Management Interface Spec (PMIS) 
+
+kPMDevicePowerLevel_On			EQU		0					; fully-powered 'On' state (D0 state)    
+kPMDevicePowerLevel_D1			EQU		1					; not used by Apple system SW         
+kPMDevicePowerLevel_D2			EQU		2					; not used by Apple system SW         
+kPMDevicePowerLevel_Off			EQU		3					; main PCI bus power 'Off', but PCI standby power available (D3cold state) 
+;  PowerHandlerProc definition 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewPowerHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposePowerHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokePowerHandlerUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  PCI power management support
+
+kUseDefaultMinimumWakeTime		EQU		0					; Defaults to 5 minutes
+kPowerSummaryVersion			EQU		1					; Version of PowerSummary structure.
+kDevicePowerInfoVersion			EQU		1					; Version of DevicePowerInfo structure.
+
+															; PowerSummary flags
+kPCIPowerOffAllowed				EQU		$00000001			; PCI power off is allowed.
+
+															; DevicePowerInfo flags
+kDevicePCIPowerOffAllowed		EQU		$00000001			; PCI power off is allowed for device.
+kDeviceSupportsPMIS				EQU		$00000002			; Device supports Power Mgt Interface Spec.
+kDeviceCanAssertPMEDuringSleep	EQU		$00000004			; Device can assert PME# during sleep.
+kDeviceUsesCommonLogicPower		EQU		$00000008			; Device uses common-logic power
+kDeviceDriverPresent			EQU		$00000010			; Driver present for device.
+kDeviceDriverSupportsPowerMgt	EQU		$00000020			; Driver installed a power handler.
+DevicePowerInfo			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  Version of this structure.
+regID					 ds		RegEntryID		; offset: $4 (4)		;  RegEntryID for device.
+flags					 ds.l	1				; offset: $14 (20)		;  Flags
+minimumWakeTime			 ds.l	1				; offset: $18 (24)		;  Minimum seconds before sleeping again.
+sleepPowerNeeded		 ds.l	1				; offset: $1C (28)		;  Milliwatts needed in the sleep state.
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+PowerSummary			RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  Version of this structure.
+flags					 ds.l	1				; offset: $4 (4)		;  Flags
+sleepPowerAvailable		 ds.l	1				; offset: $8 (8)		;  Milliwatts available during sleep.
+sleepPowerNeeded		 ds.l	1				; offset: $C (12)		;  Milliwatts needed during sleep.
+minimumWakeTime			 ds.l	1				; offset: $10 (16)		;  Minimum seconds before sleeping again.
+deviceCount				 ds.l	1				; offset: $14 (20)		;  Number of device power info records.
+devices					 ds		DevicePowerInfo ; offset: $18 (24) <-- really an array of length one ;  Array of device power info records.
+sizeof					 EQU *					; size:   $38 (56)
+						ENDR
+
+															; SleepQRec.sleepQFlags 
+noCalls							EQU		1
+noRequest						EQU		2
+slpQType						EQU		16
+sleepQType						EQU		16
+;  Power Mgt Apple Event types and errors 
+
+															; power mgt class
+kAEMacPowerMgtEvt				EQU		'pmgt'				; event ids
+kAEMacToWake					EQU		'wake'
+kAEMacLowPowerSaveData			EQU		'pmsd'
+kAEMacEmergencySleep			EQU		'emsl'
+kAEMacEmergencyShutdown			EQU		'emsd'
+
+
+;   These are result values returned by a Power Handler when queries
+;   by the Power Mgr if the device which that Power Handler represents
+;   woke the machine.
+
+
+
+kDeviceDidNotWakeMachine		EQU		0					; device did NOT wake machine
+kDeviceRequestsFullWake			EQU		1					; device did wake machine and requests full wakeup
+kDeviceRequestsWakeToDoze		EQU		2					; device did wake machine and requests partial wakeup
+;  bits in bitfield returned by PMFeatures 
+
+hasWakeupTimer					EQU		0					; 1=wakeup timer is supported                    
+hasSharedModemPort				EQU		1					; 1=modem port shared by SCC and internal modem       
+hasProcessorCycling				EQU		2					; 1=processor cycling is supported                
+mustProcessorCycle				EQU		3					; 1=processor cycling should not be turned off          
+hasReducedSpeed					EQU		4					; 1=processor can be started up at reduced speed        
+dynamicSpeedChange				EQU		5					; 1=processor speed can be switched dynamically       
+hasSCSIDiskMode					EQU		6					; 1=SCSI Disk Mode is supported                 
+canGetBatteryTime				EQU		7					; 1=battery time can be calculated                
+canWakeupOnRing					EQU		8					; 1=can wakeup when the modem detects a ring          
+hasDimmingSupport				EQU		9					; 1=has dimming support built in (DPMS standby by default)   
+hasStartupTimer					EQU		10					; 1=startup timer is supported                    
+hasChargeNotification			EQU		11					; 1=client can determine of charge connect status change notifications available 
+hasDimSuspendSupport			EQU		12					; 1=supports dimming LCD and CRT to DPMS suspend state     
+hasWakeOnNetActivity			EQU		13					; 1=hardware supports wake on network activity          
+hasWakeOnLid					EQU		14					; 1=hardware can wake when opened                   
+canPowerOffPCIBus				EQU		15					; 1=hardware can power off PCI bus during sleep if cards allow 
+hasDeepSleep					EQU		16					; 1=hardware supports deep sleep (hibernation) mode   
+hasSleep						EQU		17					; 1=hardware supports normal (PowerBook-like) sleep   
+supportsServerModeAPIs			EQU		18					; 1=hardware supports server mode API routines          
+supportsUPSIntegration			EQU		19					; 1=hardware support UPS integration and reporting      
+;  bits in bitfield returned by GetIntModemInfo and set by SetIntModemState 
+
+hasInternalModem				EQU		0					; 1=internal modem installed               
+intModemRingDetect				EQU		1					; 1=internal modem has detected a ring          
+intModemOffHook					EQU		2					; 1=internal modem is off hook               
+intModemRingWakeEnb				EQU		3					; 1=wakeup on ring is enabled                 
+extModemSelected				EQU		4					; 1=external modem selected             
+modemSetBit						EQU		15					; 1=set bit, 0=clear bit (SetIntModemState)   
+;  bits in BatteryInfo.flags                                    
+;  ("chargerConnected" doesn't mean the charger is plugged in)  
+
+batteryInstalled				EQU		7					; 1=battery is currently connected             
+batteryCharging					EQU		6					; 1=battery is being charged               
+chargerConnected				EQU		5					; 1=charger is connected to the PowerBook         
+
+HDPwrQType						EQU		$4844				; 'HD' hard disk spindown queue element type     
+PMgrStateQType					EQU		$504D				; 'PM' Power Manager state queue element type       
+;  client notification bits in PMgrQueueElement.pmNotifyBits 
+
+pmSleepTimeoutChanged			EQU		0
+pmSleepEnableChanged			EQU		1
+pmHardDiskTimeoutChanged		EQU		2
+pmHardDiskSpindownChanged		EQU		3
+pmDimmingTimeoutChanged			EQU		4
+pmDimmingEnableChanged			EQU		5
+pmDiskModeAddressChanged		EQU		6
+pmProcessorCyclingChanged		EQU		7
+pmProcessorSpeedChanged			EQU		8
+pmWakeupTimerChanged			EQU		9
+pmStartupTimerChanged			EQU		10
+pmHardDiskPowerRemovedbyUser	EQU		11
+pmChargeStatusChanged			EQU		12
+pmPowerLevelChanged				EQU		13
+pmWakeOnNetActivityChanged		EQU		14
+
+pmSleepTimeoutChangedMask		EQU		$01
+pmSleepEnableChangedMask		EQU		$02
+pmHardDiskTimeoutChangedMask	EQU		$04
+pmHardDiskSpindownChangedMask	EQU		$08
+pmDimmingTimeoutChangedMask		EQU		$10
+pmDimmingEnableChangedMask		EQU		$20
+pmDiskModeAddressChangedMask	EQU		$40
+pmProcessorCyclingChangedMask	EQU		$80
+pmProcessorSpeedChangedMask		EQU		$0100
+pmWakeupTimerChangedMask		EQU		$0200
+pmStartupTimerChangedMask		EQU		$0400
+pmHardDiskPowerRemovedbyUserMask EQU	$0800
+pmChargeStatusChangedMask		EQU		$1000
+pmPowerLevelChangedMask			EQU		$2000
+pmWakeOnNetActivityChangedMask	EQU		$4000
+;  System Activity Selectors 
+
+OverallAct						EQU		0					; general type of activity                
+UsrActivity						EQU		1					; user specific type of activity           
+NetActivity						EQU		2					; network specific activity             
+HDActivity						EQU		3					; Hard Drive activity                    
+;  Storage Media sleep mode defines 
+
+kMediaModeOn					EQU		0					; Media active (Drive spinning and at full power)    
+kMediaModeStandBy				EQU		1					; Media standby (not implemented)    
+kMediaModeSuspend				EQU		2					; Media Idle (not implemented)   
+kMediaModeOff					EQU		3					; Media Sleep (Drive not spinning and at min power, max recovery time)   
+
+kMediaPowerCSCode				EQU		70
+
+;  definitions for HDQueueElement.hdFlags   
+
+kHDQueuePostBit					EQU		0					; 1 = call this routine on the second pass     
+kHDQueuePostMask				EQU		$01
+ActivityInfo			RECORD 0
+ActivityType			 ds.w	1				; offset: $0 (0)		;  Type of activity to be fetched.  Same as UpdateSystemActivity Selectors 
+ActivityTime			 ds.l	1				; offset: $2 (2)		;  Time of last activity (in ticks) of specified type. 
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  information returned by GetScaledBatteryInfo 
+BatteryInfo				RECORD 0
+flags					 ds.b	1				; offset: $0 (0)		;  misc flags (see below)                  
+warningLevel			 ds.b	1				; offset: $1 (1)		;  scaled warning level (0-255)               
+reserved				 ds.b	1				; offset: $2 (2)		;  reserved for internal use             
+batteryLevel			 ds.b	1				; offset: $3 (3)		;  scaled battery level (0-255)               
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef SInt8 						ModemByte
+
+; typedef SInt8 						BatteryByte
+
+; typedef SInt8 						SoundMixerByte
+
+; typedef long 							PMResultCode
+
+
+
+; typedef SleepQRec *					SleepQRecPtr
+
+
+
+
+
+SleepQRec				RECORD 0
+sleepQLink				 ds.l	1				; offset: $0 (0)		;  pointer to next queue element          
+sleepQType				 ds.w	1				; offset: $4 (4)		;  queue element type (must be SleepQType)       
+sleepQProc				 ds.l	1				; offset: $6 (6)		;  pointer to sleep universal proc ptr         
+sleepQFlags				 ds.w	1				; offset: $A (10)		;  flags                       
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+HDQueueElement			RECORD 0
+hdQLink					 ds.l	1				; offset: $0 (0)		;  pointer to next queue element          
+hdQType					 ds.w	1				; offset: $4 (4)		;  queue element type (must be HDPwrQType)       
+hdFlags					 ds.w	1				; offset: $6 (6)		;  miscellaneous flags                   
+hdProc					 ds.l	1				; offset: $8 (8)		;  pointer to routine to call           
+hdUser					 ds.l	1				; offset: $C (12)		;  user-defined (variable storage, etc.)   
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+PMgrQueueElement		RECORD 0
+pmQLink					 ds.l	1				; offset: $0 (0)		;  pointer to next queue element          
+pmQType					 ds.w	1				; offset: $4 (4)		;  queue element type (must be PMgrStateQType)    
+pmFlags					 ds.w	1				; offset: $6 (6)		;  miscellaneous flags                   
+pmNotifyBits			 ds.l	1				; offset: $8 (8)		;  bitmap of which changes to be notified for 
+pmProc					 ds.l	1				; offset: $C (12)		;  pointer to routine to call           
+pmUser					 ds.l	1				; offset: $10 (16)		;  user-defined (variable storage, etc.)   
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+BatteryTimeRec			RECORD 0
+expectedBatteryTime		 ds.l	1				; offset: $0 (0)		;  estimated battery time remaining (seconds) 
+minimumBatteryTime		 ds.l	1				; offset: $4 (4)		;  minimum battery time remaining (seconds)     
+maximumBatteryTime		 ds.l	1				; offset: $8 (8)		;  maximum battery time remaining (seconds)     
+timeUntilCharged		 ds.l	1				; offset: $C (12)		;  time until battery is fully charged (seconds)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+WakeupTime				RECORD 0
+wakeTime				 ds.l	1				; offset: $0 (0)		;  wakeup time (same format as current time)   
+wakeEnabled				 ds.b	1				; offset: $4 (4)		;  1=enable wakeup timer, 0=disable wakeup timer  
+filler					 ds.b	1				; offset: $5 (5)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+
+StartupTime				RECORD 0
+startTime				 ds.l	1				; offset: $0 (0)		;  startup time (same format as current time)     
+startEnabled			 ds.b	1				; offset: $4 (4)		;  1=enable startup timer, 0=disable startup timer    
+filler					 ds.b	1				; offset: $5 (5)
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  PowerSource version
+
+kVersionOnePowerSource			EQU		1
+kVersionTwoPowerSource			EQU		2
+kCurrentPowerSourceVersion		EQU		2
+;  PowerSourceAttrs bits
+
+
+bSourceIsBattery				EQU		0					; power source is battery
+bSourceIsAC						EQU		1					; power source is AC
+bSourceCanBeCharged				EQU		2					; power source can be charged
+bSourceIsUPS					EQU		3					; power source is UPS. NOTE: software should set bSourceIsBattery and bSourceIsAC also, as appropriate
+bSourceProvidesWarnLevels		EQU		4					; power source provides low power and dead battery warning levels
+kSourceIsBatteryMask			EQU		$01
+kSourceIsACMask					EQU		$02
+kSourceCanBeChargedMask			EQU		$04
+kSourceIsUPSMask				EQU		$08
+kSourceProvidesWarnLevelsMask	EQU		$10
+;  PowerSourceFlags bits
+
+
+bSourceIsAvailable				EQU		0					; power source is installed
+bSourceIsCharging				EQU		1					; power source being charged
+bChargerIsAttached				EQU		2					; a charger is connected
+kSourceIsAvailableMask			EQU		$01
+kSourceIsChargingMask			EQU		$02
+kChargerIsAttachedMask			EQU		$04
+;  Power Capacity Types
+
+
+kCapacityIsActual				EQU		0					; current capacity is expessed as actual capacity in same units as max
+kCapacityIsPercentOfMax			EQU		1					; current capacity is expressed as a percentage of maximumCapacity
+;  Net Activity Wake Options
+
+kConfigSupportsWakeOnNetBit		EQU		0
+kWakeOnNetAdminAccessesBit		EQU		1
+kWakeOnAllNetAccessesBit		EQU		2
+kUnmountServersBeforeSleepingBit EQU	3
+kConfigSupportsWakeOnNetMask	EQU		$01
+kWakeOnNetAdminAccessesMask		EQU		$02
+kWakeOnAllNetAccessesMask		EQU		$04
+kUnmountServersBeforeSleepingMask EQU	$08
+;  Power Source capacity usage types
+
+kCurrentCapacityIsActualValue	EQU		0					; currentCapacity is a real value in same units as maxCapacity
+kCurrentCapacityIsPercentOfMax	EQU		1					; currentCapacity is expressed as a percentage of maxCapacity.
+; typedef SInt16 						PowerSourceID
+
+PowerSourceParamBlock	RECORD 0
+sourceID				 ds.w	1				; offset: $0 (0)		;  unique id assigned by Power Mgr
+sourceCapacityUsage		 ds.w	1				; offset: $2 (2)		;  how currentCapacity is used
+sourceVersion			 ds.l	1				; offset: $4 (4)		;  version of this record
+sourceAttr				 ds.l	1				; offset: $8 (8)		;  attribute flags (see below)
+sourceState				 ds.l	1				; offset: $C (12)		;  state flags (see below)
+currentCapacity			 ds.l	1				; offset: $10 (16)		;  current capacity, in
+;    milliwatts or %
+maxCapacity				 ds.l	1				; offset: $14 (20)		;  full capacity, in milliwatts
+timeRemaining			 ds.l	1				; offset: $18 (24)		;  time left to deplete, 
+;    in milliwatt-hours
+timeToFullCharge		 ds.l	1				; offset: $1C (28)		;  time to charge, 
+;    in milliwatt-hours
+voltage					 ds.l	1				; offset: $20 (32)		;  voltage in millivolts
+current					 ds.l	1				; offset: $24 (36)		;  current in milliamperes 
+;   (negative if consuming, 
+;    positive if charging)
+lowWarnLevel			 ds.l	1				; offset: $28 (40)		;  low warning level in milliwatts (or % if sourceCapacityUsage is %)
+deadWarnLevel			 ds.l	1				; offset: $2C (44)		;  dead warning level in milliwatts (or % if sourceCapacityUsage is %)
+reserved				 ds.l	16				; offset: $30 (48)		;  for future expansion
+sizeof					 EQU *					; size:   $70 (112)
+						ENDR
+; typedef struct PowerSourceParamBlock * PowerSourceParamBlockPtr
+
+
+; *  DisableWUTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DisableWUTime(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableWUTime
+	ENDIF
+
+
+; *  SetWUTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetWUTime(long wuTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWUTime
+	ENDIF
+
+
+; *  GetWUTime()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetWUTime(long *wuTime, Byte *wuFlag)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWUTime
+	ENDIF
+
+
+; *  BatteryStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr BatteryStatus(Byte *status, Byte *power)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BatteryStatus
+	ENDIF
+
+
+; *  ModemStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr ModemStatus(Byte *status)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ModemStatus
+	ENDIF
+
+
+; *  IdleUpdate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long IdleUpdate(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	long            <= D0
+		_IdleUpdate:	OPWORD	$A285
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IdleUpdate
+	ENDIF
+
+
+; *  GetCPUSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long GetCPUSpeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	long            <= D0
+		Macro
+		_GetCPUSpeed
+			moveq           	#-1,D0
+			dc.w            	$A485
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCPUSpeed
+	ENDIF
+
+
+; *  EnableIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableIdle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_EnableIdle
+			moveq           	#0,D0
+			dc.w            	$A485
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableIdle
+	ENDIF
+
+
+; *  DisableIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisableIdle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DisableIdle
+			moveq           	#1,D0
+			dc.w            	$A485
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisableIdle
+	ENDIF
+
+
+; *  SleepQInstall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SleepQInstall(SleepQRecPtr qRecPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	qRecPtr         => A0
+		_SleepQInstall:	OPWORD	$A28A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SleepQInstall
+	ENDIF
+
+
+; *  SleepQRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SleepQRemove(SleepQRecPtr qRecPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	qRecPtr         => A0
+		_SleepQRemove:	OPWORD	$A48A
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SleepQRemove
+	ENDIF
+
+
+; *  AOn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AOn(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AOn
+			moveq           	#4,D0
+			dc.w            	$A685
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AOn
+	ENDIF
+
+
+; *  AOnIgnoreModem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AOnIgnoreModem(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AOnIgnoreModem
+			moveq           	#5,D0
+			dc.w            	$A685
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AOnIgnoreModem
+	ENDIF
+
+
+; *  BOn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void BOn(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_BOn
+			moveq           	#0,D0
+			dc.w            	$A685
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BOn
+	ENDIF
+
+
+; *  AOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AOff(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_AOff
+			moveq           	#-124,D0
+			dc.w            	$A685
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AOff
+	ENDIF
+
+
+; *  BOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void BOff(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_BOff
+			moveq           	#-128,D0
+			dc.w            	$A685
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BOff
+	ENDIF
+
+
+;  Public Power Management API  
+
+; *  PMSelectorCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short PMSelectorCount(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_PMSelectorCount
+			moveq           	#0,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PMSelectorCount
+	ENDIF
+
+
+; *  PMFeatures()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 PMFeatures(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt32          <= D0
+		Macro
+		_PMFeatures
+			moveq           	#1,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PMFeatures
+	ENDIF
+
+
+; *  GetSleepTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 GetSleepTimeout(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt8           <= D0
+		Macro
+		_GetSleepTimeout
+			moveq           	#2,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSleepTimeout
+	ENDIF
+
+
+; *  SetSleepTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetSleepTimeout(UInt8 timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	timeout         => D0
+		Macro
+		_SetSleepTimeout
+			swap                D0
+			move.w              #$0003,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSleepTimeout
+	ENDIF
+
+
+; *  GetHardDiskTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 GetHardDiskTimeout(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt8           <= D0
+		Macro
+		_GetHardDiskTimeout
+			moveq           	#4,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetHardDiskTimeout
+	ENDIF
+
+
+; *  SetHardDiskTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetHardDiskTimeout(UInt8 timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	timeout         => D0
+		Macro
+		_SetHardDiskTimeout
+			swap                D0
+			move.w              #$0005,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetHardDiskTimeout
+	ENDIF
+
+
+; *  HardDiskPowered()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean HardDiskPowered(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_HardDiskPowered
+			moveq           	#6,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HardDiskPowered
+	ENDIF
+
+
+; *  SpinDownHardDisk()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SpinDownHardDisk(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SpinDownHardDisk
+			moveq           	#7,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SpinDownHardDisk
+	ENDIF
+
+
+; *  IsSpindownDisabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsSpindownDisabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_IsSpindownDisabled
+			moveq           	#8,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsSpindownDisabled
+	ENDIF
+
+
+; *  SetSpindownDisable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetSpindownDisable(Boolean setDisable)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	setDisable      => D0
+		Macro
+		_SetSpindownDisable
+			swap                D0
+			move.w              #$0009,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSpindownDisable
+	ENDIF
+
+
+; *  HardDiskQInstall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr HardDiskQInstall(HDQueueElement *theElement)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theElement      => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_HardDiskQInstall
+			moveq           	#10,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HardDiskQInstall
+	ENDIF
+
+
+; *  HardDiskQRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr HardDiskQRemove(HDQueueElement *theElement)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theElement      => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_HardDiskQRemove
+			moveq           	#11,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION HardDiskQRemove
+	ENDIF
+
+
+; *  GetScaledBatteryInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetScaledBatteryInfo(short whichBattery, BatteryInfo *theInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	whichBatterytheInfo=> D0
+		;	theInfo         => A0
+		Macro
+		_GetScaledBatteryInfo
+			swap                D0
+			move.w              #$000C,D0
+			dc.w            	$A09E
+			move.l              D0,(A0)
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetScaledBatteryInfo
+	ENDIF
+
+
+; *  AutoSleepControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void AutoSleepControl(Boolean enableSleep)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	enableSleep     => D0
+		Macro
+		_AutoSleepControl
+			swap                D0
+			move.w              #$000D,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AutoSleepControl
+	ENDIF
+
+
+; *  GetIntModemInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 GetIntModemInfo(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt32          <= D0
+		Macro
+		_GetIntModemInfo
+			moveq           	#14,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetIntModemInfo
+	ENDIF
+
+
+; *  SetIntModemState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetIntModemState(short theState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theState        => D0
+		Macro
+		_SetIntModemState
+			swap                D0
+			move.w              #$000F,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetIntModemState
+	ENDIF
+
+
+; *  MaximumProcessorSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short MaximumProcessorSpeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_MaximumProcessorSpeed
+			moveq           	#16,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MaximumProcessorSpeed
+	ENDIF
+
+
+; *  MinimumProcessorSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short MinimumProcessorSpeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_MinimumProcessorSpeed
+			moveq           	#54,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION MinimumProcessorSpeed
+	ENDIF
+
+
+; *  CurrentProcessorSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short CurrentProcessorSpeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_CurrentProcessorSpeed
+			moveq           	#17,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CurrentProcessorSpeed
+	ENDIF
+
+
+; *  FullProcessorSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean FullProcessorSpeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_FullProcessorSpeed
+			moveq           	#18,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FullProcessorSpeed
+	ENDIF
+
+
+; *  SetProcessorSpeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean SetProcessorSpeed(Boolean fullSpeed)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	fullSpeed       => D0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_SetProcessorSpeed
+			swap                D0
+			move.w              #$0013,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetProcessorSpeed
+	ENDIF
+
+
+; *  GetSCSIDiskModeAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short GetSCSIDiskModeAddress(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_GetSCSIDiskModeAddress
+			moveq           	#20,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSCSIDiskModeAddress
+	ENDIF
+
+
+; *  SetSCSIDiskModeAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetSCSIDiskModeAddress(short scsiAddress)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	scsiAddress     => D0
+		Macro
+		_SetSCSIDiskModeAddress
+			swap                D0
+			move.w              #$0015,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSCSIDiskModeAddress
+	ENDIF
+
+
+; *  GetWakeupTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetWakeupTimer(WakeupTime *theTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theTime         => A0
+		Macro
+		_GetWakeupTimer
+			moveq           	#22,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWakeupTimer
+	ENDIF
+
+
+; *  SetWakeupTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetWakeupTimer(WakeupTime *theTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theTime         => A0
+		Macro
+		_SetWakeupTimer
+			moveq           	#23,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWakeupTimer
+	ENDIF
+
+
+; *  IsProcessorCyclingEnabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsProcessorCyclingEnabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_IsProcessorCyclingEnabled
+			moveq           	#24,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsProcessorCyclingEnabled
+	ENDIF
+
+
+; *  EnableProcessorCycling()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void EnableProcessorCycling(Boolean enable)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	enable          => D0
+		Macro
+		_EnableProcessorCycling
+			swap                D0
+			move.w              #$0019,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableProcessorCycling
+	ENDIF
+
+
+; *  BatteryCount()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal short BatteryCount(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	short           <= D0
+		Macro
+		_BatteryCount
+			moveq           	#26,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION BatteryCount
+	ENDIF
+
+
+; *  GetBatteryVoltage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Fixed GetBatteryVoltage(short whichBattery)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	whichBattery    => D0
+		; returns:
+		;	Fixed           <= D0
+		Macro
+		_GetBatteryVoltage
+			swap                D0
+			move.w              #$001B,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetBatteryVoltage
+	ENDIF
+
+
+; *  GetBatteryTimes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void GetBatteryTimes(short whichBattery, BatteryTimeRec *theTimes)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	whichBatterytheTimes=> D0
+		;	theTimes        => A0
+		Macro
+		_GetBatteryTimes
+			swap                D0
+			move.w              #$001C,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetBatteryTimes
+	ENDIF
+
+
+; *  GetDimmingTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt8 GetDimmingTimeout(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt8           <= D0
+		Macro
+		_GetDimmingTimeout
+			moveq           	#29,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDimmingTimeout
+	ENDIF
+
+
+; *  SetDimmingTimeout()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetDimmingTimeout(UInt8 timeout)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	timeout         => D0
+		Macro
+		_SetDimmingTimeout
+			swap                D0
+			move.w              #$001E,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDimmingTimeout
+	ENDIF
+
+
+; *  DimmingControl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DimmingControl(Boolean enableSleep)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	enableSleep     => D0
+		Macro
+		_DimmingControl
+			swap                D0
+			move.w              #$001F,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DimmingControl
+	ENDIF
+
+
+; *  IsDimmingControlDisabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsDimmingControlDisabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_IsDimmingControlDisabled
+			moveq           	#32,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsDimmingControlDisabled
+	ENDIF
+
+
+; *  IsAutoSlpControlDisabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean IsAutoSlpControlDisabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_IsAutoSlpControlDisabled
+			moveq           	#33,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsAutoSlpControlDisabled
+	ENDIF
+
+
+; *  PMgrStateQInstall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PMgrStateQInstall(PMgrQueueElement *theElement)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theElement      => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PMgrStateQInstall
+			moveq           	#34,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PMgrStateQInstall
+	ENDIF
+
+
+; *  PMgrStateQRemove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr PMgrStateQRemove(PMgrQueueElement *theElement)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theElement      => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_PMgrStateQRemove
+			moveq           	#35,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PMgrStateQRemove
+	ENDIF
+
+
+; *  UpdateSystemActivity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr UpdateSystemActivity(UInt8 activity)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	activity        => D0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_UpdateSystemActivity
+			swap                D0
+			move.w              #$0024,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdateSystemActivity
+	ENDIF
+
+
+; *  DelaySystemIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DelaySystemIdle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_DelaySystemIdle
+			moveq           	#37,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DelaySystemIdle
+	ENDIF
+
+
+; *  GetStartupTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetStartupTimer(StartupTime *theTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theTime         => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_GetStartupTimer
+			moveq           	#38,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetStartupTimer
+	ENDIF
+
+
+; *  SetStartupTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetStartupTimer(StartupTime *theTime)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theTime         => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SetStartupTimer
+			moveq           	#39,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetStartupTimer
+	ENDIF
+
+
+; *  GetLastActivity()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetLastActivity(ActivityInfo *theActivity)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theActivity     => A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_GetLastActivity
+			moveq           	#40,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetLastActivity
+	ENDIF
+
+
+; *  GetSoundMixerState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetSoundMixerState(SoundMixerByte *theSoundMixerByte)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theSoundMixerByte=> A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_GetSoundMixerState
+			moveq           	#41,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetSoundMixerState
+	ENDIF
+
+
+; *  SetSoundMixerState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr SetSoundMixerState(SoundMixerByte *theSoundMixerByte)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	theSoundMixerByte=> A0
+		; returns:
+		;	OSErr           <= D0
+		Macro
+		_SetSoundMixerState
+			moveq           	#42,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetSoundMixerState
+	ENDIF
+
+
+; *  GetDimSuspendState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean GetDimSuspendState(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_GetDimSuspendState
+			moveq           	#43,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDimSuspendState
+	ENDIF
+
+
+; *  SetDimSuspendState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void SetDimSuspendState(Boolean dimSuspendState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	dimSuspendState => D0
+		Macro
+		_SetDimSuspendState
+			swap                D0
+			move.w              #$002C,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDimSuspendState
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetCoreProcessorTemperature()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal SInt32 GetCoreProcessorTemperature(MPCpuID inCpuID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	inCpuID         => A0
+		; returns:
+		;	SInt32          <= D0
+		Macro
+		_GetCoreProcessorTemperature
+			moveq           	#45,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetCoreProcessorTemperature
+	ENDIF
+
+
+; *  GetWakeOnNetworkOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OptionBits GetWakeOnNetworkOptions(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	OptionBits      <= D0
+		Macro
+		_GetWakeOnNetworkOptions
+			moveq           	#46,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetWakeOnNetworkOptions
+	ENDIF
+
+
+; *  SetWakeOnNetworkOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void SetWakeOnNetworkOptions(OptionBits inOptions)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	inOptions       => A0
+		Macro
+		_SetWakeOnNetworkOptions
+			moveq           	#47,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetWakeOnNetworkOptions
+	ENDIF
+
+
+; *  AddPowerSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus AddPowerSource(PowerSourceParamBlock *ioPowerSource)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	ioPowerSource   => A0
+		; returns:
+		;	OSStatus        <= D0
+		Macro
+		_AddPowerSource
+			moveq           	#48,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AddPowerSource
+	ENDIF
+
+
+; *  RemovePowerSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus RemovePowerSource(PowerSourceID inSourceID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	inSourceID      => D0
+		; returns:
+		;	OSStatus        <= D0
+		Macro
+		_RemovePowerSource
+			swap                D0
+			move.w              #$0031,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemovePowerSource
+	ENDIF
+
+
+; *  UpdatePowerSource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus UpdatePowerSource(PowerSourceParamBlock *ioSource)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	ioSource        => A0
+		; returns:
+		;	OSStatus        <= D0
+		Macro
+		_UpdatePowerSource
+			moveq           	#50,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UpdatePowerSource
+	ENDIF
+
+
+; *  IsServerModeEnabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean IsServerModeEnabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_IsServerModeEnabled
+			moveq           	#51,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsServerModeEnabled
+	ENDIF
+
+
+; *  EnableServerMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void EnableServerMode(Boolean inEnable)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	inEnable        => D0
+		Macro
+		_EnableServerMode
+			swap                D0
+			move.w              #$0034,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnableServerMode
+	ENDIF
+
+;  
+;   NumBatteriesInstalled is different from BatteryCount in that it
+;   indicates how many batteries are actually available at the time
+;   it is called (including UPS batteries). BatteryCount shows a 
+;   static number of batteries a machine is capable of holding which does NOT
+;   include UPS batteries. So, while a desktop might show a BatteryCount
+;   of zero, its NumBatteriesInstalled value might be 1 or more if a UPS
+;   is attached. 
+;
+
+
+; *  NumBatteriesInstalled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PowerMgrLib 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal UInt32 NumBatteriesInstalled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; returns:
+		;	UInt32          <= D0
+		Macro
+		_NumBatteriesInstalled
+			moveq           	#53,D0
+			dc.w            	$A09E
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NumBatteriesInstalled
+	ENDIF
+
+;  Power Handler Management 
+
+; *  IsPCIPowerOffDisabled()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean IsPCIPowerOffDisabled(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION IsPCIPowerOffDisabled
+	ENDIF
+
+
+; *  EnablePCIPowerOff()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void EnablePCIPowerOff(Boolean inEnable)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION EnablePCIPowerOff
+	ENDIF
+
+
+; *  AddDevicePowerHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus AddDevicePowerHandler(RegEntryIDPtr regEntryID, PowerHandlerProcPtr handler, UInt32 refCon, char *deviceType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AddDevicePowerHandler
+	ENDIF
+
+
+; *  RemoveDevicePowerHandler()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RemoveDevicePowerHandler(RegEntryIDPtr regEntryID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveDevicePowerHandler
+	ENDIF
+
+
+; *  RemoveDevicePowerHandlerForProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus RemoveDevicePowerHandlerForProc(PowerHandlerProcPtr proc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RemoveDevicePowerHandlerForProc
+	ENDIF
+
+
+; *  GetDevicePowerLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus GetDevicePowerLevel(RegEntryIDPtr regEntryID, PowerLevel *devicePowerLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDevicePowerLevel
+	ENDIF
+
+
+; *  SetDevicePowerLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DriverServicesLib 1.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus SetDevicePowerLevel(RegEntryIDPtr regEntryID, PowerLevel devicePowerLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDevicePowerLevel
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewSleepQUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewHDSpindownUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewPMgrStateChangeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeSleepQUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeHDSpindownUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposePMgrStateChangeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeSleepQUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeHDSpindownUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokePMgrStateChangeUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+	ENDIF ; __POWER__ 
+

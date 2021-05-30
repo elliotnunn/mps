@@ -1,0 +1,2106 @@
+;
+;    File:       Displays.a
+;
+;    Contains:   Display Manager Interfaces.
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1993-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DISPLAYS__') = 'UNDEFINED' THEN
+__DISPLAYS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__VIDEO__') = 'UNDEFINED' THEN
+	include 'Video.a'
+	ENDIF
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+	include 'CMApplication.a'
+	ENDIF
+
+    IF 0 THEN
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+    ENDIF
+
+; typedef ProcessSerialNumberPtr 		DMProcessInfoPtr
+
+; typedef ModalFilterUPP 				DMModalFilterUPP
+
+
+
+															; AppleEvents Core Suite 
+kAESystemConfigNotice			EQU		'cnfg'				; Core Suite types 
+kAEDisplayNotice				EQU		'dspl'
+kAEDisplaySummary				EQU		'dsum'
+keyDMConfigVersion				EQU		'dmcv'
+keyDMConfigFlags				EQU		'dmcf'
+keyDMConfigReserved				EQU		'dmcr'
+keyDisplayID					EQU		'dmid'
+keyDisplayComponent				EQU		'dmdc'
+keyDisplayDevice				EQU		'dmdd'
+keyDisplayFlags					EQU		'dmdf'
+keyDisplayMode					EQU		'dmdm'
+keyDisplayModeReserved			EQU		'dmmr'
+keyDisplayReserved				EQU		'dmdr'
+keyDisplayMirroredId			EQU		'dmmi'
+keyDeviceFlags					EQU		'dddf'
+keyDeviceDepthMode				EQU		'dddm'
+keyDeviceRect					EQU		'dddr'
+keyPixMapRect					EQU		'dpdr'
+keyPixMapHResolution			EQU		'dphr'
+keyPixMapVResolution			EQU		'dpvr'
+keyPixMapPixelType				EQU		'dppt'
+keyPixMapPixelSize				EQU		'dpps'
+keyPixMapCmpCount				EQU		'dpcc'
+keyPixMapCmpSize				EQU		'dpcs'
+keyPixMapAlignment				EQU		'dppa'
+keyPixMapResReserved			EQU		'dprr'
+keyPixMapReserved				EQU		'dppr'
+keyPixMapColorTableSeed			EQU		'dpct'
+keySummaryMenubar				EQU		'dsmb'
+keySummaryChanges				EQU		'dsch'
+keyDisplayOldConfig				EQU		'dold'
+keyDisplayNewConfig				EQU		'dnew'
+
+dmOnlyActiveDisplays			EQU		1
+dmAllDisplays					EQU		0
+
+
+															; DMSendDependentNotification notifyClass 
+kDependentNotifyClassShowCursor	EQU		'shcr'				; When display mgr shows a hidden cursor during an unmirror 
+kDependentNotifyClassDriverOverride EQU	'ndrv'				; When a driver is overridden 
+kDependentNotifyClassDisplayMgrOverride EQU 'dmgr'			; When display manager is upgraded 
+kDependentNotifyClassProfileChanged EQU	'prof'				; When DMSetProfileByAVID is called 
+
+
+															; Switch Flags 
+kNoSwitchConfirmBit				EQU		0					; Flag indicating that there is no need to confirm a switch to this mode 
+kDepthNotAvailableBit			EQU		1					; Current depth not available in new mode 
+kShowModeBit					EQU		3					; Show this mode even though it requires a confirm. 
+kModeNotResizeBit				EQU		4					; Do not use this mode to resize display (for cards that mode drives a different connector). 
+kNeverShowModeBit				EQU		5					; This mode should not be shown in the user interface. 
+;     Summary Change Flags (sticky bits indicating an operation was performed)
+;    For example, moving a display then moving it back will still set the kMovedDisplayBit.
+;
+
+
+kBeginEndConfigureBit			EQU		0
+kMovedDisplayBit				EQU		1
+kSetMainDisplayBit				EQU		2
+kSetDisplayModeBit				EQU		3
+kAddDisplayBit					EQU		4
+kRemoveDisplayBit				EQU		5
+kNewDisplayBit					EQU		6
+kDisposeDisplayBit				EQU		7
+kEnabledDisplayBit				EQU		8
+kDisabledDisplayBit				EQU		9
+kMirrorDisplayBit				EQU		10
+kUnMirrorDisplayBit				EQU		11
+
+
+															; Notification Messages for extended call back routines 
+kDMNotifyRequestConnectionProbe	EQU		0					; Like kDMNotifyRequestDisplayProbe only not for smart displays (used in wake before all busses are awake) 
+kDMNotifyInstalled				EQU		1					; At install time 
+kDMNotifyEvent					EQU		2					; Post change time 
+kDMNotifyRemoved				EQU		3					; At remove time 
+kDMNotifyPrep					EQU		4					; Pre change time 
+kDMNotifyExtendEvent			EQU		5					; Allow registrees to extend apple event before it is sent 
+kDMNotifyDependents				EQU		6					; Minor notification check without full update 
+kDMNotifySuspendConfigure		EQU		7					; Temporary end of configuration 
+kDMNotifyResumeConfigure		EQU		8					; Resume configuration 
+kDMNotifyRequestDisplayProbe	EQU		9					; Request smart displays re-probe (used in sleep and hot plugging) 
+															; Notification Flags 
+kExtendedNotificationProc		EQU		$00010000
+
+;  types for notifyType 
+
+kFullNotify						EQU		0					; This is the appleevent whole nine yards notify 
+kFullDependencyNotify			EQU		1					; Only sends to those who want to know about interrelated functionality (used for updating UI) 
+;  DisplayID/DeviceID constants 
+
+kDummyDeviceID					EQU		$00FF				; This is the ID of the dummy display, used when the last “real” display is disabled.
+kInvalidDisplayID				EQU		$0000				; This is the invalid ID
+kFirstDisplayID					EQU		$0100
+
+															; bits for panelListFlags 
+kAllowDuplicatesBit				EQU		0
+
+															; bits for nameFlags 
+kSuppressNumberBit				EQU		0
+kSuppressNumberMask				EQU		1
+kForceNumberBit					EQU		1
+kForceNumberMask				EQU		2
+kSuppressNameBit				EQU		2
+kSuppressNameMask				EQU		4
+;  DMGetNameByAVID masks
+
+kDMSupressNumbersMask			EQU		$01					; Supress the numbers and return only names
+kDMForceNumbersMask				EQU		$02					; Force numbers to always be shown (even on single display configs)
+kDMSupressNameMask				EQU		$04					; Supress the names and return only numbers.
+
+
+;  Constants for fidelity checks 
+
+kNoFidelity						EQU		0
+kMinimumFidelity				EQU		1
+kDefaultFidelity				EQU		500					; I'm just picking a number for Apple default panels and engines
+kDefaultManufacturerFidelity	EQU		1000				; I'm just picking a number for Manufacturer's panels and engines (overrides apple defaults)
+
+kAnyPanelType					EQU		0					; Pass to DMNewEngineList for list of all panels (as opposed to specific types)
+kAnyEngineType					EQU		0					; Pass to DMNewEngineList for list of all engines
+kAnyDeviceType					EQU		0					; Pass to DMNewDeviceList for list of all devices
+kAnyPortType					EQU		0					; Pass to DMNewDevicePortList for list of all devices
+;  portListFlags for DM_NewDevicePortList 
+
+															; Should offline devices be put into the port list (such as dummy display) 
+kPLIncludeOfflineDevicesBit		EQU		0
+
+;  confirmFlags for DMConfirmConfiguration 
+
+kForceConfirmBit				EQU		0					; Force a confirm dialog 
+kForceConfirmMask				EQU		$01
+
+;  Flags for displayModeFlags 
+
+kDisplayModeListNotPreferredBit	EQU		0
+kDisplayModeListNotPreferredMask EQU	$01
+
+;  Flags for itemFlags 
+
+kComponentListNotPreferredBit	EQU		0
+kComponentListNotPreferredMask	EQU		$01
+
+kDisplayTimingInfoVersionZero	EQU		1
+kDisplayTimingInfoReservedCountVersionZero EQU 16
+kDisplayModeEntryVersionZero	EQU		0					; displayModeVersion - original version
+kDisplayModeEntryVersionOne		EQU		1					; displayModeVersion - added displayModeOverrideInfo
+
+
+kMakeAndModelReservedCount		EQU		4					; Number of reserved fields
+
+;  Display Gestalt for DMDisplayGestalt
+
+kDisplayGestaltDisplayCommunicationAttr EQU 'comm'
+kDisplayGestaltForbidI2CMask	EQU		$01					; Some displays have firmware problems if they get I2C communication.  If this bit is set, then I2C communication is forbidden
+kDisplayGestaltUseI2CPowerMask	EQU		$02					; Some displays require I2C power settings (most use DPMS).
+kDisplayGestaltCalibratorAttr	EQU		'cali'
+kDisplayGestaltBrightnessAffectsGammaMask EQU $01			; Used by default calibrator (should we show brightness panel) 
+kDisplayGestaltViewAngleAffectsGammaMask EQU $02			; Currently not used by color sync
+
+; typedef UInt32 						DMFidelityType
+
+
+;   AVID is an ID for ports and devices the old DisplayID type
+;    is carried on for compatibility
+
+
+
+
+; typedef void *						DMListType
+
+; typedef unsigned long 				DMListIndexType
+
+AVPowerStateRec			RECORD 0
+f						 ds		VDPowerStateRec
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+
+; typedef struct VDPowerStateRec *		AVPowerStatePtr
+
+DMDisplayTimingInfoRec	RECORD 0
+timingInfoVersion		 ds.l	1				; offset: $0 (0)
+timingInfoAttributes	 ds.l	1				; offset: $4 (4)		;  Flags 
+timingInfoRelativeQuality  ds.l	1				; offset: $8 (8)		;  quality of the timing 
+timingInfoRelativeDefault  ds.l	1				; offset: $C (12)		;  relative default of the timing 
+timingInfoReserved		 ds.l	16				; offset: $10 (16)		;  Reserved 
+sizeof					 EQU *					; size:   $50 (80)
+						ENDR
+; typedef struct DMDisplayTimingInfoRec * DMDisplayTimingInfoPtr
+
+
+DMComponentListEntryRec	RECORD 0
+itemID					 ds.l	1				; offset: $0 (0)		;  DisplayID Manager
+itemComponent			 ds.l	1				; offset: $4 (4)		;  Component Manager
+itemDescription			 ds		ComponentDescription ; offset: $8 (8)	;  We can always construct this if we use something beyond the compontent mgr.
+itemClass				 ds.l	1				; offset: $1C (28)		;  Class of group to put this panel (eg geometry/color/etc for panels, brightness/contrast for engines, video out/sound/etc for devices)
+itemFidelity			 ds.l	1				; offset: $20 (32)		;  How good is this item for the specified search?
+itemSubClass			 ds.l	1				; offset: $24 (36)		;  Subclass of group to put this panel.  Can use to do sub-grouping (eg volume for volume panel and mute panel)
+itemSort				 ds		Point			; offset: $28 (40)		;  Set to 0 - future to sort the items in a sub group.
+itemFlags				 ds.l	1				; offset: $2C (44)		;  Set to 0 (future expansion)
+itemReserved			 ds.l	1				; offset: $30 (48)		;  What kind of code does the itemReference point to  (right now - kPanelEntryTypeComponentMgr only)
+itemFuture1				 ds.l	1				; offset: $34 (52)		;  Set to 0 (future expansion - probably an alternate code style)
+itemFuture2				 ds.l	1				; offset: $38 (56)		;  Set to 0 (future expansion - probably an alternate code style)
+itemFuture3				 ds.l	1				; offset: $3C (60)		;  Set to 0 (future expansion - probably an alternate code style)
+itemFuture4				 ds.l	1				; offset: $40 (64)		;  Set to 0 (future expansion - probably an alternate code style)
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+; typedef struct DMComponentListEntryRec * DMComponentListEntryPtr
+
+;  ••• Move AVLocationRec to AVComponents.i AFTER AVComponents.i is created
+AVLocationRec			RECORD 0
+locationConstant		 ds.l	1				; offset: $0 (0)		;  Set to 0 (future expansion - probably an alternate code style)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct AVLocationRec *		AVLocationPtr
+
+DMDepthInfoRec			RECORD 0
+depthSwitchInfo			 ds.l	1				; offset: $0 (0)		;  This is the switch mode to choose this timing/depth 
+depthVPBlock			 ds.l	1				; offset: $4 (4)		;  VPBlock (including size, depth and format) 
+depthFlags				 ds.l	1				; offset: $8 (8)		;  VDVideoParametersInfoRec.csDepthFlags  
+depthReserved1			 ds.l	1				; offset: $C (12)		;  Reserved 
+depthReserved2			 ds.l	1				; offset: $10 (16)		;  Reserved 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct DMDepthInfoRec *		DMDepthInfoPtr
+
+DMDepthInfoBlockRec		RECORD 0
+depthBlockCount			 ds.l	1				; offset: $0 (0)		;  How many depths are there? 
+depthVPBlock			 ds.l	1				; offset: $4 (4)		;  Array of DMDepthInfoRec 
+depthBlockFlags			 ds.l	1				; offset: $8 (8)		;  Reserved 
+depthBlockReserved1		 ds.l	1				; offset: $C (12)		;  Reserved 
+depthBlockReserved2		 ds.l	1				; offset: $10 (16)		;  Reserved 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct DMDepthInfoBlockRec *	DMDepthInfoBlockPtr
+
+DMDisplayModeListEntryRec RECORD 0
+displayModeFlags		 ds.l	1				; offset: $0 (0)
+displayModeSwitchInfo	 ds.l	1				; offset: $4 (4)
+displayModeResolutionInfo  ds.l	1				; offset: $8 (8)
+displayModeTimingInfo	 ds.l	1				; offset: $C (12)
+displayModeDepthBlockInfo  ds.l	1				; offset: $10 (16)		;  Information about all the depths
+displayModeVersion		 ds.l	1				; offset: $14 (20)		;  What version is this record (now kDisplayModeEntryVersionOne)
+displayModeName			 ds.l	1				; offset: $18 (24)		;  Name of the timing mode
+displayModeDisplayInfo	 ds.l	1				; offset: $1C (28)		;  Information from the display.
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct DMDisplayModeListEntryRec * DMDisplayModeListEntryPtr
+
+
+DependentNotifyRec		RECORD 0
+notifyType				 ds.l	1				; offset: $0 (0)		;  What type was the engine that made the change (may be zero)
+notifyClass				 ds.l	1				; offset: $4 (4)		;  What class was the change (eg geometry, color etc)
+notifyPortID			 ds.l	1				; offset: $8 (8)		;  Which device was touched (kInvalidDisplayID -> all or none)
+notifyComponent			 ds.l	1				; offset: $C (12)		;  What engine did it (may be 0)?
+notifyVersion			 ds.l	1				; offset: $10 (16)		;  Set to 0 (future expansion)
+notifyFlags				 ds.l	1				; offset: $14 (20)		;  Set to 0 (future expansion)
+notifyReserved			 ds.l	1				; offset: $18 (24)		;  Set to 0 (future expansion)
+notifyFuture			 ds.l	1				; offset: $1C (28)		;  Set to 0 (future expansion)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct DependentNotifyRec *	DependentNotifyPtr
+
+
+DMMakeAndModelRec		RECORD 0
+manufacturer			 ds.l	1				; offset: $0 (0)
+model					 ds.l	1				; offset: $4 (4)
+serialNumber			 ds.l	1				; offset: $8 (8)
+manufactureDate			 ds.l	1				; offset: $C (12)
+makeReserved			 ds.l	4				; offset: $10 (16)
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct DMMakeAndModelRec *	DMMakeAndModelPtr
+
+;  DMNewDisplayList displayListIncludeFlags
+
+kIncludeOnlineActiveDisplaysMask EQU	$01
+kIncludeOnlineDisabledDisplaysMask EQU	$02
+kIncludeOfflineDisplaysMask		EQU		$04
+kIncludeOfflineDummyDisplaysMask EQU	$08
+kIncludeHardwareMirroredDisplaysMask EQU $10
+
+
+															; modeListFlags for DMNewDisplayModeList 
+kDMModeListIncludeAllModesMask	EQU		$01					; Include all timing modes not _explicitly_ excluded (see other bits)
+kDMModeListIncludeOfflineModesMask EQU	$02
+kDMModeListExcludeDriverModesMask EQU	$04					; Exclude old-style timing modes (cscGetNextResolution/kDisplayModeIDFindFirstResolution modes)
+kDMModeListExcludeDisplayModesMask EQU	$08					; Exclude timing modes that come from the display (always arbritrary timing modes)
+kDMModeListExcludeCustomModesMask EQU	$10					; Exclude custom modes that came neither from the driver or display (need a better name)
+kDMModeListPreferStretchedModesMask EQU	$20					; Prefer modes that are stretched over modes that are letterboxed when setting kDisplayModeListNotPreferredBit
+kDMModeListPreferSafeModesMask	EQU		$40					; Prefer modes that are safe over modes that are not when setting kDisplayModeListNotPreferredBit
+
+;  DMNewDisplayList displayListFlags
+DisplayListEntryRec		RECORD 0
+displayListEntryGDevice	 ds.l	1				; offset: $0 (0)
+displayListEntryDisplayID  ds.l	1				; offset: $4 (4)
+displayListEntryIncludeFlags  ds.l 1			; offset: $8 (8)		;  Reason this entry was included
+displayListEntryReserved1  ds.l	1				; offset: $C (12)
+displayListEntryReserved2  ds.l	1				; offset: $10 (16)		;  Zero
+displayListEntryReserved3  ds.l	1				; offset: $14 (20)		;  Zero
+displayListEntryReserved4  ds.l	1				; offset: $18 (24)		;  Zero
+displayListEntryReserved5  ds.l	1				; offset: $1C (28)		;  Zero
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+; typedef struct DisplayListEntryRec *	DisplayListEntryPtr
+
+DMProfileListEntryRec	RECORD 0
+profileRef				 ds.l	1				; offset: $0 (0)
+profileReserved1		 ds.l	1				; offset: $4 (4)		;  Reserved
+profileReserved2		 ds.l	1				; offset: $8 (8)		;  Reserved
+profileReserved3		 ds.l	1				; offset: $C (12)		;  Reserved
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct DMProfileListEntryRec * DMProfileListEntryPtr
+
+
+; *  NewDMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDMExtendedNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDMComponentListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDMDisplayModeListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDMProfileListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewDMDisplayListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMExtendedNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMComponentListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMDisplayModeListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMProfileListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeDMDisplayListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMExtendedNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMComponentListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMDisplayModeListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMProfileListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeDMDisplayListIteratorUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DMDisplayGestalt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMDisplayGestalt(DisplayIDType theDisplayID, ResType displayGestaltSelector, UInt32 *displayGestaltResponse)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDisplayGestalt
+			move.w              #$06D3,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDisplayGestalt
+	ENDIF
+
+
+; *  DMUseScreenPrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMUseScreenPrefs(Boolean usePrefs, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMUseScreenPrefs
+			move.w              #$03EC,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMUseScreenPrefs
+	ENDIF
+
+
+; *  DMSuspendConfigure()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMSuspendConfigure(Handle displayState, unsigned long reserved1)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSuspendConfigure
+			move.w              #$04E9,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSuspendConfigure
+	ENDIF
+
+
+; *  DMResumeConfigure()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMResumeConfigure(Handle displayState, unsigned long reserved1)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMResumeConfigure
+			move.w              #$04E8,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMResumeConfigure
+	ENDIF
+
+
+; *  DMSetGammaByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMSetGammaByAVID(AVIDType gammaAVID, UInt32 setGammaFlags, GammaTblHandle theGamma)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetGammaByAVID
+			move.w              #$06D1,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetGammaByAVID
+	ENDIF
+
+
+; *  DMGetGammaByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMGetGammaByAVID(AVIDType gammaAVID, UInt32 getGammaFlags, GammaTblHandle *theGamma)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetGammaByAVID
+			move.w              #$06D0,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetGammaByAVID
+	ENDIF
+
+
+; *  DMGetMakeAndModelByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMGetMakeAndModelByAVID(AVIDType theAVID, DMMakeAndModelPtr theMakeAndModel)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetMakeAndModelByAVID
+			move.w              #$04D7,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetMakeAndModelByAVID
+	ENDIF
+
+
+; *  DMNewDisplayList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMNewDisplayList(UInt32 displayListIncludeFlags, UInt32 reserved1, UInt32 reserved2, DMListIndexType *theCount, DMListType *theDisplayList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewDisplayList
+			move.w              #$0AD6,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewDisplayList
+	ENDIF
+
+
+; *  DMGetIndexedDisplayFromList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMGetIndexedDisplayFromList(DMListType theDisplayList, DMListIndexType itemIndex, UInt32 reserved, DMDisplayListIteratorUPP listIterator, void *userData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetIndexedDisplayFromList
+			move.w              #$0AD5,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetIndexedDisplayFromList
+	ENDIF
+
+
+; *  DMNewProfileListByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMNewProfileListByAVID(AVIDType theAVID, UInt32 reserved, DMListIndexType *profileCount, DMListType *profileList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewProfileListByAVID
+			move.w              #$08DC,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewProfileListByAVID
+	ENDIF
+
+
+; *  DMGetIndexedProfileFromList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMGetIndexedProfileFromList(DMListType profileList, DMListIndexType itemIndex, UInt32 reserved, DMProfileListIteratorUPP listIterator, void *userData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetIndexedProfileFromList
+			move.w              #$0ADB,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetIndexedProfileFromList
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DMGetFirstScreenDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal GDHandle DMGetFirstScreenDevice(Boolean activeOnly)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetFirstScreenDevice
+			moveq           	#0,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetFirstScreenDevice
+	ENDIF
+
+
+; *  DMGetNextScreenDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal GDHandle DMGetNextScreenDevice(GDHandle theDevice, Boolean activeOnly)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetNextScreenDevice
+			moveq           	#1,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetNextScreenDevice
+	ENDIF
+
+
+; *  DMDrawDesktopRect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DMDrawDesktopRect(Rect *globalRect)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDrawDesktopRect
+			moveq           	#2,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDrawDesktopRect
+	ENDIF
+
+
+; *  DMDrawDesktopRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DMDrawDesktopRegion(RgnHandle globalRgn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDrawDesktopRegion
+			moveq           	#3,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDrawDesktopRegion
+	ENDIF
+
+
+
+
+; *  DMBeginConfigureDisplays()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMBeginConfigureDisplays(Handle *displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMBeginConfigureDisplays
+			move.w              #$0206,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMBeginConfigureDisplays
+	ENDIF
+
+
+; *  DMEndConfigureDisplays()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMEndConfigureDisplays(Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMEndConfigureDisplays
+			move.w              #$0207,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMEndConfigureDisplays
+	ENDIF
+
+
+; *  DMAddDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMAddDisplay(GDHandle newDevice, short driver, unsigned long mode, unsigned long reserved, unsigned long displayID, Component displayComponent, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMAddDisplay
+			move.w              #$0D08,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMAddDisplay
+	ENDIF
+
+
+; *  DMMoveDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMMoveDisplay(GDHandle moveDevice, short x, short y, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMMoveDisplay
+			move.w              #$0609,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMMoveDisplay
+	ENDIF
+
+
+; *  DMDisableDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMDisableDisplay(GDHandle disableDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDisableDisplay
+			move.w              #$040A,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDisableDisplay
+	ENDIF
+
+
+; *  DMEnableDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMEnableDisplay(GDHandle enableDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMEnableDisplay
+			move.w              #$040B,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMEnableDisplay
+	ENDIF
+
+
+; *  DMRemoveDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMRemoveDisplay(GDHandle removeDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMRemoveDisplay
+			move.w              #$040C,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMRemoveDisplay
+	ENDIF
+
+
+
+
+
+; *  DMSetMainDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSetMainDisplay(GDHandle newMainDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetMainDisplay
+			move.w              #$0410,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetMainDisplay
+	ENDIF
+
+
+; *  DMSetDisplayMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSetDisplayMode(GDHandle theDevice, unsigned long mode, unsigned long *depthMode, unsigned long reserved, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetDisplayMode
+			move.w              #$0A11,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetDisplayMode
+	ENDIF
+
+
+; *  DMCheckDisplayMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMCheckDisplayMode(GDHandle theDevice, unsigned long mode, unsigned long depthMode, unsigned long *switchFlags, unsigned long reserved, Boolean *modeOk)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMCheckDisplayMode
+			move.w              #$0C12,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMCheckDisplayMode
+	ENDIF
+
+
+; *  DMGetDeskRegion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDeskRegion(RgnHandle *desktopRegion)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDeskRegion
+			move.w              #$0213,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDeskRegion
+	ENDIF
+
+
+; *  DMRegisterNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMRegisterNotifyProc(DMNotificationUPP notificationProc, DMProcessInfoPtr whichPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMRegisterNotifyProc
+			move.w              #$0414,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMRegisterNotifyProc
+	ENDIF
+
+
+; *  DMRemoveNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMRemoveNotifyProc(DMNotificationUPP notificationProc, DMProcessInfoPtr whichPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMRemoveNotifyProc
+			move.w              #$0415,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMRemoveNotifyProc
+	ENDIF
+
+
+; *  DMQDIsMirroringCapable()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMQDIsMirroringCapable(Boolean *qdIsMirroringCapable)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMQDIsMirroringCapable
+			move.w              #$0216,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMQDIsMirroringCapable
+	ENDIF
+
+
+; *  DMCanMirrorNow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMCanMirrorNow(Boolean *canMirrorNow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMCanMirrorNow
+			move.w              #$0217,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMCanMirrorNow
+	ENDIF
+
+
+; *  DMIsMirroringOn()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMIsMirroringOn(Boolean *isMirroringOn)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMIsMirroringOn
+			move.w              #$0218,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMIsMirroringOn
+	ENDIF
+
+
+; *  DMMirrorDevices()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMMirrorDevices(GDHandle gD1, GDHandle gD2, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMMirrorDevices
+			move.w              #$0619,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMMirrorDevices
+	ENDIF
+
+
+; *  DMUnmirrorDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMUnmirrorDevice(GDHandle gDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMUnmirrorDevice
+			move.w              #$041A,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMUnmirrorDevice
+	ENDIF
+
+
+; *  DMGetNextMirroredDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetNextMirroredDevice(GDHandle gDevice, GDHandle *mirroredDevice)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetNextMirroredDevice
+			move.w              #$041B,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetNextMirroredDevice
+	ENDIF
+
+
+; *  DMBlockMirroring()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMBlockMirroring(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMBlockMirroring
+			moveq           	#28,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMBlockMirroring
+	ENDIF
+
+
+; *  DMUnblockMirroring()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMUnblockMirroring(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMUnblockMirroring
+			moveq           	#29,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMUnblockMirroring
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DMGetDisplayMgrA5World()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DMGetDisplayMgrA5World(Ptr *dmA5)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDisplayMgrA5World
+			move.w              #$021E,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDisplayMgrA5World
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  DMGetDisplayIDByGDevice()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDisplayIDByGDevice(GDHandle displayDevice, DisplayIDType *displayID, Boolean failToMain)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDisplayIDByGDevice
+			move.w              #$051F,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDisplayIDByGDevice
+	ENDIF
+
+
+; *  DMGetGDeviceByDisplayID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetGDeviceByDisplayID(DisplayIDType displayID, GDHandle *displayDevice, Boolean failToMain)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetGDeviceByDisplayID
+			move.w              #$0520,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetGDeviceByDisplayID
+	ENDIF
+
+
+; *  DMSetDisplayComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSetDisplayComponent(GDHandle theDevice, Component displayComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetDisplayComponent
+			move.w              #$0421,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetDisplayComponent
+	ENDIF
+
+
+; *  DMGetDisplayComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDisplayComponent(GDHandle theDevice, Component *displayComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDisplayComponent
+			move.w              #$0422,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDisplayComponent
+	ENDIF
+
+
+; *  DMNewDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewDisplay(GDHandle *newDevice, short driverRefNum, unsigned long mode, unsigned long reserved, DisplayIDType displayID, Component displayComponent, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewDisplay
+			move.w              #$0D23,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewDisplay
+	ENDIF
+
+
+; *  DMDisposeDisplay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMDisposeDisplay(GDHandle disposeDevice, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDisposeDisplay
+			move.w              #$0424,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDisposeDisplay
+	ENDIF
+
+
+; *  DMResolveDisplayComponents()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMResolveDisplayComponents(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMResolveDisplayComponents
+			moveq           	#37,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMResolveDisplayComponents
+	ENDIF
+
+
+; *  DMRegisterExtendedNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMRegisterExtendedNotifyProc(DMExtendedNotificationUPP notifyProc, void *notifyUserData, unsigned short nofifyOnFlags, DMProcessInfoPtr whichPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMRegisterExtendedNotifyProc
+			move.w              #$07EF,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMRegisterExtendedNotifyProc
+	ENDIF
+
+
+; *  DMRemoveExtendedNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMRemoveExtendedNotifyProc(DMExtendedNotificationUPP notifyProc, void *notifyUserData, DMProcessInfoPtr whichPSN, unsigned short removeFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMRemoveExtendedNotifyProc
+			move.w              #$0726,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMRemoveExtendedNotifyProc
+	ENDIF
+
+
+; *  DMNewAVPanelList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVPanelList(DisplayIDType displayID, ResType panelType, DMFidelityType minimumFidelity, unsigned long panelListFlags, unsigned long reserved, DMListIndexType *thePanelCount, DMListType *thePanelList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVPanelList
+			move.w              #$0C27,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVPanelList
+	ENDIF
+
+
+; *  DMNewAVEngineList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVEngineList(DisplayIDType displayID, ResType engineType, DMFidelityType minimumFidelity, unsigned long engineListFlags, unsigned long reserved, DMListIndexType *engineCount, DMListType *engineList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVEngineList
+			move.w              #$0C28,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVEngineList
+	ENDIF
+
+
+; *  DMNewAVDeviceList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVDeviceList(ResType deviceType, unsigned long deviceListFlags, unsigned long reserved, DMListIndexType *deviceCount, DMListType *deviceList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVDeviceList
+			move.w              #$0A29,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVDeviceList
+	ENDIF
+
+
+; *  DMNewAVPortListByPortType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVPortListByPortType(ResType subType, unsigned long portListFlags, unsigned long reserved, DMListIndexType *devicePortCount, DMListType *theDevicePortList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVPortListByPortType
+			move.w              #$0A2A,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVPortListByPortType
+	ENDIF
+
+
+; *  DMGetIndexedComponentFromList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetIndexedComponentFromList(DMListType panelList, DMListIndexType itemIndex, unsigned long reserved, DMComponentListIteratorUPP listIterator, void *userData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetIndexedComponentFromList
+			move.w              #$0A2B,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetIndexedComponentFromList
+	ENDIF
+
+
+; *  DMDisposeList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMDisposeList(DMListType panelList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDisposeList
+			move.w              #$022C,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDisposeList
+	ENDIF
+
+
+; *  DMGetNameByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetNameByAVID(AVIDType theID, unsigned long nameFlags, Str255 name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetNameByAVID
+			move.w              #$062D,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetNameByAVID
+	ENDIF
+
+
+; *  DMNewAVIDByPortComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVIDByPortComponent(Component thePortComponent, ResType portKind, unsigned long reserved, AVIDType *newID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVIDByPortComponent
+			move.w              #$082E,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVIDByPortComponent
+	ENDIF
+
+
+; *  DMGetPortComponentByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetPortComponentByAVID(DisplayIDType thePortID, Component *thePortComponent, ComponentDescription *theDesciption, ResType *thePortKind)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetPortComponentByAVID
+			move.w              #$082F,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetPortComponentByAVID
+	ENDIF
+
+
+; *  DMSendDependentNotification()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSendDependentNotification(ResType notifyType, ResType notifyClass, AVIDType displayID, ComponentInstance notifyComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSendDependentNotification
+			move.w              #$0830,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSendDependentNotification
+	ENDIF
+
+
+; *  DMDisposeAVComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMDisposeAVComponent(Component theAVComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMDisposeAVComponent
+			move.w              #$0231,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMDisposeAVComponent
+	ENDIF
+
+
+; *  DMSaveScreenPrefs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSaveScreenPrefs(unsigned long reserved1, unsigned long saveFlags, unsigned long reserved2)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSaveScreenPrefs
+			move.w              #$0632,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSaveScreenPrefs
+	ENDIF
+
+
+; *  DMNewAVIDByDeviceComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVIDByDeviceComponent(Component theDeviceComponent, ResType portKind, unsigned long reserved, DisplayIDType *newID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVIDByDeviceComponent
+			move.w              #$0833,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVIDByDeviceComponent
+	ENDIF
+
+
+; *  DMNewAVPortListByDeviceAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewAVPortListByDeviceAVID(AVIDType theID, DMFidelityType minimumFidelity, unsigned long portListFlags, unsigned long reserved, DMListIndexType *devicePortCount, DMListType *theDevicePortList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewAVPortListByDeviceAVID
+			move.w              #$0C34,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewAVPortListByDeviceAVID
+	ENDIF
+
+
+; *  DMGetDeviceComponentByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDeviceComponentByAVID(AVIDType theDeviceID, Component *theDeviceComponent, ComponentDescription *theDesciption, ResType *theDeviceKind)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDeviceComponentByAVID
+			move.w              #$0835,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDeviceComponentByAVID
+	ENDIF
+
+
+; *  DMNewDisplayModeList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMNewDisplayModeList(DisplayIDType displayID, unsigned long modeListFlags, unsigned long reserved, DMListIndexType *thePanelCount, DMListType *thePanelList)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMNewDisplayModeList
+			move.w              #$0A36,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMNewDisplayModeList
+	ENDIF
+
+
+; *  DMGetIndexedDisplayModeFromList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetIndexedDisplayModeFromList(DMListType panelList, DMListIndexType itemIndex, unsigned long reserved, DMDisplayModeListIteratorUPP listIterator, void *userData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetIndexedDisplayModeFromList
+			move.w              #$0A37,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetIndexedDisplayModeFromList
+	ENDIF
+
+
+; *  DMGetGraphicInfoByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetGraphicInfoByAVID(AVIDType theID, PicHandle *theAVPcit, Handle *theAVIconSuite, AVLocationRec *theAVLocation)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetGraphicInfoByAVID
+			move.w              #$0838,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetGraphicInfoByAVID
+	ENDIF
+
+
+; *  DMGetAVPowerState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetAVPowerState(AVIDType theID, AVPowerStatePtr getPowerState, unsigned long reserved1)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetAVPowerState
+			move.w              #$0839,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetAVPowerState
+	ENDIF
+
+
+; *  DMSetAVPowerState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSetAVPowerState(AVIDType theID, AVPowerStatePtr setPowerState, unsigned long powerFlags, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetAVPowerState
+			move.w              #$083A,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetAVPowerState
+	ENDIF
+
+
+; *  DMGetDeviceAVIDByPortAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDeviceAVIDByPortAVID(AVIDType portAVID, AVIDType *deviceAVID)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDeviceAVIDByPortAVID
+			move.w              #$043B,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDeviceAVIDByPortAVID
+	ENDIF
+
+
+; *  DMGetEnableByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetEnableByAVID(AVIDType theAVID, Boolean *isAVIDEnabledNow, Boolean *canChangeEnableNow)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetEnableByAVID
+			move.w              #$063C,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetEnableByAVID
+	ENDIF
+
+
+; *  DMSetEnableByAVID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMSetEnableByAVID(AVIDType theAVID, Boolean doEnable, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMSetEnableByAVID
+			move.w              #$053D,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMSetEnableByAVID
+	ENDIF
+
+
+; *  DMGetDisplayMode()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib68k 2.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMGetDisplayMode(GDHandle theDevice, VDSwitchInfoPtr switchInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMGetDisplayMode
+			move.w              #$043E,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMGetDisplayMode
+	ENDIF
+
+
+; *  DMConfirmConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in DisplayLib 2.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr DMConfirmConfiguration(DMModalFilterUPP filterProc, UInt32 confirmFlags, UInt32 reserved, Handle displayState)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DMConfirmConfiguration
+			move.w              #$083F,D0
+			dc.w            	$ABEB
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DMConfirmConfiguration
+	ENDIF
+
+	ENDIF ; __DISPLAYS__ 
+

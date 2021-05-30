@@ -1,0 +1,1691 @@
+;
+;	File:		ImageCompression.a
+;
+;	Contains:	QuickTime Image Compression Interfaces.
+;
+;	Version:	Technology:	QuickTime 2.0
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__IMAGECOMPRESSION__') = 'UNDEFINED' THEN
+__IMAGECOMPRESSION__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'QuickdrawText.a'									;
+
+	IF &TYPE('__QDOFFSCREEN__') = 'UNDEFINED' THEN
+	include 'QDOffscreen.a'
+	ENDIF
+;		include 'Errors.a'											;
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Memory.a'											;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__STANDARDFILE__') = 'UNDEFINED' THEN
+	include 'StandardFile.a'
+	ENDIF
+;		include 'Dialogs.a'										;
+;			include 'TextEdit.a'									;
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+MatrixRecord 			RECORD	0
+matrix					 ds.l   9		; offset: $0 (0)
+sizeof					 EQU *			; size:   $24 (36)
+						ENDR
+
+; typedef struct MatrixRecord  MatrixRecord, *MatrixRecordPtr
+FixedPoint 				RECORD	0
+x						 ds.l   1		; offset: $0 (0)
+y						 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct FixedPoint  FixedPoint
+FixedRect 				RECORD	0
+left					 ds.l   1		; offset: $0 (0)
+top						 ds.l   1		; offset: $4 (4)
+right					 ds.l   1		; offset: $8 (8)
+bottom					 ds.l   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct FixedRect 	FixedRect
+; These are the bits that are set in the Component flags, and also in the codecInfo struct. 
+
+codecInfoDoes1					EQU		(1 << 0)
+codecInfoDoes2					EQU		(1 << 1)
+codecInfoDoes4					EQU		(1 << 2)
+codecInfoDoes8					EQU		(1 << 3)
+codecInfoDoes16					EQU		(1 << 4)
+codecInfoDoes32					EQU		(1 << 5)
+codecInfoDoesDither				EQU		(1 << 6)
+codecInfoDoesStretch			EQU		(1 << 7)
+codecInfoDoesShrink				EQU		(1 << 8)
+codecInfoDoesMask				EQU		(1 << 9)
+codecInfoDoesTemporal			EQU		(1 << 10)
+codecInfoDoesDouble				EQU		(1 << 11)
+codecInfoDoesQuad				EQU		(1 << 12)
+codecInfoDoesHalf				EQU		(1 << 13)
+codecInfoDoesQuarter			EQU		(1 << 14)
+codecInfoDoesRotate				EQU		(1 << 15)
+codecInfoDoesHorizFlip			EQU		(1 << 16)
+codecInfoDoesVertFlip			EQU		(1 << 17)
+codecInfoDoesSkew				EQU		(1 << 18)
+codecInfoDoesBlend				EQU		(1 << 19)
+codecInfoDoesWarp				EQU		(1 << 20)
+codecInfoDoesRecompress			EQU		(1 << 21)
+codecInfoDoesSpool				EQU		(1 << 22)
+codecInfoDoesRateConstrain		EQU		(1 << 23)
+
+codecInfoDepth1					EQU		(1 << 0)
+codecInfoDepth2					EQU		(1 << 1)
+codecInfoDepth4					EQU		(1 << 2)
+codecInfoDepth8					EQU		(1 << 3)
+codecInfoDepth16				EQU		(1 << 4)
+codecInfoDepth32				EQU		(1 << 5)
+codecInfoDepth24				EQU		(1 << 6)
+codecInfoDepth33				EQU		(1 << 7)
+codecInfoDepth34				EQU		(1 << 8)
+codecInfoDepth36				EQU		(1 << 9)
+codecInfoDepth40				EQU		(1 << 10)
+codecInfoStoresClut				EQU		(1 << 11)
+codecInfoDoesLossless			EQU		(1 << 12)
+codecInfoSequenceSensitive		EQU		(1 << 13)
+
+codecFlagUseImageBuffer			EQU		(1 << 0)
+codecFlagUseScreenBuffer		EQU		(1 << 1)
+codecFlagUpdatePrevious			EQU		(1 << 2)
+codecFlagNoScreenUpdate			EQU		(1 << 3)
+codecFlagWasCompressed			EQU		(1 << 4)
+codecFlagDontOffscreen			EQU		(1 << 5)
+codecFlagUpdatePreviousComp		EQU		(1 << 6)
+codecFlagForceKeyFrame			EQU		(1 << 7)
+codecFlagOnlyScreenUpdate		EQU		(1 << 8)
+codecFlagLiveGrab				EQU		(1 << 9)
+codecFlagDontUseNewImageBuffer	EQU		(1 << 10)
+codecFlagInterlaceUpdate		EQU		(1 << 11)
+codecFlagCatchUpDiff			EQU		(1 << 12)
+codecFlagUsedNewImageBuffer		EQU		(1 << 14)
+codecFlagUsedImageBuffer		EQU		(1 << 15)
+
+; The minimum data size for spooling in or out data 
+codecMinimumDataSize			EQU		32768
+
+compressorComponentType			EQU		'imco'				; the type for "Components" which compress images 
+decompressorComponentType		EQU		'imdc'
+
+; typedef Component 		CompressorComponent
+; typedef Component 		DecompressorComponent
+; typedef Component 		CodecComponent
+
+anyCodec						EQU		0					; take first working codec of given type 
+bestSpeedCodec					EQU		-1					; take fastest codec of given type 
+bestFidelityCodec				EQU		-2					; take codec which is most accurate 
+bestCompressionCodec			EQU		-3					; take codec of given type that is most accurate 
+
+; typedef long 				CodecType
+; typedef unsigned short 	CodecFlags
+; typedef unsigned long 	CodecQ
+
+codecLosslessQuality			EQU		$400
+codecMaxQuality					EQU		$3ff
+codecMinQuality					EQU		$000
+codecLowQuality					EQU		$100
+codecNormalQuality				EQU		$200
+codecHighQuality				EQU		$300
+
+codecCompletionSource			EQU		(1 << 0)			; asynchronous codec is done with source data 
+codecCompletionDest				EQU		(1 << 1)			; asynchronous codec is done with destination data 
+
+codecProgressOpen				EQU		0
+codecProgressUpdatePercent		EQU		1
+codecProgressClose				EQU		2
+
+; typedef long 				ImageSequence
+ICMProgressProcRecord 	RECORD	0
+progressProc			 ds.l   1		; offset: $0 (0)
+progressRefCon			 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ICMProgressProcRecord  ICMProgressProcRecord, *ICMProgressProcRecordPtr
+ICMCompletionProcRecord RECORD	0
+completionProc			 ds.l   1		; offset: $0 (0)
+completionRefCon		 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ICMCompletionProcRecord  ICMCompletionProcRecord, *ICMCompletionProcRecordPtr
+ICMDataProcRecord 		RECORD	0
+dataProc				 ds.l   1		; offset: $0 (0)
+dataRefCon				 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ICMDataProcRecord  ICMDataProcRecord, *ICMDataProcRecordPtr
+ICMFlushProcRecord 		RECORD	0
+flushProc				 ds.l   1		; offset: $0 (0)
+flushRefCon				 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ICMFlushProcRecord  ICMFlushProcRecord, *ICMFlushProcRecordPtr
+ICMAlignmentProcRecord 	RECORD	0
+alignmentProc			 ds.l   1		; offset: $0 (0)
+alignmentRefCon			 ds.l   1		; offset: $4 (4)
+sizeof					 EQU *			; size:   $8 (8)
+						ENDR
+
+; typedef struct ICMAlignmentProcRecord  ICMAlignmentProcRecord, *ICMAlignmentProcRecordPtr
+DataRateParams 			RECORD	0
+dataRate				 ds.l   1		; offset: $0 (0)
+dataOverrun				 ds.l   1		; offset: $4 (4)
+frameDuration			 ds.l   1		; offset: $8 (8)
+keyFrameRate			 ds.l   1		; offset: $C (12)
+minSpatialQuality		 ds.l   1		; offset: $10 (16)
+minTemporalQuality		 ds.l   1		; offset: $14 (20)
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct DataRateParams  DataRateParams, *DataRateParamsPtr
+ImageDescription 		RECORD	0
+idSize					 ds.l   1		; offset: $0 (0)		; total size of ImageDescription including extra data ( CLUTs and other per sequence data 
+cType					 ds.l   1		; offset: $4 (4)		; what kind of codec compressed this data 
+resvd1					 ds.l   1		; offset: $8 (8)		; reserved for Apple use 
+resvd2					 ds.w   1		; offset: $C (12)		; reserved for Apple use 
+dataRefIndex			 ds.w   1		; offset: $E (14)		; set to zero  
+version					 ds.w   1		; offset: $10 (16)		; which version is this data 
+revisionLevel			 ds.w   1		; offset: $12 (18)		; what version of that codec did this 
+vendor					 ds.l   1		; offset: $14 (20)		; whose  codec compressed this data 
+temporalQuality			 ds.l   1		; offset: $18 (24)		; what was the temporal quality factor  
+spatialQuality			 ds.l   1		; offset: $1C (28)		; what was the spatial quality factor 
+width					 ds.w   1		; offset: $20 (32)		; how many pixels wide is this data 
+height					 ds.w   1		; offset: $22 (34)		; how many pixels high is this data 
+hRes					 ds.l   1		; offset: $24 (36)		; horizontal resolution 
+vRes					 ds.l   1		; offset: $28 (40)		; vertical resolution 
+dataSize				 ds.l   1		; offset: $2C (44)		; if known, the size of data for this image descriptor 
+frameCount				 ds.w   1		; offset: $30 (48)		; number of frames this description applies to 
+name					 ds.l   8		; offset: $32 (50)		; name of codec ( in case not installed )  
+depth					 ds.w   1		; offset: $52 (82)		; what depth is this data (1-32) or ( 33-40 grayscale ) 
+clutID					 ds.w   1		; offset: $54 (84)		; clut id or if 0 clut follows  or -1 if no clut 
+sizeof					 EQU *			; size:   $56 (86)
+						ENDR
+
+; typedef struct ImageDescription  ImageDescription, *ImageDescriptionPtr, **ImageDescriptionHandle
+CodecInfo 				RECORD	0
+typeName				 ds.l   8		; offset: $0 (0)		; name of the codec type i.e.: 'Apple Image Compression' 
+version					 ds.w   1		; offset: $20 (32)		; version of the codec data that this codec knows about 
+revisionLevel			 ds.w   1		; offset: $22 (34)		; revision level of this codec i.e: 0x00010001 (1.0.1) 
+vendor					 ds.l   1		; offset: $24 (36)		; Maker of this codec i.e: 'appl' 
+decompressFlags			 ds.l   1		; offset: $28 (40)		; codecInfo flags for decompression capabilities 
+compressFlags			 ds.l   1		; offset: $2C (44)		; codecInfo flags for compression capabilities 
+formatFlags				 ds.l   1		; offset: $30 (48)		; codecInfo flags for compression format details 
+compressionAccuracy		 ds.b   1		; offset: $34 (52)		; measure (1-255) of accuracy of this codec for compress (0 if unknown) 
+decompressionAccuracy	 ds.b   1		; offset: $35 (53)		; measure (1-255) of accuracy of this codec for decompress (0 if unknown) 
+compressionSpeed		 ds.w   1		; offset: $36 (54)		; ( millisecs for compressing 320x240 on base mac II) (0 if unknown)  
+decompressionSpeed		 ds.w   1		; offset: $38 (56)		; ( millisecs for decompressing 320x240 on mac II)(0 if unknown)  
+compressionLevel		 ds.b   1		; offset: $3A (58)		; measure (1-255) of compression level of this codec (0 if unknown)  
+resvd					 ds.b   1		; offset: $3B (59)		; pad 
+minimumHeight			 ds.w   1		; offset: $3C (60)		; minimum height of image (block size) 
+minimumWidth			 ds.w   1		; offset: $3E (62)		; minimum width of image (block size) 
+decompressPipelineLatency ds.w   1		; offset: $40 (64)		; in milliseconds ( for asynchronous codecs ) 
+compressPipelineLatency	 ds.w   1		; offset: $42 (66)		; in milliseconds ( for asynchronous codecs ) 
+privateData				 ds.l   1		; offset: $44 (68)
+sizeof					 EQU *			; size:   $48 (72)
+						ENDR
+
+; typedef struct CodecInfo 	CodecInfo
+CodecNameSpec 			RECORD	0
+codec					 ds.l   1		; offset: $0 (0)
+cType					 ds.l   1		; offset: $4 (4)
+typeName				 ds.l   8		; offset: $8 (8)
+name					 ds.l   1		; offset: $28 (40)
+sizeof					 EQU *			; size:   $2C (44)
+						ENDR
+
+; typedef struct CodecNameSpec  CodecNameSpec
+CodecNameSpecList 		RECORD	0
+count					 ds.w   1		; offset: $0 (0)
+list					 ds     CodecNameSpec ; offset: $2 (2)
+sizeof					 EQU *			; size:   $2E (46)
+						ENDR
+
+; typedef struct CodecNameSpecList  CodecNameSpecList, *CodecNameSpecListPtr
+
+defaultDither					EQU		0
+forceDither						EQU		1
+suppressDither					EQU		2
+useColorMatching				EQU		4
+
+ICMFrameTimeRecord 		RECORD	0
+value					 ds     wide	; offset: $0 (0)		; frame time
+scale					 ds.l   1		; offset: $8 (8)		; timescale of value/duration fields
+base					 ds.l   1		; offset: $C (12)		; timebase
+duration				 ds.l   1		; offset: $10 (16)		; duration frame is to be displayed (0 if unknown)
+rate					 ds.l   1		; offset: $14 (20)		; rate of timebase relative to wall-time
+sizeof					 EQU *			; size:   $18 (24)
+						ENDR
+
+; typedef struct ICMFrameTimeRecord  ICMFrameTimeRecord, *ICMFrameTimePtr
+;
+; pascal OSErr CodecManagerVersion(long *version)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CodecManagerVersion
+			moveq	#0,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CodecManagerVersion
+	ENDIF
+
+;
+; pascal OSErr GetCodecNameList(CodecNameSpecListPtr *list, short showAll)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCodecNameList
+			moveq	#1,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCodecNameList
+	ENDIF
+
+;
+; pascal OSErr DisposeCodecNameList(CodecNameSpecListPtr list)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DisposeCodecNameList
+			moveq	#15,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DisposeCodecNameList
+	ENDIF
+
+;
+; pascal OSErr GetCodecInfo(CodecInfo *info, CodecType cType, CodecComponent codec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCodecInfo
+			moveq	#3,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCodecInfo
+	ENDIF
+
+;
+; pascal OSErr GetMaxCompressionSize(PixMapHandle src, const Rect *srcRect, short colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, long *size)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMaxCompressionSize
+			moveq	#4,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMaxCompressionSize
+	ENDIF
+
+;
+; pascal OSErr GetCompressionTime(PixMapHandle src, const Rect *srcRect, short colorDepth, CodecType cType, CompressorComponent codec, CodecQ *spatialQuality, CodecQ *temporalQuality, unsigned long *compressTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCompressionTime
+			moveq	#5,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCompressionTime
+	ENDIF
+
+;
+; pascal OSErr CompressImage(PixMapHandle src, const Rect *srcRect, CodecQ quality, CodecType cType, ImageDescriptionHandle desc, Ptr data)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompressImage
+			moveq	#6,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompressImage
+	ENDIF
+
+;
+; pascal OSErr FCompressImage(PixMapHandle src, const Rect *srcRect, short colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, CTabHandle clut, CodecFlags flags, long bufferSize, ICMFlushProcRecordPtr flushProc, ICMProgressProcRecordPtr progressProc, ImageDescriptionHandle desc, Ptr data)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FCompressImage
+			moveq	#7,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FCompressImage
+	ENDIF
+
+;
+; pascal OSErr DecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, const Rect *dstRect, short mode, RgnHandle mask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressImage
+			moveq	#8,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressImage
+	ENDIF
+
+;
+; pascal OSErr FDecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, MatrixRecordPtr matrix, short mode, RgnHandle mask, PixMapHandle matte, const Rect *matteRect, CodecQ accuracy, DecompressorComponent codec, long bufferSize, ICMDataProcRecordPtr dataProc, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FDecompressImage
+			moveq	#9,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FDecompressImage
+	ENDIF
+
+;
+; pascal OSErr CompressSequenceBegin(ImageSequence *seqID, PixMapHandle src, PixMapHandle prev, const Rect *srcRect, const Rect *prevRect, short colorDepth, CodecType cType, CompressorComponent codec, CodecQ spatialQuality, CodecQ temporalQuality, long keyFrameRate, CTabHandle clut, CodecFlags flags, ImageDescriptionHandle desc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompressSequenceBegin
+			moveq	#10,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompressSequenceBegin
+	ENDIF
+
+;
+; pascal OSErr CompressSequenceFrame(ImageSequence seqID, PixMapHandle src, const Rect *srcRect, CodecFlags flags, Ptr data, long *dataSize, UInt8 *similarity, ICMCompletionProcRecordPtr asyncCompletionProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompressSequenceFrame
+			moveq	#11,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompressSequenceFrame
+	ENDIF
+
+;
+; pascal OSErr DecompressSequenceBegin(ImageSequence *seqID, ImageDescriptionHandle desc, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, short mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressSequenceBegin
+			moveq	#13,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressSequenceBegin
+	ENDIF
+
+;
+; pascal OSErr DecompressSequenceBeginS(ImageSequence *seqID, ImageDescriptionHandle desc, Ptr data, long dataSize, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, short mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressSequenceBeginS
+			dc.w 	$203C
+			dc.w 	$0030
+			dc.w 	$005D
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressSequenceBeginS
+	ENDIF
+
+;
+; pascal OSErr DecompressSequenceFrame(ImageSequence seqID, Ptr data, CodecFlags inFlags, CodecFlags *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressSequenceFrame
+			moveq	#14,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressSequenceFrame
+	ENDIF
+
+;
+; pascal OSErr DecompressSequenceFrameS(ImageSequence seqID, Ptr data, long dataSize, CodecFlags inFlags, CodecFlags *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressSequenceFrameS
+			dc.w 	$203C
+			dc.w 	$0016
+			dc.w 	$0047
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressSequenceFrameS
+	ENDIF
+
+;
+; pascal OSErr DecompressSequenceFrameWhen(ImageSequence seqID, Ptr data, long dataSize, CodecFlags inFlags, CodecFlags *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc, const ICMFrameTimeRecord *frameTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DecompressSequenceFrameWhen
+			dc.w 	$203C
+			dc.w 	$001A
+			dc.w 	$005E
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DecompressSequenceFrameWhen
+	ENDIF
+
+;
+; pascal OSErr CDSequenceFlush(ImageSequence seqID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CDSequenceFlush
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$005F
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CDSequenceFlush
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceMatrix(ImageSequence seqID, MatrixRecordPtr matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceMatrix
+			moveq	#16,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceMatrix
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceMatte(ImageSequence seqID, PixMapHandle matte, const Rect *matteRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceMatte
+			moveq	#17,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceMatte
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceMask(ImageSequence seqID, RgnHandle mask)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceMask
+			moveq	#18,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceMask
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceTransferMode(ImageSequence seqID, short mode, const RGBColor *opColor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceTransferMode
+			moveq	#19,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceTransferMode
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceDataProc(ImageSequence seqID, ICMDataProcRecordPtr dataProc, long bufferSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceDataProc
+			moveq	#20,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceDataProc
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceAccuracy(ImageSequence seqID, CodecQ accuracy)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceAccuracy
+			moveq	#52,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceAccuracy
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceSrcRect(ImageSequence seqID, const Rect *srcRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceSrcRect
+			moveq	#53,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceSrcRect
+	ENDIF
+
+;
+; pascal OSErr GetDSequenceImageBuffer(ImageSequence seqID, GWorldPtr *gworld)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDSequenceImageBuffer
+			moveq	#21,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDSequenceImageBuffer
+	ENDIF
+
+;
+; pascal OSErr GetDSequenceScreenBuffer(ImageSequence seqID, GWorldPtr *gworld)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDSequenceScreenBuffer
+			moveq	#22,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDSequenceScreenBuffer
+	ENDIF
+
+;
+; pascal OSErr SetCSequenceQuality(ImageSequence seqID, CodecQ spatialQuality, CodecQ temporalQuality)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequenceQuality
+			moveq	#23,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequenceQuality
+	ENDIF
+
+;
+; pascal OSErr SetCSequencePrev(ImageSequence seqID, PixMapHandle prev, const Rect *prevRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequencePrev
+			moveq	#24,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequencePrev
+	ENDIF
+
+;
+; pascal OSErr SetCSequenceFlushProc(ImageSequence seqID, ICMFlushProcRecordPtr flushProc, long bufferSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequenceFlushProc
+			moveq	#51,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequenceFlushProc
+	ENDIF
+
+;
+; pascal OSErr SetCSequenceKeyFrameRate(ImageSequence seqID, long keyframerate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequenceKeyFrameRate
+			moveq	#54,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequenceKeyFrameRate
+	ENDIF
+
+;
+; pascal OSErr GetCSequenceKeyFrameRate(ImageSequence seqID, long *keyframerate)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCSequenceKeyFrameRate
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$004B
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCSequenceKeyFrameRate
+	ENDIF
+
+;
+; pascal OSErr GetCSequencePrevBuffer(ImageSequence seqID, GWorldPtr *gworld)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCSequencePrevBuffer
+			moveq	#25,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCSequencePrevBuffer
+	ENDIF
+
+;
+; pascal OSErr CDSequenceBusy(ImageSequence seqID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CDSequenceBusy
+			moveq	#26,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CDSequenceBusy
+	ENDIF
+
+;
+; pascal OSErr CDSequenceEnd(ImageSequence seqID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CDSequenceEnd
+			moveq	#27,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CDSequenceEnd
+	ENDIF
+
+;
+; pascal OSErr GetCompressedImageSize(ImageDescriptionHandle desc, Ptr data, long bufferSize, ICMDataProcRecordPtr dataProc, long *dataSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCompressedImageSize
+			moveq	#28,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCompressedImageSize
+	ENDIF
+
+;
+; pascal OSErr GetSimilarity(PixMapHandle src, const Rect *srcRect, ImageDescriptionHandle desc, Ptr data, Fixed *similarity)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSimilarity
+			moveq	#29,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSimilarity
+	ENDIF
+
+;
+; pascal OSErr GetImageDescriptionCTable(ImageDescriptionHandle desc, CTabHandle *ctable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetImageDescriptionCTable
+			moveq	#30,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetImageDescriptionCTable
+	ENDIF
+
+;
+; pascal OSErr SetImageDescriptionCTable(ImageDescriptionHandle desc, CTabHandle ctable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetImageDescriptionCTable
+			moveq	#31,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetImageDescriptionCTable
+	ENDIF
+
+;
+; pascal OSErr GetImageDescriptionExtension(ImageDescriptionHandle desc, Handle *extension, long idType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetImageDescriptionExtension
+			moveq	#32,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetImageDescriptionExtension
+	ENDIF
+
+;
+; pascal OSErr SetImageDescriptionExtension(ImageDescriptionHandle desc, Handle extension, long idType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetImageDescriptionExtension
+			moveq	#33,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetImageDescriptionExtension
+	ENDIF
+
+;
+; pascal OSErr RemoveImageDescriptionExtension(ImageDescription **desc, long idType, long index)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RemoveImageDescriptionExtension
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$003A
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RemoveImageDescriptionExtension
+	ENDIF
+
+;
+; pascal OSErr CountImageDescriptionExtensionType(ImageDescription **desc, long idType, long *count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountImageDescriptionExtensionType
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$003B
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountImageDescriptionExtensionType
+	ENDIF
+
+;
+; pascal OSErr GetNextImageDescriptionExtensionType(ImageDescription **desc, long *idType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetNextImageDescriptionExtensionType
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$003C
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetNextImageDescriptionExtensionType
+	ENDIF
+
+;
+; pascal OSErr FindCodec(CodecType cType, CodecComponent specCodec, CompressorComponent *compressor, DecompressorComponent *decompressor)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindCodec
+			moveq	#35,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindCodec
+	ENDIF
+
+;
+; pascal OSErr CompressPicture(PicHandle srcPicture, PicHandle dstPicture, CodecQ quality, CodecType cType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompressPicture
+			moveq	#36,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompressPicture
+	ENDIF
+
+;
+; pascal OSErr FCompressPicture(PicHandle srcPicture, PicHandle dstPicture, short colorDepth, CTabHandle clut, CodecQ quality, short doDither, short compressAgain, ICMProgressProcRecordPtr progressProc, CodecType cType, CompressorComponent codec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FCompressPicture
+			moveq	#37,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FCompressPicture
+	ENDIF
+
+;
+; pascal OSErr CompressPictureFile(short srcRefNum, short dstRefNum, CodecQ quality, CodecType cType)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CompressPictureFile
+			moveq	#38,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CompressPictureFile
+	ENDIF
+
+;
+; pascal OSErr FCompressPictureFile(short srcRefNum, short dstRefNum, short colorDepth, CTabHandle clut, CodecQ quality, short doDither, short compressAgain, ICMProgressProcRecordPtr progressProc, CodecType cType, CompressorComponent codec)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FCompressPictureFile
+			moveq	#39,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FCompressPictureFile
+	ENDIF
+
+;
+; pascal OSErr GetPictureFileHeader(short refNum, Rect *frame, OpenCPicParams *header)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetPictureFileHeader
+			moveq	#40,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetPictureFileHeader
+	ENDIF
+
+;
+; pascal OSErr DrawPictureFile(short refNum, const Rect *frame, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawPictureFile
+			moveq	#41,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawPictureFile
+	ENDIF
+
+;
+; pascal OSErr DrawTrimmedPicture(PicHandle srcPicture, const Rect *frame, RgnHandle trimMask, short doDither, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawTrimmedPicture
+			moveq	#46,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawTrimmedPicture
+	ENDIF
+
+;
+; pascal OSErr DrawTrimmedPictureFile(short srcRefnum, const Rect *frame, RgnHandle trimMask, short doDither, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DrawTrimmedPictureFile
+			moveq	#47,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DrawTrimmedPictureFile
+	ENDIF
+
+;
+; pascal OSErr MakeThumbnailFromPicture(PicHandle picture, short colorDepth, PicHandle thumbnail, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MakeThumbnailFromPicture
+			moveq	#42,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeThumbnailFromPicture
+	ENDIF
+
+;
+; pascal OSErr MakeThumbnailFromPictureFile(short refNum, short colorDepth, PicHandle thumbnail, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MakeThumbnailFromPictureFile
+			moveq	#43,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeThumbnailFromPictureFile
+	ENDIF
+
+;
+; pascal OSErr MakeThumbnailFromPixMap(PixMapHandle src, const Rect *srcRect, short colorDepth, PicHandle thumbnail, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MakeThumbnailFromPixMap
+			moveq	#44,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeThumbnailFromPixMap
+	ENDIF
+
+;
+; pascal OSErr TrimImage(ImageDescriptionHandle desc, Ptr inData, long inBufferSize, ICMDataProcRecordPtr dataProc, Ptr outData, long outBufferSize, ICMFlushProcRecordPtr flushProc, Rect *trimRect, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TrimImage
+			moveq	#45,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TrimImage
+	ENDIF
+
+;
+; pascal OSErr ConvertImage(ImageDescriptionHandle srcDD, Ptr srcData, short colorDepth, CTabHandle clut, CodecQ accuracy, CodecQ quality, CodecType cType, CodecComponent codec, ImageDescriptionHandle dstDD, Ptr dstData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConvertImage
+			moveq	#48,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConvertImage
+	ENDIF
+
+;
+; pascal OSErr GetCompressedPixMapInfo(PixMapPtr pix, ImageDescriptionHandle *desc, Ptr *data, long *bufferSize, ICMDataProcRecord *dataProc, ICMProgressProcRecord *progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCompressedPixMapInfo
+			moveq	#55,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCompressedPixMapInfo
+	ENDIF
+
+;
+; pascal OSErr SetCompressedPixMapInfo(PixMapPtr pix, ImageDescriptionHandle desc, Ptr data, long bufferSize, ICMDataProcRecordPtr dataProc, ICMProgressProcRecordPtr progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCompressedPixMapInfo
+			moveq	#56,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCompressedPixMapInfo
+	ENDIF
+
+;
+; pascal void StdPix(PixMapPtr src, const Rect *srcRect, MatrixRecordPtr matrix, short mode, RgnHandle mask, PixMapPtr matte, const Rect *matteRect, short flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StdPix
+			moveq	#12,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StdPix
+	ENDIF
+
+;
+; pascal OSErr TransformRgn(MatrixRecordPtr matrix, RgnHandle rgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TransformRgn
+			moveq	#57,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TransformRgn
+	ENDIF
+
+;**********
+;	preview stuff
+;**********
+;
+; pascal void SFGetFilePreview(Point where, ConstStr255Param prompt, FileFilterUPP fileFilter, short numTypes, ConstSFTypeListPtr typeList, DlgHookUPP dlgHook, SFReply *reply)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SFGetFilePreview
+			moveq	#65,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SFGetFilePreview
+	ENDIF
+
+;
+; pascal void SFPGetFilePreview(Point where, ConstStr255Param prompt, FileFilterUPP fileFilter, short numTypes, ConstSFTypeListPtr typeList, DlgHookUPP dlgHook, SFReply *reply, short dlgID, ModalFilterUPP filterProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SFPGetFilePreview
+			moveq	#66,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SFPGetFilePreview
+	ENDIF
+
+;
+; pascal void StandardGetFilePreview(FileFilterUPP fileFilter, short numTypes, ConstSFTypeListPtr typeList, StandardFileReply *reply)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_StandardGetFilePreview
+			moveq	#67,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	StandardGetFilePreview
+	ENDIF
+
+;
+; pascal void CustomGetFilePreview(FileFilterYDUPP fileFilter, short numTypes, ConstSFTypeListPtr typeList, StandardFileReply *reply, short dlgID, Point where, DlgHookYDUPP dlgHook, ModalFilterYDUPP filterProc, ActivationOrderListPtr activeList, ActivateYDUPP activateProc, void *yourDataPtr)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CustomGetFilePreview
+			moveq	#68,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CustomGetFilePreview
+	ENDIF
+
+;
+; pascal OSErr MakeFilePreview(short resRefNum, ICMProgressProcRecordPtr progress)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MakeFilePreview
+			moveq	#69,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MakeFilePreview
+	ENDIF
+
+;
+; pascal OSErr AddFilePreview(short resRefNum, OSType previewType, Handle previewData)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AddFilePreview
+			moveq	#70,d0
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AddFilePreview
+	ENDIF
+
+
+sfpItemPreviewAreaUser			EQU		11
+sfpItemPreviewStaticText		EQU		12
+sfpItemPreviewDividerUser		EQU		13
+sfpItemCreatePreviewButton		EQU		14
+sfpItemShowPreviewButton		EQU		15
+
+PreviewResourceRecord 	RECORD	0
+modDate					 ds.l   1		; offset: $0 (0)
+version					 ds.w   1		; offset: $4 (4)
+resType					 ds.l   1		; offset: $6 (6)
+resID					 ds.w   1		; offset: $A (10)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct PreviewResourceRecord  PreviewResourceRecord, *PreviewResourcePtr, **PreviewResource
+;
+; pascal void AlignScreenRect(Rect *rp, ICMAlignmentProcRecordPtr alignmentProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AlignScreenRect
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$004C
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AlignScreenRect
+	ENDIF
+
+;
+; pascal void AlignWindow(WindowPtr wp, Boolean front, const Rect *alignmentRect, ICMAlignmentProcRecordPtr alignmentProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_AlignWindow
+			dc.w 	$203C
+			dc.w 	$000E
+			dc.w 	$004D
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	AlignWindow
+	ENDIF
+
+;
+; pascal void DragAlignedWindow(WindowPtr wp, Point startPt, Rect *boundsRect, Rect *alignmentRect, ICMAlignmentProcRecordPtr alignmentProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DragAlignedWindow
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$004E
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DragAlignedWindow
+	ENDIF
+
+;
+; pascal long DragAlignedGrayRgn(RgnHandle theRgn, Point startPt, Rect *boundsRect, Rect *slopRect, short axis, UniversalProcPtr actionProc, Rect *alignmentRect, ICMAlignmentProcRecordPtr alignmentProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_DragAlignedGrayRgn
+			dc.w 	$203C
+			dc.w 	$001E
+			dc.w 	$004F
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	DragAlignedGrayRgn
+	ENDIF
+
+;
+; pascal OSErr SetCSequenceDataRateParams(ImageSequence seqID, DataRateParamsPtr params)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequenceDataRateParams
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0050
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequenceDataRateParams
+	ENDIF
+
+;
+; pascal OSErr SetCSequenceFrameNumber(ImageSequence seqID, long frameNumber)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetCSequenceFrameNumber
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0051
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetCSequenceFrameNumber
+	ENDIF
+
+;
+; pascal QDErr NewImageGWorld(GWorldPtr *gworld, ImageDescriptionHandle idh, GWorldFlags flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_NewImageGWorld
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0052
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	NewImageGWorld
+	ENDIF
+
+;
+; pascal OSErr GetCSequenceDataRateParams(ImageSequence seqID, DataRateParamsPtr params)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCSequenceDataRateParams
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0053
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCSequenceDataRateParams
+	ENDIF
+
+;
+; pascal OSErr GetCSequenceFrameNumber(ImageSequence seqID, long *frameNumber)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetCSequenceFrameNumber
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0054
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetCSequenceFrameNumber
+	ENDIF
+
+;
+; pascal OSErr GetBestDeviceRect(GDHandle *gdh, Rect *rp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetBestDeviceRect
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0055
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetBestDeviceRect
+	ENDIF
+
+;
+; pascal OSErr SetSequenceProgressProc(ImageSequence seqID, ICMProgressProcRecord *progressProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetSequenceProgressProc
+			dc.w 	$203C
+			dc.w 	$0008
+			dc.w 	$0056
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetSequenceProgressProc
+	ENDIF
+
+;
+; pascal OSErr GDHasScale(GDHandle gdh, short depth, Fixed *scale)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GDHasScale
+			dc.w 	$203C
+			dc.w 	$000A
+			dc.w 	$005A
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GDHasScale
+	ENDIF
+
+;
+; pascal OSErr GDGetScale(GDHandle gdh, Fixed *scale, short *flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GDGetScale
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$005B
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GDGetScale
+	ENDIF
+
+;
+; pascal OSErr GDSetScale(GDHandle gdh, Fixed scale, short flags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GDSetScale
+			dc.w 	$203C
+			dc.w 	$000A
+			dc.w 	$005C
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GDSetScale
+	ENDIF
+
+;
+; pascal OSErr ICMShieldSequenceCursor(ImageSequence seqID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ICMShieldSequenceCursor
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0062
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ICMShieldSequenceCursor
+	ENDIF
+
+;
+; pascal void ICMDecompressComplete(ImageSequence seqID, OSErr err, short flag, ICMCompletionProcRecordPtr completionRtn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ICMDecompressComplete
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0063
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ICMDecompressComplete
+	ENDIF
+
+;
+; pascal OSErr SetDSequenceTimeCode(ImageSequence seqID, void *timeCodeFormat, void *timeCodeTime)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetDSequenceTimeCode
+			dc.w 	$203C
+			dc.w 	$000C
+			dc.w 	$0064
+			dc.w 	$AAA3
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetDSequenceTimeCode
+	ENDIF
+
+
+identityMatrixType				EQU		$00					; result if matrix is identity 
+translateMatrixType				EQU		$01					; result if matrix translates 
+scaleMatrixType					EQU		$02					; result if matrix scales 
+scaleTranslateMatrixType		EQU		$03					; result if matrix scales and translates 
+linearMatrixType				EQU		$04					; result if matrix is general 2 x 2 
+linearTranslateMatrixType		EQU		$05					; result if matrix is general 2 x 2 and translates 
+perspectiveMatrixType			EQU		$06					; result if matrix is general 3 x 3 
+
+; typedef unsigned short 	MatrixFlags
+;
+; pascal short GetMatrixType(const MatrixRecord *m)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMatrixType
+			moveq	#20,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMatrixType
+	ENDIF
+
+;
+; pascal void CopyMatrix(const MatrixRecord *m1, MatrixRecord *m2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CopyMatrix
+			moveq	#32,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CopyMatrix
+	ENDIF
+
+;
+; pascal Boolean EqualMatrix(const MatrixRecord *m1, const MatrixRecord *m2)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_EqualMatrix
+			moveq	#33,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	EqualMatrix
+	ENDIF
+
+;
+; pascal void SetIdentityMatrix(MatrixRecord *matrix)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SetIdentityMatrix
+			moveq	#21,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SetIdentityMatrix
+	ENDIF
+
+;
+; pascal void TranslateMatrix(MatrixRecord *m, Fixed deltaH, Fixed deltaV)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TranslateMatrix
+			moveq	#25,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TranslateMatrix
+	ENDIF
+
+;
+; pascal void RotateMatrix(MatrixRecord *m, Fixed degrees, Fixed aboutX, Fixed aboutY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RotateMatrix
+			moveq	#22,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RotateMatrix
+	ENDIF
+
+;
+; pascal void ScaleMatrix(MatrixRecord *m, Fixed scaleX, Fixed scaleY, Fixed aboutX, Fixed aboutY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ScaleMatrix
+			moveq	#23,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ScaleMatrix
+	ENDIF
+
+;
+; pascal void SkewMatrix(MatrixRecord *m, Fixed skewX, Fixed skewY, Fixed aboutX, Fixed aboutY)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SkewMatrix
+			moveq	#24,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SkewMatrix
+	ENDIF
+
+;
+; pascal OSErr TransformFixedPoints(const MatrixRecord *m, FixedPoint *fpt, long count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TransformFixedPoints
+			moveq	#34,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TransformFixedPoints
+	ENDIF
+
+;
+; pascal OSErr TransformPoints(const MatrixRecord *mp, Point *pt1, long count)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TransformPoints
+			moveq	#35,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TransformPoints
+	ENDIF
+
+;
+; pascal Boolean TransformFixedRect(const MatrixRecord *m, FixedRect *fr, FixedPoint *fpp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TransformFixedRect
+			moveq	#36,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TransformFixedRect
+	ENDIF
+
+;
+; pascal Boolean TransformRect(const MatrixRecord *m, Rect *r, FixedPoint *fpp)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_TransformRect
+			moveq	#37,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	TransformRect
+	ENDIF
+
+;
+; pascal Boolean InverseMatrix(const MatrixRecord *m, MatrixRecord *im)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_InverseMatrix
+			moveq	#28,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	InverseMatrix
+	ENDIF
+
+;
+; pascal void ConcatMatrix(const MatrixRecord *a, MatrixRecord *b)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ConcatMatrix
+			moveq	#27,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	ConcatMatrix
+	ENDIF
+
+;
+; pascal void RectMatrix(MatrixRecord *matrix, const Rect *srcRect, const Rect *dstRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_RectMatrix
+			moveq	#30,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	RectMatrix
+	ENDIF
+
+;
+; pascal void MapMatrix(MatrixRecord *matrix, const Rect *fromRect, const Rect *toRect)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_MapMatrix
+			moveq	#29,d0
+			dc.w 	$ABC2
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	MapMatrix
+	ENDIF
+
+	ENDIF ; __IMAGECOMPRESSION__

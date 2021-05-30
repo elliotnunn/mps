@@ -1,0 +1,469 @@
+;
+;    File:       LocationManager.a
+;
+;    Contains:   LocationManager (manages groups of settings)
+;
+;    Version:    Technology: Mac OS 8
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__LOCATIONMANAGER__') = 'UNDEFINED' THEN
+__LOCATIONMANAGER__ SET 1
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+	IF &TYPE('__STANDARDFILE__') = 'UNDEFINED' THEN
+	include 'StandardFile.a'
+	ENDIF
+
+;  Location Manager API Support -------------------------------------------------------------------- 
+;  A Location Token uniquely identifies a Location on a machine... 
+
+
+
+
+kALMNoLocationToken				EQU		-1					; ALMToken of "off" Location...
+
+kALMLocationNameMaxLen			EQU		31					; name (actually imposed by file system)... 
+kALMNoLocationIndex				EQU		-1					; index for the "off" Location (kALMNoLocationToken)... 
+ALMLocationName			RECORD 0
+f						 ds		Str31
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+
+;  Returned from ALMConfirmName... 
+
+; typedef SInt16						ALMConfirmChoice
+kALMConfirmRename				EQU		1
+kALMConfirmReplace				EQU		2
+;  ALMConfirmName dialog item numbers for use in callbacks (ALM 2.0)... 
+
+
+kALMDuplicateRenameButton		EQU		1					; if Window refcon is kALMDuplicateDialogRefCon... 
+kALMDuplicateReplaceButton		EQU		2
+kALMDuplicateCancelButton		EQU		3
+kALMDuplicatePromptText			EQU		5
+
+kALMRenameRenameButton			EQU		1					; if Window refcon is kALMRenameDialogRefCon... 
+kALMRenameCancelButton			EQU		2
+kALMRenameEditText				EQU		3
+kALMRenamePromptText			EQU		4
+;  Refcons of two windows in ALMConfirmName (ALM 2.0)... 
+
+
+kALMDuplicateDialogRefCon		EQU		'dupl'
+kALMRenameDialogRefCon			EQU		'rnam'
+;  Callback routine for Location awareness (mimics AppleEvents) in non-application code... 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewALMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeALMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeALMNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  Notification AppleEvents sent to apps/registered code...  
+
+kAELocationChangedNoticeKey		EQU		'walk'				; Current Location changed... 
+kAELocationRescanNoticeKey		EQU		'trip'				; Location created/renamed/deleted... 
+;  ALMSwitchToLocation masks... 
+
+; typedef SInt32						ALMSwitchActionFlags
+kALMDefaultSwitchFlags			EQU		$00000000			; No special action to take... 
+kALMDontShowStatusWindow		EQU		$00000001			; Suppress "switching" window... 
+kALMSignalViaAE					EQU		$00000002			; Switch by sending Finder AppleEvent... 
+;  Parameters for Get/Put/Merge Location calls... 
+
+; typedef const OSType *				ConstALMModuleTypeListPtr
+
+
+kALMAddAllOnSimple				EQU		0					; Add all single-instance, non-action modules... 
+kALMAddAllOff					EQU		-1					; Add all modules but turn them off... 
+;  Item numbers for use in Get/Put/Merge Location filters... 
+
+
+kALMLocationSelectButton		EQU		1
+kALMLocationCancelButton		EQU		2
+kALMLocationBalloonHelp			EQU		3
+kALMLocationLocationList		EQU		7
+kALMLocationLocationNameEdit	EQU		10
+kALMLocationPromptText			EQU		11
+
+kALMLocationSaveButton			EQU		1
+;  Location Manager Module API Support ------------------------------------------------------------- 
+
+;  ALMGetScriptInfo stuff... 
+
+
+kALMScriptInfoVersion			EQU		2					; Customarily put in resource for localization... 
+ALMScriptManagerInfo	RECORD 0
+version					 ds.w	1				; offset: $0 (0)		;  Set to kALMScriptInfoVersion... 
+scriptCode				 ds.w	1				; offset: $2 (2)
+regionCode				 ds.w	1				; offset: $4 (4)
+langCode				 ds.w	1				; offset: $6 (6)
+fontNum					 ds.w	1				; offset: $8 (8)
+fontSize				 ds.w	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct ALMScriptManagerInfo *	ALMScriptManagerInfoPtr
+
+
+;   Alternate form of ScriptInfo is easier to localize in resources; it is used extensively in
+;   samples and internally, so....
+
+
+ALMAltScriptManagerInfo	RECORD 0
+version					 ds.w	1				; offset: $0 (0)
+scriptCode				 ds.w	1				; offset: $2 (2)
+regionCode				 ds.w	1				; offset: $4 (4)
+langCode				 ds.w	1				; offset: $6 (6)
+fontSize				 ds.w	1				; offset: $8 (8)
+fontName				 ds		Str63			; offset: $A (10)
+sizeof					 EQU *					; size:   $4A (74)
+						ENDR
+; typedef struct ALMAltScriptManagerInfo * ALMAltScriptManagerInfoPtr
+
+; typedef ALMAltScriptManagerInfoPtr *	ALMAltScriptManagerInfoHandle
+
+
+kALMAltScriptManagerInfoRsrcType EQU	'trip'
+kALMAltScriptManagerInfoRsrcID	EQU		0
+;  Reboot information used on ALMSetCurrent (input/output parameter)... 
+
+; typedef UInt32						ALMRebootFlags
+kALMNoChange					EQU		0
+kALMAvailableNow				EQU		1
+kALMFinderRestart				EQU		2
+kALMProcesses					EQU		3
+kALMExtensions					EQU		4
+kALMWarmBoot					EQU		5
+kALMColdBoot					EQU		6
+kALMShutdown					EQU		7
+
+;   File types and signatures...
+;   Note: auto-routing of modules will not be supported for 'thng' files...
+
+
+
+
+kALMFileCreator					EQU		'fall'				; Creator of Location Manager files... 
+kALMComponentModuleFileType		EQU		'thng'				; Type of a Component Manager Module file [v1.0]... 
+kALMComponentStateModuleFileType EQU	'almn'				; Type of a CM 'state' Module file... 
+kALMComponentActionModuleFileType EQU	'almb'				; Type of a CM 'action' Module file... 
+kALMCFMStateModuleFileType		EQU		'almm'				; Type of a CFM 'state' Module file... 
+kALMCFMActionModuleFileType		EQU		'alma'				; Type of a CFM 'action' Module file... 
+;  Component Manager 'thng' info... 
+
+
+kALMComponentRsrcType			EQU		'thng'
+kALMComponentType				EQU		'walk'
+;  CFM Modules require a bit of information (replacing some of the 'thng' resource)... 
+
+
+kALMModuleInfoRsrcType			EQU		'walk'
+kALMModuleInfoOriginalVersion	EQU		0
+;  These masks apply to the "Flags" field in the 'thng' or 'walk' resource... 
+
+
+kALMMultiplePerLocation			EQU		$00000001			; Module can be added more than once to a Location... 
+kALMDescriptionGetsStale		EQU		$00000002			; Descriptions may change though the setting didn't...  
+;  Misc stuff for older implementations ------------------------------------------------------------ 
+
+	IF OLDROUTINENAMES THEN
+;  Old error codes for compatibility - new names are in Errors interface... 
+
+ALMInternalErr					EQU		-30049				; use kALMInternalErr 
+ALMLocationNotFound				EQU		-30048				; use kALMLocationNotFoundErr 
+ALMNoSuchModuleErr				EQU		-30047				; use kALMNoSuchModuleErr 
+ALMModuleCommunicationErr		EQU		-30046				; use kALMModuleCommunicationErr 
+ALMDuplicateModuleErr			EQU		-30045				; use kALMDuplicateModuleErr 
+ALMInstallationErr				EQU		-30044				; use kALMInstallationErr 
+ALMDeferSwitchErr				EQU		-30043				; use kALMDeferSwitchErr 
+;  Old ALMConfirmName constants... 
+
+
+ALMConfirmRenameConfig			EQU		1
+ALMConfirmReplaceConfig			EQU		2
+;  Old AppleEvents... 
+
+
+kAELocationNotice				EQU		'walk'
+ALMScriptMgrInfo		RECORD 0
+f						 ds		ALMScriptManagerInfo
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+
+; typedef UInt32 						ALMComponentFlagsEnum
+
+	ENDIF	; OLDROUTINENAMES
+;  Location Manager API ---------------------------------------------------------------------------- 
+
+;  The following 7 routines are present if gestaltALMAttr has bit gestaltALMPresent set... 
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  ALMGetCurrentLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMGetCurrentLocation(SInt16 *index, ALMToken *token, ALMLocationName name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMGetCurrentLocation
+			move.w              #$0600,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMGetCurrentLocation
+	ENDIF
+
+
+; *  ALMGetIndLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMGetIndLocation(SInt16 index, ALMToken *token, ALMLocationName name)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMGetIndLocation
+			move.w              #$0501,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMGetIndLocation
+	ENDIF
+
+
+; *  ALMCountLocations()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMCountLocations(SInt16 *locationCount)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMCountLocations
+			move.w              #$0202,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMCountLocations
+	ENDIF
+
+
+; *  ALMSwitchToLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMSwitchToLocation(ALMToken newLocation, ALMSwitchActionFlags switchFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMSwitchToLocation
+			move.w              #$0403,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMSwitchToLocation
+	ENDIF
+
+
+; *  ALMRegisterNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMRegisterNotifyProc(ALMNotificationUPP notificationProc, const ProcessSerialNumber *whichPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMRegisterNotifyProc
+			move.w              #$0404,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMRegisterNotifyProc
+	ENDIF
+
+
+; *  ALMRemoveNotifyProc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMRemoveNotifyProc(ALMNotificationUPP notificationProc, const ProcessSerialNumber *whichPSN)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMRemoveNotifyProc
+			move.w              #$0405,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMRemoveNotifyProc
+	ENDIF
+
+
+; *  ALMConfirmName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMConfirmName(ConstStr255Param message, Str255 theName, ALMConfirmChoice *choice, ModalFilterUPP filter)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMConfirmName
+			move.w              #$0806,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMConfirmName
+	ENDIF
+
+;  The following 3 routines are present if gestaltALMAttr has bit gestaltALMHasSFLocation set... 
+
+
+; *  ALMPutLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMPutLocation(ConstStr255Param prompt, ALMLocationName name, SInt16 numTypes, ConstALMModuleTypeListPtr typeList, ModalFilterYDUPP filter, void *yourDataPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMPutLocation
+			move.w              #$0B07,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMPutLocation
+	ENDIF
+
+
+; *  ALMGetLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMGetLocation(ConstStr255Param prompt, ALMLocationName name, ModalFilterYDUPP filter, void *yourDataPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMGetLocation
+			move.w              #$0808,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMGetLocation
+	ENDIF
+
+
+; *  ALMMergeLocation()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in Walkabout 2.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr ALMMergeLocation(ConstStr255Param prompt, ALMLocationName name, SInt16 numTypes, ConstALMModuleTypeListPtr typeList, ModalFilterYDUPP filter, void *yourDataPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ALMMergeLocation
+			move.w              #$0B09,D0
+			dc.w            	$AAA4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ALMMergeLocation
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __LOCATIONMANAGER__ 
+

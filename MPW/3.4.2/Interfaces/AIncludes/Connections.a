@@ -1,0 +1,542 @@
+;
+;	File:		Connections.a
+;
+;	Contains:	Communications Toolbox Connection Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CONNECTIONS__') = 'UNDEFINED' THEN
+__CONNECTIONS__ SET 1
+
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Types.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'Quickdraw.a'										;
+;			include 'QuickdrawText.a'								;
+;		include 'Events.a'											;
+;			include 'OSUtils.a'									;
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__DIALOGS__') = 'UNDEFINED' THEN
+	include 'Dialogs.a'
+	ENDIF
+;		include 'Errors.a'											;
+;		include 'TextEdit.a'										;
+
+	IF &TYPE('__CTBUTILITIES__') = 'UNDEFINED' THEN
+	include 'CTBUtilities.a'
+	ENDIF
+;		include 'StandardFile.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;		include 'AppleTalk.a'										;
+
+;	current Connection Manager version	
+curCMVersion					EQU		2
+;	current Connection Manager Environment Record version 	
+curConnEnvRecVers				EQU		0
+; CMErr 
+cmGenericError					EQU		-1
+cmNoErr							EQU		0
+cmRejected						EQU		1
+cmFailed						EQU		2
+cmTimeOut						EQU		3
+cmNotOpen						EQU		4
+cmNotClosed						EQU		5
+cmNoRequestPending				EQU		6
+cmNotSupported					EQU		7
+cmNoTools						EQU		8
+cmUserCancel					EQU		9
+cmUnknownError					EQU		11
+
+; typedef OSErr 			CMErr
+
+cmData							EQU		1 << 0
+cmCntl							EQU		1 << 1
+cmAttn							EQU		1 << 2
+cmDataNoTimeout					EQU		1 << 4
+cmCntlNoTimeout					EQU		1 << 5
+cmAttnNoTimeout					EQU		1 << 6
+cmDataClean						EQU		1 << 8
+cmCntlClean						EQU		1 << 9
+cmAttnClean						EQU		1 << 10
+;		Only for CMRecFlags (not CMChannel) in the rest of this enum	
+cmNoMenus						EQU		1 << 16
+cmQuiet							EQU		1 << 17
+cmConfigChanged					EQU		1 << 18
+
+; CMRecFlags and CMChannel		
+;		Low word of CMRecFlags is same as CMChannel	
+; typedef long 				CMRecFlags
+; typedef short 			CMChannel
+
+cmStatusOpening					EQU		1 << 0
+cmStatusOpen					EQU		1 << 1
+cmStatusClosing					EQU		1 << 2
+cmStatusDataAvail				EQU		1 << 3
+cmStatusCntlAvail				EQU		1 << 4
+cmStatusAttnAvail				EQU		1 << 5
+cmStatusDRPend					EQU		1 << 6				; data read pending	
+cmStatusDWPend					EQU		1 << 7				; data write pending	
+cmStatusCRPend					EQU		1 << 8				; cntl read pending	
+cmStatusCWPend					EQU		1 << 9				; cntl write pending	
+cmStatusARPend					EQU		1 << 10				; attn read pending	
+cmStatusAWPend					EQU		1 << 11				; attn write pending	
+cmStatusBreakPend				EQU		1 << 12
+cmStatusListenPend				EQU		1 << 13
+cmStatusIncomingCallPresent		EQU		1 << 14
+cmStatusReserved0				EQU		1 << 15
+
+; typedef unsigned long 	CMStatFlags
+
+cmDataIn						EQU		0
+cmDataOut						EQU		1
+cmCntlIn						EQU		2
+cmCntlOut						EQU		3
+cmAttnIn						EQU		4
+cmAttnOut						EQU		5
+cmRsrvIn						EQU		6
+cmRsrvOut						EQU		7
+
+; typedef unsigned short 	CMBufFields
+; typedef Ptr 				CMBuffers[8]
+; typedef long 				CMBufferSizes[8]
+
+cmSearchSevenBit				EQU		1 << 0
+
+; typedef unsigned short 	CMSearchFlags
+
+cmFlagsEOM						EQU		1 << 0
+
+; typedef unsigned short 	CMFlags
+ConnEnvironRec 			RECORD	0
+version					 ds.w   1		; offset: $0 (0)
+baudRate				 ds.l   1		; offset: $2 (2)
+dataBits				 ds.w   1		; offset: $6 (6)
+channels				 ds.w   1		; offset: $8 (8)
+swFlowControl			 ds.b   1		; offset: $A (10)
+hwFlowControl			 ds.b   1		; offset: $B (11)
+flags					 ds.w   1		; offset: $C (12)
+sizeof					 EQU *			; size:   $E (14)
+						ENDR
+
+; typedef struct ConnEnvironRec  ConnEnvironRec
+; typedef ConnEnvironRec 	*ConnEnvironRecPtr
+; typedef struct ConnRecord  ConnRecord, *ConnPtr, **ConnHandle
+ConnRecord 				RECORD	0
+procID					 ds.w   1		; offset: $0 (0)
+flags					 ds.l   1		; offset: $2 (2)
+errCode					 ds.w   1		; offset: $6 (6)
+refCon					 ds.l   1		; offset: $8 (8)
+userData				 ds.l   1		; offset: $C (12)
+defProc					 ds.l   1		; offset: $10 (16)
+config					 ds.l   1		; offset: $14 (20)
+oldConfig				 ds.l   1		; offset: $18 (24)
+asyncEOM				 ds.l   1		; offset: $1C (28)
+reserved1				 ds.l   1		; offset: $20 (32)
+reserved2				 ds.l   1		; offset: $24 (36)
+cmPrivate				 ds.l   1		; offset: $28 (40)
+bufferArray				 ds.l   8		; offset: $2C (44)
+bufSizes				 ds.l   8		; offset: $4C (76)
+mluField				 ds.l   1		; offset: $6C (108)
+asyncCount				 ds.l   8		; offset: $70 (112)
+sizeof					 EQU *			; size:   $90 (144)
+						ENDR
+
+
+; CMIOPB constants and structure 
+cmIOPBQType						EQU		10
+cmIOPBversion					EQU		0
+
+CMIOPB 					RECORD	0
+qLink					 ds.l   1		; offset: $0 (0)
+qType					 ds.w   1		; offset: $4 (4)		; cmIOPBQType 
+hConn					 ds.l   1		; offset: $6 (6)
+theBuffer				 ds.l   1		; offset: $A (10)
+count					 ds.l   1		; offset: $E (14)
+flags					 ds.w   1		; offset: $12 (18)
+userCompletion			 ds.l   1		; offset: $14 (20)
+timeout					 ds.l   1		; offset: $18 (24)
+errCode					 ds.w   1		; offset: $1C (28)
+channel					 ds.w   1		; offset: $1E (30)
+asyncEOM				 ds.l   1		; offset: $20 (32)
+reserved1				 ds.l   1		; offset: $24 (36)
+reserved2				 ds.w   1		; offset: $28 (40)
+version					 ds.w   1		; offset: $2A (42)		; cmIOPBversion 
+refCon					 ds.l   1		; offset: $2C (44)		; for application 
+toolData1				 ds.l   1		; offset: $30 (48)		; for tool 
+toolData2				 ds.l   1		; offset: $34 (52)		; for tool 
+sizeof					 EQU *			; size:   $38 (56)
+						ENDR
+
+; typedef struct CMIOPB 	CMIOPB
+; typedef CMIOPB 			*CMIOPBPtr
+;
+; pascal CMErr InitCM(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	InitCM
+	ENDIF
+
+;
+; pascal Handle CMGetVersion(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetVersion
+	ENDIF
+
+;
+; pascal short CMGetCMVersion(void)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetCMVersion
+	ENDIF
+
+;
+; pascal ConnHandle CMNew(short procID, CMRecFlags flags, CMBufferSizes desiredSizes, long refCon, long userData)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMNew
+	ENDIF
+
+;
+; pascal void CMDispose(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMDispose
+	ENDIF
+
+;
+; pascal CMErr CMListen(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMListen
+	ENDIF
+
+;
+; pascal CMErr CMAccept(ConnHandle hConn, Boolean accept)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMAccept
+	ENDIF
+
+;
+; pascal CMErr CMOpen(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMOpen
+	ENDIF
+
+;
+; pascal CMErr CMClose(ConnHandle hConn, Boolean async, ConnectionCompletionUPP completor, long timeout, Boolean now)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMClose
+	ENDIF
+
+;
+; pascal CMErr CMAbort(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMAbort
+	ENDIF
+
+;
+; pascal CMErr CMStatus(ConnHandle hConn, CMBufferSizes sizes, CMStatFlags *flags)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMStatus
+	ENDIF
+
+;
+; pascal void CMIdle(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMIdle
+	ENDIF
+
+;
+; pascal void CMReset(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMReset
+	ENDIF
+
+;
+; pascal void CMBreak(ConnHandle hConn, long duration, Boolean async, ConnectionCompletionUPP completor)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMBreak
+	ENDIF
+
+;
+; pascal CMErr CMRead(ConnHandle hConn, void *theBuffer, long *toRead, CMChannel theChannel, Boolean async, ConnectionCompletionUPP completor, long timeout, CMFlags *flags)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMRead
+	ENDIF
+
+;
+; pascal CMErr CMWrite(ConnHandle hConn, const void *theBuffer, long *toWrite, CMChannel theChannel, Boolean async, ConnectionCompletionUPP completor, long timeout, CMFlags flags)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMWrite
+	ENDIF
+
+;
+; pascal CMErr CMIOKill(ConnHandle hConn, short which)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMIOKill
+	ENDIF
+
+;
+; pascal void CMActivate(ConnHandle hConn, Boolean activate)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMActivate
+	ENDIF
+
+;
+; pascal void CMResume(ConnHandle hConn, Boolean resume)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMResume
+	ENDIF
+
+;
+; pascal Boolean CMMenu(ConnHandle hConn, short menuID, short item)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMMenu
+	ENDIF
+
+;
+; pascal Boolean CMValidate(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMValidate
+	ENDIF
+
+;
+; pascal void CMDefault(Ptr *theConfig, short procID, Boolean allocate)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMDefault
+	ENDIF
+
+;
+; pascal Handle CMSetupPreflight(short procID, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupPreflight
+	ENDIF
+
+;
+; pascal Boolean CMSetupFilter(short procID, const void *theConfig, short count, DialogPtr theDialog, EventRecord *theEvent, short *theItem, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupFilter
+	ENDIF
+
+;
+; pascal void CMSetupSetup(short procID, const void *theConfig, short count, DialogPtr theDialog, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupSetup
+	ENDIF
+
+;
+; pascal void CMSetupItem(short procID, const void *theConfig, short count, DialogPtr theDialog, short *theItem, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupItem
+	ENDIF
+
+;
+; pascal void CMSetupXCleanup(short procID, const void *theConfig, short count, DialogPtr theDialog, Boolean OKed, long *magicCookie)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupXCleanup
+	ENDIF
+
+;
+; pascal void CMSetupPostflight(short procID)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetupPostflight
+	ENDIF
+
+;
+; pascal Ptr CMGetConfig(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetConfig
+	ENDIF
+
+;
+; pascal short CMSetConfig(ConnHandle hConn, const void *thePtr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetConfig
+	ENDIF
+
+;
+; pascal OSErr CMIntlToEnglish(ConnHandle hConn, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMIntlToEnglish
+	ENDIF
+
+;
+; pascal OSErr CMEnglishToIntl(ConnHandle hConn, const void *inputPtr, Ptr *outputPtr, short language)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMEnglishToIntl
+	ENDIF
+
+;
+; pascal long CMAddSearch(ConnHandle hConn, ConstStr255Param theString, CMSearchFlags flags, ConnectionSearchCallBackUPP callBack)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMAddSearch
+	ENDIF
+
+;
+; pascal void CMRemoveSearch(ConnHandle hConn, long refnum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMRemoveSearch
+	ENDIF
+
+;
+; pascal void CMClearSearch(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMClearSearch
+	ENDIF
+
+;
+; pascal CMErr CMGetConnEnvirons(ConnHandle hConn, ConnEnvironRec *theEnvirons)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetConnEnvirons
+	ENDIF
+
+;
+; pascal short CMChoose(ConnHandle *hConn, Point where, ConnectionChooseIdleUPP idle)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMChoose
+	ENDIF
+
+;
+; pascal void CMEvent(ConnHandle hConn, const EventRecord *theEvent)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMEvent
+	ENDIF
+
+;
+; pascal void CMGetToolName(short procID, Str255 name)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetToolName
+	ENDIF
+
+;
+; pascal short CMGetProcID(ConstStr255Param name)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetProcID
+	ENDIF
+
+;
+; pascal void CMSetRefCon(ConnHandle hConn, long refCon)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetRefCon
+	ENDIF
+
+;
+; pascal long CMGetRefCon(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetRefCon
+	ENDIF
+
+;
+; pascal long CMGetUserData(ConnHandle hConn)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetUserData
+	ENDIF
+
+;
+; pascal void CMSetUserData(ConnHandle hConn, long userData)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMSetUserData
+	ENDIF
+
+;
+; pascal void CMGetErrorString(ConnHandle hConn, short id, Str255 errMsg)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMGetErrorString
+	ENDIF
+
+;
+; pascal CMErr CMNewIOPB(ConnHandle hConn, CMIOPBPtr *theIOPB)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMNewIOPB
+	ENDIF
+
+;
+; pascal CMErr CMDisposeIOPB(ConnHandle hConn, CMIOPBPtr theIOPB)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMDisposeIOPB
+	ENDIF
+
+;
+; pascal CMErr CMPBRead(ConnHandle hConn, CMIOPBPtr theIOPB, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMPBRead
+	ENDIF
+
+;
+; pascal CMErr CMPBWrite(ConnHandle hConn, CMIOPBPtr theIOPB, Boolean async)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMPBWrite
+	ENDIF
+
+;
+; pascal CMErr CMPBIOKill(ConnHandle hConn, CMIOPBPtr theIOPB)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CMPBIOKill
+	ENDIF
+
+	ENDIF ; __CONNECTIONS__

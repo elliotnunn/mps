@@ -1,0 +1,4601 @@
+;
+;    File:       OpenTransport.a
+;
+;    Contains:   Open Transport client interface file.  This contains all the client APIs
+;
+;    Version:    Technology: Open Transport 2.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__OPENTRANSPORT__') = 'UNDEFINED' THEN
+__OPENTRANSPORT__ SET 1
+
+
+
+
+
+;   The following table shows how to map from the old (pre-Universal
+;   Interfaces) header file name to the equivalent Universal Interfaces
+;   header file name.
+;    Old Header              New Header
+;    ----------              ----------
+;    cred.h                  OpenTransportProtocol.h
+;    dlpi.h                  OpenTransportProtocol.h
+;    miioccom.h              OpenTransportProtocol.h
+;    mistream.h              OpenTransportProtocol.h/OpenTransportKernel.h
+;    modnames.h              OpenTransportProtocol.h
+;    OpenTptAppleTalk.h      OpenTransportProviders.h
+;    OpenTptClient.h         OpenTransportProtocol.h
+;    OpenTptCommon.h         OpenTransportProtocol.h
+;    OpenTptConfig.h         OpenTransportProtocol.h
+;    OpenTptDevLinks.h       OpenTransportProviders.h
+;    OpenTptInternet.h       OpenTransportProviders.h
+;    OpenTptISDN.h           OpenTransportProviders.h
+;    OpenTptLinks.h          OpenTransportProviders.h
+;    OpenTptModule.h         OpenTransportKernel.h
+;    OpenTptPCISupport.h     OpenTransportKernel.h
+;    OpenTptSerial.h         OpenTransportProviders.h
+;    OpenTptXTI.h            OpenTransportUNIX.r
+;    OpenTransport.h         OpenTransport.h
+;    OpenTransport.r         OpenTransport.r
+;    OTConfig.r              OpenTransportProtocol.r
+;    OTDebug.h               OpenTransport.h
+;    OTSharedLibs.h          OpenTransportProviders.h
+;    strlog.h                OpenTransportProtocol.h/OpenTransportKernel.h
+;    stropts.h               OpenTransportProtocol.h/OpenTransportUNIX.h
+;    strstat.h               OpenTransportProtocol.h
+;    tihdr.h                 OpenTransportProtocol.h
+
+
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+;  ***** Setup Default Compiler Variables *****
+
+
+;   OTKERNEL is used to indicate whether the code is being built
+;   for the kernel environment.  It defaults to 0.  If you include
+;   "OpenTransportKernel.h" before including this file,
+;   it will be 1 and you will only be able to see stuff available
+;   to kernel code.
+
+
+
+	IF &TYPE('OTKERNEL') = 'UNDEFINED' THEN
+	OTKERNEL: SET 0
+	ENDIF
+
+;   OTUNIXERRORS determines whether this file defines a bunch of
+;   common UNIX error codes, like EPERM.  Typically, client code does
+;   not want to do this because of the possibility of a clash with
+;   other code modules, like the standard C libraries, that also
+;   defines these routines.  However, client code can turn it on to
+;   get these definitions.  This might be done by protocol stack
+;   infrastructure, or some other low-level code.
+;   "OpenTransportKernel.i" sets this flag before include
+;   "OpenTransport.h" because kernel modules typically need these
+;   error codes.  Note that kernel modules shouldn't be including
+;   standard C libraries, so this is rarely a problem.
+;   In general, the clash between OT and standard C definitions
+;   of these error codes is rarely a problem becasue both OT
+;   and the C libraries define them to have the same value.  But
+;   I'm sure this check is useful to some people.
+
+
+	IF &TYPE('OTUNIXERRORS') = 'UNDEFINED' THEN
+	OTUNIXERRORS: SET 0
+	ENDIF
+
+;   OTDEBUG is used to control the behaviour of the OT debugging
+;   macros.  If you set it to non-zero, the macros will generate code
+;   that drops you into the debugger.  If you set it to 0, or leave it
+;   undefined, the macros are compiled out.
+;   Setting up this compiler variable is a little tricky because previous
+;   versions of the OT interfaces used a different variable, qDebug.
+;   We replaced qDebug with OTDEBUG because qDebug does not fit into
+;   the OT namespace.  But I didn't want to break a lot of currently
+;   building code.  The following tricky compiler variable footwork
+;   avoids this.
+;   There are four outcomes when this code is compiled, depending on
+;   whether qDebug and OTDEBUG are defined beforehand.  The following
+;   table shows the outcome in each case.
+;   qDebug     OTDEBUG    Outcome       Explanation  
+;   ------     -------    -------       -----------
+;   defined    defined    OTDEBUG wins  Mixed legacy and new code, we believe the new code.
+;   defined    undefined  qDebug wins   Legacy code.
+;   undefined  defined    OTDEBUG wins  New code.
+;   undefined  undefined  no debugging  No debugging.
+
+
+	IF &TYPE('qDebug') <> 'UNDEFINED' THEN
+	IF &TYPE('OTDEBUG') = 'UNDEFINED' THEN
+	OTDebug: SET qDebug
+	ENDIF
+	ENDIF
+	IF &TYPE('OTDEBUG') = 'UNDEFINED' THEN
+	OTDEBUG: SET 0
+	ENDIF
+;  Carbon Applications have some restrictions on using OT
+	IF &TYPE('OTCARBONAPPLICATION') = 'UNDEFINED' THEN
+	OTCARBONAPPLICATION: SET 0
+	ENDIF
+
+;   ***** Normalise 68K Calling C Conventions *****
+;   Define special types that handle the difference in parameter passing
+;   between different Mac OS C compilers when generating 68K code.  OT
+;   exports C calling conventions routines, and various C compilers use
+;   various different conventions.  Differences in the placement of the result
+;   are covered above, where we output pragma pointers_in_D0.  The other big
+;   difference is how the compilers pass integer parameters less than 32 bits.
+;   The MPW compiler always extends these to 32 bits; other compilers simply
+;   push a value of the appropriate size.  We overcome this difference by
+;   defining special OTFooParam types, which are only used when passing
+;   sub 32 bit values to routines.  They are always defined to a 32 bit
+;   size, which makes all the compilers do the same thing.
+;   One weird consequence of this is that in more strict type checking
+;   languages (eg Pascal) OTBooleanParam is not compatible with Boolean.
+;   Sorry.
+
+
+
+
+
+	IF TARGET_CPU_68K THEN
+; typedef UInt32 						OTUInt8Param
+
+; typedef UInt32 						OTUInt16Param
+
+; typedef SInt32 						OTSInt16Param
+
+; typedef SInt32 						OTSInt8Param
+
+; typedef SInt32 						OTBooleanParam
+
+	ELSE
+; typedef UInt8 						OTUInt8Param
+
+; typedef UInt16 						OTUInt16Param
+
+; typedef SInt16 						OTSInt16Param
+
+; typedef SInt8 						OTSInt8Param
+
+; typedef Boolean 						OTBooleanParam
+
+	ENDIF	; TARGET_CPU_68K
+
+; typedef ByteCount 					OTByteCount
+
+; typedef ItemCount 					OTItemCount
+
+; typedef SInt32 						OTInt32
+
+; typedef UInt32 						OTUInt32
+
+
+;  ***** C++ Support *****
+
+
+;   Setup _MDECL to be _cdecl when compiling C++ code with
+;   compilers that support it, or nothing otherwise.
+
+
+
+
+;  ***** Shared Library Prefixes *****
+
+
+kOTCFMClass						EQU		'otan'
+;  ***** Miscellaneous Type Definitions *****
+
+;  A millisecond timeout value
+; typedef UInt32 						OTTimeout
+
+;  An ID number in connections/transactions     
+; typedef SInt32 						OTSequence
+
+;  An ID number for registered names            
+; typedef SInt32 						OTNameID
+
+
+;   A protocol-specific reason code for failure.
+;   Usually a Unix-style positive error code.
+
+
+; typedef SInt32 						OTReason
+
+;  Number of outstanding connection requests at a time.
+; typedef UInt32 						OTQLen
+
+;  Will become internationalizeable shortly (yeah, right).
+; typedef UInt8 *						OTClientName
+
+;  The command code in STREAMS messages.
+; typedef SInt32 						OTCommand
+
+;  value describing a client
+
+
+;  ***** Debugging Macros *****
+
+;  Debugging macros are only available in the C header file.  Sorry.
+
+;   ***** Flags Used When Opening Providers *****
+;   Important
+;   OT does not currently support any of these flags.  You should
+;   always pass 0 to a parameter of type OTOpenFlags.  If you need
+;   to modify the mode of operation of a provider, use OTSetBlocking,
+;   OTSetSynchronous, etc.
+
+
+
+; typedef UInt32						OTOpenFlags
+kO_ASYNC						EQU		$01
+kO_NDELAY						EQU		$04
+kO_NONBLOCK						EQU		$04
+
+	IF CALL_NOT_IN_CARBON THEN
+
+;   BSD defines O_ASYNC, O_NDELAY and O_NONBLOCK in fcntl.h 
+;   Use kO_ASYNC, kO_NDELAY and kO_NONBLOCK in the unlikely event you need the OT value in Carbon
+
+
+
+O_ASYNC							EQU		$01
+O_NDELAY						EQU		$04
+O_NONBLOCK						EQU		$04
+	ENDIF	; CALL_NOT_IN_CARBON
+;  ***** UNIX-Style Error Codes *****
+
+; typedef UInt16 						OTUnixErr
+
+
+;   These definitions are only compiled if you're building kernel code
+;   or you explicit request them by setting OTUNIXERRORS.  See the
+;   description of these compiler variables, given above.
+
+
+	IF OTKERNEL ++ OTUNIXERRORS THEN
+
+;   There may be some error code confusions with other compiler vendor header
+;   files - However, these match both MPW and AIX definitions.
+
+
+
+;   First we undefine the #defined ones we know about so that we can put them
+;   in an enum.  Of course, this is only going to work in C, but hopefully
+;   other languages won't have these symbols overloaded.
+
+
+
+
+EPERM							EQU		1					; Permission denied            
+ENOENT							EQU		2					; No such file or directory       
+ENORSRC							EQU		3					; No such resource               
+EINTR							EQU		4					; Interrupted system service        
+EIO								EQU		5					; I/O error                 
+ENXIO							EQU		6					; No such device or address       
+EBADF							EQU		9					; Bad file number                 
+EAGAIN							EQU		11					; Try operation again later       
+ENOMEM							EQU		12					; Not enough space               
+EACCES							EQU		13					; Permission denied            
+EFAULT							EQU		14					; Bad address                   
+EBUSY							EQU		16					; Device or resource busy          
+EEXIST							EQU		17					; File exists                   
+ENODEV							EQU		19					; No such device               
+EINVAL							EQU		22					; Invalid argument               
+ENOTTY							EQU		25					; Not a character device          
+EPIPE							EQU		32					; Broken pipe                   
+ERANGE							EQU		34					; Math result not representable   
+EDEADLK							EQU		35					; Call would block so was aborted       
+EWOULDBLOCK						EQU		35					; Or a deadlock would occur       
+EALREADY						EQU		37
+ENOTSOCK						EQU		38					; Socket operation on non-socket     
+EDESTADDRREQ					EQU		39					; Destination address required      
+EMSGSIZE						EQU		40					; Message too long               
+EPROTOTYPE						EQU		41					; Protocol wrong type for socket     
+ENOPROTOOPT						EQU		42					; Protocol not available          
+EPROTONOSUPPORT					EQU		43					; Protocol not supported          
+ESOCKTNOSUPPORT					EQU		44					; Socket type not supported       
+EOPNOTSUPP						EQU		45					; Operation not supported on socket  
+EADDRINUSE						EQU		48					; Address already in use          
+EADDRNOTAVAIL					EQU		49					; Can't assign requested address     
+ENETDOWN						EQU		50					; Network is down                 
+ENETUNREACH						EQU		51					; Network is unreachable          
+ENETRESET						EQU		52					; Network dropped connection on reset    
+ECONNABORTED					EQU		53					; Software caused connection abort     
+ECONNRESET						EQU		54					; Connection reset by peer          
+ENOBUFS							EQU		55					; No buffer space available       
+EISCONN							EQU		56					; Socket is already connected         
+ENOTCONN						EQU		57					; Socket is not connected          
+ESHUTDOWN						EQU		58					; Can't send after socket shutdown     
+ETOOMANYREFS					EQU		59					; Too many references: can't splice  
+ETIMEDOUT						EQU		60					; Connection timed out             
+ECONNREFUSED					EQU		61					; Connection refused           
+EHOSTDOWN						EQU		64					; Host is down                
+EHOSTUNREACH					EQU		65					; No route to host               
+EPROTO							EQU		70					; STREAMS protocol error          
+ETIME							EQU		71
+ENOSR							EQU		72
+EBADMSG							EQU		73
+ECANCEL							EQU		74
+ENOSTR							EQU		75
+ENODATA							EQU		76
+EINPROGRESS						EQU		77
+ESRCH							EQU		78
+ENOMSG							EQU		79
+ELASTERRNO						EQU		79
+	ENDIF
+;  ***** Open Transport/XTI Error codes *****
+; typedef UInt16 						OTXTIErr
+
+
+TSUCCESS						EQU		0					; No Error occurred             
+TBADADDR						EQU		1					; A Bad address was specified          
+TBADOPT							EQU		2					; A Bad option was specified          
+TACCES							EQU		3					; Missing access permission          
+TBADF							EQU		4					; Bad provider reference           
+TNOADDR							EQU		5					; No address was specified             
+TOUTSTATE						EQU		6					; Call issued in wrong state          
+TBADSEQ							EQU		7					; Sequence specified does not exist   
+TSYSERR							EQU		8					; A system error occurred              
+TLOOK							EQU		9					; An event occurred - call Look()         
+TBADDATA						EQU		10					; An illegal amount of data was specified    
+TBUFOVFLW						EQU		11					; Passed buffer not big enough          
+TFLOW							EQU		12					; Provider is flow-controlled          
+TNODATA							EQU		13					; No data available for reading       
+TNODIS							EQU		14					; No disconnect indication available     
+TNOUDERR						EQU		15					; No Unit Data Error indication available    
+TBADFLAG						EQU		16					; A Bad flag value was supplied       
+TNOREL							EQU		17					; No orderly release indication available    
+TNOTSUPPORT						EQU		18					; Command is not supported             
+TSTATECHNG						EQU		19					; State is changing - try again later       
+TNOSTRUCTYPE					EQU		20					; Bad structure type requested for OTAlloc   
+TBADNAME						EQU		21					; A bad endpoint name was supplied      
+TBADQLEN						EQU		22					; A Bind to an in-use address with qlen > 0
+TADDRBUSY						EQU		23					; Address requested is already in use       
+TINDOUT							EQU		24					; Accept failed because of pending listen    
+TPROVMISMATCH					EQU		25					; Tried to accept on incompatible endpoint   
+TRESQLEN						EQU		26
+TRESADDR						EQU		27
+TQFULL							EQU		28
+TPROTO							EQU		29					; An unspecified provider error occurred 
+TBADSYNC						EQU		30					; A synchronous call at interrupt time     
+TCANCELED						EQU		31					; The command was cancelled          
+TLASTXTIERROR					EQU		31
+
+;   ***** Mac OS Error Codes *****
+;   Most OT client routines return an OSStatus error code, a 32 bit type
+;   defined in "MacTypes.h".  The OT-unique error code values are
+;   defined below.  Many of these are generated by remapping XTI error
+;   codes (Txxxx) and UNIX error codes (Exxxx) to a reserved range
+;   in the OSStatus space.
+;   Some routines return an OTResult type, indicating
+;   that the routine might fail with a negative error, succeed with noErr,
+;   or possible return a positive value indicating some status.
+
+
+
+; typedef SInt32 						OTResult
+
+;  ***** OTAddress *****
+
+
+;   OTAddress type defines the standard header for all OT address formats.
+;   It consists of one 16 bit integer, which defines the address format
+;   used, followed by an arbitrary number of bytes which are protocol-specific.
+;   Conceptually, all OT address formats are subtypes of this type,
+;   extended with fields that are specific to the protocol.  For example,
+;   OTInetAddress starts with the OTAddressType field and then continues
+;   to include a host IP address and a port number.
+
+
+
+
+kOTGenericName					EQU		0					; Protocol specific data is just a string, interpreted in a protocol-specific fashion.
+; typedef UInt16 						OTAddressType
+
+OTAddress				RECORD 0
+fAddressType			 ds.w	1				; offset: $0 (0)		;  The address format of this address...
+fAddress				 ds.b	1				; offset: $2 (2) <-- really an array of length one ;  ... followed by protocol specific address information.
+						 ORG 4
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+;   ***** OTAlloc Constants *****
+;   Note:
+;   In general, Apple recommends that you avoid the OTAlloc call because
+;   using it extensively causes your program to allocate and deallocate
+;   many memory blocks, with each extra memory allocation costing time.
+
+
+
+;   OTStructType defines the structure type to be allocated using the OTAlloc
+;   call.
+
+
+
+T_BIND							EQU		1
+T_OPTMGMT						EQU		2
+T_CALL							EQU		3
+T_DIS							EQU		4
+T_UNITDATA						EQU		5
+T_UDERROR						EQU		6
+T_INFO							EQU		7
+T_REPLYDATA						EQU		8
+T_REQUESTDATA					EQU		9
+T_UNITREQUEST					EQU		10
+T_UNITREPLY						EQU		11
+; typedef UInt32 						OTStructType
+
+
+;   These values are used in the "fields" parameter of the OTAlloc call
+;   to define which fields of the structure should be allocated.
+
+
+
+T_ADDR							EQU		$01
+T_OPT							EQU		$02
+T_UDATA							EQU		$04
+T_ALL							EQU		$FFFF
+; typedef UInt32 						OTFieldsType
+
+;  ***** OTFlags *****
+
+;   This type is used to describe bitwise flags in OT data structures
+;   and parameters.  Think of it as the OT analogue to the OptionBits
+;   type in "MacTypes.h".
+
+
+
+; typedef UInt32 						OTFlags
+
+
+;   These flags are used when sending and receiving data.  The
+;   constants defined are masks.
+
+
+
+T_MORE							EQU		$0001				; More data to come in message     
+T_EXPEDITED						EQU		$0002				; Data is expedited, if possible 
+T_ACKNOWLEDGED					EQU		$0004				; Acknowledge transaction         
+T_PARTIALDATA					EQU		$0008				; Partial data - more coming     
+T_NORECEIPT						EQU		$0010				; No event on transaction done     
+T_TIMEDOUT						EQU		$0020				; Reply timed out              
+;  These flags are used in the TOptMgmt structure to request services.
+
+
+T_NEGOTIATE						EQU		$0004
+T_CHECK							EQU		$0008
+T_DEFAULT						EQU		$0010
+T_CURRENT						EQU		$0080
+
+;   These flags are used in the TOptMgmt and TOption structures to
+;   return results.
+
+
+
+
+T_SUCCESS						EQU		$0020
+T_FAILURE						EQU		$0040
+T_PARTSUCCESS					EQU		$0100
+T_READONLY						EQU		$0200
+T_NOTSUPPORT					EQU		$0400
+
+;   ***** OTBand *****
+;   A band is a STREAMS concepts which defines the priority of data
+;   on a stream.  Although this type is defined as a 32 bit number
+;   for efficiency's sake, bands actually only range from 0 to 255. 
+;   Typically band 0 is used for normal data and band 1 for expedited data.
+
+
+; typedef UInt32 						OTBand
+
+;  ***** Object References *****
+
+;   The C header file has a special mechanism to define these
+;   types so that the object hierarchy is checked by the compiler,
+;   at least when you engage the C++ compiler.  This special
+;   case is not propagated to your language of choice.  All
+;   OT object references are completely opaque.
+;   See the C header file for more details.
+
+
+
+
+
+
+
+
+
+kOTInvalidRef					EQU		0
+kOTInvalidProviderRef			EQU		0
+kOTInvalidEndpointRef			EQU		0
+kOTInvalidMapperRef				EQU		0
+;  ***** Event Codes *****
+
+;   OT event codes values for Open Transport.  These are the event codes that
+;   are sent to notification routine (notifiers).
+
+
+
+; typedef UInt32 						OTEventCode
+
+
+;   Events are divided into numerous categories:
+;   
+;   1. (0x0000xxxx) The core XTI events have identifiers of the form
+;      T_XXXX.  These signal that an XTI event has occured on a stream.
+;   2. (0x1000xxxx) Private events are reserved for protocol specific
+;      events.  Each protocol stack defines them as appropriate for
+;      its own usage.
+;   3. (0x2000xxxxx) Completion events have identifiers of the form
+;      T_XXXXCOMPLETE.  These signal the completion of some asynchronous
+;      API routine, and are only delivered if the endpoint is in asynchronous
+;      mode.
+;   4. (0x2100xxxx) Stream events are generally encountered when programming
+;      the raw streams API and indicate some event on a raw stream, or
+;      some other event of interest in the STREAMS kernel.
+;   5. (0x2200xxxx) Signal events indicate that a signal has arrived on
+;      a raw stream.  See "Signal Values" for details.
+;   6. (0x2300xxxx) General provider events that might be generated by any
+;      provider.
+;   7. (0x2400xxxx) System events sent to all providers.
+;   8. (0x2500xxxx) System events sent to registered clients.
+;   9. (0x2600xxxx) System events used by configurators.
+;  10. (0x2700xxxx) Events sent to registered OT clients.
+
+
+
+;   All event codes not described here are reserved by Apple.  If you receive
+;   an event code you do not understand, ignore it!
+
+
+
+
+T_LISTEN						EQU		$0001				; An connection request is available     
+T_CONNECT						EQU		$0002				; Confirmation of a connect request  
+T_DATA							EQU		$0004				; Standard data is available        
+T_EXDATA						EQU		$0008				; Expedited data is available         
+T_DISCONNECT					EQU		$0010				; A disconnect is available       
+T_ERROR							EQU		$0020				; obsolete/unused in library        
+T_UDERR							EQU		$0040				; A Unit Data Error has occurred     
+T_ORDREL						EQU		$0080				; An orderly release is available       
+T_GODATA						EQU		$0100				; Flow control lifted on standard data   
+T_GOEXDATA						EQU		$0200				; Flow control lifted on expedited data
+T_REQUEST						EQU		$0400				; An Incoming request is available     
+T_REPLY							EQU		$0800				; An Incoming reply is available     
+T_PASSCON						EQU		$1000				; State is now T_DATAXFER          
+T_RESET							EQU		$2000				; Protocol has been reset          
+kPRIVATEEVENT					EQU		$10000000			; Base of the private event range.
+kCOMPLETEEVENT					EQU		$20000000			; Base of the completion event range.
+T_BINDCOMPLETE					EQU		$20000001			; Bind call is complete          
+T_UNBINDCOMPLETE				EQU		$20000002			; Unbind call is complete          
+T_ACCEPTCOMPLETE				EQU		$20000003			; Accept call is complete          
+T_REPLYCOMPLETE					EQU		$20000004			; SendReply call is complete        
+T_DISCONNECTCOMPLETE			EQU		$20000005			; Disconnect call is complete         
+T_OPTMGMTCOMPLETE				EQU		$20000006			; OptMgmt call is complete          
+T_OPENCOMPLETE					EQU		$20000007			; An Open call is complete          
+T_GETPROTADDRCOMPLETE			EQU		$20000008			; GetProtAddress call is complete       
+T_RESOLVEADDRCOMPLETE			EQU		$20000009			; A ResolveAddress call is complet     
+T_GETINFOCOMPLETE				EQU		$2000000A			; A GetInfo call is complete        
+T_SYNCCOMPLETE					EQU		$2000000B			; A Sync call is complete          
+T_MEMORYRELEASED				EQU		$2000000C			; No-copy memory was released         
+T_REGNAMECOMPLETE				EQU		$2000000D			; A RegisterName call is complete       
+T_DELNAMECOMPLETE				EQU		$2000000E			; A DeleteName call is complete   
+T_LKUPNAMECOMPLETE				EQU		$2000000F			; A LookupName call is complete   
+T_LKUPNAMERESULT				EQU		$20000010			; A LookupName is returning a name     
+kOTSyncIdleEvent				EQU		$20000011			; Synchronous call Idle event         
+kSTREAMEVENT					EQU		$21000000			; Base of the raw stream event range.
+kOTReservedEvent1				EQU		$21000001			; reserved for internal use by OT       
+kGetmsgEvent					EQU		$21000002			; A GetMessage call is complete   
+kStreamReadEvent				EQU		$21000003			; A Read call is complete          
+kStreamWriteEvent				EQU		$21000004			; A Write call is complete          
+kStreamIoctlEvent				EQU		$21000005			; An Ioctl call is complete       
+kOTReservedEvent2				EQU		$21000006			; reserved for internal use by OT       
+kStreamOpenEvent				EQU		$21000007			; An OpenStream call is complete     
+kPollEvent						EQU		$21000008			; A Poll call is complete          
+kOTReservedEvent3				EQU		$21000009			; reserved for internal use by OT       
+kOTReservedEvent4				EQU		$2100000A			; reserved for internal use by OT       
+kOTReservedEvent5				EQU		$2100000B			; reserved for internal use by OT       
+kOTReservedEvent6				EQU		$2100000C			; reserved for internal use by OT       
+kOTReservedEvent7				EQU		$2100000D			; reserved for internal use by OT       
+kOTReservedEvent8				EQU		$2100000E			; reserved for internal use by OT       
+kSIGNALEVENT					EQU		$22000000			; A signal has arrived on a raw stream, see "Signal Values" below.
+kPROTOCOLEVENT					EQU		$23000000			; Some event from the protocols   
+kOTProviderIsDisconnected		EQU		$23000001			; Provider is temporarily off-line     
+kOTProviderIsReconnected		EQU		$23000002			; Provider is now back on-line      
+kOTProviderWillClose			EQU		$24000001			; Provider will close immediately       
+kOTProviderIsClosed				EQU		$24000002			; Provider was closed              
+kOTPortDisabled					EQU		$25000001			; Port is now disabled, result is 0, cookie is port ref 
+kOTPortEnabled					EQU		$25000002			; Port is now enabled, result is 0, cookie is port ref 
+kOTPortOffline					EQU		$25000003			; Port is now offline, result is 0, cookie is port ref 
+kOTPortOnline					EQU		$25000004			; Port is now online, result is 0, cookie is port ref 
+kOTClosePortRequest				EQU		$25000005			; Request to close/yield, result is reason, cookie is OTPortCloseStruct* 
+kOTYieldPortRequest				EQU		$25000005			; Request to close/yield, result is reason, cookie is OTPortCloseStruct* 
+kOTNewPortRegistered			EQU		$25000006			; New port has been registered, cookie is port ref 
+kOTPortNetworkChange			EQU		$25000007			; Port may have moved to a new network, result is 0, cookie is port ref 
+kOTConfigurationChanged			EQU		$26000001			; Protocol configuration changed     
+kOTSystemSleep					EQU		$26000002
+kOTSystemShutdown				EQU		$26000003
+kOTSystemAwaken					EQU		$26000004
+kOTSystemIdle					EQU		$26000005
+kOTSystemSleepPrep				EQU		$26000006
+kOTSystemShutdownPrep			EQU		$26000007
+kOTSystemAwakenPrep				EQU		$26000008
+kOTStackIsLoading				EQU		$27000001			; Sent before Open Transport attempts to load the TCP/IP protocol stack.
+kOTStackWasLoaded				EQU		$27000002			; Sent after the TCP/IP stack has been successfully loaded.
+kOTStackIsUnloading				EQU		$27000003			; Sent before Open Transport unloads the TCP/IP stack.
+
+
+
+;   ***** Signal Values *****
+;   Signals that are generated by a raw stream.  When writing a notifier
+;   for a raw stream, add these values to kSIGNALEVENT to determine what
+;   event you are receiving.
+
+
+
+
+kSIGHUP							EQU		1
+kSIGURG							EQU		16
+kSIGPOLL						EQU		30
+
+SIGHUP							EQU		1
+SIGURG							EQU		16
+SIGPOLL							EQU		30
+
+
+;   ***** Notifier Type Definition *****
+;   Open Transport notifiers must conform to the OTNotifyProcPtr prototype.
+;   Even though a OTNotifyUPP is a OTNotifyProcPtr on pre-Carbon system,
+;   use NewOTNotifyUPP() and friends to make your source code portable to OS X and Carbon.
+
+
+
+; *  NewOTNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeOTNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeOTNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  ***** Option Management Definitions *****
+;  The XTI Level number of a protocol.
+
+XTI_GENERIC						EQU		$FFFF				; level for XTI options 
+; typedef UInt32 						OTXTILevel
+
+;  The XTI name of a protocol option.
+; typedef UInt32 						OTXTIName
+
+;  XTI names for options used with XTI_GENERIC above
+
+XTI_DEBUG						EQU		$0001
+XTI_LINGER						EQU		$0080
+XTI_RCVBUF						EQU		$1002
+XTI_RCVLOWAT					EQU		$1004
+XTI_SNDBUF						EQU		$1001
+XTI_SNDLOWAT					EQU		$1003
+XTI_PROTOTYPE					EQU		$1005
+OPT_CHECKSUM					EQU		$0600				; Set checksumming = UInt32 - 0 or 1)
+OPT_RETRYCNT					EQU		$0601				; Set a retry counter = UInt32 (0 = infinite)
+OPT_INTERVAL					EQU		$0602				; Set a retry interval = UInt32 milliseconds
+OPT_ENABLEEOM					EQU		$0603				; Enable the EOM indication = UInt8 (0 or 1)
+OPT_SELFSEND					EQU		$0604				; Enable Self-sending on broadcasts = UInt32 (0 or 1)
+OPT_SERVERSTATUS				EQU		$0605				; Set Server Status (format is proto dependent)
+OPT_ALERTENABLE					EQU		$0606				; Enable/Disable protocol alerts
+OPT_KEEPALIVE					EQU		$0008				; See t_keepalive structure
+;  ***** Ioctl Definitions *****
+
+
+;   All OT ioctl numbers are formed using the MIOC_CMD macro,
+;   which divides the ioctl space by protocol space (the
+;   first parameter) and ioctl number within that protocol
+;   space (the second parameter).  This macro is only available
+;   to C users but it's relatively easy to synthesise its
+;   results in other languages.
+
+
+
+;  The following is a registry of the ioctls protocol spaces.
+
+
+MIOC_STREAMIO					EQU		65					; Basic Stream ioctl() cmds - I_PUSH, I_LOOK, etc. 
+MIOC_TMOD						EQU		97					; ioctl's for tmod test module    
+MIOC_STRLOG						EQU		98					; ioctl's for Mentat's log device      
+MIOC_ND							EQU		99					; ioctl's for Mentat's nd device        
+MIOC_ECHO						EQU		100					; ioctl's for Mentat's echo device   
+MIOC_TLI						EQU		101					; ioctl's for Mentat's timod module  
+MIOC_RESERVEDf					EQU		102					; reserved, used by SVR4 FIOxxx   
+MIOC_SAD						EQU		103					; ioctl's for Mentat's sad module      
+MIOC_ARP						EQU		104					; ioctl's for Mentat's arp module      
+MIOC_HAVOC						EQU		72					; Havoc module ioctls.           
+MIOC_RESERVEDi					EQU		105					; reserved, used by SVR4 SIOCxxx     
+MIOC_SIOC						EQU		106					; sockio.h socket ioctl's           
+MIOC_TCP						EQU		107					; tcp.h ioctl's                
+MIOC_DLPI						EQU		108					; dlpi.h additions             
+MIOC_SOCKETS					EQU		109					; Mentat sockmod ioctl's           
+MIOC_IPX						EQU		111					; ioctls for IPX               
+MIOC_OT							EQU		79					; ioctls for Open Transport       
+MIOC_ATALK						EQU		84					; ioctl's for AppleTalk          
+MIOC_SRL						EQU		85					; ioctl's for Serial           
+MIOC_RESERVEDp					EQU		112					; reserved, used by SVR4          
+MIOC_RESERVEDr					EQU		114					; reserved, used by SVR4          
+MIOC_RESERVEDs					EQU		115					; reserved, used by SVR4          
+MIOC_CFIG						EQU		122					; ioctl's for private configuration 
+;  OT specific ioctls.
+
+
+I_OTGetMiscellaneousEvents		EQU		$4F01				; sign up for Misc Events              
+I_OTSetFramingType				EQU		$4F02				; Set framing option for link          
+kOTGetFramingValue				EQU		$FFFFFFFF			; Use this value to read framing        
+I_OTSetRawMode					EQU		$4F03				; Set raw mode for link            
+kOTSetRecvMode					EQU		$01
+kOTSendErrorPacket				EQU		$02
+I_OTConnect						EQU		$4F04				; Generic connect request for links   
+I_OTDisconnect					EQU		$4F05				; Generic disconnect request for links     
+I_OTScript						EQU		$4F06				; Send a script to a module          
+;  Structure for the I_OTScript Ioctl.
+
+OTScriptInfo			RECORD 0
+fScriptType				 ds.l	1				; offset: $0 (0)
+fTheScript				 ds.l	1				; offset: $4 (4)
+fScriptLength			 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+;   ***** XTI States *****
+;   These are the potential values returned by OTGetEndpointState and OTSync
+;   which represent the XTI state of an endpoint.
+
+
+
+; typedef UInt32						OTXTIStates
+T_UNINIT						EQU		0					; addition to standard xti.h 
+T_UNBND							EQU		1					; unbound                 
+T_IDLE							EQU		2					; idle                
+T_OUTCON						EQU		3					; outgoing connection pending    
+T_INCON							EQU		4					; incoming connection pending    
+T_DATAXFER						EQU		5					; data transfer          
+T_OUTREL						EQU		6					; outgoing orderly release     
+T_INREL							EQU		7					; incoming orderly release     
+
+;   ***** General XTI Definitions *****
+;   These definitions are typically used during option management.
+
+
+
+
+T_YES							EQU		1
+T_NO							EQU		0
+T_UNUSED						EQU		-1
+kT_NULL							EQU		0
+T_ABSREQ						EQU		$8000
+
+kT_UNSPEC						EQU		$FFFFFFFD
+T_ALLOPT						EQU		0
+
+T_NULL							EQU		0
+T_UNSPEC						EQU		$FFFFFFFD
+
+;   ***** OTConfiguration *****
+;   This is a "black box" structure used to define the configuration of a
+;   provider or endpoint.  This file defines a very limited set of operations
+;   on a configuration.  "OpenTransportClient.h" extends this with extra
+;   operations used by protocol stacks but not typically needed by clients.
+
+
+
+
+
+
+
+kOTNoMemoryConfigurationPtr		EQU		0
+kOTInvalidConfigurationPtr		EQU		-1
+;  ***** Option Management Structures *****
+
+;  This structure describes the contents of a single option in a buffer.
+
+TOptionHeader			RECORD 0
+len						 ds.l	1				; offset: $0 (0)		;  total length of option          
+;  = sizeof(TOptionHeader) + length     
+;      of option value in bytes       
+level					 ds.l	1				; offset: $4 (4)		;  protocol affected            
+name					 ds.l	1				; offset: $8 (8)		;  option name                   
+status					 ds.l	1				; offset: $C (12)		;  status value                
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;   This structure describes the contents of a single option in a buffer.
+;   It differs from TOptionHeader in that it includes the value field,
+;   which acts as an unbounded array representing the value of the option.
+
+
+TOption					RECORD 0
+len						 ds.l	1				; offset: $0 (0)		;  total length of option          
+;  = sizeof(TOption) + length 
+;      of option value in bytes       
+level					 ds.l	1				; offset: $4 (4)		;  protocol affected            
+name					 ds.l	1				; offset: $8 (8)		;  option name                   
+status					 ds.l	1				; offset: $C (12)		;  status value                
+value					 ds.l	1				; offset: $10 (16) <-- really an array of length one ;  data goes here               
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+;  Some useful constants when manipulating option buffers.
+
+kOTOptionHeaderSize				EQU		16
+kOTBooleanOptionDataSize		EQU		4
+kOTBooleanOptionSize			EQU		20
+kOTOneByteOptionSize			EQU		17
+kOTTwoByteOptionSize			EQU		18
+kOTFourByteOptionSize			EQU		20
+;  t_kpalive is used with OPT_KEEPALIVE option.
+
+t_kpalive				RECORD 0
+kp_onoff				 ds.l	1				; offset: $0 (0)		;  option on/off   
+kp_timeout				 ds.l	1				; offset: $4 (4)		;  timeout in minutes 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+;  t_linger is used with XTI_LINGER option.
+t_linger				RECORD 0
+l_onoff					 ds.l	1				; offset: $0 (0)		;  option on/off 
+l_linger				 ds.l	1				; offset: $4 (4)		;  linger time 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+;   ***** TEndpointInfo *****
+;   This structure is returned from the GetEndpointInfo call and contains
+;   information about an endpoint.  But first, some special flags and types.
+
+
+;  Values returned in servtype field of TEndpointInfo.
+
+
+; typedef UInt32						OTServiceType
+T_COTS							EQU		1					; Connection-mode service                    
+T_COTS_ORD						EQU		2					; Connection service with orderly release          
+T_CLTS							EQU		3					; Connectionless-mode service                   
+T_TRANS							EQU		5					; Connection-mode transaction service              
+T_TRANS_ORD						EQU		6					; Connection transaction service with orderly release    
+T_TRANS_CLTS					EQU		7					; Connectionless transaction service           
+;  Masks for the flags field of TEndpointInfo.
+
+
+T_SENDZERO						EQU		$0001				; supports 0-length TSDU's          
+T_XPG4_1						EQU		$0002				; supports the GetProtAddress call     
+T_CAN_SUPPORT_MDATA				EQU		$10000000			; support M_DATAs on packet protocols    
+T_CAN_RESOLVE_ADDR				EQU		$40000000			; Supports ResolveAddress call      
+T_CAN_SUPPLY_MIB				EQU		$20000000			; Supports SNMP MIB data          
+
+;   Special-case values for in the tsdu, etsdu, connect, and discon
+;   fields of TEndpointInfo.
+
+
+
+
+T_INFINITE						EQU		-1					; supports infinit amounts of data     
+T_INVALID						EQU		-2					; Does not support data transmission 
+; typedef SInt32 						OTDataSize
+
+;  Now the TEndpointInfo structure proper.
+TEndpointInfo			RECORD 0
+addr					 ds.l	1				; offset: $0 (0)		;  Maximum size of an address        
+options					 ds.l	1				; offset: $4 (4)		;  Maximum size of options          
+tsdu					 ds.l	1				; offset: $8 (8)		;  Standard data transmit unit size     
+etsdu					 ds.l	1				; offset: $C (12)		;  Expedited data transmit unit size  
+connect					 ds.l	1				; offset: $10 (16)		;  Maximum data size on connect      
+discon					 ds.l	1				; offset: $14 (20)		;  Maximum data size on disconnect       
+servtype				 ds.l	1				; offset: $18 (24)		;  service type                
+flags					 ds.l	1				; offset: $1C (28)		;  Flags (see above for values)      
+sizeof					 EQU *					; size:   $20 (32)
+						ENDR
+
+;   "OpenTransport.h" no longer defines "struct t_info".  We recommend
+;   that you use TEndpointInfo instead.  If this is impossible, use
+;   the definition of "struct t_info" in "OpenTransportXTI.h".
+
+
+;  ***** OTPortRecord *****
+
+;  Unique identifier for a port.
+
+; typedef UInt32 						OTPortRef
+
+; typedef OTPortRef *					OTPortRefPtr
+
+
+kOTInvalidPortRef				EQU		0
+;  Valid values for the bus type element of an OTPortRef.
+
+
+; typedef UInt8							OTBusType
+kOTUnknownBusPort				EQU		0
+kOTMotherboardBus				EQU		1
+kOTNuBus						EQU		2
+kOTPCIBus						EQU		3
+kOTGeoPort						EQU		4
+kOTPCCardBus					EQU		5
+kOTFireWireBus					EQU		6
+kOTLastBusIndex					EQU		15
+
+;   A couple of special values for the device type element of an
+;   OTPortRef.  See "OpenTransportDevices.h" for the standard values.
+
+
+
+
+; typedef UInt16						OTDeviceType
+kOTNoDeviceType					EQU		0
+kOTADEVDevice					EQU		1					; An Atalk ADEV   
+kOTMDEVDevice					EQU		2					; A TCP/IP MDEV   
+kOTLocalTalkDevice				EQU		3					; LocalTalk       
+kOTIRTalkDevice					EQU		4					; IRTalk          
+kOTTokenRingDevice				EQU		5					; Token Ring        
+kOTISDNDevice					EQU		6					; ISDN             
+kOTATMDevice					EQU		7					; ATM              
+kOTSMDSDevice					EQU		8					; SMDS             
+kOTSerialDevice					EQU		9					; Serial           
+kOTEthernetDevice				EQU		10					; Ethernet          
+kOTSLIPDevice					EQU		11					; SLIP Pseudo-device 
+kOTPPPDevice					EQU		12					; PPP Pseudo-device  
+kOTModemDevice					EQU		13					; Modem Pseudo-Device    
+kOTFastEthernetDevice			EQU		14					; 100 MB Ethernet       
+kOTFDDIDevice					EQU		15					; FDDI             
+kOTIrDADevice					EQU		16					; IrDA Infrared   
+kOTATMSNAPDevice				EQU		17					; ATM SNAP emulation 
+kOTFibreChannelDevice			EQU		18					; Fibre Channel   
+kOTFireWireDevice				EQU		19					; FireWire link Device   
+kOTPseudoDevice					EQU		1023				; used where no other defined device type will work
+kOTLastDeviceIndex				EQU		1022
+;  Special case values for the slot number element of an OTPortRef.
+
+
+kOTLastSlotNumber				EQU		255
+kOTLastOtherNumber				EQU		255
+; typedef UInt16 						OTSlotNumber
+
+;  Accessor functions for the various elements of the OTPortRef.
+
+; *  OTCreatePortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTPortRef OTCreatePortRef(OTBusType busType, OTDeviceType devType, OTSlotNumber slot, UInt16 other)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreatePortRef
+	ENDIF
+
+
+; *  OTGetDeviceTypeFromPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTDeviceType OTGetDeviceTypeFromPortRef(OTPortRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetDeviceTypeFromPortRef
+	ENDIF
+
+
+; *  OTGetBusTypeFromPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt16 OTGetBusTypeFromPortRef(OTPortRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetBusTypeFromPortRef
+	ENDIF
+
+
+; *  OTGetSlotFromPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTSlotNumber OTGetSlotFromPortRef(OTPortRef ref, UInt16 *other)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetSlotFromPortRef
+	ENDIF
+
+
+; *  OTSetDeviceTypeInPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTPortRef OTSetDeviceTypeInPortRef(OTPortRef ref, OTDeviceType devType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetDeviceTypeInPortRef
+	ENDIF
+
+
+; *  OTSetBusTypeInPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTPortRef OTSetBusTypeInPortRef(OTPortRef ref, OTBusType busType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetBusTypeInPortRef
+	ENDIF
+
+;  Name length definitions for various fields in OTPortRecord.
+
+
+kMaxModuleNameLength			EQU		31					; max length of a STREAMS module name
+kMaxModuleNameSize				EQU		32
+kMaxProviderNameLength			EQU		35					; providers allow 4 characters for minor number
+kMaxProviderNameSize			EQU		36
+kMaxSlotIDLength				EQU		7					; PCI slot names tend to be short
+kMaxSlotIDSize					EQU		8
+kMaxResourceInfoLength			EQU		31					; max length of a configuration helper name
+kMaxResourceInfoSize			EQU		32
+kMaxPortNameLength				EQU		35					; max size allowed to define a port
+kMaxPortNameSize				EQU		36
+
+;   Masks for the fPortFlags field of OTPortRecord
+;   If no bits are set, the port is currently inactive.
+
+
+
+
+kOTPortIsActive					EQU		$00000001
+kOTPortIsDisabled				EQU		$00000002
+kOTPortIsUnavailable			EQU		$00000004
+kOTPortIsOffline				EQU		$00000008
+;  Masks for the fInfoFlags field of the OTPortRecord.
+
+
+kOTPortIsDLPI					EQU		$00000001
+kOTPortIsTPI					EQU		$00000002
+kOTPortCanYield					EQU		$00000004			; will not be set until the port is used for the first time
+kOTPortCanArbitrate				EQU		$00000008			; will not be set until the port is used for the first time
+kOTPortIsTransitory				EQU		$00000010
+kOTPortAutoConnects				EQU		$00000020
+kOTPortIsSystemRegistered		EQU		$00004000
+kOTPortIsPrivate				EQU		$00008000
+kOTPortIsAlias					EQU		$80000000
+
+;   One OTPortRecord is created for each instance of a port.
+;   For Instance 'enet' identifies an ethernet port.
+;   A OTPortRecord for each ethernet card it finds, with an
+;   OTPortRef that will uniquely allow the driver to determine which
+;   port it is supposed to open on.
+
+
+
+OTPortRecord			RECORD 0
+fRef					 ds.l	1				; offset: $0 (0)
+fPortFlags				 ds.l	1				; offset: $4 (4)
+fInfoFlags				 ds.l	1				; offset: $8 (8)
+fCapabilities			 ds.l	1				; offset: $C (12)
+fNumChildPorts			 ds.l	1				; offset: $10 (16)
+fChildPorts				 ds.l	1				; offset: $14 (20)
+fPortName				 ds.b	36				; offset: $18 (24)
+fModuleName				 ds.b	32				; offset: $3C (60)
+fSlotID					 ds.b	8				; offset: $5C (92)
+fResourceInfo			 ds.b	32				; offset: $64 (100)
+fReserved				 ds.b	164				; offset: $84 (132)
+sizeof					 EQU *					; size:   $128 (296)
+						ENDR
+
+;   Routines for finding, registering and unregistering ports.
+;   IMPORTANT:
+;   These routines have two versions, one for the client and one
+;   for the kernel.  Make sure you use and link with the right ones.
+
+
+	IF ¬ OTKERNEL THEN
+
+; *  OTGetIndexedPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTGetIndexedPort(OTPortRecord *portRecord, OTItemCount index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetIndexedPort
+	ENDIF
+
+;  Index through the ports in the system
+
+; *  OTFindPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTFindPort(OTPortRecord *portRecord, const char *portName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindPort
+	ENDIF
+
+;  Find an OTPortRecord for a port using it's name
+
+; *  OTFindPortByRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTFindPortByRef(OTPortRecord *portRecord, OTPortRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindPortByRef
+	ENDIF
+
+;  Find an OTPortRecord for a port using it's OTPortRef
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTRegisterPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTRegisterPort(OTPortRecord *portRecord, void *ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRegisterPort
+	ENDIF
+
+
+;   Register a port. The name the port was registered under is returned in
+;   the fPortName field.
+
+
+
+; *  OTUnregisterPort()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTUnregisterPort(const char *portName, void **ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnregisterPort
+	ENDIF
+
+
+;   Unregister the port with the given name (If you re-register the
+;   port, it may get a different name - use OTChangePortState if
+;   that is not desireable).  Since a single OTPortRef can be registered
+;   with several names, the API needs to use the portName rather than
+;   the OTPortRef to disambiguate.
+
+
+
+; *  OTChangePortState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus OTChangePortState(OTPortRef portRef, OTEventCode theChange, OTResult why)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTChangePortState
+	ENDIF
+
+;  Change the state of the port.
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+;  ***** Data Buffers *****
+
+;   TNetbuf is the basic structure used to pass data back and forth
+;   between the Open Transport protocols and their clients
+
+
+
+TNetbuf					RECORD 0
+maxlen					 ds.l	1				; offset: $0 (0)
+len						 ds.l	1				; offset: $4 (4)
+buf						 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+;   Some rarely used low-level routines in this file take a strbuf
+;   as a parameter.  This is the raw streams equivalent of a TNetbuf.
+;   The key difference is that the maxlen and len fields are signed,
+;   which allows you to specify extra operations by providing a
+;   negative value.
+
+
+
+
+strbuf					RECORD 0
+maxlen					 ds.l	1				; offset: $0 (0)		;  max buffer length 
+len						 ds.l	1				; offset: $4 (4)		;  length of data 
+buf						 ds.l	1				; offset: $8 (8)		;  pointer to buffer 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+;   OTData is used in a TNetbuf or netbuf to send
+;   non-contiguous data.  Set the 'len' field of the netbuf to the
+;   constant kNetbufDataIsOTData to signal that the 'buf' field of the
+;   netbuf actually points to one of these structures instead of a
+;   memory buffer.
+
+
+OTData					RECORD 0
+fNext					 ds.l	1				; offset: $0 (0)
+fData					 ds.l	1				; offset: $4 (4)
+fLen					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+
+kNetbufDataIsOTData				EQU		$FFFFFFFE
+
+
+;   OTBuffer is used for no-copy receives.  When receiving, you can
+;   set the receive length to kOTNetbufDataIsOTBufferStar and then
+;   pass the address of an OTBuffer* as the receive buffer.  OT will
+;   fill it out to point to a chain of OTBuffers.
+;   When you are done with it, you must call the OTReleaseBuffer function.
+;   For best performance, you need to call OTReleaseBuffer quickly.
+;   Only data netbufs may use this - no netbufs for addresses or options, or the like.
+;   Any OTBuffer returned to you by OT is read only!
+;   The astute will notice that this has a high correlation with the
+;   STREAMS msgb data type.  The fields are commented with their
+;   corresponding msgb field name.
+
+
+
+OTBuffer				RECORD 0
+fLink					 ds.l	1				; offset: $0 (0)		;  b_next
+fLink2					 ds.l	1				; offset: $4 (4)		;  b_prev
+fNext					 ds.l	1				; offset: $8 (8)		;  b_cont
+fData					 ds.l	1				; offset: $C (12)		;  b_rptr
+fLen					 ds.l	1				; offset: $10 (16)		;  b_wptr
+fSave					 ds.l	1				; offset: $14 (20)		;  b_datap
+fBand					 ds.b	1				; offset: $18 (24)		;  b_band
+fType					 ds.b	1				; offset: $19 (25)		;  b_pad1
+fPad1					 ds.b	1				; offset: $1A (26)
+fFlags					 ds.b	1				; offset: $1B (27)		;  b_flag
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+kOTNetbufDataIsOTBufferStar		EQU		$FFFFFFFD
+
+;   OTBufferInfo is used with OTReadBuffer to keep track of where you
+;   are in the buffer, since the OTBuffer is "read-only".
+
+
+
+;   To initialise this structure, copy the code from the OTInitBuffer macro in
+;   the C header file.
+
+
+OTBufferInfo			RECORD 0
+fBuffer					 ds.l	1				; offset: $0 (0)
+fOffset					 ds.l	1				; offset: $4 (4)
+fPad					 ds.b	1				; offset: $8 (8)
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+
+;   If the endpoint supports "raw mode" (the T_CAN_SUPPORT_MDATA bit will
+;   be set in the TEndpointInfo::flags field), then you specify the
+;   raw mode packet by putting the kOTNetbufIsRawMode value in
+;   the udata.addr.len field when calling OTSndUData and also set the
+;   udata.opt.len, udata.opt.buf, and udata.addr.buf fields to 0.
+
+
+
+
+kOTNetbufIsRawMode				EQU		$FFFFFFFF
+
+;   ***** Standard XTI Parameter Types *****
+;   These structures are all used as parameters to the standard
+;   XTI routines.
+
+
+
+
+;   TBind holds binding information for calls to
+;   OTGetProtAddress, OTResolveAddress and OTBind.
+
+
+
+TBind					RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+qlen					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;   TDiscon is passed to RcvDisconnect to find out additional information
+;   about the disconnect.
+
+
+TDiscon					RECORD 0
+udata					 ds		TNetbuf			; offset: $0 (0)
+reason					 ds.l	1				; offset: $C (12)
+sequence				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+;   TCall holds information about a connection and is a parameter to
+;   OTConnect, OTRcvConnect, OTListen, OTAccept, and OTSndDisconnect.
+
+
+TCall					RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+udata					 ds		TNetbuf			; offset: $18 (24)
+sequence				 ds.l	1				; offset: $24 (36)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+;  TUnitData describes a datagram in calls to OTSndUData and OTRcvUData.
+TUnitData				RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+udata					 ds		TNetbuf			; offset: $18 (24)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+
+;   TUDErr is used to get information about a datagram error using
+;   OTRcvUDErr.
+
+
+TUDErr					RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+error					 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  TOptMgmt is passed to the OTOptionManagement call to read or set protocol
+TOptMgmt				RECORD 0
+opt						 ds		TNetbuf			; offset: $0 (0)
+flags					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;   ***** Transactional XTI Parameter Types *****
+;   These structures are all used as parameters to the OT's
+;   XTI-like routines for transaction protocols.
+
+
+
+;   TRequest is passed to OTSndRequest and OTRcvRequest that contains the information
+;   about the request.
+
+
+
+TRequest				RECORD 0
+data					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+sequence				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+;  TReply is passed to OTSndReply to send a reply to an incoming request.
+TReply					RECORD 0
+data					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+sequence				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+;   TUnitRequest is passed to OTSndURequest and OTRcvURequest that contains
+;   the information about the request.
+
+
+TUnitRequest			RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+opt						 ds		TNetbuf			; offset: $C (12)
+udata					 ds		TNetbuf			; offset: $18 (24)
+sequence				 ds.l	1				; offset: $24 (36)
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+;  TUnitReply is passed to OTSndUReply to send a reply to an incoming request.
+TUnitReply				RECORD 0
+opt						 ds		TNetbuf			; offset: $0 (0)
+udata					 ds		TNetbuf			; offset: $C (12)
+sequence				 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+;   ***** Mapper Parameter Types *****
+;   These structures are all used as parameters to the OT's
+;   mapper routines.
+
+
+;  TRegisterRequest holds the name to register in a call to OTRegisterName.
+
+TRegisterRequest		RECORD 0
+name					 ds		TNetbuf			; offset: $0 (0)
+addr					 ds		TNetbuf			; offset: $C (12)
+flags					 ds.l	1				; offset: $18 (24)
+sizeof					 EQU *					; size:   $1C (28)
+						ENDR
+
+;   TRegisterReply returns information about the registered name in a call
+;   to OTRegisterName.
+
+
+TRegisterReply			RECORD 0
+addr					 ds		TNetbuf			; offset: $0 (0)
+nameid					 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+;  TLookupRequest holds the name to look up in a call to OTLookupName.
+TLookupRequest			RECORD 0
+name					 ds		TNetbuf			; offset: $0 (0)
+addr					 ds		TNetbuf			; offset: $C (12)
+maxcnt					 ds.l	1				; offset: $18 (24)
+timeout					 ds.l	1				; offset: $1C (28)
+flags					 ds.l	1				; offset: $20 (32)
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+
+;   TLookupReply returns information about the found names after a call
+;   to OTLookupName.
+
+
+TLookupReply			RECORD 0
+names					 ds		TNetbuf			; offset: $0 (0)
+rspcount				 ds.l	1				; offset: $C (12)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+
+;   TLookupBuffer describes the contents of the names buffer pointed
+;   to by the TLookupReply.
+
+
+TLookupBuffer			RECORD 0
+fAddressLength			 ds.w	1				; offset: $0 (0)
+fNameLength				 ds.w	1				; offset: $2 (2)
+fAddressBuffer			 ds.b	1				; offset: $4 (4) <-- really an array of length one
+						 ORG 6
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+;  ***** Initializing and Shutting Down Open Transport *****
+
+	IF ¬ OTKERNEL THEN
+
+
+
+;   For Carbon the InitOpenTransport interface has changed so it takes a flags parameter 
+;   and returns a client context pointer.
+;   The flag passed to indicates whether OT should be initialized for application use or for some other target
+;   (for example, plugins that run in an application context but not the application itself.)
+;   Applications that are not interested in the value of the client context pointer may pass NULL
+;   as outClientContext -- they will pass NULL to other routines that take a OTClientContextPtr.
+
+
+
+; typedef UInt32						OTInitializationFlags
+kInitOTForApplicationMask		EQU		1
+kInitOTForExtensionMask			EQU		2
+
+; *  InitOpenTransportInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus InitOpenTransportInContext(OTInitializationFlags flags, OTClientContextPtr *outClientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitOpenTransportInContext
+	ENDIF
+
+
+
+;   Under Carbon, CloseOpenTransport takes a client context pointer.  Applications may pass NULL
+;   after calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  CloseOpenTransportInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void CloseOpenTransportInContext(OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseOpenTransportInContext
+	ENDIF
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  InitOpenTransport()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus InitOpenTransport(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitOpenTransport
+	ENDIF
+
+
+; *  InitOpenTransportUtilities()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus InitOpenTransportUtilities(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION InitOpenTransportUtilities
+	ENDIF
+
+
+; *  CloseOpenTransport()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void CloseOpenTransport(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseOpenTransport
+	ENDIF
+
+
+; *  OTRegisterAsClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTRegisterAsClient(OTClientName name, OTNotifyUPP proc)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRegisterAsClient
+	ENDIF
+
+
+;   This registers yourself as a client for any miscellaneous Open Transport
+;   notifications that come along. CloseOpenTransport will automatically do
+;   an OTUnregisterAsClient, if you have not already done so.
+
+
+
+; *  OTUnregisterAsClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTUnregisterAsClient(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnregisterAsClient
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTRegisterAsClientInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRegisterAsClientInContext(OTClientName name, OTNotifyUPP proc, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRegisterAsClientInContext
+	ENDIF
+
+
+; *  OTUnregisterAsClientInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTUnregisterAsClientInContext(OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnregisterAsClientInContext
+	ENDIF
+
+	IF OTCARBONAPPLICATION THEN
+;  The following macro may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+	ENDIF
+;  ***** Tasking Model *****
+
+;   OTEnterInterrupt/OTLeaveInterrupt are normally used within the kernel to
+;   tell Open Transport we're at hardware interrupt time.  Clients can also
+;   them to do the same.
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTEnterInterrupt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTEnterInterrupt(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTEnterInterrupt
+	ENDIF
+
+
+; *  OTLeaveInterrupt()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void OTLeaveInterrupt(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLeaveInterrupt
+	ENDIF
+
+
+; *  OTIsAtInterruptLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTIsAtInterruptLevel(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsAtInterruptLevel
+	ENDIF
+
+
+; *  OTCanLoadLibraries()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern Boolean OTCanLoadLibraries(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCanLoadLibraries
+	ENDIF
+
+
+;   All OT task callbacks use the same prototype, shown below.
+;   This is only a UPP for CFM-68K clients.
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  NewOTProcessUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeOTProcessUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeOTProcessUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+	IF ¬ OTKERNEL THEN
+
+;   Under Carbon, OTCreateDeferredTask takes a client context pointer.  Applications may pass NULL
+;   after calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  OTCreateDeferredTaskInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long OTCreateDeferredTaskInContext(OTProcessUPP upp, void *arg, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateDeferredTaskInContext
+	ENDIF
+
+	ENDIF
+
+;   OT deferred tasks are often more convenience that standard Mac OS
+;   although they have no significant advantages beyond convenience.
+
+
+
+; typedef long 							OTDeferredTaskRef
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCreateDeferredTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTDeferredTaskRef OTCreateDeferredTask(OTProcessUPP proc, void *arg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateDeferredTask
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTScheduleDeferredTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTScheduleDeferredTask(OTDeferredTaskRef dtCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTScheduleDeferredTask
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTScheduleInterruptTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTScheduleInterruptTask(OTDeferredTaskRef dtCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTScheduleInterruptTask
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTDestroyDeferredTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTDestroyDeferredTask(OTDeferredTaskRef dtCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDestroyDeferredTask
+	ENDIF
+
+	IF OTCARBONAPPLICATION THEN
+;  The following macro may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+	IF ¬ OTKERNEL THEN
+
+;   OT system tasks allow you to schedule a procedure to be called
+;   at system task time.  Potentially useful, but it relies on someone
+;   calling SystemTask (or WaitNextEvent, which calls SystemTask).
+;   Not available to kernel code because relying on system task time
+;   to make progress is likely to result in deadlocks.
+
+
+; typedef long 							OTSystemTaskRef
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCreateSystemTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTSystemTaskRef OTCreateSystemTask(OTProcessUPP proc, void *arg)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateSystemTask
+	ENDIF
+
+
+; *  OTDestroySystemTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTDestroySystemTask(OTSystemTaskRef stCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDestroySystemTask
+	ENDIF
+
+
+; *  OTScheduleSystemTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTScheduleSystemTask(OTSystemTaskRef stCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTScheduleSystemTask
+	ENDIF
+
+
+; *  OTCancelSystemTask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal Boolean OTCancelSystemTask(OTSystemTaskRef stCookie)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelSystemTask
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTCanMakeSyncCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTCanMakeSyncCall(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCanMakeSyncCall
+	ENDIF
+
+	ENDIF
+;  ***** Interface to Providers *****
+	IF ¬ OTKERNEL THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTAsyncOpenProvider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTAsyncOpenProvider(OTConfigurationRef cfig, OTOpenFlags flags, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncOpenProvider
+	ENDIF
+
+
+; *  OTOpenProvider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ProviderRef OTOpenProvider(OTConfigurationRef cfig, OTOpenFlags flags, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenProvider
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTCloseProvider()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTCloseProvider(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloseProvider
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTTransferProviderOwnership()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal ProviderRef OTTransferProviderOwnership(ProviderRef ref, OTClient prevOwner, OSStatus *errPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTTransferProviderOwnership
+	ENDIF
+
+
+; *  OTWhoAmI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTClient OTWhoAmI(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTWhoAmI
+	ENDIF
+
+
+; *  OTGetProviderPortRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTPortRef OTGetProviderPortRef(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetProviderPortRef
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTIoctl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal SInt32 OTIoctl(ProviderRef ref, UInt32 cmd, void *data)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIoctl
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTGetMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTGetMessage(ProviderRef ref, strbuf *ctlbuf, strbuf *databuf, OTFlags *flagsPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetMessage
+	ENDIF
+
+
+; *  OTGetPriorityMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTGetPriorityMessage(ProviderRef ref, strbuf *ctlbuf, strbuf *databuf, OTBand *bandPtr, OTFlags *flagsPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetPriorityMessage
+	ENDIF
+
+
+; *  OTPutMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTPutMessage(ProviderRef ref, const strbuf *ctlbuf, const strbuf *databuf, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTPutMessage
+	ENDIF
+
+
+; *  OTPutPriorityMessage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTPutPriorityMessage(ProviderRef ref, const strbuf *ctlbuf, const strbuf *databuf, OTBand band, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTPutPriorityMessage
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTSetAsynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSetAsynchronous(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetAsynchronous
+	ENDIF
+
+
+; *  OTSetSynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSetSynchronous(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetSynchronous
+	ENDIF
+
+
+; *  OTIsSynchronous()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTIsSynchronous(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsSynchronous
+	ENDIF
+
+
+; *  OTSetBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSetBlocking(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetBlocking
+	ENDIF
+
+
+; *  OTSetNonBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSetNonBlocking(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSetNonBlocking
+	ENDIF
+
+
+; *  OTIsBlocking()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTIsBlocking(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsBlocking
+	ENDIF
+
+
+; *  OTInstallNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTInstallNotifier(ProviderRef ref, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTInstallNotifier
+	ENDIF
+
+
+; *  OTUseSyncIdleEvents()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTUseSyncIdleEvents(ProviderRef ref, Boolean useEvents)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUseSyncIdleEvents
+	ENDIF
+
+
+; *  OTRemoveNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTRemoveNotifier(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveNotifier
+	ENDIF
+
+
+; *  OTLeaveNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTLeaveNotifier(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLeaveNotifier
+	ENDIF
+
+
+; *  OTEnterNotifier()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTEnterNotifier(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTEnterNotifier
+	ENDIF
+
+
+; *  OTAckSends()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTAckSends(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAckSends
+	ENDIF
+
+
+; *  OTDontAckSends()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTDontAckSends(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDontAckSends
+	ENDIF
+
+
+; *  OTIsAckingSends()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean OTIsAckingSends(ProviderRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsAckingSends
+	ENDIF
+
+
+; *  OTCancelSynchronousCalls()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTCancelSynchronousCalls(ProviderRef ref, OSStatus err)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelSynchronousCalls
+	ENDIF
+
+	ENDIF
+;  ***** Interface to Endpoints *****
+	IF ¬ OTKERNEL THEN
+;  Open/Close
+
+;   Under Carbon, the OpenEndpoint routines take a client context pointer.  Applications may pass NULL after
+;   calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  OTOpenEndpointInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal EndpointRef OTOpenEndpointInContext(OTConfigurationRef config, OTOpenFlags oflag, TEndpointInfo *info, OSStatus *err, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenEndpointInContext
+	ENDIF
+
+
+; *  OTAsyncOpenEndpointInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTAsyncOpenEndpointInContext(OTConfigurationRef config, OTOpenFlags oflag, TEndpointInfo *info, OTNotifyUPP upp, void *contextPtr, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncOpenEndpointInContext
+	ENDIF
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTOpenEndpoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal EndpointRef OTOpenEndpoint(OTConfigurationRef cfig, OTOpenFlags oflag, TEndpointInfo *info, OSStatus *err)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenEndpoint
+	ENDIF
+
+
+; *  OTAsyncOpenEndpoint()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTAsyncOpenEndpoint(OTConfigurationRef cfig, OTOpenFlags oflag, TEndpointInfo *info, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncOpenEndpoint
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OTCARBONAPPLICATION THEN
+;  The following macros may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+;  Misc Information
+
+
+; *  OTGetEndpointInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTGetEndpointInfo(EndpointRef ref, TEndpointInfo *info)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetEndpointInfo
+	ENDIF
+
+
+; *  OTGetEndpointState()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTGetEndpointState(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetEndpointState
+	ENDIF
+
+
+; *  OTLook()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTLook(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLook
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTSync()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OTResult OTSync(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSync
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTCountDataBytes()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTCountDataBytes(EndpointRef ref, OTByteCount *countPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCountDataBytes
+	ENDIF
+
+
+; *  OTGetProtAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTGetProtAddress(EndpointRef ref, TBind *boundAddr, TBind *peerAddr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetProtAddress
+	ENDIF
+
+
+; *  OTResolveAddress()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTResolveAddress(EndpointRef ref, TBind *reqAddr, TBind *retAddr, OTTimeout timeOut)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTResolveAddress
+	ENDIF
+
+;  Allocating structures
+
+
+;   Note:
+;   In general, Apple recommends that you avoid the OTAlloc call because
+;   using it extensively causes your program to allocate and deallocate
+;   many memory blocks, with each extra memory allocation costing time.
+
+
+
+
+;   Under Carbon, OTAlloc takes a client context pointer.  Applications may pass NULL after
+;   calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  OTAllocInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void *OTAllocInContext(EndpointRef ref, OTStructType structType, UInt32 fields, OSStatus *err, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAllocInContext
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTAlloc()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void *OTAlloc(EndpointRef ref, OTStructType structType, OTFieldsType fields, OSStatus *err)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAlloc
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OTCARBONAPPLICATION THEN
+;  The following macro may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+
+; *  OTFree()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTFree(void *ptr, OTStructType structType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFree
+	ENDIF
+
+;  Option management
+
+;  It looks simple enough...
+
+
+; *  OTOptionManagement()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTOptionManagement(EndpointRef ref, TOptMgmt *req, TOptMgmt *ret)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOptionManagement
+	ENDIF
+
+;  ... but then the hidden complexity emerges.
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTCreateOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCreateOptions(const char *endPtName, char **strPtr, TNetbuf *buf)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateOptions
+	ENDIF
+
+
+; *  OTCreateOptionString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCreateOptionString(const char *endPtName, TOption **opt, void *bufEnd, char *str, OTByteCount stringSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateOptionString
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTNextOption()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTNextOption(UInt8 *buffer, UInt32 buflen, TOption **prevOptPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTNextOption
+	ENDIF
+
+
+; *  OTFindOption()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal TOption *OTFindOption(UInt8 *buffer, UInt32 buflen, OTXTILevel level, OTXTIName name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindOption
+	ENDIF
+
+;  Bind/Unbind
+
+
+; *  OTBind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTBind(EndpointRef ref, TBind *reqAddr, TBind *retAddr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTBind
+	ENDIF
+
+
+; *  OTUnbind()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTUnbind(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTUnbind
+	ENDIF
+
+;  Connection creation/tear-down
+
+
+; *  OTConnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTConnect(EndpointRef ref, TCall *sndCall, TCall *rcvCall)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTConnect
+	ENDIF
+
+
+; *  OTRcvConnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRcvConnect(EndpointRef ref, TCall *call)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvConnect
+	ENDIF
+
+
+; *  OTListen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTListen(EndpointRef ref, TCall *call)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTListen
+	ENDIF
+
+
+; *  OTAccept()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTAccept(EndpointRef listener, EndpointRef worker, TCall *call)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAccept
+	ENDIF
+
+
+; *  OTSndDisconnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSndDisconnect(EndpointRef ref, TCall *call)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndDisconnect
+	ENDIF
+
+
+; *  OTSndOrderlyDisconnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSndOrderlyDisconnect(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndOrderlyDisconnect
+	ENDIF
+
+
+; *  OTRcvDisconnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRcvDisconnect(EndpointRef ref, TDiscon *discon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvDisconnect
+	ENDIF
+
+
+; *  OTRcvOrderlyDisconnect()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRcvOrderlyDisconnect(EndpointRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvOrderlyDisconnect
+	ENDIF
+
+;  Connection-oriented send/receive
+
+
+; *  OTRcv()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTRcv(EndpointRef ref, void *buf, OTByteCount nbytes, OTFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcv
+	ENDIF
+
+
+; *  OTSnd()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTResult OTSnd(EndpointRef ref, void *buf, OTByteCount nbytes, OTFlags flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSnd
+	ENDIF
+
+;  Connectionless send/receive
+
+
+; *  OTSndUData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTSndUData(EndpointRef ref, TUnitData *udata)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndUData
+	ENDIF
+
+
+; *  OTRcvUData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRcvUData(EndpointRef ref, TUnitData *udata, OTFlags *flags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvUData
+	ENDIF
+
+
+; *  OTRcvUDErr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRcvUDErr(EndpointRef ref, TUDErr *uderr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvUDErr
+	ENDIF
+
+;  Connection-oriented transactions
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTSndRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTSndRequest(EndpointRef ref, TRequest *req, OTFlags reqFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndRequest
+	ENDIF
+
+
+; *  OTRcvReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTRcvReply(EndpointRef ref, TReply *reply, OTFlags *replyFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvReply
+	ENDIF
+
+
+; *  OTSndReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTSndReply(EndpointRef ref, TReply *reply, OTFlags replyFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndReply
+	ENDIF
+
+
+; *  OTRcvRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTRcvRequest(EndpointRef ref, TRequest *req, OTFlags *reqFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvRequest
+	ENDIF
+
+
+; *  OTCancelRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCancelRequest(EndpointRef ref, OTSequence sequence)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelRequest
+	ENDIF
+
+
+; *  OTCancelReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCancelReply(EndpointRef ref, OTSequence sequence)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelReply
+	ENDIF
+
+;  Connectionless transactions
+
+
+; *  OTSndURequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTSndURequest(EndpointRef ref, TUnitRequest *req, OTFlags reqFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndURequest
+	ENDIF
+
+
+; *  OTRcvUReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTRcvUReply(EndpointRef ref, TUnitReply *reply, OTFlags *replyFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvUReply
+	ENDIF
+
+
+; *  OTSndUReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTSndUReply(EndpointRef ref, TUnitReply *reply, OTFlags replyFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSndUReply
+	ENDIF
+
+
+; *  OTRcvURequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTRcvURequest(EndpointRef ref, TUnitRequest *req, OTFlags *reqFlags)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRcvURequest
+	ENDIF
+
+
+; *  OTCancelURequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCancelURequest(EndpointRef ref, OTSequence seq)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelURequest
+	ENDIF
+
+
+; *  OTCancelUReply()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTCancelUReply(EndpointRef ref, OTSequence seq)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCancelUReply
+	ENDIF
+
+;  Interface to Mappers
+
+
+
+;   Under Carbon, the OpenMapper routines take a client context pointer.  Applications may pass NULL after
+;   calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTAsyncOpenMapperInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTAsyncOpenMapperInContext(OTConfigurationRef config, OTOpenFlags oflag, OTNotifyUPP upp, void *contextPtr, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncOpenMapperInContext
+	ENDIF
+
+
+; *  OTOpenMapperInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal MapperRef OTOpenMapperInContext(OTConfigurationRef config, OTOpenFlags oflag, OSStatus *err, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenMapperInContext
+	ENDIF
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTAsyncOpenMapper()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSStatus OTAsyncOpenMapper(OTConfigurationRef cfig, OTOpenFlags oflag, OTNotifyUPP proc, void *contextPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAsyncOpenMapper
+	ENDIF
+
+
+; *  OTOpenMapper()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal MapperRef OTOpenMapper(OTConfigurationRef cfig, OTOpenFlags oflag, OSStatus *err)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTOpenMapper
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF OTCARBONAPPLICATION THEN
+;  The following macros may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+
+; *  OTRegisterName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTRegisterName(MapperRef ref, TRegisterRequest *req, TRegisterReply *reply)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRegisterName
+	ENDIF
+
+
+; *  OTDeleteName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTDeleteName(MapperRef ref, TNetbuf *name)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDeleteName
+	ENDIF
+
+
+; *  OTDeleteNameByID()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTDeleteNameByID(MapperRef ref, OTNameID nameID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDeleteNameByID
+	ENDIF
+
+
+; *  OTLookupName()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus OTLookupName(MapperRef ref, TLookupRequest *req, TLookupReply *reply)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLookupName
+	ENDIF
+
+;  Basic configuration manipulation
+
+
+; *  OTCreateConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTConfigurationRef OTCreateConfiguration(const char *path)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCreateConfiguration
+	ENDIF
+
+
+; *  OTCloneConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OTConfigurationRef OTCloneConfiguration(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCloneConfiguration
+	ENDIF
+
+
+; *  OTDestroyConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTDestroyConfiguration(OTConfigurationRef cfig)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDestroyConfiguration
+	ENDIF
+
+
+;   This file defines a very limited set of operations
+;   on a configuration.  "OpenTransportClient.h" extends this with extra
+;   operations used by protocol stacks but not typically needed by clients.
+
+
+
+;  Interrupt-safe memory allocators
+
+
+;   Under Carbon, OTAllocMem takes a client context pointer.  Applications may pass NULL after
+;   calling InitOpenTransport(kInitOTForApplicationMask, ...).  Non-applications must always pass a
+;   valid client context.
+
+
+
+; *  OTAllocMemInContext()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *OTAllocMemInContext(OTByteCount size, OTClientContextPtr clientContext)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAllocMemInContext
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  OTAllocMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void *OTAllocMem(OTByteCount size)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAllocMem
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  OTFreeMem()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientUtilLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTFreeMem(void *mem)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFreeMem
+	ENDIF
+
+	IF OTCARBONAPPLICATION THEN
+;  The following macros may be used by applications only.
+	ENDIF	; OTCARBONAPPLICATION
+;  Miscellaneous and Generic Routines
+
+
+;   Neither of these routines should be necessary to the correct
+;   operation of an OT program.  If you're calling them, think again.
+
+
+
+
+; *  OTDelay()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTDelay(UInt32 seconds)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDelay
+	ENDIF
+
+
+; *  OTIdle()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTClientLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void OTIdle(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIdle
+	ENDIF
+
+	ENDIF
+
+;   ***** Open Transport Utility Routines *****
+;   All of these routines are available to both client and kernel.
+
+
+;  Memory and String Routines
+
+
+;   These are preferable, especially in the kernel case, to the standard
+;   C equivalents because they don't require you to link with StdCLib.
+
+
+
+
+; *  OTMemcpy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTMemcpy(void *dest, const void *src, OTByteCount nBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTMemcpy
+	ENDIF
+
+
+; *  OTMemcmp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTMemcmp(const void *mem1, const void *mem2, OTByteCount nBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTMemcmp
+	ENDIF
+
+
+; *  OTMemmove()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTMemmove(void *dest, const void *src, OTByteCount nBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTMemmove
+	ENDIF
+
+
+; *  OTMemzero()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTMemzero(void *dest, OTByteCount nBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTMemzero
+	ENDIF
+
+
+; *  OTMemset()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTMemset(void *dest, OTUInt8Param toSet, OTByteCount nBytes)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTMemset
+	ENDIF
+
+
+; *  OTStrLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTByteCount OTStrLength(const char *str)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStrLength
+	ENDIF
+
+
+; *  OTStrCopy()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTStrCopy(char *dest, const char *src)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStrCopy
+	ENDIF
+
+
+; *  OTStrCat()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTStrCat(char *dest, const char *src)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStrCat
+	ENDIF
+
+
+; *  OTStrEqual()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTStrEqual(const char *src1, const char *src2)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTStrEqual
+	ENDIF
+
+;  Timer Utilities
+
+
+;   OTGetTimeStamp returns time in "tick" numbers, stored in 64 bits.
+;   This timestamp can be used as a base number for calculating elapsed 
+;   time.
+;   OTSubtractTimeStamps returns a pointer to the "result" parameter.
+;    
+;   OTGetClockTimeInSecs returns time since Open Transport was initialized
+;   in seconds.
+
+
+
+OTTimeStamp				RECORD 0
+f						 ds		UnsignedWide
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+
+; *  OTGetTimeStamp()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTGetTimeStamp(OTTimeStamp *currentTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetTimeStamp
+	ENDIF
+
+
+; *  OTSubtractTimeStamps()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTTimeStamp *OTSubtractTimeStamps(OTTimeStamp *result, OTTimeStamp *startTime, OTTimeStamp *endEnd)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTSubtractTimeStamps
+	ENDIF
+
+
+; *  OTTimeStampInMilliseconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 OTTimeStampInMilliseconds(OTTimeStamp *delta)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTTimeStampInMilliseconds
+	ENDIF
+
+
+; *  OTTimeStampInMicroseconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 OTTimeStampInMicroseconds(OTTimeStamp *delta)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTTimeStampInMicroseconds
+	ENDIF
+
+
+; *  OTElapsedMilliseconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 OTElapsedMilliseconds(OTTimeStamp *startTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTElapsedMilliseconds
+	ENDIF
+
+
+; *  OTElapsedMicroseconds()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 OTElapsedMicroseconds(OTTimeStamp *startTime)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTElapsedMicroseconds
+	ENDIF
+
+
+; *  OTGetClockTimeInSecs()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern UInt32 OTGetClockTimeInSecs(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetClockTimeInSecs
+	ENDIF
+
+;  ***** OT Link Element *****
+
+
+;   When using OT linked lists, all pointers to other elements are
+;   represented by the OTLink structure.  When operating on link
+;   lists, you always pass in the address of the OTLink on which
+;   list elements are chained.
+
+
+
+OTLink					RECORD 0
+fNext					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  OTLIFO
+
+
+;   These are functions to implement a LIFO list that is interrupt-safe.
+;   The only function which is not is OTReverseList.  Normally, you create
+;   a LIFO list, populate it at interrupt time, and then use OTLIFOStealList
+;   to atomically remove the list, and OTReverseList to flip the list so that
+;   it is a FIFO list, which tends to be more useful.
+
+
+
+OTLIFO					RECORD 0
+fHead					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+;   This function atomically enqueues the link onto the
+;   front of the list.
+
+
+
+; *  OTLIFOEnqueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTLIFOEnqueue(OTLIFO *list, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLIFOEnqueue
+	ENDIF
+
+
+;   This function atomically dequeues the first element
+;   on the list.
+
+
+
+; *  OTLIFODequeue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTLIFODequeue(OTLIFO *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLIFODequeue
+	ENDIF
+
+
+;   This function atomically empties the list and returns a
+;   pointer to the first element on the list.
+
+
+
+; *  OTLIFOStealList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTLIFOStealList(OTLIFO *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTLIFOStealList
+	ENDIF
+
+
+;   This function reverses a list that was stolen by
+;   OTLIFOStealList.  It is NOT atomic.  It returns the
+;   new starting list.
+
+
+
+; *  OTReverseList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTReverseList(OTLink *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTReverseList
+	ENDIF
+
+;  OTList
+
+
+;   An OTList is a non-interrupt-safe list, but has more features than the
+;   OTLIFO list. It is a standard singly-linked list.
+
+
+
+
+;   The following is the prototype for a list element comparison function,
+;   which returns true if the element described by linkToCheck matches
+;   the client criteria (typically held in ref).
+;   This is only a UPP for CFM-68K clients.
+
+
+
+
+; *  NewOTListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeOTListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeOTListSearchUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+OTList					RECORD 0
+fHead					 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+;  Add the link to the list at the front
+
+; *  OTAddFirst()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTAddFirst(OTList *list, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAddFirst
+	ENDIF
+
+;  Add the link to the list at the end
+
+; *  OTAddLast()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTAddLast(OTList *list, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAddLast
+	ENDIF
+
+;  Remove the first link from the list
+
+; *  OTRemoveFirst()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTRemoveFirst(OTList *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveFirst
+	ENDIF
+
+;  Remove the last link from the list
+
+; *  OTRemoveLast()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTRemoveLast(OTList *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveLast
+	ENDIF
+
+;  Return the first link from the list
+
+; *  OTGetFirst()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTGetFirst(OTList *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetFirst
+	ENDIF
+
+;  Return the last link from the list
+
+; *  OTGetLast()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTGetLast(OTList *list)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetLast
+	ENDIF
+
+;  Return true if the link is present in the list
+
+; *  OTIsInList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTIsInList(OTList *list, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTIsInList
+	ENDIF
+
+
+;   Find a link in the list which matches the search criteria
+;   established by the search proc and the refPtr.  This is done
+;   by calling the search proc, passing it the refPtr and each
+;   link in the list, until the search proc returns true.
+;   NULL is returned if the search proc never returned true.
+
+
+
+; *  OTFindLink()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTFindLink(OTList *list, OTListSearchUPP proc, const void *ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindLink
+	ENDIF
+
+;  Remove the specified link from the list, returning true if it was found
+
+; *  OTRemoveLink()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTRemoveLink(OTList *list, OTLink *link)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTRemoveLink
+	ENDIF
+
+;  Similar to OTFindLink, but it also removes it from the list.
+
+; *  OTFindAndRemoveLink()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTFindAndRemoveLink(OTList *list, OTListSearchUPP proc, const void *ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTFindAndRemoveLink
+	ENDIF
+
+;  Return the "index"th link in the list
+
+; *  OTGetIndexedLink()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern OTLink *OTGetIndexedLink(OTList *list, OTItemCount index)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTGetIndexedLink
+	ENDIF
+
+;  OTEnqueue/OTDequeue
+
+
+;   These routines are atomic, mighty weird, and generally not
+;   worth the complexity.  If you need atomic list operations,
+;   use OTLIFO instead.
+
+
+
+
+;   This function puts "object" on the listHead, and places the
+;   previous value at listHead into the pointer at "object" plus
+;   linkOffset.
+
+
+
+; *  OTEnqueue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void OTEnqueue(void **listHead, void *object, OTByteCount linkOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTEnqueue
+	ENDIF
+
+
+;   This function returns the head object of the list, and places
+;   the pointer at "object" + linkOffset into the listHead
+
+
+
+; *  OTDequeue()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern void *OTDequeue(void **listHead, OTByteCount linkOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTDequeue
+	ENDIF
+
+;  Atomic Operations
+
+
+;   Note:
+;   The Bit operations return the previous value of the bit (0 or non-zero).
+;   The memory pointed to must be a single byte and only bits 0 through 7 are
+;   valid.  Bit 0 corresponds to a mask of 0x01, and Bit 7 to a mask of 0x80.
+
+
+
+
+;   WARNING!
+;   void* and UInt32 locations MUST be on 4-byte boundaries.
+;   UInt16 locations must not cross a 4-byte boundary.
+
+
+
+
+; *  OTAtomicSetBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTAtomicSetBit(UInt8 *bytePtr, OTByteCount bitNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	bytePtr         => A0
+		;	bitNumber       => D0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTAtomicSetBit
+			dc.w            	$01D0
+			dc.w            	$56C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicSetBit
+	ENDIF
+
+
+;   bset.b d0,(a0)
+;   sne d0
+;   moveq #1,d1
+;   and.l d1,d0
+
+
+
+; *  OTAtomicClearBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTAtomicClearBit(UInt8 *bytePtr, OTByteCount bitNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	bytePtr         => A0
+		;	bitNumber       => D0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTAtomicClearBit
+			dc.w            	$0190
+			dc.w            	$56C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicClearBit
+	ENDIF
+
+
+;   bclr.b d0,(a0)
+;   sne d0
+;   moveq #1,d1
+;   and.l d1,d0
+
+
+
+; *  OTAtomicTestBit()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTAtomicTestBit(UInt8 *bytePtr, OTByteCount bitNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	bytePtr         => A0
+		;	bitNumber       => D0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTAtomicTestBit
+			dc.w            	$0110
+			dc.w            	$56C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicTestBit
+	ENDIF
+
+
+;   btst.b d0,(a0)
+;   sne d0 */
+;   moveq #1,d1
+;   and.l d1,d0 */
+
+
+
+; *  OTCompareAndSwapPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTCompareAndSwapPtr(void *oldValue, void *newValue, void **dest)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	oldValue        => D0
+		;	newValue        => D1
+		;	dest            => A0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTCompareAndSwapPtr
+			dc.w            	$0ED0
+			dc.w            	$0040
+			dc.w            	$57C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCompareAndSwapPtr
+	ENDIF
+
+
+;   cas.l    d0,d1,(a0)  */
+;   seq      d0          */
+;   moveq #1,d1; and.l d1,d0 */
+
+
+
+; *  OTCompareAndSwap32()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTCompareAndSwap32(UInt32 oldValue, UInt32 newValue, UInt32 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	oldValue        => D0
+		;	newValue        => D1
+		;	dest            => A0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTCompareAndSwap32
+			dc.w            	$0ED0
+			dc.w            	$0040
+			dc.w            	$57C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCompareAndSwap32
+	ENDIF
+
+
+;   cas.l    d0,d1,(a0)  */
+;   seq      d0          */
+;   moveq #1,d1; and.l d1,d0 */
+
+
+
+; *  OTCompareAndSwap16()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTCompareAndSwap16(UInt32 oldValue, UInt32 newValue, UInt16 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	oldValue        => D0
+		;	newValue        => D1
+		;	dest            => A0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTCompareAndSwap16
+			dc.w            	$0CD0
+			dc.w            	$0040
+			dc.w            	$57C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCompareAndSwap16
+	ENDIF
+
+
+;   cas.w    d0,d1,(a0)  */
+;   seq      d0          */
+;   moveq #1,d1; and.l d1,d0 */
+
+
+
+; *  OTCompareAndSwap8()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern Boolean OTCompareAndSwap8(UInt32 oldValue, UInt32 newValue, UInt8 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	oldValue        => D0
+		;	newValue        => D1
+		;	dest            => A0
+		; returns:
+		;	Boolean         <= D0
+		Macro
+		_OTCompareAndSwap8
+			dc.w            	$0AD0
+			dc.w            	$0040
+			dc.w            	$57C0
+			dc.w            	$7201
+			dc.w            	$C081
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTCompareAndSwap8
+	ENDIF
+
+
+;   cas.b    d0,d1,(a0)  */
+;   seq      d0          */
+;   moveq #1,d1; and.l d1,d0 */
+
+
+
+; *  OTAtomicAdd32()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern SInt32 OTAtomicAdd32(SInt32 toAdd, SInt32 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		; parameters:
+		;	toAdd           => D0
+		;	dest            => A0
+		; returns:
+		;	SInt32          <= D0
+		Macro
+		_OTAtomicAdd32
+			dc.w            	$2240
+			dc.w            	$2210
+			dc.w            	$2001
+			dc.w            	$D089
+			dc.w            	$0ED0
+			dc.w            	$0001
+			dc.w            	$66F4
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicAdd32
+	ENDIF
+
+
+;   move.l   d0,a1       */
+;   move.l   (a0),d1     */
+;   move.l   d1,d0       */
+;   add.l    a1,d0       */
+;   cas.l    d1,d0,(a0)  */
+;   bne.s    @1          */
+
+
+
+; *  OTAtomicAdd16()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern SInt16 OTAtomicAdd16(SInt32 toAdd, SInt16 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicAdd16
+	ENDIF
+
+;  Not used frequently enough to justify inlining.
+
+; *  OTAtomicAdd8()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in OTUtilityLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; extern SInt8 OTAtomicAdd8(SInt32 toAdd, SInt8 *dest)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OTAtomicAdd8
+	ENDIF
+
+;  Not used frequently enough to justify inlining.
+;  OTLock is just a convenience type with some convenient macros.
+
+; typedef UInt8 						OTLock
+
+
+	ENDIF ; __OPENTRANSPORT__ 
+

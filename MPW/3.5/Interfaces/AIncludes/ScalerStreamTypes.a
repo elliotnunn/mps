@@ -1,0 +1,98 @@
+;
+;    File:       ScalerStreamTypes.a
+;
+;    Contains:   Scaler streaming data structures and constants for OFA 1.x
+;
+;    Version:    Technology: Quickdraw GX 1.1
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1994-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__SCALERSTREAMTYPES__') = 'UNDEFINED' THEN
+__SCALERSTREAMTYPES__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__SFNTTYPES__') = 'UNDEFINED' THEN
+	include 'SFNTTypes.a'
+	ENDIF
+
+;  ScalerStream input/output types 
+
+cexec68K						EQU		$00000001
+truetypeStreamType				EQU		$00000001
+type1StreamType					EQU		$00000002
+type3StreamType					EQU		$00000004
+type42StreamType				EQU		$00000008
+type42GXStreamType				EQU		$00000010
+portableStreamType				EQU		$00000020
+flattenedStreamType				EQU		$00000040
+cidType2StreamType				EQU		$00000080
+cidType0StreamType				EQU		$00000100
+type1CFFStreamType				EQU		$00000200
+evenOddModifierStreamType		EQU		$00008000
+eexecBinaryModifierStreamType	EQU		$00010000			; encrypted portion of Type1Stream to be binary 
+unicodeMappingModifierStreamType EQU	$00020000			; include glyph ID to unicode mapping info for PDF 
+scalerSpecifcModifierMask		EQU		$0000F000			; for scaler's internal use 
+streamTypeModifierMask			EQU		$FFFFF000			; 16 bits for Apple, 4 bits for scaler 
+;  Possible streamed font formats 
+; typedef unsigned long 				scalerStreamTypeFlag
+
+
+downloadStreamAction			EQU		0					; Transmit the (possibly sparse) font data 
+asciiDownloadStreamAction		EQU		1					; Transmit font data to a 7-bit ASCII destination 
+fontSizeQueryStreamAction		EQU		2					; Estimate in-printer memory used if the font were downloaded 
+encodingOnlyStreamAction		EQU		3					; Transmit only the encoding for the font 
+prerequisiteQueryStreamAction	EQU		4					; Return a list of prerequisite items needed for the font 
+prerequisiteItemStreamAction	EQU		5					; Transmit a specified prerequisite item 
+variationQueryStreamAction		EQU		6					; Return information regarding support for variation streaming 
+variationPSOperatorStreamAction	EQU		7					; Transmit Postscript code necessary to effect variation of a font 
+; typedef long 							scalerStreamAction
+
+
+selectAllVariations				EQU		-1					; Special variationCount value meaning include all variation data 
+scalerPrerequisiteItem	RECORD 0
+enumeration				 ds.l	1				; offset: $0 (0)		;  Shorthand tag identifying the item 
+size					 ds.l	1				; offset: $4 (4)		;  Worst case vm in printer item requires 
+name					 ds.b	1				; offset: $8 (8) <-- really an array of length one ;  Name to be used by the client when emitting the item (Pascal string) 
+						 ORG 10
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+scalerStream			RECORD 0
+streamRefCon			 ds.l	1				; offset: $0 (0)		;  <- private reference for client 
+targetVersion			 ds.l	1				; offset: $4 (4)		;  <- e.g. Postscript printer name (C string) 
+types					 ds.l	1				; offset: $8 (8)		;  <->    Data stream formats desired/supplied 
+action					 ds.l	1				; offset: $C (12)		;  <-     What action to take 
+memorySize				 ds.l	1				; offset: $10 (16)		;  -> Worst case memory use (vm) in printer or as sfnt 
+variationCount			 ds.l	1				; offset: $14 (20)		;  <- The number of variations, or selectAllVariations 
+variations				 ds.l	1				; offset: $18 (24)		;  <- A pointer to an array of the variations (gxFontVariation) 
+;  Normal font streaming information
+encoding				 ds.l	1				; offset: $1C (28)		;  <- Intention is * unsigned short[256] 
+glyphBits				 ds.l	1				; offset: $20 (32)		;  <->    Bitvector: a bit for each glyph, 1 = desired/supplied 
+name					 ds.l	1				; offset: $24 (36)		;  <->    The printer font name to use/used (C string) 
+;  Used to obtain a list of prerequisites from the scaler
+						 ORG 28
+size					 ds.l	1				; offset: $1C (28)		;  ->     Size of the prereq. list in bytes (0 indicates no prerequisites)
+list					 ds.l	1				; offset: $20 (32)		;  <- Pointer to client block to hold list (nil = list size query only) 
+						 ORG 28
+prerequisiteItem		 ds.l	1				; offset: $1C (28)		;  <-     Enumeration value for the prerequisite item to be streamed.
+						 ORG 28
+variationQueryResult	 ds.l	1				; offset: $1C (28)		;  -> Output from the variationQueryStreamAction 
+						 ORG 40
+sizeof					 EQU *					; size:   $28 (40)
+						ENDR
+scalerStreamData		RECORD 0
+hexFlag					 ds.l	1				; offset: $0 (0)		;  Indicates that the data is to be interpreted as hex, versus binary 
+byteCount				 ds.l	1				; offset: $4 (4)		;  Number of bytes in the data being streamed 
+data					 ds.l	1				; offset: $8 (8)		;  Pointer to the data being streamed 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+	ENDIF ; __SCALERSTREAMTYPES__ 
+

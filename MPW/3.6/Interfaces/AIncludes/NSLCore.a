@@ -1,0 +1,977 @@
+;
+;    File:       NSLCore.a
+;
+;    Contains:   Interface to API for using the NSL Manager
+;
+;    Version:    Technology: Mac OS X
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__NSLCORE__') = 'UNDEFINED' THEN
+__NSLCORE__ SET 1
+
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__THREADS__') = 'UNDEFINED' THEN
+	include 'Threads.a'
+	ENDIF
+
+
+kNSLMinSystemVersion			EQU		$0900				; equivalent to 9.0
+kNSLMinOTVersion				EQU		$0130				; equivalent to 1.3
+
+kNSLDefaultListSize				EQU		256					; default list size for service and protocol lists
+
+kNSLURLDelimiter				EQU		44					; delimits URL's within memory buffers
+
+kNSLNoContext					EQU		0					; the default context for NSLError structs
+NSLError				RECORD 0
+theErr					 ds.l	1				; offset: $0 (0)
+theContext				 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NSLError *				NSLErrorPtr
+
+
+															; Constants to use with NSLPrepareRequest
+															; kNSLDuplicateSearchInProgress is not strictly an error.  The client is free to ignore
+															; this result, and nothing bad will happen if it does.  It is
+															; informational only.
+kNSLDuplicateSearchInProgress	EQU		100
+kNSLUserCanceled				EQU		-128				; User hit cancel from the NSLStandardGetURL dialog 
+															; Invalid enumeratorRef  
+kNSLInvalidEnumeratorRef		EQU		0					; this is not an error; it is the equiv to a NULL ptr
+
+; typedef UInt16						NSLSearchState
+															; State codes for notifiers.
+kNSLSearchStateBufferFull		EQU		1
+kNSLSearchStateOnGoing			EQU		2
+kNSLSearchStateComplete			EQU		3
+kNSLSearchStateStalled			EQU		4
+kNSLWaitingForContinue			EQU		5
+
+; typedef UInt32						NSLEventCode
+															; Event codes
+kNSLServicesLookupDataEvent		EQU		6
+kNSLNeighborhoodLookupDataEvent	EQU		7
+kNSLNewDataEvent				EQU		8
+kNSLContinueLookupEvent			EQU		9
+
+; typedef UInt32 						NSLClientRef
+
+; typedef UInt32 						NSLRequestRef
+
+; typedef UInt32 						NSLOneBasedIndex
+
+; typedef char *						NSLPath
+
+; typedef char *						NSLServiceType
+
+; typedef Handle 						NSLServicesList
+
+; typedef unsigned char *				NSLNeighborhood
+
+
+;   cstring which is a comma delimited list of protocols which can be used to
+;   create a NSLProtocolList internally
+
+
+;  the async information block for client<->manager interaction
+NSLClientAsyncInfo		RECORD 0
+clientContextPtr		 ds.l	1				; offset: $0 (0)		;  set by the client for its own use
+mgrContextPtr			 ds.l	1				; offset: $4 (4)		;  set by NSL mgr; ptr to request object ptr
+resultBuffer			 ds.l	1				; offset: $8 (8)
+bufferLen				 ds.l	1				; offset: $C (12)
+maxBufferSize			 ds.l	1				; offset: $10 (16)
+startTime				 ds.l	1				; offset: $14 (20)		;  when the search starts, to use with maxSearchTime to determine time-out condition
+intStartTime			 ds.l	1				; offset: $18 (24)		;  used with alertInterval
+maxSearchTime			 ds.l	1				; offset: $1C (28)		;  total time for search, in ticks (0 == no time limit)
+alertInterval			 ds.l	1				; offset: $20 (32)		;  call client's notifier or return, every this many ticks ( 0 == don't use this param)
+totalItems				 ds.l	1				; offset: $24 (36)		;  total number of tuples currently in buffer
+alertThreshold			 ds.l	1				; offset: $28 (40)		;  call client's notifier or return, every this many items found ( 0 == don't use this param)
+searchState				 ds.w	1				; offset: $2C (44)
+searchResult			 ds		NSLError		; offset: $2E (46)
+searchDataType			 ds.l	1				; offset: $36 (54)		;  this is a data type code which allows the client's asyncNotifier to properly
+;  handle the data in resultBuffer.
+sizeof					 EQU *					; size:   $3A (58)
+						ENDR
+; typedef struct NSLClientAsyncInfo *	NSLClientAsyncInfoPtr
+
+;  the async information block plugin<->manager interaction
+NSLPluginAsyncInfo		RECORD 0
+mgrContextPtr			 ds.l	1				; offset: $0 (0)		;  set by NSL mgr; ptr to request object ptr
+pluginContextPtr		 ds.l	1				; offset: $4 (4)		;  set/used by individual plugins
+pluginPtr				 ds.l	1				; offset: $8 (8)		;  ptr to the plugin object waiting for continue lookup call
+resultBuffer			 ds.l	1				; offset: $C (12)		;  set by plugin to point at data
+bufferLen				 ds.l	1				; offset: $10 (16)
+maxBufferSize			 ds.l	1				; offset: $14 (20)
+maxSearchTime			 ds.l	1				; offset: $18 (24)		;  total time for search, in ticks (0 == no time limit)
+reserved1				 ds.l	1				; offset: $1C (28)
+reserved2				 ds.l	1				; offset: $20 (32)
+reserved3				 ds.l	1				; offset: $24 (36)
+clientRef				 ds.l	1				; offset: $28 (40)
+requestRef				 ds.l	1				; offset: $2C (44)
+searchState				 ds.w	1				; offset: $30 (48)
+searchResult			 ds.l	1				; offset: $32 (50)
+sizeof					 EQU *					; size:   $36 (54)
+						ENDR
+; typedef struct NSLPluginAsyncInfo *	NSLPluginAsyncInfoPtr
+
+;  the manager asynchronous notifier routine.
+;  the client asynchronous notifier routine.
+
+; *  NewNSLMgrNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewNSLClientNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeNSLMgrNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeNSLClientNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeNSLMgrNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeNSLClientNotifyUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+;   this struct is a format for dealing with our internal data representation.  Typed data will be contiguous chunk of
+;   memory, with the first 4 bytes being a data "descriptor".
+
+
+NSLTypedData			RECORD 0
+dataType				 ds.l	1				; offset: $0 (0)
+lengthOfData			 ds.l	1				; offset: $4 (4)
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NSLTypedData *			NSLTypedDataPtr
+
+
+;   This is just a header at the beginning of a handle that stores our list of service types.
+;   Each service type is a pascal string, so each service type starts after the end of the
+;   previous one.
+
+
+NSLServicesListHeader	RECORD 0
+numServices				 ds.l	1				; offset: $0 (0)
+logicalLen				 ds.l	1				; offset: $4 (4)		;  length of all usable data in handle
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+; typedef struct NSLServicesListHeader * NSLServicesListHeaderPtr
+
+;  some defs for common protocols
+
+;   general information from a plug-in.  Includes supported protocols, data types and services,
+;   as well as an info/comment string describing the function of the plug-in in human-readable
+;   form.  The offsets point to the beginning of each list of data returned, and the protocol
+;   data offset is the startOfData member of the struct
+
+
+NSLPluginData			RECORD 0
+reserved1				 ds.l	1				; offset: $0 (0)
+reserved2				 ds.l	1				; offset: $4 (4)
+reserved3				 ds.l	1				; offset: $8 (8)
+supportsRegistration	 ds.b	1				; offset: $C (12)
+isPurgeable				 ds.b	1				; offset: $D (13)
+totalLen				 ds.w	1				; offset: $E (14)		;  length of everything, including header
+dataTypeOffset			 ds.w	1				; offset: $10 (16)
+serviceListOffset		 ds.w	1				; offset: $12 (18)
+protocolListOffset		 ds.w	1				; offset: $14 (20)
+commentStringOffset		 ds.w	1				; offset: $16 (22)
+;  protocol data is first on the list
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+; typedef struct NSLPluginData *		NSLPluginDataPtr
+
+
+;  -----------------------------------------------------------------------------
+;    Finding out if the library is present and getting its version
+;  -----------------------------------------------------------------------------
+
+
+
+
+; *  NSLLibraryVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal UInt32 NSLLibraryVersion(void)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLLibraryVersion
+	ENDIF
+
+
+; 
+;    NSLLibraryPresent() is a macro available only in C/C++.  
+;
+
+
+;  -----------------------------------------------------------------------------
+;    High level API calls: the following two calls are ALL an application needs
+;    to register/deregister its service.
+;    If you use these, you don't need to make any of the other calls to NSLAPI 
+;    (including NSLOpenNavigationAPI) 
+;  -----------------------------------------------------------------------------
+
+
+
+;  <--- error code from registration 
+;  ---> urlToRegister is a null terminated url that has only legal characters defined for URLs.  Use HexEncodeText to encode
+;           portions of the url that have illegal characters 
+;  ---> neighborhoodToRegisterIn is an optional parameter for explicitly defining a neighborhood to register in.
+;            If parameter is NULL, then the plugins will determine where to register the service 
+
+; *  NSLStandardRegisterURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLStandardRegisterURL(NSLPath urlToRegister, NSLNeighborhood neighborhoodToRegisterIn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLStandardRegisterURL
+	ENDIF
+
+;  <--- error code from registration 
+;  ---> urlToRegister is a null terminated url that has only legal characters defined for URLs.  Use HexEncodeText to encode
+;           portions of the url that have illegal characters 
+;  ---> neighborhoodToDeregisterIn is an optional parameter for explicitly defining a neighborhood to register in.
+;            If parameter is NULL, then the plugins will determine where to register the service 
+
+; *  NSLStandardDeregisterURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLStandardDeregisterURL(NSLPath urlToDeregister, NSLNeighborhood neighborhoodToDeregisterIn)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLStandardDeregisterURL
+	ENDIF
+
+
+; -----------------------------------------------------------------------------
+
+
+; *  NSLHexEncodeText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLHexEncodeText(const char *rawText, UInt16 rawTextLen, char *newTextBuffer, UInt16 *newTextBufferLen, Boolean *textChanged)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLHexEncodeText
+	ENDIF
+
+
+; *  NSLHexDecodeText()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLHexDecodeText(const char *encodedText, UInt16 encodedTextLen, char *decodedTextBuffer, UInt16 *decodedTextBufferLen, Boolean *textChanged)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLHexDecodeText
+	ENDIF
+
+
+;  -----------------------------------------------------------------------------
+;    Basic API Utility calls: sufficient to create, and parse data structures
+;  -----------------------------------------------------------------------------
+
+
+
+
+; *  NSLMakeNewServicesList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLServicesList NSLMakeNewServicesList(const char *initialServiceList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLMakeNewServicesList
+	ENDIF
+
+
+; *  NSLAddServiceToServicesList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLAddServiceToServicesList(NSLServicesList serviceList, NSLServiceType serviceType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLAddServiceToServicesList
+	ENDIF
+
+
+; *  NSLDisposeServicesList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void NSLDisposeServicesList(NSLServicesList theList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLDisposeServicesList
+	ENDIF
+
+; 
+;    The name reflects the name of the Neighborhood, i.e. "apple.com." or "AppleTalk Zone One".
+;    The protocolList is a comma delimited list of protocols that the Neighborhood might exist in.
+;    If the user passes in NULL, then all protocols will be queried.  The result must be disposed
+;    of by the user by calling NSLFreeNeighborhood.
+;
+
+
+; *  NSLMakeNewNeighborhood()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLNeighborhood NSLMakeNewNeighborhood(const char *name, const char *protocolList)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLMakeNewNeighborhood
+	ENDIF
+
+;  creates an exact copy of an existing neighborhood 
+
+; *  NSLCopyNeighborhood()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLNeighborhood NSLCopyNeighborhood(NSLNeighborhood neighborhood)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLCopyNeighborhood
+	ENDIF
+
+
+; *  NSLFreeNeighborhood()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLNeighborhood NSLFreeNeighborhood(NSLNeighborhood neighborhood)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLFreeNeighborhood
+	ENDIF
+
+
+; *  NSLGetNameFromNeighborhood()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void NSLGetNameFromNeighborhood(NSLNeighborhood neighborhood, char **name, long *length)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetNameFromNeighborhood
+	ENDIF
+
+
+;   create a block of formatted data, pointed to by newDataPtr.  This will be used
+;   in calls (typically request-related calls) for plug-ins that handle the NSL data type.
+
+
+
+; *  NSLMakeServicesRequestPB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLMakeServicesRequestPB(NSLServicesList serviceList, NSLTypedDataPtr *newDataPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLMakeServicesRequestPB
+	ENDIF
+
+;  releases any storage created with MakeXXXPB calls, associated with TypedData.
+
+; *  NSLFreeTypedDataPtr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLTypedDataPtr NSLFreeTypedDataPtr(NSLTypedDataPtr nslTypeData)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLFreeTypedDataPtr
+	ENDIF
+
+
+;   utility function that returns whether a url was found, a pointer to the beginning
+;   of the url, and the length of the URL.
+
+
+
+; *  NSLGetNextUrl()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean NSLGetNextUrl(NSLClientAsyncInfoPtr infoPtr, char **urlPtr, long *urlLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetNextUrl
+	ENDIF
+
+
+;   utility function that returns whether a Neighborhood was found, a pointer to the beginning
+;   of the Neighborhood, and the length of the Neighborhood.
+
+
+
+; *  NSLGetNextNeighborhood()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean NSLGetNextNeighborhood(NSLClientAsyncInfoPtr infoPtr, NSLNeighborhood *neighborhood, long *neighborhoodLength)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetNextNeighborhood
+	ENDIF
+
+
+
+;   NSLErrorToString:    convert a numeric error code to its string equivalent.  Caller must
+;                        have allocated sufficient space to store both strings.  (Max 255 chars each)
+;                                
+;                        The errorString parameter will return a textual explanation of what is wrong,
+;                        while the solutionString returns a possible solution to get around the problem
+
+
+
+
+; *  NSLErrorToString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLErrorToString(NSLError theErr, char *errorString, char *solutionString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLErrorToString
+	ENDIF
+
+
+
+;  -----------------------------------------------------------------------------
+;    Basic API calls: sufficient to create simple requests, and receive answers
+;  -----------------------------------------------------------------------------
+
+
+
+
+; *  NSLOpenNavigationAPI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLOpenNavigationAPI(NSLClientRef *newRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLOpenNavigationAPI
+	ENDIF
+
+
+; *  NSLCloseNavigationAPI()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void NSLCloseNavigationAPI(NSLClientRef theClient)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLCloseNavigationAPI
+	ENDIF
+
+
+;    NSLPrepareRequest:  creates an NSLRequestRef, sets up some internal data
+;    notifier is an NSLClientNotifyUPP that will be called when data is available, when the lookup has
+;    completed, or if an error occurs.  When the notifier is called, the cookie will be the NSLRequestRef.
+;    If notifier is NULL, then the NSLManager will assume that the request is made synchronously.  This
+;    should only be used while in a separate thread, so that the client app can still process events, etc.
+;    
+;    contextPtr is a void* which is passed as the contextPtr argument when the notifier is called.  
+;    
+;    upon exit:
+;    1) ref will contain a pointer to a NSLRequestRef which must be passed to all other functions
+;    which require a NSLRequestRef.
+;    2) infoPtr will point to a newly created ClientAsycnInfoPtr which will be disposed by the manager when the search is completed
+;    NOTE: Only one search can be running at a time per clientRef.
+
+
+
+
+; *  NSLPrepareRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLPrepareRequest(NSLClientNotifyUPP notifier, void *contextPtr, NSLClientRef theClient, NSLRequestRef *ref, char *bufPtr, unsigned long bufLen, NSLClientAsyncInfoPtr *infoPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLPrepareRequest
+	ENDIF
+
+
+
+;   NSLStartNeighborhoodLookup: looking for neighborhoods associated with or neighboring a particular neighborhood
+;    Passing in NULL for neighborhood will generate a list of a default neighborhood(s)
+;   
+
+
+
+
+; *  NSLStartNeighborhoodLookup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLStartNeighborhoodLookup(NSLRequestRef ref, NSLNeighborhood neighborhood, NSLClientAsyncInfo *asyncInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLStartNeighborhoodLookup
+	ENDIF
+
+
+;   NSLStartServicesLookup: starts looking for entities if the specified type in the specified neighborhood
+;   
+
+
+
+
+; *  NSLStartServicesLookup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLStartServicesLookup(NSLRequestRef ref, NSLNeighborhood neighborhood, NSLTypedDataPtr requestData, NSLClientAsyncInfo *asyncInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLStartServicesLookup
+	ENDIF
+
+
+;  NSLContinueLookup:  continues a paused/outstanding lookup
+
+
+; *  NSLContinueLookup()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLContinueLookup(NSLClientAsyncInfo *asyncInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLContinueLookup
+	ENDIF
+
+
+;  NSLCancelRequest: cancels an ongoing search
+
+
+; *  NSLCancelRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLCancelRequest(NSLRequestRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLCancelRequest
+	ENDIF
+
+
+;   NSLDeleteRequest: deletes info associated with this ref.  The ClientAsyncInfoPtr will no longer be valid
+;    This must be called when the client is no longer using this requestRef.
+
+
+
+
+; *  NSLDeleteRequest()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal NSLError NSLDeleteRequest(NSLRequestRef ref)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLDeleteRequest
+	ENDIF
+
+
+
+;  -----------------------------------------------------------------------------
+;   Utility API calls: use these accessors to manipulate NSL's typed data
+;  -----------------------------------------------------------------------------
+
+
+
+;  NSLParseServicesRequestPB provides the inverse of NSLMakeRequestPB, filling out the offsets found within newDataPtr
+;  <--- returns an OSStatus if any errors occur parsing the data 
+;  <--- newDataPtr is the construct passed to the plugin 
+;  ---> serviceListPtr is the address of a pointer which will be set to point at the portion of the newDataPtr that holds the serviceList to be searched 
+;  ---> serviceListLen is the length of the serviceListPtr data pointed to by serviceListPtr 
+
+; *  NSLParseServicesRequestPB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLParseServicesRequestPB(NSLTypedDataPtr newDataPtr, char **serviceListPtr, UInt16 *serviceListLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLParseServicesRequestPB
+	ENDIF
+
+
+;  NSLParseServiceRegistrationPB provides for breaking apart a registration request from a client to a plugin 
+;  <--- returns an OSStatus if any errors occur parsing the data 
+;  <--- newDataPtr is the construct passed to the plugin 
+;  ---> neighborhoodPtr gets set to point at the portion of the newDataPtr that contains the neighborhood 
+;  ---> neighborhoodLen is the length of the neighborhood pointed to by neighborhoodPtr 
+;  ---> urlPtr is the address of a pointer which will be set to point at the portion of the newDataPtr that holds the url to be registered 
+;  ---> urlLen is the length of the url data pointed to by urlPtr 
+
+; *  NSLParseServiceRegistrationPB()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLParseServiceRegistrationPB(NSLTypedDataPtr newDataPtr, NSLNeighborhood *neighborhoodPtr, UInt16 *neighborhoodLen, char **urlPtr, UInt16 *urlLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLParseServiceRegistrationPB
+	ENDIF
+
+;  NSLGetErrorStringsFromResource is obsolete in X.  It will ignore the fileSpecPtr 
+;  and errorResID parameters and return the standard error strings. 
+;  NSLGetErrorStringsFromResource makes a basic assumption: 
+;  errorString and solutionString both point to valid memory of at least 256 bytes! 
+;  <--- returns an OSStatus if any errors occur 
+;  ---> theErr is an OSStatus to be matched against a resource list of errors 
+;  ---> fileSpecPtr is a FSSpecPtr to the resource containing the list of errors 
+;  ---> errorResID is the resourceID of the NSLI resource of the list of errors 
+;  <--> errorString is a pointer to valid memory of at least 256 bytes which will be filled out by the error portion of the error string 
+;  <--> solutionString is a pointer to valid memory of at least 256 bytes which will be filled out by the solution portion of the error string 
+
+; *  NSLGetErrorStringsFromResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLGetErrorStringsFromResource(OSStatus theErr, const FSSpec *fileSpecPtr, SInt16 errorResID, char *errorString, char *solutionString)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetErrorStringsFromResource
+	ENDIF
+
+;  <--- Returns true if given service is in the given service list 
+;  ---> serviceList is a valid NSLServicesList containing information about services to be searched 
+;  ---> svcToFind is an NSLServiceType of a particular service to check if it is in the serviceList 
+
+; *  NSLServiceIsInServiceList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal Boolean NSLServiceIsInServiceList(NSLServicesList serviceList, NSLServiceType svcToFind)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLServiceIsInServiceList
+	ENDIF
+
+;  <--- returns an OSStatus if any errors occur parsing the data 
+;  ---> svcString is the address of a pointer which will be set to point at the portion of theURL that holds the serviceType of theURL 
+;  ---> svcLen is the length of the serviceType pointed to by svcString 
+
+; *  NSLGetServiceFromURL()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSStatus NSLGetServiceFromURL(char *theURL, char **svcString, UInt16 *svcLen)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetServiceFromURL
+	ENDIF
+
+;  <--- returns the length of a Neighborhood data structure 
+;  ---> neighborhood is a valid NSLNeighborhood 
+
+; *  NSLGetNeighborhoodLength()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long NSLGetNeighborhoodLength(NSLNeighborhood neighborhood)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLGetNeighborhoodLength
+	ENDIF
+
+
+;  -------------------------------------------------------------------------------------
+;   Utility API calls: use these routines to separate plugin threads from client threads
+;  -------------------------------------------------------------------------------------
+
+
+
+;  this routine works the same as the Thread manager's routine NewThread, except 
+;  that the thread is added to the NSL manager's thread list. 
+
+; *  NSLNewThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NSLNewThread(ThreadStyle threadStyle, ThreadEntryProcPtr threadEntry, void *threadParam, Size stackSize, ThreadOptions options, void **threadResult, ThreadID *threadMade)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLNewThread
+	ENDIF
+
+;  this routine works the same as the Thread manager's routine DisposeThread, except 
+;  that the thread is removed from the NSL manager's thread list. 
+
+; *  NSLDisposeThread()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in NSLPPCLib 1.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr NSLDisposeThread(ThreadID threadToDump, void *threadResult, Boolean recycleThread)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NSLDisposeThread
+	ENDIF
+
+
+	IF OLDROUTINENAMES THEN
+ClientAsyncInfo			RECORD 0
+f						 ds		NSLClientAsyncInfo
+sizeof					 EQU *					; size:   $3A (58)
+						ENDR
+
+
+PluginAsyncInfo			RECORD 0
+f						 ds		NSLPluginAsyncInfo
+sizeof					 EQU *					; size:   $36 (54)
+						ENDR
+
+
+TypedData				RECORD 0
+f						 ds		NSLTypedData
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+
+PluginData				RECORD 0
+f						 ds		NSLPluginData
+sizeof					 EQU *					; size:   $18 (24)
+						ENDR
+
+
+; typedef NSLClientAsyncInfoPtr 		ClientAsyncInfoPtr
+
+; typedef NSLPluginAsyncInfoPtr 		PluginAsyncInfoPtr
+
+; typedef NSLTypedDataPtr 				TypedDataPtr
+
+; typedef NSLPluginDataPtr 				PluginDataPtr
+
+	ENDIF	; OLDROUTINENAMES
+	ENDIF ; __NSLCORE__ 
+

@@ -1,0 +1,90 @@
+*  PPCBrowser Hack to switch Macs
+*  This is half of a patch/filter interception that causes the PPC browser
+* to 'auto-change' from Zone to another if it can't find a machine in
+* that zone running the prgram you want (in this case, Kibitz)
+* NOTE!  Obviously, this is an Hack, and relies on some things not
+* changing (like the ID of the browser dialog)
+
+* I'm doing way too much checking in this code, but I like it.
+
+		case	on
+
+	include 'traps.a'
+	include 'sysequ.a'
+
+
+	import (DoModalFilter):CODE
+	import (OurParamBlock):DATA
+; Oour record structure
+myParamBlock RECORD 0
+activeFlag ds.w 1
+dialogUp	ds.w 1	
+scrollActive	ds.w 1  ; scroll active flag
+tickCounter	ds.l 1	; tick count
+oldGND	ds.l 1  ; old GND
+oldMD 	ds.l 1  ; old MD
+oldDD	ds.l 1  ; old DisposDialog
+oldFilter ds.l 1  ; original filter 
+ ENDR
+ppcBrowserDialogID equ -5856
+
+; check here to see if the dialog coming up is the PPC Browser
+GNDPatch proc export
+	with myParamBlock
+ lea OurParamBlock(A5),a0
+
+; so, the stack frame looks like this right now
+;   word ID
+;	long storage
+;   long Behind
+;   long returnAddress
+; which means that we want to do this....
+
+ cmp.w #ppcBrowserDialogID,12(SP)   ; see if the PPC browser dialog is coming up
+ bne.s @notPPC
+; it is, set our flag
+ move.w #-1,dialogUp(A0)
+; and move the initial tickCount into our block
+ move.l Ticks,D0
+ add.l #600,D0		; set first increment for 10 seconds
+ move.l D0,tickCounter(A0)
+@notPPC	move.l oldGND(a0),A0	; get old address
+ jmp (A0)		; go hither
+ endp
+OurModalFilter proc export
+	with myParamBlock
+
+ jsr DoModalFilter
+ lea OurParamBlock(A5),a0
+ move.l oldFilter(A0),a0
+ jmp (A0)
+ endp
+MDPatch proc export
+	with myParamBlock
+; double check to see if we are really active
+ lea OurParamBlock(A5),a0
+ tst.w dialogUp(A0)
+ beq.s @notUp
+
+; replace the installed filter with our special filter
+ move.l 8(SP),oldFilter(A0)
+ 
+ lea OurModalFilter,A1
+ move.l A1,8(SP)
+@notUp	move.l oldMD(a0),A0	; get old address
+ jmp (A0)
+ endp
+DDPatch proc export
+	with myParamBlock
+ lea OurParamBlock(A5),A0
+ move.w #0,dialogUp(A0)
+	move.l oldDD(a0),A0	; get old address
+ jmp (A0)
+	endp
+
+
+
+
+
+
+	end

@@ -1,0 +1,65 @@
+#	UpdateToolServerEnv
+#
+#	Copyright Apple Computer, Inc. 1991
+#	All Rights Reserved.
+#
+#	This script will send your variable definitions, your exports and your
+#	aliases to the ToolServer.  It also changes the working directory of
+# 	the ToolServer to match that of the sending shell's directory.
+#
+#	Usage - UpdateToolServerEnv 
+#
+#	It uses shell variables {WhichToolServer} and {ToolServerRedirection}
+#	which are defined in the Userstartup•ToolServer script.
+
+#	This script should not be run using the "execute" command.  This script
+#	will unset some variables, but we only want to do this locally.
+# 	The following checks if we were run using the "execute" command.  The
+#	"execute" command doesn't pass any parameters to the script.
+
+if {0} == ""
+	echo "### This script should not be run with the execute command." >> dev:stderr
+	exit 3
+end
+
+#	Save some state we need later.
+
+set	saveTemp	 "{TempFolder}"
+
+# 	We temporarily unset the following predefined variables that are 
+# 	initialized by the application during startup.  We may not want to
+# 	change ToolServer's settings for these if ToolServer is running
+# 	on a different machine.  
+
+Unset Boot
+Unset SystemFolder
+Unset MPWVersion
+Unset ShellDirectory
+Unset PrefsFolder
+Unset TempFolder
+Unset MPW 
+Unset AIncludes
+Unset Libraries
+Unset CIncludes
+Unset CLibraries 
+Unset PInterfaces 
+Unset PLibraries
+Unset RIncludes 
+Unset Commands 
+
+#
+#	Send definitions to a temp file.
+#
+
+Set tempfilename "{saveTemp}updateEnvTemp"
+Echo > "{tempfilename}"
+Set 	>> "{tempfilename}"
+Export  >> "{tempfilename}"
+Alias 	>> "{tempfilename}"
+Echo "Directory `Directory`" >> "{tempfilename}"
+
+# 	Send the file to ToolServer.  Uses variables {WhichToolServer} 
+#	and {ToolServerRedirection}, defined by Userstartup•ToolServer.
+
+rshell < "{tempfilename}" {WhichToolServer} {ToolServerRedirection}
+	

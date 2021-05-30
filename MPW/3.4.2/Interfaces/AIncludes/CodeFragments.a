@@ -1,0 +1,299 @@
+;
+;	File:		CodeFragments.a
+;
+;	Contains:	Code Fragment Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+__CODEFRAGMENTS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+;		include 'MixedMode.a'										;
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+;		include 'Finder.a'											;
+
+kCFragResourceType				EQU		'cfrg'
+kCFragResourceID				EQU		0
+kCFragLibraryFileType			EQU		'shlb'
+
+; typedef OSType 			CFragArchitecture
+
+kPowerPCCFragArch				EQU		'pwpc'
+kMotorola68KCFragArch			EQU		'm68k'
+kAnyCFragArch					EQU		$3F3F3F3F
+
+	IF GENERATINGPOWERPC  THEN
+kCurrentCFragArch				EQU		kPowerPCCFragArch
+
+	ENDIF
+	IF GENERATING68K  THEN
+kCurrentCFragArch				EQU		kMotorola68KCFragArch
+
+	ENDIF
+; typedef UInt32 			CFragConnectionID
+; typedef UInt32 			CFragClosureID
+; typedef UInt32 			CFragContextID
+; typedef UInt32 			CFragContainerID
+; typedef UInt32 			CFragLoadOptions
+
+kLoadCFrag						EQU		$01					; Try to use existing copy, load if not found.
+kFindCFrag						EQU		$02					; Try find an existing copy, don't load if not found.
+kNewCFragCopy					EQU		$05					; Load a new copy whether one already exists or not.
+kInplaceCFrag					EQU		$80					; Use data sections directly in the container.
+
+kUnresolvedCFragSymbolAddress	EQU		0
+
+; typedef UInt8 			CFragSymbolClass
+
+kCodeCFragSymbol				EQU		0
+kDataCFragSymbol				EQU		1
+kTVectorCFragSymbol				EQU		2
+kTOCCFragSymbol					EQU		3
+kGlueCFragSymbol				EQU		4
+
+; typedef UInt8 			CFragUsage
+
+kImportLibraryCFrag				EQU		0					; Standard CFM import library.
+kApplicationCFrag				EQU		1					; Macintosh application.
+kDropInAdditionCFrag			EQU		2					; Private extension to an application or library.
+
+kIsCompleteCFrag				EQU		0					; A "base" fragment, not an update.
+kFirstCFragUpdate				EQU		1					; The first update, others are numbered 2, 3, ...
+
+; typedef UInt8 			CFragLocatorKind
+
+kMemoryCFragLocator				EQU		0					; Container is already addressable.
+kDataForkCFragLocator			EQU		1					; Container is in a file's data fork.
+kResourceCFragLocator			EQU		2					; Container is in a file's resource fork.
+kByteStreamCFragLocator			EQU		3					; Container is in a given file fork as a byte stream.
+
+kCFragGoesToEOF					EQU		0
+
+CFragOldMemoryLocator 	RECORD	0
+address					 ds.l   1		; offset: $0 (0)
+length					 ds.l   1		; offset: $4 (4)
+inPlace					 ds.b   1		; offset: $8 (8)
+reserved3a				 ds.b   3		; offset: $9 (9)		; ! Do not use this!
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct CFragOldMemoryLocator  CFragOldMemoryLocator
+CFragHFSDiskFlatLocator RECORD	0
+fileSpec				 ds.l   1		; offset: $0 (0)
+offset					 ds.l   1		; offset: $4 (4)
+length					 ds.l   1		; offset: $8 (8)
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct CFragHFSDiskFlatLocator  CFragHFSDiskFlatLocator
+; ! This must have a file specification at the same offset as a data fork locator!
+CFragHFSSegmentedLocator RECORD	0
+fileSpec				 ds.l   1		; offset: $0 (0)
+rsrcType				 ds.l   1		; offset: $4 (4)
+rsrcID					 ds.w   1		; offset: $8 (8)
+reserved2a				 ds.w   1		; offset: $A (10)		; ! Do not use this!
+sizeof					 EQU *			; size:   $C (12)
+						ENDR
+
+; typedef struct CFragHFSSegmentedLocator  CFragHFSSegmentedLocator
+CFragHFSLocator 		RECORD	0
+where					 ds.l   1		; offset: $0 (0)		; Really of type CFragLocatorKind.
+onDisk					 ds     CFragHFSDiskFlatLocator ; offset: $4 (4) ; First so debugger shows this form.
+						 ORG 4
+inMem					 ds.l   3		; offset: $4 (4)
+						 ORG 4
+inSegs					 ds.l   3		; offset: $4 (4)
+						 ORG 16
+sizeof					 EQU *			; size:   $10 (16)
+						ENDR
+
+; typedef struct CFragHFSLocator  CFragHFSLocator
+; typedef CFragHFSLocator 	*CFragHFSLocatorPtr
+; -------------------------------------------------------------------------------------------
+; The parameter block passed to fragment initialization functions.  The locator and name
+; pointers are valid only for the duration of the initialization routine.  I.e. if you want
+; to save the locator or name, save the contents, not the pointers.  Initialization routines
+; take one parameter, a pointer to the parameter block, and return a success/failure result.
+; ! Note that the initialization function returns an OSErr.  Any result other than noErr will
+; ! cause the entire load to be aborted at that point.
+CFragInitBlock 			RECORD	0
+contextID				 ds.l   1		; offset: $0 (0)
+closureID				 ds.l   1		; offset: $4 (4)
+connectionID			 ds.l   1		; offset: $8 (8)
+fragLocator				 ds.l   4		; offset: $C (12)
+libName					 ds.l   1		; offset: $1C (28)
+reserved4a				 ds.l   1		; offset: $20 (32)		; ! Do not use this!
+reserved4b				 ds.l   1		; offset: $24 (36)		; ! Do not use this!
+reserved4c				 ds.l   1		; offset: $28 (40)		; ! Do not use this!
+reserved4d				 ds.l   1		; offset: $2C (44)		; ! Do not use this!
+sizeof					 EQU *			; size:   $30 (48)
+						ENDR
+
+; typedef struct CFragInitBlock  CFragInitBlock
+; typedef CFragInitBlock 	*CFragInitBlockPtr
+; typedef CFragInitFunction  *CFragInitFunctionPtr
+; typedef CFragTermRoutine 	*CFragTermRoutinePtr
+; §
+; ===========================================================================================
+; Routines
+; ========
+;
+; pascal OSErr GetSharedLibrary(ConstStr63Param libName, OSType archType, CFragLoadOptions loadFlags, CFragConnectionID *connID, Ptr *mainAddr, Str255 errMessage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetSharedLibrary
+			move.w	#$0001,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetSharedLibrary
+	ENDIF
+
+;
+; pascal OSErr GetDiskFragment(const FSSpec *fileSpec, UInt32 offset, UInt32 length, ConstStr63Param fragName, CFragLoadOptions loadFlags, CFragConnectionID *connID, Ptr *mainAddr, Str255 errMessage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetDiskFragment
+			move.w	#$0002,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetDiskFragment
+	ENDIF
+
+;
+; pascal OSErr GetMemFragment(void *memAddr, UInt32 length, ConstStr63Param fragName, CFragLoadOptions loadFlags, CFragConnectionID *connID, Ptr *mainAddr, Str255 errMessage)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetMemFragment
+			move.w	#$0003,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetMemFragment
+	ENDIF
+
+;
+; pascal OSErr CloseConnection(CFragConnectionID *connID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CloseConnection
+			move.w	#$0004,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CloseConnection
+	ENDIF
+
+;
+; pascal OSErr FindSymbol(CFragConnectionID connID, ConstStr255Param symName, Ptr *symAddr, CFragSymbolClass *symClass)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_FindSymbol
+			move.w	#$0005,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	FindSymbol
+	ENDIF
+
+;
+; pascal OSErr CountSymbols(CFragConnectionID connID, long *symCount)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_CountSymbols
+			move.w	#$0006,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	CountSymbols
+	ENDIF
+
+;
+; pascal OSErr GetIndSymbol(CFragConnectionID connID, long symIndex, Str255 symName, Ptr *symAddr, CFragSymbolClass *symClass)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_GetIndSymbol
+			move.w	#$0007,-(sp)
+			dc.w 	$AA5A
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	GetIndSymbol
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+; typedef CFragConnectionID  ConnectionID
+; typedef CFragLoadOptions 	LoadFlags
+; typedef CFragSymbolClass 	SymClass
+; typedef CFragOldMemoryLocator  MemFragment
+; typedef CFragHFSDiskFlatLocator  DiskFragment
+; typedef CFragHFSSegmentedLocator  SegmentedFragment
+; typedef CFragHFSLocator 	FragmentLocator
+; typedef CFragHFSLocatorPtr  FragmentLocatorPtr
+; typedef CFragInitBlock 	InitBlock
+; typedef CFragInitBlockPtr  InitBlockPtr
+; typedef CFragInitFunction  ConnectionInitializationRoutine
+; typedef CFragTermRoutine 	ConnectionTerminationRoutine
+
+kPowerPCArch					EQU		kPowerPCCFragArch
+kMotorola68KArch				EQU		kMotorola68KCFragArch
+kAnyArchType					EQU		kAnyCFragArch
+kNoLibName						EQU		0
+kNoConnectionID					EQU		0
+kLoadLib						EQU		kLoadCFrag
+kFindLib						EQU		kFindCFrag
+kLoadNewCopy					EQU		kNewCFragCopy
+kUseInPlace						EQU		kInplaceCFrag
+kCodeSym						EQU		kCodeCFragSymbol
+kDataSym						EQU		kDataCFragSymbol
+kTVectSym						EQU		kTVectorCFragSymbol
+kTOCSym							EQU		kTOCCFragSymbol
+kGlueSym						EQU		kGlueCFragSymbol
+kInMem							EQU		kMemoryCFragLocator
+kOnDiskFlat						EQU		kDataForkCFragLocator
+kOnDiskSegmented				EQU		kResourceCFragLocator
+kIsLib							EQU		kImportLibraryCFrag
+kIsApp							EQU		kApplicationCFrag
+kIsDropIn						EQU		kDropInAdditionCFrag
+kFullLib						EQU		kIsCompleteCFrag
+kUpdateLib						EQU		kFirstCFragUpdate
+kWholeFork						EQU		kCFragGoesToEOF
+kCFMRsrcType					EQU		kCFragResourceType
+kCFMRsrcID						EQU		kCFragResourceID
+kSHLBFileType					EQU		kCFragLibraryFileType
+kUnresolvedSymbolAddress		EQU		kUnresolvedCFragSymbolAddress
+
+kPowerPC						EQU		kPowerPCCFragArch
+kMotorola68K					EQU		kMotorola68KCFragArch
+
+	ENDIF
+	ENDIF ; __CODEFRAGMENTS__

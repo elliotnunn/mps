@@ -1,0 +1,338 @@
+;
+; 	File:		LocationManager.a
+;
+; 	Contains:	Walkabout Interfaces
+; 
+; 	Version:	Technology:	System 7.5
+; 				Release:	Universal Interfaces 2.2.5
+; 
+; 	Copyright:	© 1984-1997 by Apple Computer, Inc.  All rights reserved.
+; 
+; 	Bugs?:		If you find a problem with this file, send the file and version
+; 				information (from above) and the problem description to:
+; 
+; 					Internet:	apple.bugs@applelink.apple.com
+; 					AppleLink:	APPLE.BUGS
+; 
+;
+	IF &TYPE('__LOCATIONMANAGER__') = 'UNDEFINED' THEN
+__LOCATIONMANAGER__ SET 1
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__PROCESSES__') = 'UNDEFINED' THEN
+	include 'Processes.a'
+	ENDIF
+	IF &TYPE('__DISPLAYS__') = 'UNDEFINED' THEN
+	include 'Displays.a'
+	ENDIF
+; typedef long 							ALMToken
+
+;
+;----------------------------------
+; public error codes
+;
+
+ALMInternalErr					EQU		-30049
+ALMLocationNotFound				EQU		-30048
+ALMNoSuchModuleErr				EQU		-30047
+ALMModuleCommunicationErr		EQU		-30046
+ALMDuplicateModuleErr			EQU		-30045
+ALMInstallationErr				EQU		-30044
+ALMDeferSwitchErr				EQU		-30043
+ALMLastErr						EQU		-30043
+ALMLastAllocatedErrNum			EQU		-30030
+; ------------------------------------
+
+															; ALMConfirmName reports these results
+ALMConfirmRenameConfig			EQU		1
+ALMConfirmReplaceConfig			EQU		2
+kALMDefaultSwitchFlags			EQU		0					; switchFlags masks
+kALMDontShowStatusWindow		EQU		1
+kALMSignalViaAE					EQU		2					; gestalt selectors
+gestaltALMVers					EQU		'walk'
+gestaltALMAttr					EQU		'trip'
+gestaltALMPresent				EQU		0
+kALMLocationNameMaxLen			EQU		31
+kALMMaxLocations				EQU		16					; arbitrary limit.  enforced by walkabout.
+kALMNoLocationIndex				EQU		-1					; index and token for the 'off' location
+kALMNoLocationToken				EQU		-1					; Notification AEvent sent to apps when location
+															; changes.
+															; kAESystemConfigNotice		= 'cnfg',				// (defined in Displays.i)
+kAELocationNotice				EQU		'walk'				; creator type of walkabout files
+kALMFileCreator					EQU		'walk'
+; --------------------------------------------------------------------------------------
+;
+;--------------------------------------------------------------------------------------
+; dispatched trap API
+;
+
+_ALMDispatch					EQU		$AAA4
+;
+; pascal OSErr ALMGetCurrentLocation(short *index, ALMToken *token, Str31 name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMGetCurrentLocation
+			move.w              #$0600,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMGetCurrentLocation
+	ENDIF
+
+;
+; pascal OSErr ALMGetIndLocation(short index, ALMToken *token, Str31 name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMGetIndLocation
+			move.w              #$0501,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMGetIndLocation
+	ENDIF
+
+;
+; pascal OSErr ALMCountLocations(short *nLocations)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMCountLocations
+			move.w              #$0202,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMCountLocations
+	ENDIF
+
+;
+; pascal OSErr ALMSwitchToLocation(ALMToken newLocation, long switchFlags)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMSwitchToLocation
+			move.w              #$0403,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMSwitchToLocation
+	ENDIF
+
+;
+; pascal OSErr ALMRegisterNotifyProc(ALMNotificationUPP notificationProc, const ProcessSerialNumber *whichPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMRegisterNotifyProc
+			move.w              #$0404,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMRegisterNotifyProc
+	ENDIF
+
+;
+; pascal OSErr ALMRemoveNotifyProc(ALMNotificationUPP notificationProc, const ProcessSerialNumber *whichPSN)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMRemoveNotifyProc
+			move.w              #$0405,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMRemoveNotifyProc
+	ENDIF
+
+;
+; pascal OSErr ALMConfirmName(Str255 msg, Str255 configName, short *choice, ModalFilterUPP filter)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_ALMConfirmName
+			move.w              #$0806,D0
+			dc.w            	$AAA4
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION ALMConfirmName
+	ENDIF
+
+;
+;--------------------------------------------------------------------------------------
+; Location Manager Module API
+;
+
+kALMComponentType				EQU		'walk'				; These masks apply to the "flags" field in the ComponentDescription record. 
+kALMMultiplePerLocation			EQU		1					; this module can be added more than once to a location
+															; this module's settings' descriptions can change even 
+kALMDescriptionGetsStale		EQU		2					; when the setting didn't change.
+; typedef unsigned long 				ALMComponentFlagsEnum
+
+;  These are the possible values to be returned in the 'flags' parameter of ALMSetCurrent()
+
+kALMNoChange					EQU		0
+kALMAvailableNow				EQU		1
+kALMFinderRestart				EQU		2
+kALMProcesses					EQU		3
+kALMExtensions					EQU		4
+kALMWarmBoot					EQU		5
+kALMColdBoot					EQU		6
+kALMShutdown					EQU		7
+; typedef long 							ALMRebootFlags
+
+
+kALMScriptInfoVersion			EQU		2
+ALMScriptMgrInfo		RECORD 0
+version					 ds.w	1				; offset: $0 (0)		;  set to kALMScriptInfoVersion
+scriptCode				 ds.w	1				; offset: $2 (2)
+regionCode				 ds.w	1				; offset: $4 (4)
+langCode				 ds.w	1				; offset: $6 (6)
+fontNum					 ds.w	1				; offset: $8 (8)
+fontSize				 ds.w	1				; offset: $A (10)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;
+; These are prototypes for the routines that your module will implement (some are optional).
+; Each prototype is given in two forms, the one you'll use depends on whether you dispatch to 
+; the routine with CallComponentFunction() or CallComponentFunctionWithStorage().
+; If you use CallComponentFunctionWithStorage(), you'll create the globals handle in your Open
+; routine.
+;
+; typedef Handle 						MyGlobals
+
+;  CallComponentFunction() variant
+;
+; pascal ComponentResult MyALMGetCurrent(Handle setting)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetCurrent
+	ENDIF
+
+;
+; pascal ComponentResult MyALMSetCurrent(Handle setting, ALMRebootFlags *flags)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMSetCurrent
+	ENDIF
+
+;
+; pascal ComponentResult MyALMCompareSetting(Handle setting1, Handle setting2, Boolean *equal)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMCompareSetting
+	ENDIF
+
+;
+; pascal ComponentResult MyALMEditSetting(Handle setting)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMEditSetting
+	ENDIF
+
+;
+; pascal ComponentResult MyALMDescribeSettings(Handle setting, CharsHandle text)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMDescribeSettings
+	ENDIF
+
+;
+; pascal ComponentResult MyALMDescribeError(OSErr lastErr, Str255 errStr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMDescribeError
+	ENDIF
+
+;
+; pascal ComponentResult MyALMImportExport(Boolean import, Handle setting, short resRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMImportExport
+	ENDIF
+
+;
+; pascal ComponentResult MyALMGetScriptInfo(ALMScriptMgrInfo *info)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetScriptInfo
+	ENDIF
+
+;
+; pascal ComponentResult MyALMGetInfo(CharsHandle *text, StScrpHandle *style, ModalFilterUPP filter)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetInfo
+	ENDIF
+
+;  CallComponentFunctionWithStorage() variant.
+;
+; pascal ComponentResult MyALMGetCurrentStorage(MyGlobals g, Handle setting)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetCurrentStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMSetCurrentStorage(MyGlobals g, Handle setting, ALMRebootFlags *flags)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMSetCurrentStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMCompareSettingStorage(MyGlobals g, Handle setting1, Handle setting2, Boolean *equal)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMCompareSettingStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMEditSettingStorage(MyGlobals g, Handle setting)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMEditSettingStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMDescribeSettingsStorage(MyGlobals g, Handle setting, CharsHandle text)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMDescribeSettingsStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMDescribeErrorStorage(MyGlobals g, OSErr lastErr, Str255 errStr)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMDescribeErrorStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMImportExportStorage(MyGlobals g, Boolean import, Handle setting, short resRefNum)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMImportExportStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMGetScriptInfoStorage(MyGlobals g, ALMScriptMgrInfo *info)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetScriptInfoStorage
+	ENDIF
+
+;
+; pascal ComponentResult MyALMGetInfoStorage(MyGlobals g, CharsHandle *text, StScrpHandle *style, ModalFilterUPP filter)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION MyALMGetInfoStorage
+	ENDIF
+
+	ENDIF ; __LOCATIONMANAGER__ 
+

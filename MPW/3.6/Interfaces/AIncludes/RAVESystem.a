@@ -1,0 +1,392 @@
+;
+;    File:       RAVESystem.a
+;
+;    Contains:   Interfaces needed when building RAVE engines
+;
+;    Version:    Technology: Quickdraw 3D 1.6
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__RAVESYSTEM__') = 'UNDEFINED' THEN
+__RAVESYSTEM__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+	IF &TYPE('__RAVE__') = 'UNDEFINED' THEN
+	include 'RAVE.a'
+	ENDIF
+
+
+
+; ************************************************************************************************
+; *
+; * Typedefs of texture/bitmap method functions provided by the drawing engine.
+; *
+; **********************************************************************************************
+
+;  TQAColorTableNew parameter descriptions 
+;  TQAColorTableType    pixelType           Depth, color space, etc. 
+;  void                 *pixelData          lookup table entries in pixelType format 
+;  long                 transparentIndex    boolean, false means no transparency, true means index 0 is transparent 
+;  TQAColorTable        **newTable          (Out) Newly created TQAColorTable 
+;  TQAColorTableDelete  parameter descriptions 
+;  TQAColorTable        *colorTable     Previously allocated by QAColorTableNew() 
+;  TQATextureNew    parameter descriptions 
+;   unsigned long       flags               Mask of kQATexture_xxx flags 
+;   TQAImagePixelType   pixelType           Depth, color space, etc. 
+;   const TQAImage      images[]            Image(s) for texture 
+;   TQATexture          **newTexture        (Out) Newly created TQATexture, or NULL on error 
+;  TQATextureDetach parameter descriptions 
+;   TQATexture          *texture            Previously allocated by QATextureNew() 
+;  TQATextureDelete parameter descriptions 
+;   TQATexture          *texture            Previously allocated by QATextureNew() 
+;  TQATextureBindColorTable parameter descriptions 
+;   TQATexture          *texture            Previously allocated by QATextureNew() 
+;   TQAColorTable       *colorTable         Previously allocated by QAColorTableNew() 
+;  TQABitmapNew parameter descriptions 
+;   unsigned long       flags               Mask of kQABitmap_xxx flags 
+;   TQAImagePixelType   pixelType           Depth, color space, etc. 
+;   const TQAImage      *image              Image 
+;   TQABitmap           **newBitmap         (Out) Newly created TQABitmap, or NULL on error 
+;  TQABitmapDetach  parameter descriptions 
+;   TQABitmap           *bitmap         Previously allocated by QABitmapNew() 
+;  TQABitmapDelete  parameter descriptions 
+;   TQABitmap           *bitmap         Previously allocated by QABitmapNew() 
+;  TQABitmapBindColorTable  parameter descriptions 
+;   TQABitmap           *bitmap         Previously allocated by QABitmapNew() 
+;   TQAColorTable       *colorTable     Previously allocated by QAColorTableNew() 
+; ************************************************************************************************
+; *
+; * Typedefs of private (system-only) functions provided by the drawing engine.
+; *
+; * The TQADrawPrivateNew function returns a TQADrawPrivate *, which points to the
+; * engine-specific private data created for the context. (TQADrawPrivate is a dummy
+; * type which is then cast to the correct engine-specific datatype by the engine code.)
+; *
+; * The TQADrawPrivateDelete function deletes the engine-specific private data.
+; *
+; * TQAStorePrivateNew and TQAStorePrivateDelete provide the same function as QADrawPrivateNew
+; * and TQADrawPrivateDelete, but for the texture and bitmap storage context.
+; *
+; * TQADrawMethodGet and TQAStoreMethodGet are called by the RAVE manager to retrieve
+; * the method pointers for a drawing engine.
+; *
+; * The TQAEngineCheckDevice function returns TRUE if the engine can render to the
+; * indicated GDevice.
+; *
+; **********************************************************************************************
+
+;  TQADrawPrivateNew    parameter descriptions 
+;   TQADrawContext      *newDrawContext     Draw context to initialize 
+;   const TQADevice     *device             Target device 
+;   const TQARect       *rect               Target rectangle (device coordinates) 
+;   const TQAClip       *clip               2D clip region (or NULL) 
+;   unsigned long       flags               Mask of kQAContext_xxx 
+;  TQADrawPrivateDelete parameter descriptions 
+;   TQADrawPrivate      *drawPrivate        Private context data to delete 
+;  TQAEngineCheckDevice parameter descriptions 
+;   const TQADevice     *device         Target device 
+;  TQAEngineGestalt parameter descriptions 
+;   TQAGestaltSelector  selector            Gestalt parameter being requested 
+;   void                *response           Buffer that receives response 
+
+;  new engine methods for RAVE 1.6 
+; ************************************************************************************************
+; *
+; * The TQAEngineMethod union is used to represent a single engine method (it's a
+; * parameter to QAEngineGetMethod). TQAEngineMethodTag identifies which method is being
+; * requested.
+; *
+; **********************************************************************************************
+
+TQAEngineMethod			RECORD 0
+drawPrivateNew			 ds.l	1				; offset: $0 (0)		;  Method: Create a private draw context 
+						 ORG 0
+drawPrivateDelete		 ds.l	1				; offset: $0 (0)		;  Method: Delete a private draw context 
+						 ORG 0
+engineCheckDevice		 ds.l	1				; offset: $0 (0)		;  Method: Check a device for drawing 
+						 ORG 0
+engineGestalt			 ds.l	1				; offset: $0 (0)		;  Method: Gestalt 
+						 ORG 0
+textureNew				 ds.l	1				; offset: $0 (0)		;  Method: Create a texture (load is non-blocking) 
+						 ORG 0
+textureDetach			 ds.l	1				; offset: $0 (0)		;  Method: Complete load of a texture (blocking) 
+						 ORG 0
+textureDelete			 ds.l	1				; offset: $0 (0)		;  Method: Delete a texture 
+						 ORG 0
+bitmapNew				 ds.l	1				; offset: $0 (0)		;  Method: Create a bitmap (load is non-blocking)  
+						 ORG 0
+bitmapDetach			 ds.l	1				; offset: $0 (0)		;  Method: Complete load of a bitmap (blocking) 
+						 ORG 0
+bitmapDelete			 ds.l	1				; offset: $0 (0)		;  Method: Delete a bitmap 
+						 ORG 0
+colorTableNew			 ds.l	1				; offset: $0 (0)		;  Method: Create a new color table 
+						 ORG 0
+colorTableDelete		 ds.l	1				; offset: $0 (0)		;  Method: Create a new color table 
+						 ORG 0
+textureBindColorTable	 ds.l	1				; offset: $0 (0)		;  Method: Bind a CLUT to a texture 
+						 ORG 0
+bitmapBindColorTable	 ds.l	1				; offset: $0 (0)		;  Method: Bind a CLUT to a bitmap 
+						 ORG 0
+accessTexture			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessTextureEnd		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessBitmap			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessBitmapEnd			 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+; typedef long							TQAEngineMethodTag
+kQADrawPrivateNew				EQU		0
+kQADrawPrivateDelete			EQU		1
+kQAEngineCheckDevice			EQU		2
+kQAEngineGestalt				EQU		3
+kQATextureNew					EQU		4
+kQATextureDetach				EQU		5
+kQATextureDelete				EQU		6
+kQABitmapNew					EQU		7
+kQABitmapDetach					EQU		8
+kQABitmapDelete					EQU		9
+kQAColorTableNew				EQU		10
+kQAColorTableDelete				EQU		11
+kQATextureBindColorTable		EQU		12
+kQABitmapBindColorTable			EQU		13
+kQAAccessTexture				EQU		14
+kQAAccessTextureEnd				EQU		15
+kQAAccessBitmap					EQU		16
+kQAAccessBitmapEnd				EQU		17
+; ************************************************************************************************
+; *
+; * QARegisterEngine() registers a new engine. This is called at boot time by the drawing engine
+; * initialization code to register itself with the system. This call takes only one parameter,
+; * the engine's function that allows the manager to request the other methods.
+; *
+; **********************************************************************************************
+
+;  TQAEngineGetMethod   parameter descriptions 
+;   TQAEngineMethodTag      methodTag               Method being requested 
+;   TQAEngineMethod         *method                 (Out) Method 
+;  QARegisterEngine parameter descriptions 
+;   TQAEngineGetMethod      engineGetMethod     Engine's getMethod method 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  QARegisterEngine()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQAError QARegisterEngine(TQAEngineGetMethod engineGetMethod)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QARegisterEngine
+	ENDIF
+
+
+;  QARegisterEngineWithRefCon parameter descriptions 
+;   TQAEngineGetMethod      engineGetMethod     Engine's getMethod method 
+;   long                    refCon              Engine RefCon 
+
+; *  QARegisterEngineWithRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQAError QARegisterEngineWithRefCon(TQAEngineGetMethod engineGetMethod, long refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QARegisterEngineWithRefCon
+	ENDIF
+
+;  QAGetEngineRefCon parameter descriptions 
+
+; *  QAGetCurrentEngineRefCon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern long QAGetCurrentEngineRefCon(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QAGetCurrentEngineRefCon
+	ENDIF
+
+
+; ************************************************************************************************
+; *
+; * The TQADrawMethod union is used to represent a single draw context method (it's a
+; * parameter to QARegisterDrawMethod). TQADrawMethodTag identifies which method is being
+; * passed.
+; *
+; **********************************************************************************************
+
+	ENDIF	; CALL_NOT_IN_CARBON
+TQADrawMethod			RECORD 0
+setFloat				 ds.l	1				; offset: $0 (0)		;  Method: Set a float state variable 
+						 ORG 0
+setInt					 ds.l	1				; offset: $0 (0)		;  Method: Set an unsigned long state variable 
+						 ORG 0
+setPtr					 ds.l	1				; offset: $0 (0)		;  Method: Set an unsigned long state variable 
+						 ORG 0
+getFloat				 ds.l	1				; offset: $0 (0)		;  Method: Get a float state variable 
+						 ORG 0
+getInt					 ds.l	1				; offset: $0 (0)		;  Method: Get an unsigned long state variable 
+						 ORG 0
+getPtr					 ds.l	1				; offset: $0 (0)		;  Method: Get an pointer state variable 
+						 ORG 0
+drawPoint				 ds.l	1				; offset: $0 (0)		;  Method: Draw a point 
+						 ORG 0
+drawLine				 ds.l	1				; offset: $0 (0)		;  Method: Draw a line 
+						 ORG 0
+drawTriGouraud			 ds.l	1				; offset: $0 (0)		;  Method: Draw a Gouraud shaded triangle 
+						 ORG 0
+drawTriTexture			 ds.l	1				; offset: $0 (0)		;  Method: Draw a texture mapped triangle 
+						 ORG 0
+drawVGouraud			 ds.l	1				; offset: $0 (0)		;  Method: Draw Gouraud vertices 
+						 ORG 0
+drawVTexture			 ds.l	1				; offset: $0 (0)		;  Method: Draw texture vertices 
+						 ORG 0
+drawBitmap				 ds.l	1				; offset: $0 (0)		;  Method: Draw a bitmap 
+						 ORG 0
+renderStart				 ds.l	1				; offset: $0 (0)		;  Method: Initialize for rendering 
+						 ORG 0
+renderEnd				 ds.l	1				; offset: $0 (0)		;  Method: Complete rendering and display 
+						 ORG 0
+renderAbort				 ds.l	1				; offset: $0 (0)		;  Method: Abort any outstanding rendering (blocking) 
+						 ORG 0
+flush					 ds.l	1				; offset: $0 (0)		;  Method: Start render of any queued commands (non-blocking) 
+						 ORG 0
+sync					 ds.l	1				; offset: $0 (0)		;  Method: Wait for completion of all rendering (blocking) 
+						 ORG 0
+submitVerticesGouraud	 ds.l	1				; offset: $0 (0)		;  Method: Submit Gouraud vertices for trimesh 
+						 ORG 0
+submitVerticesTexture	 ds.l	1				; offset: $0 (0)		;  Method: Submit Texture vertices for trimesh 
+						 ORG 0
+drawTriMeshGouraud		 ds.l	1				; offset: $0 (0)		;  Method: Draw a Gouraud triangle mesh 
+						 ORG 0
+drawTriMeshTexture		 ds.l	1				; offset: $0 (0)		;  Method: Draw a Texture triangle mesh 
+						 ORG 0
+setNoticeMethod			 ds.l	1				; offset: $0 (0)		;  Method: Set a notice method 
+						 ORG 0
+getNoticeMethod			 ds.l	1				; offset: $0 (0)		;  Method: Get a notice method 
+;  new in 1.6 
+						 ORG 0
+submitMultiTextureParams  ds.l	1				; offset: $0 (0)		;  Method: Submit secondary texture params 
+						 ORG 0
+accessDrawBuffer		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessDrawBufferEnd		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessZBuffer			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+accessZBufferEnd		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+clearDrawBuffer			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+clearZBuffer			 ds.l	1				; offset: $0 (0)
+						 ORG 0
+textureFromContext		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+bitmapFromContext		 ds.l	1				; offset: $0 (0)
+						 ORG 0
+busy					 ds.l	1				; offset: $0 (0)
+						 ORG 0
+swapBuffers				 ds.l	1				; offset: $0 (0)
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+
+; typedef long							TQADrawMethodTag
+kQASetFloat						EQU		0
+kQASetInt						EQU		1
+kQASetPtr						EQU		2
+kQAGetFloat						EQU		3
+kQAGetInt						EQU		4
+kQAGetPtr						EQU		5
+kQADrawPoint					EQU		6
+kQADrawLine						EQU		7
+kQADrawTriGouraud				EQU		8
+kQADrawTriTexture				EQU		9
+kQADrawVGouraud					EQU		10
+kQADrawVTexture					EQU		11
+kQADrawBitmap					EQU		12
+kQARenderStart					EQU		13
+kQARenderEnd					EQU		14
+kQARenderAbort					EQU		15
+kQAFlush						EQU		16
+kQASync							EQU		17
+kQASubmitVerticesGouraud		EQU		18
+kQASubmitVerticesTexture		EQU		19
+kQADrawTriMeshGouraud			EQU		20
+kQADrawTriMeshTexture			EQU		21
+kQASetNoticeMethod				EQU		22
+kQAGetNoticeMethod				EQU		23
+kQSubmitMultiTextureParams		EQU		24
+kQAccessDrawBuffer				EQU		25
+kQAccessDrawBufferEnd			EQU		26
+kQAccessZBuffer					EQU		27
+kQAccessZBufferEnd				EQU		28
+kQClearDrawBuffer				EQU		29
+kQClearZBuffer					EQU		30
+kQTextureNewFromDrawContext		EQU		31
+kQBitmapNewFromDrawContext		EQU		32
+kQBusy							EQU		33
+kQSwapBuffers					EQU		34
+; ************************************************************************************************
+; *
+; * System call to register a new method for an engine. This is called during the engine's
+; * draw private new functions (to set the initial value of the draw methods), and possibly
+; * at other times when the engine needs to change a draw method.
+; *
+; **********************************************************************************************
+
+;  QARegisterDrawMethod parameter descriptions 
+;   TQADrawContext          *drawContext            Draw context in which to set method 
+;   TQADrawMethodTag        methodTag               Method to set 
+;   TQADrawMethod           method                  Method 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  QARegisterDrawMethod()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern TQAError QARegisterDrawMethod(TQADrawContext *drawContext, TQADrawMethodTag methodTag, TQADrawMethod method)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION QARegisterDrawMethod
+	ENDIF
+
+
+
+
+
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __RAVESYSTEM__ 
+

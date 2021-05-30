@@ -1,0 +1,134 @@
+;
+;    File:       CMAcceleration.a
+;
+;    Contains:   ColorSync Acceleration Component API
+;
+;    Version:    Technology: ColorSync 2.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__CMACCELERATION__') = 'UNDEFINED' THEN
+__CMACCELERATION__ SET 1
+
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+	include 'Components.a'
+	ENDIF
+	IF &TYPE('__CMAPPLICATION__') = 'UNDEFINED' THEN
+	include 'CMApplication.a'
+	ENDIF
+
+;  –––––––––––––––––––––––––––––––––––––– version info 
+
+cmAccelerationInterfaceVersion	EQU		1
+;  –––––––––––––––––––––––––––––––––––––– Component Type 
+
+cmAccelerationComponentType		EQU		'csac'
+;  –––––––––––––––––––––––––––––––––––––– Required Component function selectors 
+
+cmLoadTables					EQU		0
+cmCalculateData					EQU		1
+;  –––––––––––––––––––––––––––––––––––––– table data for acceleration component 
+CMAccelerationTableData	RECORD 0
+inputLutEntryCount		 ds.l	1				; offset: $0 (0)		;  count of entries for input lut for one dimension
+inputLutWordSize		 ds.l	1				; offset: $4 (4)		;  count of bits of each entry ( e.g. 16 for WORD )
+inputLut				 ds.l	1				; offset: $8 (8)		;  handle to input lut
+outputLutEntryCount		 ds.l	1				; offset: $C (12)		;  count of entries for output lut for one dimension  
+outputLutWordSize		 ds.l	1				; offset: $10 (16)		;  count of bits of each entry ( e.g. 8 for BYTE )
+outputLut				 ds.l	1				; offset: $14 (20)		;  handle to output lut
+colorLutInDim			 ds.l	1				; offset: $18 (24)		;  input dimension  ( e.g. 3 for LAB ; 4 for CMYK )
+colorLutOutDim			 ds.l	1				; offset: $1C (28)		;  output dimension ( e.g. 3 for LAB ; 4 for CMYK )
+colorLutGridPoints		 ds.l	1				; offset: $20 (32)		;  count of gridpoints for color lut ( for one Dimension )    
+colorLutWordSize		 ds.l	1				; offset: $24 (36)		;  count of bits of each entry ( e.g. 8 for BYTE )
+colorLut				 ds.l	1				; offset: $28 (40)		;  handle to color lut
+inputColorSpace			 ds.l	1				; offset: $2C (44)		;  packing info for input
+outputColorSpace		 ds.l	1				; offset: $30 (48)		;  packing info for output
+userData				 ds.l	1				; offset: $34 (52)
+reserved1				 ds.l	1				; offset: $38 (56)
+reserved2				 ds.l	1				; offset: $3C (60)
+reserved3				 ds.l	1				; offset: $40 (64)
+reserved4				 ds.l	1				; offset: $44 (68)
+reserved5				 ds.l	1				; offset: $48 (72)
+sizeof					 EQU *					; size:   $4C (76)
+						ENDR
+; typedef struct CMAccelerationTableData * CMAccelerationTableDataPtr
+
+; typedef CMAccelerationTableDataPtr *	CMAccelerationTableDataHdl
+
+;  –––––––––––––––––––––––––––––––––––––– calc data for acceleration component 
+CMAccelerationCalcData	RECORD 0
+pixelCount				 ds.l	1				; offset: $0 (0)		;  count of input pixels
+inputData				 ds.l	1				; offset: $4 (4)		;  input array
+outputData				 ds.l	1				; offset: $8 (8)		;  output array
+reserved1				 ds.l	1				; offset: $C (12)
+reserved2				 ds.l	1				; offset: $10 (16)
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+; typedef struct CMAccelerationCalcData * CMAccelerationCalcDataPtr
+
+; typedef CMAccelerationCalcDataPtr *	CMAccelerationCalcDataHdl
+
+
+;   ———————————————————————————————————————————————————————————————————————————————————————————————— 
+;                A c c e l e r a t i o n   C o m p o n e n t   I n t e r f a c e s
+;   ———————————————————————————————————————————————————————————————————————————————————————————————— 
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CMAccelerationLoadTables()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMAccelerationLoadTables(ComponentInstance CMSession, CMAccelerationTableDataPtr tableData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMAccelerationLoadTables
+			move.l              #$00040000,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMAccelerationLoadTables
+	ENDIF
+
+
+
+; *  CMAccelerationCalculateData()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal CMError CMAccelerationCalculateData(ComponentInstance CMSession, CMAccelerationCalcDataPtr calcData)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CMAccelerationCalculateData
+			move.l              #$00040001,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CMAccelerationCalculateData
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __CMACCELERATION__ 
+

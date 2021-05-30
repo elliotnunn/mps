@@ -1,0 +1,221 @@
+;
+;    File:       Disks.a
+;
+;    Contains:   Disk Driver Interfaces.
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DISKS__') = 'UNDEFINED' THEN
+__DISKS__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__OSUTILS__') = 'UNDEFINED' THEN
+	include 'OSUtils.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+
+sony							EQU		0
+hard20							EQU		1
+;  Disk Driver Status csCodes 
+
+kReturnFormatList				EQU		6					; .Sony 
+kDriveStatus					EQU		8
+kMFMStatus						EQU		10
+;  Disk Driver Control csCodes 
+
+kVerify							EQU		5
+kFormat							EQU		6
+kEject							EQU		7
+kSetTagBuffer					EQU		8					; .Sony 
+kTrackCache						EQU		9					; .Sony 
+kDriveIcon						EQU		21
+kMediaIcon						EQU		22
+kDriveInfo						EQU		23
+kRawTrack						EQU		18244				; .Sony: “diagnostic” raw track dump 
+; 
+;    Note:
+;
+;    qLink is usually the first field in queues, but back in the MacPlus
+;    days, the DrvSts record needed to be expanded.  In order to do this without
+;    breaking disk drivers that already added stuff to the end, the fields
+;    where added to the beginning.  This was originally done in assembly language
+;    and the record was defined to start at a negative offset, so that the qLink
+;    field would end up at offset zero.  When the C and pascal interfaces where
+;    made, they could not support negative record offsets, so qLink was no longer
+;    the first field.  Universal Interfaces are auto generated and don't support
+;    negative offsets for any language, so DrvSts in Disks.a has qLinks at a
+;    none zero offset.  Assembly code which switches to Universal Interfaces will
+;    need to compensate for that.
+;
+;
+
+DrvSts					RECORD 0
+track					 ds.w	1				; offset: $0 (0)		;  current track 
+writeProt				 ds.b	1				; offset: $2 (2)		;  bit 7 = 1 if volume is locked 
+diskInPlace				 ds.b	1				; offset: $3 (3)		;  disk in drive 
+installed				 ds.b	1				; offset: $4 (4)		;  drive installed 
+sides					 ds.b	1				; offset: $5 (5)		;  -1 for 2-sided, 0 for 1-sided 
+qLink					 ds.l	1				; offset: $6 (6)		;  next queue entry 
+qType					 ds.w	1				; offset: $A (10)		;  1 for HD20 
+dQDrive					 ds.w	1				; offset: $C (12)		;  drive number 
+dQRefNum				 ds.w	1				; offset: $E (14)		;  driver reference number 
+dQFSID					 ds.w	1				; offset: $10 (16)		;  file system ID 
+twoSideFmt				 ds.b	1				; offset: $12 (18)		;  after 1st rd/wrt: 0=1 side, -1=2 side 
+needsFlush				 ds.b	1				; offset: $13 (19)		;  -1 for MacPlus drive 
+diskErrs				 ds.w	1				; offset: $14 (20)		;  soft error count 
+						 ORG 18
+driveSize				 ds.w	1				; offset: $12 (18)
+driveS1					 ds.w	1				; offset: $14 (20)
+driveType				 ds.w	1				; offset: $16 (22)
+driveManf				 ds.w	1				; offset: $18 (24)
+driveChar				 ds.w	1				; offset: $1A (26)
+driveMisc				 ds.b	1				; offset: $1C (28)
+						 ORG 30
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+DrvSts2					RECORD 0
+f						 ds		DrvSts
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+
+
+
+kdqManualEjectBit				EQU		5
+	IF CALL_NOT_IN_CARBON THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  DiskEject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DiskEject(short drvNum)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DiskEject
+	ENDIF
+
+
+; *  SetTagBuffer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr SetTagBuffer(void *buffPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetTagBuffer
+	ENDIF
+
+
+; *  DriveStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal OSErr DriveStatus(short drvNum, DrvSts *status)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DriveStatus
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  AddDrive()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal void AddDrive(short drvrRefNum, short drvNum, DrvQElPtr qEl)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		_AddDrive:	OPWORD	$A04E
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION AddDrive
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	IF CALL_NOT_IN_CARBON THEN
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetDrvQHdr()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; pascal QHdrPtr GetDrvQHdr(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetDrvQHdr           &dest=(sp)
+			move.l            #$00000308,&dest
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetDrvQHdr
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF	; CALL_NOT_IN_CARBON
+; ——————————————————————————————————————————————————————————————————————————————————————————————————
+;  Obsolete definitions                                                                             
+; ——————————————————————————————————————————————————————————————————————————————————————————————————
+;  Status csCode previously defined in Devices.h/p/a.
+; * This is obsolete and the new name should be used instead.
+; 
+
+
+drvStsCode						EQU		8					; status call code for drive status 
+;  Control csCodes previously defined in Devices.h/p/a.
+; * These are obsolete and the new names should be used instead.
+; 
+
+
+ejectCode						EQU		7					; control call eject code 
+tgBuffCode						EQU		8					; set tag buffer code 
+;  Control csCodes previously defined in DriverGestalt.h/p/a.
+; * These are obsolete and the new names should be used instead.
+; 
+
+
+VerifyCmd						EQU		5
+FormatCmd						EQU		6
+EjectCmd						EQU		7
+
+	ENDIF ; __DISKS__ 
+

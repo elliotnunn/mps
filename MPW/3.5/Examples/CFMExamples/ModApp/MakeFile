@@ -1,0 +1,321 @@
+# Makefile for "ModApp"
+# Written 11/28/93 by Richard Clark of Apple Developer University
+# Modified 8/11/94 by Brian Strull of Apple's Runtime Group to support CFM-68K runtime.
+#
+#
+# Usage:
+#  Use "make all" or "BuildProgram all" to build a "fat" version of the app and all tools
+#  Use "make ModApp" or "BuildProgram ModApp" to build a "fat" version of the app.
+#  Use "make ModApp -d SYM=on" to build with symbols, or edit the "SYM" variable
+#	below. (The -d flag also works with BuildProgram.)
+#  Use "make ModApp -d OPT=speed" to build a speed-optimized version, or edit the "OPT"
+#	variable below. (NOTE: SYM=on disables all optimizations.)
+#  Use "make :Modules":Clock" to build the "clock" module by itself (or substitute
+#	another module name.)
+#
+# General Philosophy:
+#   The build rules for tools tend to build a PowerPC version into :PowerPC:xxx.ppc 
+#   and a 68K version into :68K:xxx.68K.  We then use MergeFragment to combine the
+#   two PEF containers, and then rez in the general resources.  The make file
+#   can't currently build a 68K only or PowerPC only version since we do the
+#   rez step after the merge.
+# 
+#   The Macintosh Debugger 2.0 can read PowerPC XCOFF files and 68K NJ files
+#   directly, eliminating the need to convert these formats to SYM.  For an app
+#   or library named FOO, the debugger expects to find FOO.XCOFF and FOO.NJ, 
+#   respectively.  We set up the link steps such that that the target will result
+#   in these names by default to simplify setting up the debugger.
+#
+# Note:
+#	The "Mark" menu has been set up to show each major secion of the makefile
+#
+# Open Issues:
+#   Header file dependencies are not completely accurate.
+#   Resource file changes don't always force a rez step
+#
+# Change history
+#		11/28/93	RC		Original release
+#		12/20/93	RC		Added comments, simplified "SYM" and "OPT" options,
+#							reset marks to the correct places
+#		 1/13/94	RC		Added "cfrg.c" and "cfrg.h" -- the cfrg resource parser
+#		 8/11/94	BLS		Modified for CFM-68K runtime.
+#		 8/31/94	mcm		changed {deps} to {DepDir}{Default}.c for new make
+#
+#  
+
+# -------------- Object files
+OBJECTS_68K = ∂
+		:68K:AppleEventHandlers.o ∂
+		:68K:ToolLoader.o ∂
+		:68K:ToolAPI.o ∂
+		:68K:Init.o ∂
+		:68K:main.o ∂
+		:68K:Menus.o ∂
+		:68K:cfrg.o ∂
+		:68K:Windows.o
+
+OBJECTS_PowerPC = ∂
+		:PowerPC:AppleEventHandlers.c.o ∂
+		:PowerPC:ToolLoader.c.o ∂
+		:PowerPC:ToolAPI.c.o ∂
+		:PowerPC:Init.c.o ∂
+		:PowerPC:main.c.o ∂
+		:PowerPC:Menus.c.o ∂
+		:PowerPC:cfrg.c.o ∂
+		:PowerPC:Windows.c.o
+
+XCOFFLibs	= 	"{SharedLibraries}"InterfaceLib 			∂
+				"{SharedLibraries}"StdCLib 					∂
+				"{SharedLibraries}"MathLib 					∂
+				"{PPCLibraries}"PPCCRuntime.o 				∂
+				"{PPCLibraries}"StdCRuntime.o
+
+# Directories used by the build process
+SRC = :
+MSRC  = :ModuleSources:
+PPC = :PowerPC:
+68K = :68K:
+
+# -------------- Debugging & optimization control
+SYM = off  # Symbolic debugging: "on" or "off" (you can override with the "d- SYM=off" option to make)
+OPT = off  # Optimization: off, speed, size, or local (you can override with the "d- SYM=size" option to make)
+
+
+# -------------- Default build rules
+:68K: ƒ :		# Objects in the 68K folder depend on sources in the current folder
+
+:PowerPC: ƒ :	# Objects in the PowerPC folder depend on sources in the current folder
+
+.o ƒ .c			# 68K .o files depend on the sources
+	SC {DepDir}{Default}.c -model cfmseg -sym {SYM} -mbg full -i "{cincludes}" -i : -w 17  -o {targ}
+
+.c.o ƒ .c		# PowerPC .c.o files depend on the sources
+	MrC {DepDir}{Default}.c -opt {OPT} -sym {SYM} -i : -w 17 -proto strict -o {targ}
+
+
+# -------------- Dummy rule to build everything
+all ƒ ModApp tools
+
+# -------------- Build rules for a fat binary
+# We copy the PowerPC pef container into the data fork, 
+# and the segmented CFM-68K application into the resource
+# fork.  We then rez in the Application resources, and 
+# a CFRG.
+
+ModApp ƒ :PowerPC:ModApp.ppc :68K:ModApp.68k  ModApp.r cfrg.r
+	duplicate -y -d :PowerPC:ModApp.ppc {targ}
+	duplicate -y -r :68K:ModApp.68k {targ}
+	Rez ModApp.r -append -o {targ}
+	Rez cfrg.r -append -o {targ}
+	SetFile -c 'moda' -a Bi {targ}
+	
+
+# -------------- Build rules for a PowerPC version
+
+:PowerPC:ModApp.ppc ƒ {OBJECTS_PowerPC}
+	PPCLink -sym {SYM} {Objects_PowerPC} {XCOFFLibs} -o {targ}
+	
+# Which files depend on which others?
+ModApp.h ƒ ToolAPI.h
+AppleEventHandlers.c.o ƒ ModApp.h Prototypes.h AppleEventHandlers.c
+ToolLoader.c.o ƒ ModApp.h Prototypes.h ToolAPI.h cfrg.h ToolLoader.c
+ToolAPI.c.o ƒ  ToolAPI.h  ToolAPI.c
+Init.c.o ƒ ModApp.h Prototypes.h Init.c
+main.c.o ƒ ModApp.h Prototypes.h main.c
+Menus.c.o ƒ ModApp.h Prototypes.h Menus.c
+Windows.c.o ƒ ModApp.h Prototypes.h Windows.c
+cfrg.c.o ƒ cfrg.h cfrg.c
+
+# -------------- Build rules for a 68K version
+
+:68K:ModApp.68k ƒƒ {OBJECTS_68K}
+	ILink -model cfmseg -xm e -c 'moda' ∂
+		-m main ∂
+		-mf -sym {SYM} ∂
+		{OBJECTS_68K} ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib ∂
+		-o {targ}
+
+
+# Which files depend on which others?
+# ModApp.h ƒ ToolAPI.h -- already shown above
+AppleEventHandlers.o ƒ ModApp.h Prototypes.h AppleEventHandlers.c
+ToolLoader.o ƒ ModApp.h Prototypes.h ToolAPI.h cfrg.h ToolLoader.c
+ToolAPI.o ƒ  ToolAPI.h  ToolAPI.c
+Init.o ƒ ModApp.h Prototypes.h Init.c
+main.o ƒ ModApp.h Prototypes.h main.c
+Menus.o ƒ ModApp.h Prototypes.h Menus.c
+Windows.o ƒ ModApp.h Prototypes.h Windows.c
+cfrg.o ƒ cfrg.h cfrg.c
+
+
+# -------------- Build all tools
+tools ƒ :Modules:Clock :Modules:Simple :Modules:Button :Modules:GWorldTools :Modules:Koch :Modules:PowerResource
+
+:PowerPC: ƒ :ModuleSources:
+GWorldTools.c.o ƒ ModApp.h Prototypes.h :ModuleSources:GWorldTools.c
+
+:68K: ƒ :ModuleSources:
+GWorldTools.o ƒ ModApp.h Prototypes.h :ModuleSources:GWorldTools.c
+
+
+# -------------- Build the GWorldTools shared library
+
+:Modules:GWorldTools ƒƒ :PowerPC:GWorldTools.ppc  :68K:GWorldTools.68K
+	delete -i {targ}
+	MergeFragment -x {deps} {targ} 
+	setfile -c 'cfmg' -t 'shlb' {targ}
+
+:PowerPC:GWorldTools.ppc ƒ :PowerPC:GWorldTools.c.o
+	PPCLink {deps} "{SharedLibraries}"InterfaceLib ∂
+		-sym {SYM}  ∂
+		-export GetGlobalBounds,AllocateBuffer,LockBuffer,UnlockBuffer,UpdateBuffer,DisposeBuffer,CopyBufferToWindow ∂
+		-xm SharedLibrary ∂
+		-o {targ}
+	MergeFragment -n GWorldTools -c -t pwpc -x {targ}  # use MergeFragment to create a library cfrg
+
+:68K:GWorldTools ƒƒ :68K:GworldTools.o
+	ILink {deps} -o {targ} ∂
+		-model cfmseg -xm s -c moda ∂
+		-sym {SYM} -mf ∂
+		"{CFM68KLibraries}"NuMacRuntime.o ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib 
+		
+:68K:GWorldTools.68K ƒƒ :68K:GWorldTools
+	MakeFlat {deps} -o {targ}
+	MergeFragment -n GWorldTools -c -t m68k -x {targ}  # use MergeFragment to create a library cfrg
+
+# -------------- Build the Clock tool
+
+:68K:Clock ƒƒ :68K:Clock.o :Modules:GWorldTools
+	ILink {deps} -o {targ} ∂
+		-model cfmseg -xm s -c moda ∂
+		-m ToolStartup  -sym {SYM} -mf ∂
+		"{CFM68KLibraries}"NuMacRuntime.o ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+
+:68K:Clock.68K ƒƒ :68K:Clock
+	MakeFlat {deps} -o {targ}
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'m68k∂' -d TOOLNAME=∂"Clock∂"  -d SystemSevenOrLater=1
+
+:PowerPC:Clock.ppc ƒ :PowerPC:Clock.c.o :PowerPC:GWorldTools.ppc
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+		"{SharedLibraries}"MathLib ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'pwpc∂' -d TOOLNAME=∂"Clock∂"  -d SystemSevenOrLater=1
+
+:Modules:Clock ƒƒ :PowerPC:Clock.ppc  :68K:Clock.68K
+	delete -i {targ}
+	MergeFragment -x {deps} {targ} 
+	Rez :ModuleSources:Clock.r -a -o {targ} -d SystemSevenOrLater=1
+	setfile -c 'moda' -t 'modt' {targ}
+	
+
+# -------------- Build the Simple tool
+
+
+:68K:Simple ƒƒ :68K:Simple.o
+	ILink {deps} -o {targ} ∂
+		-model cfmseg -xm s -c moda ∂
+		-m ToolStartup  -sym {SYM} -mf ∂
+		"{CFM68KLibraries}"NuMacRuntime.o ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+
+:68K:Simple.68K ƒƒ :68K:Simple
+	MakeFlat {deps} -o {targ}
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'m68k∂' -d TOOLNAME=∂"Simple∂"  -d SystemSevenOrLater=1
+
+:PowerPC:Simple.ppc ƒ :PowerPC:Simple.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'pwpc∂' -d TOOLNAME=∂"Simple∂"  -d SystemSevenOrLater=1
+
+:Modules:Simple ƒƒ :PowerPC:Simple.ppc  :68K:Simple.68K
+	delete -i {targ}
+	MergeFragment -x {deps} {targ} 
+	setfile -c 'moda' -t 'modt' {targ}
+	
+
+# -------------- Build the Button tool
+
+:68K:Button ƒƒ :68K:Button.o
+	ILink {deps} ∂
+		-o {targ} ∂
+		-model cfmseg -xm s -c moda ∂
+		-m ToolStartup  -sym {SYM} -mf ∂
+		"{CFM68KLibraries}"NuMacRuntime.o ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+
+:68K:Button.68K ƒƒ :68K:Button
+	MakeFlat {deps} -o {targ}
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'m68k∂' -d TOOLNAME=∂"Button∂"  -d SystemSevenOrLater=1
+
+:PowerPC:Button.ppc ƒ :PowerPC:Button.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'pwpc∂' -d TOOLNAME=∂"Button∂"  -d SystemSevenOrLater=1
+
+:Modules:Button ƒƒ :PowerPC:Button.ppc  :68K:Button.68K
+	delete -i {targ}
+	MergeFragment -x {deps} {targ} 
+	Rez :ModuleSources:Button.r -a -o {targ} -d SystemSevenOrLater=1
+	setfile -c 'moda' -t 'modt' {targ}
+
+
+# -------------- Build the Koch tool
+
+:68K:Koch ƒƒ :68K:Koch.o :Modules:GWorldTools 
+	ILink {deps} -o {targ} ∂
+		-model cfmseg -xm s -c moda ∂
+		-m ToolStartup  -sym {SYM} -mf ∂
+		"{CFM68KLibraries}"NuMacRuntime.o ∂
+		"{CFM68KLibraries}"NuMathLib.o ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib 
+
+:68K:Koch.68K ƒƒ :68K:Koch
+	MakeFlat {deps} -o {targ}
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'m68k∂' -d TOOLNAME=∂"Koch∂"  -d SystemSevenOrLater=1
+
+:PowerPC:Koch.ppc ƒ :PowerPC:Koch.c.o :PowerPC:GWorldTools.ppc
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+		"{SharedLibraries}"MathLib ∂
+		"{SharedLibraries}"StdCLib ∂
+		"{SharedLibraries}"InterfaceLib
+	Rez ModuleCFRG.r -a -o {targ} -d ARCH=∂'pwpc∂' -d TOOLNAME=∂"Koch∂"  -d SystemSevenOrLater=1
+		
+:Modules:Koch ƒƒ :PowerPC:Koch.ppc  :68K:Koch.68K
+	delete -i {targ}
+	MergeFragment -x {deps} {targ} 
+	Rez :ModuleSources:Koch.r -a -o {targ} -d SystemSevenOrLater=1
+	setfile -c 'moda' -t 'modt' {targ}
+	
+
+# -------------- Build the PowerResource tool
+# This build is a little different, as we create a PEF file and then
+# read it into a TOOL resource in the module using a Rez script.
+# The 68K resources is built classic runtime, rather than model cfm-seg
+
+
+:PowerPC:PowerResource.ppc ƒ :PowerPC:PowerResource.c.o
+	PPCLink {deps} -o {targ} -main ToolStartup -sym {SYM} ∂
+		"{SharedLibraries}"InterfaceLib
+
+:Modules:PowerResource ƒƒ :ModuleSources:PowerResource.r :PowerPC:PowerResource.ppc
+	Rez :ModuleSources:PowerResource.r -a -o {targ} -t modt -c moda -d SystemSevenOrLater=1
+
+:Modules:PowerResource ƒƒ :68K:PowerResource.o
+	Link {deps} -o {targ} -t modt -c moda -rt TOOL -m ToolStartup -sg PowerResource -sym {SYM} -mf ∂
+	"{Libraries}"Interface.o
+	
+:68K:PowerResource.o ƒ :ModuleSources:PowerResource.c
+	SC {Deps} -proto strict -sym {SYM} -mbg full -i "{cincludes}" -i : -w 17 -o {targ}
+

@@ -1,0 +1,267 @@
+;------------------------------------------------------------------------------
+;
+;	PortAsm Simple Example	by Steven Ellis
+;
+;	Copyright MicroAPL Ltd 1993/4
+;
+;	PAExample.a - Startup, Initialization and Alert handling routines.
+;
+;	Note. Some code based on
+;	MultiFinder-Aware Simple Sample Application (traffic light)
+;	Apple Macintosh Developer Technical Support
+;
+;------------------------------------------------------------------------------
+
+	CASE	OBJECT
+	
+	INCLUDE	'ToolEqu.a'
+	INCLUDE	'Traps.a'
+	INCLUDE	'QuickEqu.a'
+	INCLUDE	'PAExample.inc'	
+
+; ---------  DATA STORAGE ALLOCATION  ------------
+		EXPORT	(QD,G):DATA;		
+	
+QD		DS	MyQDGlobals		; QuickDraw's globals
+G		DS	AppGlobals		; application's globals
+
+;******************************************************
+; ALERTUSER
+;
+; Ouput the user alert and then exit program
+;
+		SEG	'Main'
+AlertUser	PROC	EXPORT
+
+		CLR.W	-(SP)			; space for result of Alert
+		MOVE.W	#rUserAlert,-(SP)	; resource for alert dialog
+		CLR.L	-(SP)			; no filter procedure
+		_Alert
+		MOVE.W	(SP)+,D0		; ignore result
+		_ExitToShell			; exit, no error recovery
+
+Exit		RTS
+
+		ENDP
+
+
+;******************************************************
+; TERMINATE
+;
+; Clean up the application and exit.
+
+		SEG	'Main'
+Terminate	PROC	EXPORT
+
+StackFrame	RECORD	{A6Link},DECR	
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+WindowPtr	DS.L	1			; local variable for a window pointer
+LocalSize	EQU 	*			; size of local variables
+		ENDR
+
+		
+		WITH	StackFrame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+
+
+Loop		CLR.L	-(SP)			; space for front window pointer
+		_FrontWindow
+		MOVE.L	(SP)+,WindowPtr(A6)	; get the front window pointer
+		CMPI.L	#NIL,WindowPtr(A6)	; 
+		BEQ.S	@1			; there are no more windows
+
+		MOVE.L	WindowPtr(A6),-(SP)	; close window, it shouldn't be a dialog
+		_CloseWindow			; close the application window
+		BRA	Loop
+		
+@1		_ExitToShell
+
+Exit		UNLK	A6
+		RTS
+
+		ENDP
+
+;************************************************************
+; INITIALIZE
+;
+; Initialize the environment, windows, menus, about dialog and sound
+;
+		SEG 'Initialize'
+Initialize	PROC
+
+CountReg	EQU	D4
+
+StackFrame	RECORD	{A6Link},DECR		; build a stack frame record
+RetAddr 	DS.L	1			; return address
+A6Link		DS.L	1			; place holder for A6 link
+CurMBar		DS.L	1			; local handle to our menubar
+TheEvent 	DS	EventRecord 		; local copy of the event record
+LocalSize	EQU 	*			; size of local variables
+		ENDR
+		
+		IMPORT	SYSENVIRONS
+		IMPORT	SoundInit
+		
+		WITH	StackFrame		; cover our local stack frame
+		LINK	A6,#LocalSize		; allocate our local stack frame
+		
+		MOVE.L	D4,-(SP) 		; save the counter register
+		
+		MOVE.L	#YellowItem,G.OldColor	; initially yellow polygon
+		
+; ------------- INITIALIZE MANAGERS -------------
+
+@1		PEA 	QD.GrafPort
+		_InitGraf
+		_InitFonts
+		_InitWindows
+		_InitMenus
+		_TEInit
+		CLR.L	-(SP)	
+		_InitDialogs
+		_InitCursor
+			 
+; ------------- WASTE THREE EVENTS -------------
+
+		MOVE.W	#2,D4			; loop 3 times
+Loop		CLR.W	-(SP)			; space for result
+		MOVE.W	#EveryEvent,-(SP)	; the events we want
+		PEA	TheEvent(A6)		; pass a pointer to our event
+		_EventAvail
+		MOVE.W	(SP)+,D0		; result code
+		DBF	D4,Loop			; decrement count, if count < 0 then continue
+
+; ------------- GET THE ENVIRONMENT -------------
+
+		MOVE.W	#EnvironsVersion,D0	; version of SysEnvirons we want
+		LEA	G.Mac,A0		; the global environment record
+		JSR	SYSENVIRONS		; we can ignore any errors here,
+						; SysEnvirons will fill in regardless
+		MOVE.W	G.Mac.MachineType,D0 	; negitive value means old ROMs
+		BPL.S	@2			; 128k ROMs or better, continue on
+		JMP	AlertUser		; we don't want to run on 64k ROMs
+			
+; ------------- CHECK FOR ENOUGH MEMORY -------------
+ 
+@2		MOVE.L	applLimit,D1
+		MOVE.L	applZone,D0
+		SUB.L	D0,D1
+		CMPI.L	#MinHeap,D1
+		BPL.S	@3
+		JMP	AlertUser
+		
+@3		_PurgeSpace
+		CMPI.L	#MinSpace,D0
+		BPL.S	@4
+		JMP	AlertUser
+
+; ------------- SET UP THE EXAMPLE WINDOW -------------
+
+@4		MOVE.L	#windowSize,D0
+		_NewPtr ,Clear			; create a pointer in A0 and clear memory
+		CMPA.L	#NIL,A0
+		BNE.S	@5
+		JMP	AlertUser
+		
+		IMPORT	RealWindow:DATA
+		
+@5		CLR.L	-(SP)			; create space for result
+		MOVE.W	#rWindow,-(SP)		; our window resource definition
+		MOVE.L	A0,-(SP)		; our window record storage
+		MOVE.L	#-1,-(SP)		; make it on top
+		_GetNewWindow			; create the window
+		MOVE.L	(SP)+,RealWindow	; save our window pointer
+
+; ------------- STORE SIZE OF EXAMPLE WINDOW -------------
+		
+		CLR.L	-(SP)			; create space for result
+		MOVE.L	#'WIND',-(SP)
+		MOVE.W	#rWindow,-(SP)		; get the window's rect
+		_GetResource
+		MOVEA.L	(SP)+,A0		; handle to WIND resource in A0
+		CMPA.L	#NIL,A0			; test for NIL handle
+		BNE.S	@6
+		JMP	AlertUser		; report error
+
+@6		MOVEA.L	(A0),A0			; pointer to RECT resource in A0
+		MOVE.L	botRight(A0),D0
+		SUB.L	topLeft(A0),D0
+		MOVE.L	D0,G.WindowSize		; Store the size of the window
+				
+; ------------- SET UP THE MENUS -------------
+	
+		CLR.L	-(SP)			; space for MenuBar handle
+		MOVE.W	#rMenuBar,-(SP)		; our MenuBar resource
+		_GetNewMBar
+		MOVE.L	(SP),CurMBar(A6)
+		_SetMenuBar
+		MOVEA.L	CurMBar(A6),A0
+		_DisposHandle			; there is a result in D0
+		CLR.L	-(SP)
+		MOVE.W	#AppleMenu,-(SP)
+		_GetMHandle			; put Apple menu handle on stack
+		MOVE.L	#'DRVR',-(SP)		; get all the DAs
+		_AddResMenu
+		_DrawMenuBar
+
+; ------------- SET UP THE ABOUT DIALOG -------------
+		IMPORT	AboutInit
+		BSR	AboutInit
+
+; ------------- INITIALIZE SOUND -------------
+
+		BSR	SoundInit		
+
+Exit		MOVE.L	(SP)+,D4		; restore the counter register
+		UNLK	A6
+		RTS
+		
+		ENDP
+
+;******************************************************
+; STARTUP
+; 
+; This is the entry point of the program.  We start with data initializing
+; and then to get the System environment (SysEnvirons).  We unload the
+; initialization code segment and finally get started with the EventLoop.
+;
+;USES:  MyPoly *CreateOnePolygon (int type, short points);
+;
+		SEG	'Main'			; case sensitive
+StartUp        	MAIN				; entry point of the program
+		
+		IMPORT	_DataInit,Initialize,	\
+			EventLoop
+		IMPORT	InitVirtualWin
+		IMPORT	ThePolygon:DATA
+		IMPORT	CreateOnePolygon
+
+;;;	IF NOT PowerPC_version THEN		; ( Need to add conditional for PowerPC)		
+		JSR	_DataInit		; initialize those constants	
+		PEA	_DataInit
+		_UnloadSeg
+;;;     ENDIF
+
+		_MaxApplZone
+		JSR	Initialize
+		PEA	Initialize
+		_UnloadSeg			; we're done this that segment too
+
+; ------------- SET UP THE FIRST POLYGON -----------------
+; Call into C to create the initial polygon
+;
+		MOVE.L	#5,-(SP)		; number of points in polygon
+		MOVE.L	#0,-(SP)		; select star type polygon
+		JSR	CreateOnePolygon
+		MOVE.L	D0,ThePolygon
+		LEA	8(SP),SP		; deallocate the stack
+		
+; ------------- SET UP THE VIRTUAL WINDOW ----------------
+		BSR	InitVirtualWin
+
+; ------------- OK LETS GO FOR THE EVENTLOOP -------------
+		JMP	EventLoop			; go into the event loop
+		ENDP
+
+		END

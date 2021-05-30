@@ -1,0 +1,100 @@
+;
+;	File:		SegLoad.a
+;
+;	Contains:	Segment Loader Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__SEGLOAD__') = 'UNDEFINED' THEN
+__SEGLOAD__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+appOpen							EQU		0					;Open the Document (s)
+appPrint						EQU		1					;Print the Document (s)
+
+AppFile 				RECORD	0
+vRefNum					 ds.w   1		; offset: $0 (0)
+fType					 ds.l   1		; offset: $2 (2)
+versNum					 ds.w   1		; offset: $6 (6)		;versNum in high byte
+fName					 ds.l   64		; offset: $8 (8)
+sizeof					 EQU *			; size:   $108 (264)
+						ENDR
+
+; typedef struct AppFile 	AppFile
+;
+;	Because PowerPC applications don’t have segments,
+;	UnloadSeg is unsupported for PowerPC.
+;
+	IF GENERATING68K  THEN
+;
+; pascal void UnloadSeg(void *routineAddr)
+;
+	IF ¬ GENERATINGCFM THEN
+		_UnloadSeg:	OPWORD	$A9F1
+	ELSE
+		IMPORT_CFM_FUNCTION	UnloadSeg
+	ENDIF
+
+	ELSE
+	ENDIF
+	IF ¬ GENERATINGCFM  THEN
+;
+; pascal void CountAppFiles(short *message, short *count)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	CountAppFiles
+	ENDIF
+
+;
+; pascal void GetAppFiles(short index, AppFile *theFile)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	GetAppFiles
+	ENDIF
+
+;
+; pascal void ClrAppFiles(short index)
+;
+	IF GENERATINGCFM THEN
+		IMPORT_CFM_FUNCTION	ClrAppFiles
+	ENDIF
+
+;
+; pascal void GetAppParms(Str255 apName, short *apRefNum, Handle *apParam)
+;
+	IF ¬ GENERATINGCFM THEN
+		_GetAppParms:	OPWORD	$A9F5
+	ELSE
+		IMPORT_CFM_FUNCTION	GetAppParms
+	ENDIF
+
+	ENDIF
+	IF OLDROUTINELOCATIONS  THEN
+;
+; pascal void ExitToShell(void)
+;
+	IF ¬ GENERATINGCFM THEN
+		_ExitToShell:	OPWORD	$A9F4
+	ELSE
+		IMPORT_CFM_FUNCTION	ExitToShell
+	ENDIF
+
+	ENDIF
+	ENDIF ; __SEGLOAD__

@@ -1,0 +1,1014 @@
+;
+;	File:		OCEStandardDirectory.a
+;
+;	Contains:	Apple Open Collaboration Environment Standard Directory Interfaces.
+;
+;	Version:	Technology:	AOCE Toolbox 1.02
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__OCESTANDARDDIRECTORY__') = 'UNDEFINED' THEN
+__OCESTANDARDDIRECTORY__ SET 1
+
+
+	IF &TYPE('__APPLEEVENTS__') = 'UNDEFINED' THEN
+	include 'AppleEvents.a'
+	ENDIF
+;		include 'Errors.a'											;
+;			include 'ConditionalMacros.a'							;
+;		include 'Types.a'											;
+;		include 'Memory.a'											;
+;			include 'MixedMode.a'									;
+;		include 'OSUtils.a'										;
+;		include 'Events.a'											;
+;			include 'Quickdraw.a'									;
+;				include 'QuickdrawText.a'							;
+;		include 'EPPC.a'											;
+;			include 'AppleTalk.a'									;
+;			include 'Files.a'										;
+;				include 'Finder.a'									;
+;			include 'PPCToolbox.a'									;
+;			include 'Processes.a'									;
+;		include 'Notification.a'									;
+
+	IF &TYPE('__ICONS__') = 'UNDEFINED' THEN
+	include 'Icons.a'
+	ENDIF
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+
+	IF &TYPE('__WINDOWS__') = 'UNDEFINED' THEN
+	include 'Windows.a'
+	ENDIF
+;		include 'Controls.a'										;
+;			include 'Menus.a'										;
+
+	IF &TYPE('__OCE__') = 'UNDEFINED' THEN
+	include 'OCE.a'
+	ENDIF
+;		include 'Aliases.a'										;
+;		include 'Script.a'											;
+;			include 'IntlResources.a'								;
+
+	IF &TYPE('__OCEAUTHDIR__') = 'UNDEFINED' THEN
+	include 'OCEAuthDir.a'
+	ENDIF
+
+gestaltSDPStandardDirectoryVersion EQU		'sdvr'
+gestaltSDPFindVersion			EQU		'dfnd'
+gestaltSDPPromptVersion			EQU		'prpv'
+
+genericDirectoryIconResource	EQU		-16721				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+genericLockedDirectoryIconResource EQU		-16716			; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+genericRecordIconResource		EQU		-16722				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+genericAttributeIconResource	EQU		-16723				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+genericTemplateIconResource		EQU		-16746				; icl8, icl4, ICN#, ics#, ics4, ics8 
+
+; standard icon suites 
+directoryFolderIconResource		EQU		-16720				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+lockedDirectoryFolderIconResource EQU		-16719			; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+personalDirectoryIconResource	EQU		-16718				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+directoriesIconResource			EQU		-16717				; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+preferredPersonalDirectoryIconResource EQU		-16724		; icl8, icl4, ICN#, ics#, ics4, ics8, sicn  
+
+; icon IDs for spinning arrows 
+kFirstSpinnerIcon				EQU		-16745
+kLastSpinnerIcon				EQU		-16738
+
+; resource types 
+kSDPPanelResourceType			EQU		'panl'
+kSDPFindPanelResourceType		EQU		'find'
+
+; Standard FindPanel resource 
+kStandardFindLayout				EQU		-16700
+
+; Prompt For Identity structures 
+kSDPGuestBit					EQU		0
+kSDPSpecificIdentityBit			EQU		1
+kSDPLocalIdentityBit			EQU		2
+
+; Values of SDPIdentityKind 
+kSDPGuestMask					EQU		1
+kSDPSpecificIdentityMask		EQU		2
+kSDPLocalIdentityMask			EQU		4
+
+; typedef unsigned short 	SDPIdentityKind
+
+kSDPSuggestionOnly				EQU		0
+kSDPRestrictToDirectory			EQU		1
+kSDPRestrictToRecord			EQU		2
+
+; typedef unsigned short 	SDPLoginFilterKind
+; Panel Structures 
+;
+;While the panel is in operation, four selection states may exist.
+;	1) kSDPNothingSelected means nothing is selected.
+;	2) kContainSelected means a volume, folder, catalog, dnode, or PAB is selected.
+;	3) kSDPLockedContainerSelected means one of the above, but no access privledges.
+;	4) kSDPRecordSelected means that a record is currently selected.
+;
+; Values of SDPSelectionState 
+
+kSDPNothingSelected				EQU		0
+kSDPLockedContainerSelected		EQU		1
+kSDPContainerSelected			EQU		2
+kSDPRecordSelected				EQU		3
+kSDPRecordAliasSelected			EQU		4
+kSDPContainerAliasSelected		EQU		5
+
+; typedef unsigned short 	SDPSelectionState
+;
+;This type informs the caller of the action the user took, either as the result
+;of an event (as returned by SDPPanelEvent) or when SDPOpenSelectedItem is called.
+;
+;kSDPProcessed means that the event (or call to SDPOpenSelectedItem) resulted in no
+;state change.
+;
+;kSDPSelectedAnItem indicates that the user wants to select the currently-hilited
+;record. This is returned, for example, when a user double-clicks on a record.
+;
+;kSDPChangedSelection implies that the user clicked on a new item (which may mean
+;that no item is selected).
+;
+; Values of SDPPanelState 
+
+kSDPProcessed					EQU		0
+kSDPSelectedAnItem				EQU		1
+kSDPChangedSelection			EQU		2
+
+; typedef unsigned short 	SDPPanelState
+;
+;Your application may read any of the fields in a SDPPanelRecord, but it should
+;use the appropriate routines to make changes to the records with the exception
+;of the refCon field which your application may read or write at will.  Private
+;information follows the SDPPanelRecord, so the handle must not be re-sized.
+;
+SDPPanelRecord 			RECORD	0
+bounds					 ds     Rect	; offset: $0 (0)
+visible					 ds.b   1		; offset: $8 (8)
+enabled					 ds.b   1		; offset: $9 (9)
+focused					 ds.b   1		; offset: $A (10)
+padByte					 ds.b   1		; offset: $B (11)
+identity				 ds.l   1		; offset: $C (12)
+refCon					 ds.l   1		; offset: $10 (16)
+listRect				 ds     Rect	; offset: $14 (20)
+popupRect				 ds     Rect	; offset: $1C (28)
+numberOfRows			 ds.w   1		; offset: $24 (36)
+rowHeight				 ds.w   1		; offset: $26 (38)
+pabMode					 ds.b   1		; offset: $28 (40)
+filler1					 ds.b   1		; offset: $29 (41)
+sizeof					 EQU *			; size:   $2A (42)
+						ENDR
+
+; typedef struct SDPPanelRecord  SDPPanelRecord
+; typedef SDPPanelRecord 	*SDPPanelPtr, **SDPPanelHandle
+; typedef PanelBusyUPP 		PanelBusyProc
+; Find Panel Structures 
+
+kSDPItemIsSelectedBit			EQU		0
+kSDPFindTextExistsBit			EQU		1
+
+; Values of SDPFindPanelState 
+kSDPItemIsSelectedMask			EQU		1 << kSDPItemIsSelectedBit
+kSDPFindTextExistsMask			EQU		1 << kSDPFindTextExistsBit
+
+; typedef unsigned short 	SDPFindPanelState
+; Values of SDPFindPanelFocus 
+
+kSDPFindPanelNoFocus			EQU		0
+kSDPFindPanelListHasFocus		EQU		1
+kSDPFindPanelTextHasFocus		EQU		2
+
+; typedef unsigned short 	SDPFindPanelFocus
+SDPFindPanelRecord 		RECORD	0
+upperLeft				 ds     Point	; offset: $0 (0)
+visible					 ds.b   1		; offset: $4 (4)
+enabled					 ds.b   1		; offset: $5 (5)
+nowFinding				 ds.b   1		; offset: $6 (6)
+padByte					 ds.b   1		; offset: $7 (7)
+currentFocus			 ds.w   1		; offset: $8 (8)
+identity				 ds.l   1		; offset: $A (10)
+simultaneousSearchCount	 ds.w   1		; offset: $E (14)
+refCon					 ds.l   1		; offset: $10 (16)
+sizeof					 EQU *			; size:   $14 (20)
+						ENDR
+
+; typedef struct SDPFindPanelRecord  SDPFindPanelRecord
+; typedef SDPFindPanelRecord  *SDPFindPanelPtr, **SDPFindPanelHandle
+; Values of SDPFindPanelResult 
+
+kSDPSelectedAFindItem			EQU		0
+kSDPFindSelectionChanged		EQU		1
+kSDPFindCompleted				EQU		2
+kSDPTextStateChanged			EQU		3
+kSDPFocusChanged				EQU		4
+kSDPSelectionAndFocusChanged	EQU		5
+kSDPMenuChanged					EQU		6
+kSDPSelectionAndMenuChanged		EQU		7
+kSDPProcessedFind				EQU		8
+
+; typedef unsigned short 	SDPFindPanelResult
+; typedef PackedPathNamePtr  *PackedRStringListHandle
+; typedef FindPanelBusyUPP 	FindPanelBusyProc
+; Prompt For Identity Routines 
+;
+; pascal OSErr SDPPromptForID(AuthIdentity *id, ConstStr255Param guestPrompt, ConstStr255Param specificIDPrompt, ConstStr255Param localIDPrompt, const RString *recordType, SDPIdentityKind permittedKinds, SDPIdentityKind *selectedKind, const RecordID *loginFilter, SDPLoginFilterKind filterKind)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPPromptForID
+			dc.w 	$203C
+			dc.w 	$0010
+			dc.w 	$0388
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPPromptForID
+	ENDIF
+
+;
+;SDPNewPanel creates a new panel. You supply the window in which the panel
+;is to live, the bounds for the panel (which includes both the menu and the list),
+;whether or not the panel is to be initially visible, the initial RLI (nil for
+;catalogs and volumes), the types of records that will be shown (only a single
+;(non-nil) type which may contain wildcards), the identity by which to browse
+;(for access control reasons), and a refCon which is  available to the caller.
+;
+;
+; pascal OSErr SDPNewPanel(SDPPanelHandle *newPanel, WindowPtr window, const Rect *bounds, Boolean visible, Boolean enabled, const PackedRLI *initialRLI, const RStringPtr *typesList, unsigned long typeCount, AuthIdentity identity, DirEnumChoices enumFlags, DirMatchWith matchTypeHow, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPNewPanel
+			dc.w 	$203C
+			dc.w 	$0015
+			dc.w 	$0064
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPNewPanel
+	ENDIF
+
+;
+;SDPSetIdentity Sets the identity used for browsing.  NOTE: This call is likely to go
+;away if the new authentication scheme works.
+;
+;
+; pascal OSErr SDPSetIdentity(SDPPanelHandle panel, AuthIdentity identity)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetIdentity
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0073
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetIdentity
+	ENDIF
+
+;
+;SDPGetNewPanel is similar to SDPNewPanel above, except it takes a resource id of a
+;'panl' resource.
+;
+;
+; pascal OSErr SDPGetNewPanel(SDPPanelHandle *newPanel, short resourceID, WindowPtr window, const PackedRLI *initialRLI, AuthIdentity identity)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetNewPanel
+			dc.w 	$203C
+			dc.w 	$0009
+			dc.w 	$0065
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetNewPanel
+	ENDIF
+
+;
+;Call this when you're completely done with a panel. It deallocates all of the
+;associated data structures.
+;
+;
+; pascal OSErr SDPDisposePanel(SDPPanelHandle panel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPDisposePanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0066
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPDisposePanel
+	ENDIF
+
+;
+;If the panel is visible, it makes it invisible by hiding the menu, turning off
+;drawing of the list, and erasing and  invaling the list's rectangle.
+;
+;
+; pascal OSErr SDPHidePanel(SDPPanelHandle panel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPHidePanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0067
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPHidePanel
+	ENDIF
+
+; If the panel is invisible, it makes it visible and draws it. 
+;
+; pascal OSErr SDPShowPanel(SDPPanelHandle panel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPShowPanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0068
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPShowPanel
+	ENDIF
+
+; Disables the list and menu so that it won't accept any commands. 
+;
+; pascal OSErr SDPEnablePanel(SDPPanelHandle panel, Boolean enable)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPEnablePanel
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$0069
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPEnablePanel
+	ENDIF
+
+;
+;Move the upper-left-hand corner of the panel to (h,v), given in local coordinates of
+;the panel's window.
+;
+;
+; pascal OSErr SDPMovePanel(SDPPanelHandle panel, short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPMovePanel
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006B
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPMovePanel
+	ENDIF
+
+;
+;Resizes the panel to have the given width and height (keeping the upper-left-hand
+;corner in a fixed position).
+;
+;
+; pascal OSErr SDPSizePanel(SDPPanelHandle panel, short width, short height)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSizePanel
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSizePanel
+	ENDIF
+
+;
+;This routine simulates a double-click on the selected item (if there is no selected
+;item, then it does nothing), and it returns the result of that "double-click" via the
+;whatHappened parameter. If a container is selected, then that container will be
+;opened and kMovedDownTheHierarchy is returned. If, however, the user is at the lowest
+;level in the hierarchy, then kSDPSelectedAnItem is returned.
+;
+;
+; pascal OSErr SDPOpenSelectedItem(SDPPanelHandle panel, SDPPanelState *whatHappened)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPOpenSelectedItem
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006D
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPOpenSelectedItem
+	ENDIF
+
+;
+;Returns whether a record is selected, something else is selected, or nothing is
+;selected.
+;
+;
+; pascal OSErr SDPGetPanelSelectionState(SDPPanelHandle panel, SDPSelectionState *itsState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetPanelSelectionState
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006E
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetPanelSelectionState
+	ENDIF
+
+;
+;Returns the size of the currently-selected DSSpec, or zero if a record is
+;not selected.  It is safe to do a NewPtr (SDPGetPanelSelectionSize (...))
+;
+;
+; pascal OSErr SDPGetPanelSelectionSize(SDPPanelHandle panel, unsigned short *dsSpecSize)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetPanelSelectionSize
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0072
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetPanelSelectionSize
+	ENDIF
+
+;
+;Returns the currently-selected DSSpec, or a zero-lengthed
+;DSSpec if a record is not selected. It is assumed that the selection
+;buffer allocated is large enough.
+;
+;
+; pascal OSErr SDPGetPanelSelection(SDPPanelHandle panel, PackedDSSpec *selection)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetPanelSelection
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006F
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetPanelSelection
+	ENDIF
+
+;
+;Forces browsing to the specified RLI. If prli is the current RLI, then it does
+;nothing.
+;
+;
+; pascal OSErr SDPSetPath(SDPPanelHandle panel, const PackedRLI *prli)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetPath
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0070
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetPath
+	ENDIF
+
+;
+;This is the main driver for the panel.  You should pass all events to SDPPanelEvent
+;including NULL events.  If you have more than 1 panel, you will need to
+;call SDPPanelEvent for each panel.  NOTE:  For Update Events you will also need to call
+;SDPUpdatePanel as described below.
+;
+;
+; pascal OSErr SDPPanelEvent(SDPPanelHandle panel, const EventRecord *theEvent, SDPPanelState *whatHappened)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPPanelEvent
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$0071
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPPanelEvent
+	ENDIF
+
+;
+;SDPUpdatePanel should be called in response to an update event.  Generally you will
+;have first called BeginUpdate, and pass the windows visRgn as theRgn.  If NULL
+;is passed for theRgn the entire panel is re-drawn.  NOTE:  Drawing is not cliped to
+;theRgn, if this is desired, you must first call SetClip.
+;
+;
+; pascal OSErr SDPUpdatePanel(SDPPanelHandle panel, RgnHandle theRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPUpdatePanel
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$006A
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPUpdatePanel
+	ENDIF
+
+;
+;SDPSelectString scrolls and selects the closest matching string at the current
+;level.  This is the same behavior as if the user typed in the given string.
+;
+;
+; pascal OSErr SDPSelectString(SDPPanelHandle panel, const RString *name)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSelectString
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0074
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSelectString
+	ENDIF
+
+;
+;SDPGetPathLength returns the length in bytes required to hold the current path name
+;in RLI format.  This corresponds to the path name in the popup menu.
+;
+;
+; pascal OSErr SDPGetPathLength(SDPPanelHandle panel, unsigned short *pathNameLength)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetPathLength
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0075
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetPathLength
+	ENDIF
+
+; SDPGetPath returns the current rli. 
+;
+; pascal OSErr SDPGetPath(SDPPanelHandle panel, PackedRLI *prli, short *dsRefNum)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetPath
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$0076
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetPath
+	ENDIF
+
+;
+;SDPSetFocus will draw the focus rectangle or erase the focus rectangle depending upon
+;the focus boolean.
+;
+;
+; pascal OSErr SDPSetFocus(SDPPanelHandle panel, Boolean focus)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetFocus
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$0077
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetFocus
+	ENDIF
+
+;
+;SDPSetPanelBalloonHelp allows clients to specify a STR# resource id to use for 
+;balloon help.  Balloon help is unavailable until this call is made.
+;
+;
+; pascal OSErr SDPSetPanelBalloonHelp(SDPPanelHandle panel, short balloonHelpID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetPanelBalloonHelp
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$0078
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetPanelBalloonHelp
+	ENDIF
+
+;
+;SDPInstallPanelBusyProc allows clients to install a CB that will be called while
+;the panel is aynchronously busy.
+;
+;
+; pascal OSErr SDPInstallPanelBusyProc(SDPPanelHandle panel, PanelBusyProc busyProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPInstallPanelBusyProc
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0079
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPInstallPanelBusyProc
+	ENDIF
+
+;
+; pascal OSErr SDPNewFindPanel(SDPFindPanelHandle *newPanel, WindowPtr window, Point upperLeft, short layoutResourceID, Boolean visible, Boolean enabled, const RStringPtr *typesList, long typeCount, DirMatchWith matchTypeHow, AuthIdentity identity, short simultaneousSearchCount, SDPFindPanelFocus initialFocus, long refCon)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPNewFindPanel
+			dc.w 	$203C
+			dc.w 	$0014
+			dc.w 	$08FC
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPNewFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPDisposeFindPanel(SDPFindPanelHandle findPanel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPDisposeFindPanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$08FD
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPDisposeFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPStartFind(SDPFindPanelHandle findPanel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPStartFind
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$08FE
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPStartFind
+	ENDIF
+
+;
+; pascal OSErr SDPStopFind(SDPFindPanelHandle findPanel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPStopFind
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$08FF
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPStopFind
+	ENDIF
+
+;
+; pascal OSErr SDPFindPanelEvent(SDPFindPanelHandle findPanel, const EventRecord *event, SDPFindPanelResult *whatHappened)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPFindPanelEvent
+			dc.w 	$203C
+			dc.w 	$0006
+			dc.w 	$0900
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPFindPanelEvent
+	ENDIF
+
+;
+; pascal OSErr SDPUpdateFindPanel(SDPFindPanelHandle findPanel, RgnHandle theRgn)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPUpdateFindPanel
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0901
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPUpdateFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPShowFindPanel(SDPFindPanelHandle findPanel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPShowFindPanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0902
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPShowFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPHideFindPanel(SDPFindPanelHandle findPanel)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPHideFindPanel
+			dc.w 	$203C
+			dc.w 	$0002
+			dc.w 	$0903
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPHideFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPMoveFindPanel(SDPFindPanelHandle findPanel, short h, short v)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPMoveFindPanel
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0904
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPMoveFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPEnableFindPanel(SDPFindPanelHandle findPanel, Boolean enabled)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPEnableFindPanel
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$0905
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPEnableFindPanel
+	ENDIF
+
+;
+; pascal OSErr SDPSetFindPanelFocus(SDPFindPanelHandle findPanel, SDPFindPanelFocus newFocus)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetFindPanelFocus
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$0906
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetFindPanelFocus
+	ENDIF
+
+;
+; pascal OSErr SDPGetFindPanelState(SDPFindPanelHandle findPanel, SDPFindPanelState *itsState)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetFindPanelState
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0907
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetFindPanelState
+	ENDIF
+
+;
+; pascal OSErr SDPGetFindPanelSelectionSize(SDPFindPanelHandle findPanel, unsigned short *size)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetFindPanelSelectionSize
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0908
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetFindPanelSelectionSize
+	ENDIF
+
+;
+; pascal OSErr SDPGetFindPanelSelection(SDPFindPanelHandle findPanel, PackedDSSpec *selection)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetFindPanelSelection
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$0909
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetFindPanelSelection
+	ENDIF
+
+;
+; pascal OSErr SDPSetFindPanelBalloonHelp(SDPFindPanelHandle findPanel, short balloonHelpID)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetFindPanelBalloonHelp
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$090A
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetFindPanelBalloonHelp
+	ENDIF
+
+;
+; pascal OSErr SDPSetFindIdentity(SDPFindPanelHandle findPanel, AuthIdentity identity)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPSetFindIdentity
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$090B
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPSetFindIdentity
+	ENDIF
+
+;
+; pascal OSErr SDPInstallFindPanelBusyProc(SDPFindPanelHandle findPanel, FindPanelBusyProc busyProc)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPInstallFindPanelBusyProc
+			dc.w 	$203C
+			dc.w 	$0004
+			dc.w 	$090C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPInstallFindPanelBusyProc
+	ENDIF
+
+;
+; pascal OSErr SDPGetIconByType(const RString *recordType, IconSelectorValue whichIcons, Handle *iconSuite)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetIconByType
+			move.w	#1024,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetIconByType
+	ENDIF
+
+;
+; pascal OSErr SDPGetDSSpecIcon(const PackedDSSpec *packedDSSpec, IconSelectorValue whichIcons, Handle *iconSuite)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetDSSpecIcon
+			move.w	#1025,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetDSSpecIcon
+	ENDIF
+
+;
+; pascal OSErr SDPGetCategories(PackedRStringListHandle *categories, PackedRStringListHandle *displayNames)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetCategories
+			move.w	#1026,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetCategories
+	ENDIF
+
+;
+; pascal OSErr SDPGetCategoryTypes(const RString *category, PackedRStringListHandle *types)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPGetCategoryTypes
+			move.w	#1027,d0
+			dc.w 	$AA5C
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPGetCategoryTypes
+	ENDIF
+
+;
+; pascal OSErr SDPResolveAliasFile(FSSpecPtr fileSpec, PackedDSSpecHandle resolvedDSSpec, AuthIdentity identity, Boolean mayPromptUser)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPResolveAliasFile
+			dc.w 	$203C
+			dc.w 	$0007
+			dc.w 	$0E74
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPResolveAliasFile
+	ENDIF
+
+;
+; pascal OSErr SDPResolveAliasDSSpec(PackedDSSpecHandle theAliasDSSpec, AuthIdentity identity, Boolean mayPromptUser)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPResolveAliasDSSpec
+			dc.w 	$203C
+			dc.w 	$0005
+			dc.w 	$0E75
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPResolveAliasDSSpec
+	ENDIF
+
+;
+; pascal OSErr SDPRepairPersonalDirectory(FSSpec *pd, Boolean showProgress)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_SDPRepairPersonalDirectory
+			dc.w 	$203C
+			dc.w 	$0003
+			dc.w 	$1A2C
+			dc.w 	$AA5D
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	SDPRepairPersonalDirectory
+	ENDIF
+
+	ENDIF ; __OCESTANDARDDIRECTORY__

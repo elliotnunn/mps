@@ -1,0 +1,1656 @@
+;
+;    File:       Components.a
+;
+;    Contains:   Component Manager Interfaces.
+;
+;    Version:    Technology: QuickTime 5.0
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1991-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__COMPONENTS__') = 'UNDEFINED' THEN
+__COMPONENTS__ SET 1
+
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__MIXEDMODE__') = 'UNDEFINED' THEN
+	include 'MixedMode.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+
+
+kAppleManufacturer				EQU		'appl'				; Apple supplied components 
+kComponentResourceType			EQU		'thng'				; a components resource type 
+kComponentAliasResourceType		EQU		'thga'				; component alias resource type 
+
+kAnyComponentType				EQU		0
+kAnyComponentSubType			EQU		0
+kAnyComponentManufacturer		EQU		0
+kAnyComponentFlagsMask			EQU		0
+
+cmpIsMissing					EQU		$20000000
+cmpWantsRegisterMessage			EQU		$80000000
+
+kComponentOpenSelect			EQU		-1					; ComponentInstance for this open 
+kComponentCloseSelect			EQU		-2					; ComponentInstance for this close 
+kComponentCanDoSelect			EQU		-3					; selector # being queried 
+kComponentVersionSelect			EQU		-4					; no params 
+kComponentRegisterSelect		EQU		-5					; no params 
+kComponentTargetSelect			EQU		-6					; ComponentInstance for top of call chain 
+kComponentUnregisterSelect		EQU		-7					; no params 
+kComponentGetMPWorkFunctionSelect EQU	-8					; some params 
+kComponentExecuteWiredActionSelect EQU	-9					; QTAtomContainer actionContainer, QTAtom actionAtom, QTCustomActionTargetPtr target, QTEventRecordPtr event 
+kComponentGetPublicResourceSelect EQU	-10					; OSType resourceType, short resourceId, Handle *resource 
+;  Component Resource Extension flags 
+
+componentDoAutoVersion			EQU		$01
+componentWantsUnregister		EQU		$02
+componentAutoVersionIncludeFlags EQU	$04
+componentHasMultiplePlatforms	EQU		$08
+componentLoadResident			EQU		$10
+
+
+;  Set Default Component flags 
+
+defaultComponentIdentical		EQU		0
+defaultComponentAnyFlags		EQU		1
+defaultComponentAnyManufacturer	EQU		2
+defaultComponentAnySubType		EQU		4
+defaultComponentAnyFlagsAnyManufacturer EQU 3
+defaultComponentAnyFlagsAnyManufacturerAnySubType EQU 7
+;  RegisterComponentResource flags 
+
+registerComponentGlobal			EQU		1
+registerComponentNoDuplicates	EQU		2
+registerComponentAfterExisting	EQU		4
+registerComponentAliasesOnly	EQU		8
+
+ComponentDescription	RECORD 0
+componentType			 ds.l	1				; offset: $0 (0)		;  A unique 4-byte code indentifying the command set 
+componentSubType		 ds.l	1				; offset: $4 (4)		;  Particular flavor of this instance 
+componentManufacturer	 ds.l	1				; offset: $8 (8)		;  Vendor indentification 
+componentFlags			 ds.l	1				; offset: $C (12)		;  8 each for Component,Type,SubType,Manuf/revision 
+componentFlagsMask		 ds.l	1				; offset: $10 (16)		;  Mask for specifying which flags to consider in search, zero during registration 
+sizeof					 EQU *					; size:   $14 (20)
+						ENDR
+
+ResourceSpec			RECORD 0
+resType					 ds.l	1				; offset: $0 (0)		;  4-byte code    
+resID					 ds.w	1				; offset: $4 (4)		;          
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+ComponentResource		RECORD 0
+cd						 ds		ComponentDescription ; offset: $0 (0)	;  Registration parameters 
+component				 ds		ResourceSpec	; offset: $14 (20)		;  resource where Component code is found 
+componentName			 ds		ResourceSpec	; offset: $1A (26)		;  name string resource 
+componentInfo			 ds		ResourceSpec	; offset: $20 (32)		;  info string resource 
+componentIcon			 ds		ResourceSpec	; offset: $26 (38)		;  icon resource 
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+; typedef struct ComponentResource *	ComponentResourcePtr
+
+; typedef ComponentResourcePtr *		ComponentResourceHandle
+
+ComponentPlatformInfo	RECORD 0
+componentFlags			 ds.l	1				; offset: $0 (0)		;  flags of Component 
+component				 ds		ResourceSpec	; offset: $4 (4)		;  resource where Component code is found 
+platformType			 ds.w	1				; offset: $A (10)		;  gestaltSysArchitecture result 
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+ComponentResourceExtension RECORD 0
+componentVersion		 ds.l	1				; offset: $0 (0)		;  version of Component 
+componentRegisterFlags	 ds.l	1				; offset: $4 (4)		;  flags for registration 
+componentIconFamily		 ds.w	1				; offset: $8 (8)		;  resource id of Icon Family 
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+ComponentPlatformInfoArray RECORD 0
+count					 ds.l	1				; offset: $0 (0)
+platformArray			 ds		ComponentPlatformInfo ; offset: $4 (4) <-- really an array of length one
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+ExtComponentResource	RECORD 0
+cd						 ds		ComponentDescription ; offset: $0 (0)	;  registration parameters 
+component				 ds		ResourceSpec	; offset: $14 (20)		;  resource where Component code is found 
+componentName			 ds		ResourceSpec	; offset: $1A (26)		;  name string resource 
+componentInfo			 ds		ResourceSpec	; offset: $20 (32)		;  info string resource 
+componentIcon			 ds		ResourceSpec	; offset: $26 (38)		;  icon resource 
+componentVersion		 ds.l	1				; offset: $2C (44)		;  version of Component 
+componentRegisterFlags	 ds.l	1				; offset: $30 (48)		;  flags for registration 
+componentIconFamily		 ds.w	1				; offset: $34 (52)		;  resource id of Icon Family 
+count					 ds.l	1				; offset: $36 (54)		;  elements in platformArray 
+platformArray			 ds		ComponentPlatformInfo ; offset: $3A (58) <-- really an array of length one
+sizeof					 EQU *					; size:   $46 (70)
+						ENDR
+; typedef struct ExtComponentResource *	ExtComponentResourcePtr
+
+; typedef ExtComponentResourcePtr *		ExtComponentResourceHandle
+
+ComponentAliasResource	RECORD 0
+cr						 ds		ComponentResource ; offset: $0 (0)		;  Registration parameters 
+aliasCD					 ds		ComponentDescription ; offset: $2C (44) ;  component alias description 
+sizeof					 EQU *					; size:   $40 (64)
+						ENDR
+;   Structure received by Component:        
+ComponentParameters		RECORD 0
+flags					 ds.b	1				; offset: $0 (0)		;  call modifiers: sync/async, deferred, immed, etc 
+paramSize				 ds.b	1				; offset: $1 (1)		;  size in bytes of actual parameters passed to this call 
+what					 ds.w	1				; offset: $2 (2)		;  routine selector, negative for Component management calls 
+params					 ds.l	1				; offset: $4 (4) <-- really an array of length one ;  actual parameters for the indicated routine 
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+ComponentRecord			RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct ComponentRecord *		Component
+
+ComponentInstanceRecord	RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct ComponentInstanceRecord * ComponentInstance
+
+RegisteredComponentRecord RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct RegisteredComponentRecord * RegisteredComponentRecordPtr
+
+RegisteredComponentInstanceRecord RECORD 0
+data					 ds.l	1				; offset: $0 (0) <-- really an array of length one
+sizeof					 EQU *					; size:   $4 (4)
+						ENDR
+; typedef struct RegisteredComponentInstanceRecord * RegisteredComponentInstanceRecordPtr
+
+; typedef long 							ComponentResult
+
+
+platform68k						EQU		1					; platform type (response from gestaltComponentPlatform) 
+platformPowerPC					EQU		2					; (when gestaltComponentPlatform is not implemented, use 
+platformInterpreted				EQU		3					; gestaltSysArchitecture) 
+platformWin32					EQU		4
+platformPowerPCNativeEntryPoint	EQU		5
+
+mpWorkFlagDoWork				EQU		$01
+mpWorkFlagDoCompletion			EQU		$02
+mpWorkFlagCopyWorkBlock			EQU		$04
+mpWorkFlagDontBlock				EQU		$08
+mpWorkFlagGetProcessorCount		EQU		$10
+mpWorkFlagGetIsRunning			EQU		$40
+
+cmpAliasNoFlags					EQU		0
+cmpAliasOnlyThisFile			EQU		1
+ComponentMPWorkFunctionHeaderRecord RECORD 0
+headerSize				 ds.l	1				; offset: $0 (0)
+recordSize				 ds.l	1				; offset: $4 (4)
+workFlags				 ds.l	1				; offset: $8 (8)
+processorCount			 ds.w	1				; offset: $C (12)
+unused					 ds.b	1				; offset: $E (14)
+isRunning				 ds.b	1				; offset: $F (15)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct ComponentMPWorkFunctionHeaderRecord * ComponentMPWorkFunctionHeaderRecordPtr
+
+; 
+;    The parameter list for each ComponentFunction is unique. It is
+;    therefore up to users to create the appropriate procInfo for their
+;    own ComponentFunctions where necessary.
+;
+
+; typedef UniversalProcPtr 				ComponentFunctionUPP
+
+
+; *  NewComponentFunctionUPP()
+; *  
+; *  Discussion:
+; *    For use in writing a Carbon compliant Component.  It is used to
+; *    create a ComponentFunctionUPP needed to call
+; *    CallComponentFunction in the Components dispatch routine.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentFunctionUPP NewComponentFunctionUPP(ProcPtr userRoutine, ProcInfoType procInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION NewComponentFunctionUPP
+	ENDIF
+
+
+; *  DisposeComponentFunctionUPP()
+; *  
+; *  Discussion:
+; *    For use in writing a Carbon compliant Component.  It is used to
+; *    dispose of a ComponentFunctionUPP created by
+; *    NewComponentFunctionUPP.
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal void DisposeComponentFunctionUPP(ComponentFunctionUPP userUPP)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DisposeComponentFunctionUPP
+	ENDIF
+
+
+
+; *  CallComponentUPP
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+
+; ********************************************************
+;*                                                       *
+;*               APPLICATION LEVEL CALLS                 *
+;*                                                       *
+;*******************************************************
+
+; ********************************************************
+;* Component Database Add, Delete, and Query Routines
+;*******************************************************
+
+
+; *  RegisterComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Component RegisterComponent(ComponentDescription *cd, ComponentRoutineUPP componentEntryPoint, short global, Handle componentName, Handle componentInfo, Handle componentIcon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegisterComponent
+			moveq           	#1,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterComponent
+	ENDIF
+
+
+; *  RegisterComponentResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Component RegisterComponentResource(ComponentResourceHandle cr, short global)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegisterComponentResource
+			moveq           	#18,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterComponentResource
+	ENDIF
+
+
+; *  UnregisterComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr UnregisterComponent(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UnregisterComponent
+			moveq           	#2,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UnregisterComponent
+	ENDIF
+
+
+; *  FindNextComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Component FindNextComponent(Component aComponent, ComponentDescription *looking)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_FindNextComponent
+			moveq           	#4,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION FindNextComponent
+	ENDIF
+
+
+; *  CountComponents()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long CountComponents(ComponentDescription *looking)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CountComponents
+			moveq           	#3,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountComponents
+	ENDIF
+
+
+; *  GetComponentInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr GetComponentInfo(Component aComponent, ComponentDescription *cd, Handle componentName, Handle componentInfo, Handle componentIcon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentInfo
+			moveq           	#5,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentInfo
+	ENDIF
+
+
+; *  GetComponentListModSeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long GetComponentListModSeed(void )
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentListModSeed
+			moveq           	#6,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentListModSeed
+	ENDIF
+
+
+; *  GetComponentTypeModSeed()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long GetComponentTypeModSeed(OSType componentType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentTypeModSeed
+			moveq           	#44,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentTypeModSeed
+	ENDIF
+
+; ********************************************************
+;* Component Instance Allocation and dispatch routines
+;*******************************************************
+
+
+; *  OpenAComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr OpenAComponent(Component aComponent, ComponentInstance *ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenAComponent
+			moveq           	#45,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenAComponent
+	ENDIF
+
+
+; *  OpenComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentInstance OpenComponent(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenComponent
+			moveq           	#7,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenComponent
+	ENDIF
+
+
+; *  CloseComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr CloseComponent(ComponentInstance aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseComponent
+			moveq           	#8,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseComponent
+	ENDIF
+
+
+; *  GetComponentInstanceError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr GetComponentInstanceError(ComponentInstance aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentInstanceError
+			moveq           	#10,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentInstanceError
+	ENDIF
+
+; ********************************************************
+;* Component aliases
+;*******************************************************
+
+
+; *  ResolveComponentAlias()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Component ResolveComponentAlias(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ResolveComponentAlias
+			moveq           	#32,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ResolveComponentAlias
+	ENDIF
+
+; ********************************************************
+;* Component public resources and public string lists
+;*******************************************************
+
+;  Note: GetComponentPublicResource returns a Handle, not a resource.  The caller must dispose it with DisposeHandle. 
+
+; *  GetComponentPublicResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetComponentPublicResource(Component aComponent, OSType resourceType, short resourceID, Handle *theResource)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentPublicResource
+			moveq           	#56,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentPublicResource
+	ENDIF
+
+
+; *  GetComponentPublicResourceList()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.0.2 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetComponentPublicResourceList(OSType resourceType, short resourceID, long flags, ComponentDescription *cd, GetMissingComponentResourceUPP missingProc, void *refCon, void *atomContainerPtr)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentPublicResourceList
+			moveq           	#57,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentPublicResourceList
+	ENDIF
+
+
+; *  GetComponentPublicIndString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.3 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal OSErr GetComponentPublicIndString(Component aComponent, Str255 theString, short strListID, short index)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentPublicIndString
+			moveq           	#58,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentPublicIndString
+	ENDIF
+
+; ********************************************************
+;*                                                       *
+;*                   CALLS MADE BY COMPONENTS            *
+;*                                                       *
+;*******************************************************
+
+; ********************************************************
+;* Component Management routines
+;*******************************************************
+
+
+; *  SetComponentInstanceError()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal void SetComponentInstanceError(ComponentInstance aComponentInstance, OSErr theError)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetComponentInstanceError
+			moveq           	#11,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetComponentInstanceError
+	ENDIF
+
+
+; *  GetComponentRefcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long GetComponentRefcon(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentRefcon
+			moveq           	#16,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentRefcon
+	ENDIF
+
+
+; *  SetComponentRefcon()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal void SetComponentRefcon(Component aComponent, long theRefcon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetComponentRefcon
+			moveq           	#17,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetComponentRefcon
+	ENDIF
+
+
+; *  OpenComponentResFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal short OpenComponentResFile(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenComponentResFile
+			moveq           	#21,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenComponentResFile
+	ENDIF
+
+
+; *  OpenAComponentResFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr OpenAComponentResFile(Component aComponent, short *resRef)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenAComponentResFile
+			moveq           	#47,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenAComponentResFile
+	ENDIF
+
+
+; *  CloseComponentResFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr CloseComponentResFile(short refnum)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CloseComponentResFile
+			moveq           	#24,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CloseComponentResFile
+	ENDIF
+
+;  Note: GetComponentResource returns a Handle, not a resource.  The caller must dispose it with DisposeHandle. 
+
+; *  GetComponentResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr GetComponentResource(Component aComponent, OSType resType, short resID, Handle *theResource)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentResource
+			moveq           	#53,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentResource
+	ENDIF
+
+
+; *  GetComponentIndString()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 3.0 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr GetComponentIndString(Component aComponent, Str255 theString, short strListID, short index)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentIndString
+			moveq           	#54,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentIndString
+	ENDIF
+
+; ********************************************************
+;* Component Instance Management routines
+;*******************************************************
+
+
+; *  GetComponentInstanceStorage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Handle GetComponentInstanceStorage(ComponentInstance aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentInstanceStorage
+			moveq           	#12,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentInstanceStorage
+	ENDIF
+
+
+; *  SetComponentInstanceStorage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal void SetComponentInstanceStorage(ComponentInstance aComponentInstance, Handle theStorage)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetComponentInstanceStorage
+			moveq           	#13,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetComponentInstanceStorage
+	ENDIF
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  GetComponentInstanceA5()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long GetComponentInstanceA5(ComponentInstance aComponentInstance)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentInstanceA5
+			moveq           	#14,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentInstanceA5
+	ENDIF
+
+
+; *  SetComponentInstanceA5()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal void SetComponentInstanceA5(ComponentInstance aComponentInstance, long theA5)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetComponentInstanceA5
+			moveq           	#15,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetComponentInstanceA5
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+; *  CountComponentInstances()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long CountComponentInstances(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CountComponentInstances
+			moveq           	#19,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CountComponentInstances
+	ENDIF
+
+;  useful helper routines for convenient method dispatching 
+
+; *  CallComponentFunction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long CallComponentFunction(ComponentParameters *params, ComponentFunctionUPP func)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentFunction
+			moveq           	#-1,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentFunction
+	ENDIF
+
+
+; *  CallComponentFunctionWithStorage()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long CallComponentFunctionWithStorage(Handle storage, ComponentParameters *params, ComponentFunctionUPP func)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentFunctionWithStorage
+			moveq           	#-1,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentFunctionWithStorage
+	ENDIF
+
+	IF TARGET_CPU_PPC ** TARGET_OS_MAC THEN
+
+; *  CallComponentFunctionWithStorageProcInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal long CallComponentFunctionWithStorageProcInfo(Handle storage, ComponentParameters *params, ProcPtr func, ProcInfoType funcProcInfo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentFunctionWithStorageProcInfo
+	ENDIF
+
+	ELSE
+	ENDIF
+
+; *  DelegateComponentCall()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long DelegateComponentCall(ComponentParameters *originalParams, ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_DelegateComponentCall
+			moveq           	#36,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION DelegateComponentCall
+	ENDIF
+
+
+; *  SetDefaultComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr SetDefaultComponent(Component aComponent, short flags)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_SetDefaultComponent
+			moveq           	#30,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION SetDefaultComponent
+	ENDIF
+
+
+; *  OpenDefaultComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentInstance OpenDefaultComponent(OSType componentType, OSType componentSubType)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenDefaultComponent
+			moveq           	#33,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenDefaultComponent
+	ENDIF
+
+
+; *  OpenADefaultComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr OpenADefaultComponent(OSType componentType, OSType componentSubType, ComponentInstance *ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_OpenADefaultComponent
+			moveq           	#46,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION OpenADefaultComponent
+	ENDIF
+
+
+; *  CaptureComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal Component CaptureComponent(Component capturedComponent, Component capturingComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CaptureComponent
+			moveq           	#28,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CaptureComponent
+	ENDIF
+
+
+; *  UncaptureComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr UncaptureComponent(Component aComponent)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_UncaptureComponent
+			moveq           	#29,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION UncaptureComponent
+	ENDIF
+
+
+; *  RegisterComponentResourceFile()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long RegisterComponentResourceFile(short resRefNum, short global)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_RegisterComponentResourceFile
+			moveq           	#20,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION RegisterComponentResourceFile
+	ENDIF
+
+
+; *  GetComponentIconSuite()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal OSErr GetComponentIconSuite(Component aComponent, Handle *iconSuite)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentIconSuite
+			moveq           	#41,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentIconSuite
+	ENDIF
+
+; ********************************************************
+;*                                                       *
+;*           Direct calls to the Components              *
+;*                                                       *
+;*******************************************************
+
+;  Old style names
+
+
+; *  ComponentFunctionImplemented()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long ComponentFunctionImplemented(ComponentInstance ci, short ftnNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ComponentFunctionImplemented
+			move.l              #$0002FFFD,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ComponentFunctionImplemented
+	ENDIF
+
+
+; *  GetComponentVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long GetComponentVersion(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_GetComponentVersion
+			move.l              #$0000FFFC,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION GetComponentVersion
+	ENDIF
+
+
+; *  ComponentSetTarget()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib 7.1 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal long ComponentSetTarget(ComponentInstance ci, ComponentInstance target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_ComponentSetTarget
+			move.l              #$0004FFFA,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION ComponentSetTarget
+	ENDIF
+
+;  New style names
+
+
+; *  CallComponentOpen()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentOpen(ComponentInstance ci, ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentOpen
+			move.l              #$0004FFFF,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentOpen
+	ENDIF
+
+
+; *  CallComponentClose()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentClose(ComponentInstance ci, ComponentInstance self)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentClose
+			move.l              #$0004FFFE,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentClose
+	ENDIF
+
+
+; *  CallComponentCanDo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentCanDo(ComponentInstance ci, short ftnNumber)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentCanDo
+			move.l              #$0002FFFD,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentCanDo
+	ENDIF
+
+
+; *  CallComponentVersion()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentVersion(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentVersion
+			move.l              #$0000FFFC,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentVersion
+	ENDIF
+
+
+; *  CallComponentRegister()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentRegister(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentRegister
+			move.l              #$0000FFFB,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentRegister
+	ENDIF
+
+
+; *  CallComponentTarget()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentTarget(ComponentInstance ci, ComponentInstance target)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentTarget
+			move.l              #$0004FFFA,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentTarget
+	ENDIF
+
+
+; *  CallComponentUnregister()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentUnregister(ComponentInstance ci)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentUnregister
+			move.l              #$0000FFF9,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentUnregister
+	ENDIF
+
+
+; *  CallComponentGetMPWorkFunction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 2.5 and later
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponentGetMPWorkFunction(ComponentInstance ci, ComponentMPWorkFunctionUPP *workFunction, void **refCon)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentGetMPWorkFunction
+			move.l              #$0008FFF8,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentGetMPWorkFunction
+	ENDIF
+
+
+; *  CallComponentGetPublicResource()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in InterfaceLib via QuickTime 4.0 and later
+; *    CarbonLib:        in CarbonLib 1.1 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult CallComponentGetPublicResource(ComponentInstance ci, OSType resourceType, short resourceID, Handle *resource)
+;
+	IF TARGET_OS_MAC ** TARGET_CPU_68K ** ¬ TARGET_RT_MAC_CFM THEN
+		Macro
+		_CallComponentGetPublicResource
+			move.l              #$000AFFF6,-(sp)
+			moveq           	#0,D0
+			dc.w            	$A82A
+		EndM
+	ELSEIF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentGetPublicResource
+	ENDIF
+
+
+	IF ¬ TARGET_OS_MAC THEN
+;  
+;        CallComponent is used by ComponentGlue routines to manually call a component function.
+;     
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  CallComponent()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; *    Windows:          in qtmlClient.lib 3.0 and later
+; 
+
+;
+; pascal ComponentResult CallComponent(ComponentInstance ci, ComponentParameters *cp)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponent
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF
+; 
+;    CallComponentDispatch is a CarbonLib routine that replaces CallComponent inline glue
+;    to call a component function.
+; 
+
+
+; *  CallComponentDispatch()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   not available
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;
+; pascal ComponentResult CallComponentDispatch(ComponentParameters *cp)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION CallComponentDispatch
+	ENDIF
+
+
+;  UPP call backs 
+
+; *  NewComponentMPWorkFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewComponentRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  NewGetMissingComponentResourceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeComponentMPWorkFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeComponentRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  DisposeGetMissingComponentResourceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeComponentMPWorkFunctionUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeComponentRoutineUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+
+; *  InvokeGetMissingComponentResourceUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        in CarbonLib 1.0 and later
+; *    Mac OS X:         in version 10.0 or later
+; 
+
+;  ProcInfos 
+
+
+
+
+
+
+	ENDIF ; __COMPONENTS__ 
+

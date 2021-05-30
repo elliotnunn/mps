@@ -1,0 +1,451 @@
+;
+;	File:		Lists.a
+;
+;	Contains:	List Manager Interfaces.
+;
+;	Version:	Technology:	System 7.5
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__LISTS__') = 'UNDEFINED' THEN
+__LISTS__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__CONTROLS__') = 'UNDEFINED' THEN
+	include 'Controls.a'
+	ENDIF
+;		include 'Quickdraw.a'										;
+;			include 'MixedMode.a'									;
+;			include 'QuickdrawText.a'								;
+;		include 'Menus.a'											;
+;			include 'Memory.a'										;
+
+	IF &TYPE('__MEMORY__') = 'UNDEFINED' THEN
+	include 'Memory.a'
+	ENDIF
+	IF &TYPE('STRICT_LISTS') = 'UNDEFINED' THEN
+	STRICT_LISTS: SET 0
+	ENDIF
+	IF ¬ STRICT_LISTS  THEN
+
+lDoVAutoscroll					EQU		2
+lDoHAutoscroll					EQU		1
+lOnlyOne						EQU		-128
+lExtendDrag						EQU		64
+lNoDisjoint						EQU		32
+lNoExtend						EQU		16
+lNoRect							EQU		8
+lUseSense						EQU		4
+lNoNilHilite					EQU		2
+
+lDoVAutoscrollBit				EQU		1
+lDoHAutoscrollBit				EQU		0
+lOnlyOneBit						EQU		7
+lExtendDragBit					EQU		6
+lNoDisjointBit					EQU		5
+lNoExtendBit					EQU		4
+lNoRectBit						EQU		3
+lUseSenseBit					EQU		2
+lNoNilHiliteBit					EQU		1
+
+	ENDIF
+
+lInitMsg						EQU		0
+lDrawMsg						EQU		1
+lHiliteMsg						EQU		2
+lCloseMsg						EQU		3
+
+	IF STRICT_LISTS  THEN
+; typedef ListRef 			ListHandle
+	ELSE
+; typedef struct ListRec 	ListRec, *ListPtr, **ListHandle
+; typedef ListHandle 		ListRef
+	ENDIF
+; typedef Point 			Cell
+; typedef Rect 				ListBounds
+; typedef char 				DataArray[32001]
+	IF ¬ STRICT_LISTS  THEN
+ListRec 				RECORD	0
+rView					 ds     Rect	; offset: $0 (0)
+port					 ds.l   1		; offset: $8 (8)
+indent					 ds     Point	; offset: $C (12)
+cellSize				 ds     Point	; offset: $10 (16)
+visible					 ds.l   2		; offset: $14 (20)
+vScroll					 ds.l   1		; offset: $1C (28)
+hScroll					 ds.l   1		; offset: $20 (32)
+selFlags				 ds.b   1		; offset: $24 (36)
+lActive					 ds.b   1		; offset: $25 (37)
+lReserved				 ds.b   1		; offset: $26 (38)
+listFlags				 ds.b   1		; offset: $27 (39)
+clikTime				 ds.l   1		; offset: $28 (40)
+clikLoc					 ds     Point	; offset: $2C (44)
+mouseLoc				 ds     Point	; offset: $30 (48)
+lClickLoop				 ds.l   1		; offset: $34 (52)
+lastClick				 ds.l   1		; offset: $38 (56)
+refCon					 ds.l   1		; offset: $3C (60)
+listDefProc				 ds.l   1		; offset: $40 (64)
+userHandle				 ds.l   1		; offset: $44 (68)
+dataBounds				 ds.l   2		; offset: $48 (72)
+cells					 ds.l   1		; offset: $50 (80)
+maxIndex				 ds.w   1		; offset: $54 (84)
+cellArray				 ds.w   1		; offset: $56 (86)
+sizeof					 EQU *			; size:   $58 (88)
+						ENDR
+
+	ENDIF
+;
+; pascal ListRef LNew(const Rect *rView, const ListBounds *dataBounds, Point cSize, short theProc, WindowRef theWindow, Boolean drawIt, Boolean hasGrow, Boolean scrollHoriz, Boolean scrollVert)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LNew
+			move.w	#$0044,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LNew
+	ENDIF
+
+;
+; pascal void LDispose(ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LDispose
+			move.w	#$0028,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LDispose
+	ENDIF
+
+;
+; pascal short LAddColumn(short count, short colNum, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LAddColumn
+			move.w	#$0004,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LAddColumn
+	ENDIF
+
+;
+; pascal short LAddRow(short count, short rowNum, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LAddRow
+			move.w	#$0008,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LAddRow
+	ENDIF
+
+;
+; pascal void LDelColumn(short count, short colNum, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LDelColumn
+			move.w	#$0020,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LDelColumn
+	ENDIF
+
+;
+; pascal void LDelRow(short count, short rowNum, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LDelRow
+			move.w	#$0024,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LDelRow
+	ENDIF
+
+;
+; pascal Boolean LGetSelect(Boolean next, Cell *theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LGetSelect
+			move.w	#$003C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LGetSelect
+	ENDIF
+
+;
+; pascal Cell LLastClick(ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LLastClick
+			move.w	#$0040,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LLastClick
+	ENDIF
+
+;
+; pascal Boolean LNextCell(Boolean hNext, Boolean vNext, Cell *theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LNextCell
+			move.w	#$0048,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LNextCell
+	ENDIF
+
+;
+; pascal Boolean LSearch(const void *dataPtr, short dataLen, ListSearchUPP searchProc, Cell *theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LSearch
+			move.w	#$0054,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LSearch
+	ENDIF
+
+;
+; pascal void LSize(short listWidth, short listHeight, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LSize
+			move.w	#$0060,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LSize
+	ENDIF
+
+;
+; pascal void LSetDrawingMode(Boolean drawIt, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LSetDrawingMode
+			move.w	#$002C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LSetDrawingMode
+	ENDIF
+
+;
+; pascal void LScroll(short dCols, short dRows, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LScroll
+			move.w	#$0050,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LScroll
+	ENDIF
+
+;
+; pascal void LAutoScroll(ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LAutoScroll
+			move.w	#$0010,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LAutoScroll
+	ENDIF
+
+;
+; pascal void LUpdate(RgnHandle theRgn, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LUpdate
+			move.w	#$0064,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LUpdate
+	ENDIF
+
+;
+; pascal void LActivate(Boolean act, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LActivate
+			dc.w 	$4267
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LActivate
+	ENDIF
+
+;
+; pascal void LCellSize(Point cSize, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LCellSize
+			move.w	#$0014,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LCellSize
+	ENDIF
+
+;
+; pascal Boolean LClick(Point pt, short modifiers, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LClick
+			move.w	#$0018,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LClick
+	ENDIF
+
+;
+; pascal void LAddToCell(const void *dataPtr, short dataLen, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LAddToCell
+			move.w	#$000C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LAddToCell
+	ENDIF
+
+;
+; pascal void LClrCell(Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LClrCell
+			move.w	#$001C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LClrCell
+	ENDIF
+
+;
+; pascal void LGetCell(void *dataPtr, short *dataLen, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LGetCell
+			move.w	#$0038,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LGetCell
+	ENDIF
+
+;
+; pascal void LRect(Rect *cellRect, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LRect
+			move.w	#$004C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LRect
+	ENDIF
+
+;
+; pascal void LSetCell(const void *dataPtr, short dataLen, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LSetCell
+			move.w	#$0058,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LSetCell
+	ENDIF
+
+;
+; pascal void LSetSelect(Boolean setIt, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LSetSelect
+			move.w	#$005C,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LSetSelect
+	ENDIF
+
+;
+; pascal void LDraw(Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LDraw
+			move.w	#$0030,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LDraw
+	ENDIF
+
+;
+; pascal void LGetCellDataLocation(short *offset, short *len, Cell theCell, ListRef lHandle)
+;
+	IF ¬ GENERATINGCFM THEN
+		Macro
+		_LGetCellDataLocation
+			move.w	#$0034,-(sp)
+			dc.w 	$A9E7
+		EndM
+	ELSE
+		IMPORT_CFM_FUNCTION	LGetCellDataLocation
+	ENDIF
+
+	IF OLDROUTINENAMES  THEN
+	ENDIF
+	ENDIF ; __LISTS__

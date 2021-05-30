@@ -1,0 +1,412 @@
+
+; File: SonyEqu.a
+;
+; Version 1.0
+;
+; Copyright Apple Computer, Inc. 1984, 1985, 1986
+; All Rights Reserved
+;
+
+
+;--------------------------------------------------------------------
+;
+; The following information was formerly in "private" files that were
+; not released to the general developer community.
+;
+; The information in this file is not needed for normal application
+; development. These equates and macros were necessary for development
+; of the Macintosh ToolBox and Operating System, and are likely to be
+; dependent on their current implementation. Use of any information
+; in this file is likely to cause your software to fail on future
+; versions of Macintosh system software or hardware.
+;
+; Apple Developer Support will not support any use of the following
+; information.
+;
+; In order to prevent any "accidental" use of this information, it has
+; been disabled using the conditional-assembly variable defined below.
+; If you change this to a non-zero value, you're on your own.
+
+	IF (&TYPE('SonyNonPortable') = 'UNDEFINED') THEN
+SonyNonPortable EQU 0
+	ENDIF
+
+	IF SonyNonPortable THEN
+
+
+; SonyVars Data Structure (offsets):
+;	(1) Driver local vars.
+;	(2) Drive-specific vars.
+;	(3) More driver local vars.
+;	(4) Direct-connect driver locals.
+;
+; Drive Constants:
+;	(1) Floppy drive constants (tuneable).
+;	(2) Floppy drive sense/control constants.
+;	(3) Floppy drive formatting constants.
+;	(4) Direct-connect drive constants.
+;
+; Driver Constants:
+;	(1) Driver Control codes.
+;
+; Driver Vectors:
+;	(1) Location of disk routine vectors.
+;
+;_______________________________________________________________________
+
+;_______________________________________;
+;						;
+; SonyVars Data Structure (offsets):	;
+;_______________________________________;
+
+;_______________________________________;
+;
+; (1) Driver local vars.				; * = known to be used in a copy-
+										;  protection scheme.
+DiskUnitPtr EQU    0					; pointer to device control entry
+DiskQVE 	EQU    DiskUnitPtr+4		; disk VBL task control block
+Drive		EQU    DiskQVE+14			; * 0001 = int drive, 0002 = ext drive
+Wait		EQU    Drive+2				; extra wait time for speed changes
+
+SideTrack	EQU    Wait+2				; destination side/track
+OneToOne	EQU    SideTrack+2			; open up rupts flg (no longer used)
+Active		EQU    OneToOne+1			; * non-zero when driver is active
+TimeOut 	EQU    Active+1 			; * power time out
+
+DiskBuffer	EQU    TimeOut+2			; pointer to track data buffer
+FirstSect	EQU    DiskBuffer+4 		; low sector number needed on a track
+SectMap 	EQU    FirstSect+2			; bit map of sectors needed on a track
+FirstFSeq	EQU    SectMap+4			; first file seq # for current r/w request
+FBlksDone	EQU    FirstFSeq+2			; file blocks done previous to this track
+
+ReadErrInit EQU    FBlksDone+2			; init value, read error countdown cntr
+ReadErrCnt	EQU    ReadErrInit+1		; read error countdown cntr
+RecalInit	EQU    ReadErrCnt+1 		; init value, recal count
+RecalCnt	EQU    RecalInit+1			; recal count
+WrgSectInit EQU    RecalCnt+1			; init value, wrong sector countdown cnt
+WrgSectCnt	EQU    WrgSectInit+1		; wrong sector countdown cnt
+BadSpdInit	EQU    WrgSectCnt+1 		; init value, bad speed
+BadSpdCnt	EQU    BadSpdInit+1 		; bad speed countdown value
+
+Command 	EQU    BadSpdCnt+1			; I/O command
+
+HeadSettle	EQU    Command+2			; disk head settle time (@100usec)
+SpdChgTime	EQU    HeadSettle+2 	   ; motor speed change time (@100usec)
+PwrOnTime	EQU    SpdChgTime+2 	   ; * power-on wait time (@100usec)
+PwrOffTime	EQU    PwrOnTime+2			; * power down time (@1/2sec)
+SeekTime	EQU    PwrOffTime+2 	   ; seek wait time (@100usec)
+SectTime	EQU    SeekTime+2			; * sector time (@100usec)
+DskVBLTime	EQU    SectTime+2			; VBL task time (@16ms)
+EjectTime	EQU    DskVBLTime+2 	   ; Eject time (@100usec)
+CkDelta 	EQU    EjectTime+2			; delta time before speed recheck
+EjectWait	EQU    CkDelta+4			; VBL times after eject to ignore DIP
+
+; Format/Verify code reuses some of these fields as follows:
+
+GapSync 	EQU    SectMap			; (2) start with 7 groups of intersector sync
+TwoSided	EQU    Command			; (1) set non-zero for 2-sided format
+SectSave	EQU    FirstSect			; (2) SectMpSave must follow
+SectMapSave EQU    SectMap			; (8) uses SectMap, FirstFSeq, FBlksDone
+SectCnt 	EQU    FirstSect			; (2) loop counter . . .
+
+;_______________________________________;
+;
+; (2) Drive-specific vars.
+
+DrvLclLth	EQU    66
+Drive1		EQU    EjectWait+2			; * internal drive variables
+Drive2		EQU    Drive1+DrvLclLth    ; * external drive variables
+
+Track		EQU    0				; current track location (used for spd)
+WriteProt	EQU    2				; * bit7=1=write-protected
+DiskInPlace EQU    3				; * $FC-$FF= just ejected,
+										;	0=no disk in place,1=DIP,2=clamped
+Installed	EQU    4				; * 0=don't know, 1=inst., $FF=not inst.
+Sides		EQU    5				; * bit7=0=1 sided
+DQEl		EQU    6				; drive queue element for this drive
+DriveQLink	EQU    6
+DriveQVers	EQU    10
+DriveSize	EQU    18				; drive block size (DCD only!)
+TwoSideFmt	EQU    18				; * non-zero if 2-sided format
+NewIntf 	EQU    19				; $FF if new interface, $00 for old 
+DriveErrs	EQU    20				; drive soft errs
+
+DriveS1 	EQU    20				; drive block size (high word)
+DriveType	EQU    22				; old OffSpeed (no longer supported)
+DriveManf	EQU    24
+DriveChar	EQU    26
+DriveMisc	EQU    27
+
+SpdAdjCnt	EQU    24				; speed adjust count this drive
+TrkSpeedTbl EQU    26				; 5-entry track speed table
+
+TSTblCode	EQU    0				; first is speed code
+TSTblDelta	EQU    2				; 2% speed code delta
+TSTblTicks	EQU    4				; longword last time checked tick cnt
+TrkSTEnd	EQU    66				; end of drive vars
+
+;_______________________________________;
+;
+; (3) More driver local vars.
+
+WakeTimeCnt EQU    Drive2+DrvLclLth    ; WakeUp remainder count
+SaveRegs	EQU    WakeTimeCnt+2	   ; * wakeup routine saves D3-D7,A3-A6 here
+
+TagBufPtr	EQU    SaveRegs+36			; if non-zero, pointer to separate
+										;  buffer for file tags . . .
+TagBufOS	EQU    TagBufPtr+4			; temp offset into buffer
+DiskErrs	EQU    TagBufOS+2			; global soft errors
+PassThru	EQU    DiskErrs+2			; 0 if pass thru on external port
+SonyExtra	EQU    PassThru+1			; extra byte
+CurSector	EQU    SonyExtra+1			; current sector being read/written 
+
+TCRdEnable	EQU    CurSector+2			; (byte) set non-zero to activate reads into cache
+TCInstalled EQU    TCRdEnable+1 	   ; (byte) non-zero when caching is installed and on
+TCDrive 	EQU    TCInstalled+1	   ; (word) drive number of cache blks (zero to inval)
+TCSideTrack EQU    TCDrive+2			; (word) side/track of cache blocks 		
+TCSectMap	EQU    TCSideTrack+2	   ; (long) bitmap of sectors currently cached	
+TCBuffer	EQU    TCSectMap+4			; (long) pointer to track cache buffer (512+12)*12
+TCNumCached EQU    TCBuffer+4			; (word) number read into cache 			
+TCNumUsed	EQU    TCNumCached+2	   ; (word actual number used			
+
+LastDrive	EQU    TCNumUsed+2			; (word) set at CkDrvNum to previous value of Drive
+TimeOutDrive EQU   LastDrive+4			; (word) set at PowerDown to value of Drive 
+
+TimeQEl 	EQU    TimeOutDrive+2	   ; a time queue element
+NextGZProc	EQU    TimeQEl+tmQSize	   ; (long) saved old GZ proc		
+
+SonyVarEnd	EQU    NextGZProc+4 	   ; end of sony vars excluding DCD 
+
+			IF	 onMac=1 THEN				;					
+;_______________________________________;
+;
+; (4) Direct-connect driver locals.
+
+TagSize 	EQU    20				; 20 bytes tags/block
+
+DCDLclLth	EQU    28				; (use fields through DriveMisc)
+Drive3		EQU    SonyVarEnd			; first DCD 			
+Drive4		EQU    Drive3+DCDLclLth    ; second DCD
+Drive5		EQU    Drive4+DCDLclLth    ; third DCD
+Drive6		EQU    Drive5+DCDLclLth    ; fourth DCD
+
+StsRtnAddr	EQU    Drive6+DCDLclLth    ; DCD status call return address
+
+DCDCmd		EQU    StsRtnAddr+4 	   ; command byte to DCD
+Response	EQU    DCDCmd			; response byte (command+$80)
+SeqNum		EQU    Response+1			; mb sequence number (sys commands only)
+Status		EQU    SeqNum+1 			; returned status bytes
+StartBlock	EQU    Status				; starting block # (in commands)
+DriveOut	EQU    StartBlock+3 		; we send drive number in this field
+DriveIn 	EQU    Status+2 			; low 6 bits
+TagBytes	EQU    Status+4 			; tag bytes get stuffed here temporarily
+DevType 	EQU    TagBytes 			; first 20 bytes of status are written
+DevManufctr EQU    DevType+2			;  in the 20-byte tag buffer
+DevChar 	EQU    DevManufctr+2
+DevBlks 	EQU    DevChar				; low 3 bytes of this longword
+DevSpares	EQU    DevChar+4
+DevBadBlks	EQU    DevSpares+2
+DevMisc 	EQU    DevBadBlks+2 		; 8 bytes misc
+BufSize 	EQU    TagBytes+TagSize 	; number of bytes/block
+LastStatus	EQU    BufSize+4			; last status returned
+LastResult	EQU    LastStatus+4 		; error type
+DCDFlags	EQU    LastResult+1 		; flag of whether we've done a reset
+ChkTime 	EQU    DCDFlags+1			; 100usec check ready count
+MaxTime 	EQU    ChkTime+2			; maximum number of checks
+StsBuffer	EQU    MaxTime+2			; 512 bytes of status
+DevReserve	EQU    StsBuffer
+DevIcon 	EQU    DevReserve+44
+DevFiller	EQU    DevIcon+256			; 32 bytes for optional name
+
+DiskVarLth	EQU    DevFiller+32
+
+StsBufSize	EQU    DiskVarLth-StsBuffer
+
+			ELSE				;					
+DiskVarLth	EQU    SonyVarEnd			;					
+			ENDIF				;					
+
+; device characteristics byte:
+
+DevChEject	EQU    4				; ejectable if 1
+DevChWP 	EQU    3				; write protected if 1
+DevChIcon	EQU    2				; icon available if 1
+
+
+;_______________________________________;
+;						;
+; Drive Constants:				;
+;_______________________________________;
+
+
+DQSides 	EQU    -1				; Bit 7 of this byte: 0=single-sided Sony, 1=double sided
+DQInstall	EQU    -2				; 0=unknown, 1=installed, FF=no disk
+DQDIP		EQU    -3				; $FC-$FF = disk just ejected,
+										;		0 = no disk in place
+										;		1 = disk in place
+										;		2 = disk has been read
+										;	   >8 = non-ejectable disk
+DQWrPrt 	EQU    -4				; Bit 7 of this byte: 1=disk is write protected.
+
+;_______________________________________;
+;
+; (1) Floppy drive constants (tuneable).
+
+KSeekTime	EQU    120				; 12 ms trk-to-trk
+KHdSetTime	EQU    300				; 30 ms head settle time
+KEjectTime	EQU    7500 		; .75 seconds eject time
+KEjectWait	EQU    -4				; - number of VBL calls after eject before dip check
+KSectTime	EQU    100				; minimum sector time in 100 us increments (10 ms)
+KPowerOn	EQU    4000 		; read/write powerup time in 100 us increments
+KRWPOff 	EQU    5				; read/write power off time (in 1/2 seconds)
+KDskVBLTime EQU    30				; happens every 1/2 second
+KSpdChgTime EQU    1500 		; speed change wait time = 150ms
+KCkDelta	EQU    14400			; speed check delta time (in 1/60 sec) (4 min)
+
+;_______________________________________;
+;
+; (2) Floppy drive sense/control constants.
+;	 (ca1-ca0-sel-ca2).
+
+DirLAdr 	EQU    0				; dirtn low
+DirHAdr 	EQU    1
+RdDtaAdr	EQU    1				; side 0 read data
+RdDta1Adr	EQU    3				; side 1 read data
+StepLAdr	EQU    4				; step low and step sense address
+StepHAdr	EQU    5
+MtrOnAdr	EQU    8
+MtrOffAdr	EQU    9
+EjectLAdr	EQU    12
+EjectHAdr	EQU    13
+
+DIPAdr		EQU    2				; disk in place sense address
+WrProtAdr	EQU    6				; write protect sense address
+SidesAdr	EQU    9				; sense for number of sides
+Tk0Adr		EQU    10				; track 0 sense address
+ReadyAdr	EQU    11				; /Ready sense address
+DrvExstAdr	EQU    13				; sense=0 when a drive is connected
+TachAdr 	EQU    14				; tach feedback sense address
+NewIntfAdr	EQU    15				; implements ready handshake if 1	
+
+;_______________________________________;
+;
+; (3) Floppy drive formatting constants.
+
+FmtByte 	EQU    $02				; 2-1 interleave, single-sided
+Fmt2Byte	EQU    $22				; 2-1 interleave, double-sided
+
+MustFindCt	EQU    1500
+minSync 	EQU    4				; min number of inter-sector sync groups
+
+			IF	 onMac=1 THEN				;				
+;_______________________________________;
+;
+; (4) Direct-connect drive constants.
+
+;This variable has been renamed SONYRetry and placed in Privates
+;RetryCount  EQU	5				; Number of HardReset/retries allowed
+
+BlkSize 	EQU    512				; 512 bytes data/block
+SyncByte	EQU    $AA				; Sync byte for start of transmission
+
+noError 	EQU    0				; resultTypes
+nonZerStat	EQU    1
+comErr		EQU    2
+
+; New HD20 error codes
+
+WrtHsLw 		EQU   $10			; HSHK low before starting
+WrtHSLwTO		EQU   $11			; Time out waiting for HSHK to go low
+WrtHSHighTO 	EQU   $13			; Time out waiting for HSHK to go high
+RdHsHi			EQU   $20			; HSHK high before starting
+RdSyncTO		EQU   $21			; Time out waiting for sync ($AA) bye
+RdGroupTO		EQU   $22			; Time out waiting for group
+RdHoffSyncTO	EQU   $24			; Time out waiting for sync after holdoff
+RdHsHiTO		EQU   $25			; Time out waiting for HSHK high
+RdChksumErr 	EQU   $26			; Checksum error on response packet
+InvalidResp 	EQU   $30			; First byte in response packet was wrong
+SqncNumErr		EQU   $31			; Sequence number in response packet was wrong
+DNumberErr		EQU   $32			; Drive number in response packet was wrong
+NoResp			EQU   $40			; No response packet ever received
+
+; LastStatus
+
+opFailed	EQU    24				; bit to test for operation failed
+bChksum 	EQU    30				; bit number for checksum error
+
+; DCDFlags
+
+resetonce	EQU    0
+retryonce	EQU    1
+
+maxTries	EQU    4				; max # times to try command
+tSeekChk	EQU    10				; check during a seek every 1 ms
+tSeekMax	EQU    10000			; max time for seek = 10 secs
+tStsChk 	EQU    10				; check during a status every 1 ms
+tStsMax 	EQU    10000			; max time for status = 10 secs
+tQuickTime	EQU    100
+tNextChk	EQU    7				; check for next block after 700 µsec
+tNextMax	EQU    10000			; max time for next block = 7 secs
+tFVChk		EQU    100				; check during fmt/vfy every 10 ms
+tFVMax		EQU    18000			; max time for fmt/vfy = 3 minutes
+tRstAssert	EQU    1000 		; assert reset for 100 msec
+tRstSettle	EQU    20000			; 2 sec wait for busy to settle
+tRstChk 	EQU    100				; check during reset every 10 ms
+tRstMax 	EQU    1600 		; max time for reset = 16 seconds
+
+; DCD sense/cntl addr (ca1-ca0-sel-ca2)
+
+dcdExist	EQU    5				; /Exist (/Sides=/DrvIn=1 also)
+dcdReset	EQU    1				; for 1ms resets DCD controller
+			ENDIF				;				
+
+;_______________________________________;
+;						;
+; Driver Constants: 			;
+;_______________________________________;
+
+;_______________________________________;
+;
+; (1) Driver Control codes.
+
+verifyCC	EQU    5				; 'verify' control code
+formatCC	EQU    6				; 'format' control code
+tagBufCC	EQU    8				; 'set tag buffer' control code
+TCacheCC	EQU    9				; 'track cache' control 			
+iconIDCC	EQU    20				; 'get icon id' control code
+iconCC		EQU    21				; 'get icon' control code
+
+;_______________________________________;
+;						;
+; Driver Vectors:				;
+;_______________________________________;
+
+;_______________________________________;
+;
+; (1) Location of disk routine vectors.
+
+JFigTrkSpd	EQU    DiskVars
+JDiskPrime	EQU    JFigTrkSpd+4
+JRdAddr 	EQU    JDiskPrime+4
+JRdData 	EQU    JRdAddr+4
+
+JWrData 	EQU    JRdData+4
+JSeek		EQU    JWrData+4
+JSetUpPoll	EQU    JSeek+4
+JRecal		EQU    JSetUpPoll+4
+
+JControl	EQU    JRecal+4
+JWakeUp 	EQU    JControl+4
+JReSeek 	EQU    JWakeUp+4
+JMakeSpdTbl EQU    JReSeek+4
+
+JAdrDisk	EQU    JMakeSpdTbl+4
+JSetSpeed	EQU    JAdrDisk+4
+NiblTbl 	EQU    JSetSpeed+4
+
+JDiskSel	EQU    $B40 		; (long) vector to .Sony DiskSelect routine 
+JSendCmd	EQU    $B44 		; (long) vector to .Sony DCD SendCmd routine
+JDCDReset	EQU    $B48 		; (long) vector to .Sony DCD DCDReset routine
+
+		ENDIF  ;end exclusion of private information
+	

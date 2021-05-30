@@ -1,0 +1,165 @@
+;
+;	File:		HyperXCmd.a
+;
+;	Contains:	Interfaces for HyperCard XCMD's
+;
+;	Version:	Technology:	HyperCard 2.3
+;				Package:	Universal Interfaces 2.2 in “MPW” on ETO #20
+;
+;	Copyright:	© 1984-1995 by Apple Computer, Inc.
+;				All rights reserved.
+;
+;	Bugs?:		If you find a problem with this file, use the Apple Bug Reporter
+;				stack.  Include the file and version information (from above)
+;				in the problem description and send to:
+;					Internet:	apple.bugs@applelink.apple.com
+;					AppleLink:	APPLE.BUGS
+;
+;
+
+	IF &TYPE('__HYPERXCMD__') = 'UNDEFINED' THEN
+__HYPERXCMD__ SET 1
+
+
+	IF &TYPE('__TYPES__') = 'UNDEFINED' THEN
+	include 'Types.a'
+	ENDIF
+;		include 'ConditionalMacros.a'								;
+
+	IF &TYPE('__EVENTS__') = 'UNDEFINED' THEN
+	include 'Events.a'
+	ENDIF
+;		include 'Quickdraw.a'										;
+;			include 'MixedMode.a'									;
+;			include 'QuickdrawText.a'								;
+;		include 'OSUtils.a'										;
+;			include 'Memory.a'										;
+;			include 'Patches.a'									;
+
+	IF &TYPE('__TEXTEDIT__') = 'UNDEFINED' THEN
+	include 'TextEdit.a'
+	ENDIF
+
+	IF &TYPE('__MENUS__') = 'UNDEFINED' THEN
+	include 'Menus.a'
+	ENDIF
+
+	IF &TYPE('__STANDARDFILE__') = 'UNDEFINED' THEN
+	include 'StandardFile.a'
+	ENDIF
+;		include 'Dialogs.a'										;
+;			include 'Errors.a'										;
+;			include 'Controls.a'									;
+;			include 'Windows.a'									;
+;		include 'Files.a'											;
+;			include 'Finder.a'										;
+; result codes 
+
+xresSucc						EQU		0
+xresFail						EQU		1
+xresNotImp						EQU		2
+
+; XCMDBlock constants for event.what... 
+xOpenEvt						EQU		1000				; the first event after you are created 
+xCloseEvt						EQU		1001				; your window is being forced close (Quit?) 
+xGiveUpEditEvt					EQU		1002				; you are losing Edit... 
+xGiveUpSoundEvt					EQU		1003				; you are losing the sound channel... 
+xHidePalettesEvt				EQU		1004				; someone called HideHCPalettes 
+xShowPalettesEvt				EQU		1005				; someone called ShowHCPalettes 
+xEditUndo						EQU		1100				; Edit——Undo 
+xEditCut						EQU		1102				; Edit——Cut 
+xEditCopy						EQU		1103				; Edit——Copy 
+xEditPaste						EQU		1104				; Edit——Paste 
+xEditClear						EQU		1105				; Edit——Clear 
+xSendEvt						EQU		1200				; script has sent you a message (text) 
+xSetPropEvt						EQU		1201				; set a window property 
+xGetPropEvt						EQU		1202				; get a window property 
+xCursorWithin					EQU		1300				; cursor is within the window 
+xMenuEvt						EQU		1400				; user has selected an item in your menu 
+xMBarClickedEvt					EQU		1401				; a menu is about to be shown--update if needed 
+xShowWatchInfoEvt				EQU		1501				; for variable and message watchers 
+xScriptErrorEvt					EQU		1502				; place the insertion point 
+xDebugErrorEvt					EQU		1503				; user clicked "Debug" at a complaint 
+xDebugStepEvt					EQU		1504				; hilite the line 
+xDebugTraceEvt					EQU		1505				; same as step but tracing 
+xDebugFinishedEvt				EQU		1506				; script ended 
+
+paletteProc						EQU		2048				; Windoid with grow box 
+palNoGrowProc					EQU		2052				; standard Windoid defproc 
+palZoomProc						EQU		2056				; Windoid with zoom and grow 
+palZoomNoGrow					EQU		2060				; Windoid with zoom and no grow 
+hasZoom							EQU		8
+hasTallTBar						EQU		2
+toggleHilite					EQU		1
+
+; paramCount is set to these constants when first calling special XThings 
+xMessageWatcherID				EQU		-2
+xVariableWatcherID				EQU		-3
+xScriptEditorID					EQU		-4
+xDebuggerID						EQU		-5
+
+; XTalkObjectPtr->objectKind values 
+stackObj						EQU		1
+bkgndObj						EQU		2
+cardObj							EQU		3
+fieldObj						EQU		4
+buttonObj						EQU		5
+
+; selectors for ShowHCAlert's dialogs (shown as buttonID:buttonText) 
+errorDlgID						EQU		1					; 1:OK (default) 
+confirmDlgID					EQU		2					; 1:OK (default) and 2:Cancel 
+confirmDelDlgID					EQU		3					; 1:Cancel (default) and 2:Delete 
+yesNoCancelDlgID				EQU		4					; 1:Yes (default), 2:Cancel, and 3:No 
+
+; type definitions 
+XCmdBlock 				RECORD	0
+paramCount				 ds.w   1		; offset: $0 (0)		; If = -1 then new use for XWindoids 
+params					 ds.l   16		; offset: $2 (2)
+returnValue				 ds.l   1		; offset: $42 (66)
+passFlag				 ds.b   1		; offset: $46 (70)
+filler1					 ds.b   1		; offset: $47 (71)
+entryPoint				 ds.l   1		; offset: $48 (72)		; to call back to HyperCard 
+request					 ds.w   1		; offset: $4C (76)
+result					 ds.w   1		; offset: $4E (78)
+inArgs					 ds.l   8		; offset: $50 (80)
+outArgs					 ds.l   4		; offset: $70 (112)
+sizeof					 EQU *			; size:   $80 (128)
+						ENDR
+
+; typedef struct XCmdBlock 	XCmdBlock
+; typedef XCmdBlock 		*XCmdPtr
+XWEventInfo 			RECORD	0
+event					 ds     EventRecord ; offset: $0 (0)
+eventWindow				 ds.l   1		; offset: $10 (16)
+eventParams				 ds.l   9		; offset: $14 (20)
+eventResult				 ds.l   1		; offset: $38 (56)
+sizeof					 EQU *			; size:   $3C (60)
+						ENDR
+
+; typedef struct XWEventInfo  XWEventInfo
+; typedef XWEventInfo 		*XWEventInfoPtr
+XTalkObject 			RECORD	0
+objectKind				 ds.w   1		; offset: $0 (0)		; stack, bkgnd, card, field, or button 
+stackNum				 ds.l   1		; offset: $2 (2)		; reference number of the source stack 
+bkgndID					 ds.l   1		; offset: $6 (6)
+cardID					 ds.l   1		; offset: $A (10)
+buttonID				 ds.l   1		; offset: $E (14)
+fieldID					 ds.l   1		; offset: $12 (18)
+sizeof					 EQU *			; size:   $16 (22)
+						ENDR
+
+; typedef struct XTalkObject  XTalkObject
+; typedef XTalkObject 		*XTalkObjectPtr
+; maximum number of checkpoints in a script 
+
+maxCachedChecks					EQU		16
+
+CheckPts 				RECORD	0
+checks					 ds.w   16		; offset: $0 (0)
+sizeof					 EQU *			; size:   $20 (32)
+						ENDR
+
+; typedef struct CheckPts 	CheckPts
+; typedef CheckPts 			*CheckPtPtr
+; typedef CheckPtPtr 		*CheckPtHandle
+	ENDIF ; __HYPERXCMD__

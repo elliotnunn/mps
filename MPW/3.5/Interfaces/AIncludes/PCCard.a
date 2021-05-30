@@ -1,0 +1,950 @@
+;
+;    File:       PCCard.a
+;
+;    Contains:   PC Card Family Programming interface
+;
+;    Version:    Technology: System 7.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1996-2001 by Apple Computer, Inc.  All rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__PCCARD__') = 'UNDEFINED' THEN
+__PCCARD__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+
+kServiceCategoryPCCard			EQU		'pccd'
+
+; typedef UInt32 						PCCardEvent
+
+; typedef UInt32 						PCCardEventMask
+
+; typedef UInt32 						PCCardClientID
+
+; typedef UInt32 						PCCardTimerID
+
+; typedef UInt32 						PCCardSocket
+
+; typedef UInt32 						PCCardWindowID
+
+; typedef UInt32 						PCCardWindowType
+
+; typedef UInt32 						PCCardWindowSize
+
+; typedef UInt32 						PCCardWindowOffset
+
+; typedef UInt32 						PCCardWindowAlign
+
+; typedef OptionBits 					PCCardWindowState
+
+; typedef UInt32 						PCCardAccessSpeed
+
+; typedef UInt32 						PCCardWindowParam
+
+; typedef UInt32 						PCCardPage
+
+; typedef UInt32 						PCCardVoltage
+
+; 
+;    Several of the client notification bit flags have been REMOVED since the first
+;    release of this header.  These were unused codes that were either
+;    copied directly from PC Card 2.x, or from the PCMCIA standard.  In all cases,
+;    they were completely unimplemented and would never be sent under PCCard 3.0.
+;    
+;    The removed flags are:
+;        kPCCardClientInfoMessage, kPCCardSSUpdatedMessage,
+;        and kPCCardFunctionInterruptMessage.
+;    
+;    If your software used any of these flags, you should delete any references
+;    to them.  These event codes are being recycled for new features.
+;
+
+;  Client notification bit flags 
+
+kPCCardNullMessage				EQU		$00000000			; no messages pending (not sent to clients)
+kPCCardInsertionMessage			EQU		$00000001			; card has been inserted into the socket
+kPCCardRemovalMessage			EQU		$00000002			; card has been removed from the socket- do not touch hardware!
+															; Lock and Unlock may be used for a hardware locking card-cage. 
+kPCCardLockMessage				EQU		$00000004			; card is locked into the socket with a mechanical latch 
+kPCCardUnlockMessage			EQU		$00000008			; card is no longer locked into the socket 
+															; Ready and Reset are holdovers from PC Card 2.x, but someone might be using them (!?) 
+kPCCardReadyMessage				EQU		$00000010			; card is ready to be accessed -- do not use! this event is never sent! (use kPCCardInsertion instead) 
+kPCCardResetMessage				EQU		$00000020			; physical reset has completed -- do not use! this event is never sent! (use kPCCardResetComplete instead) 
+															; InsertionRequest and InsertionComplete may be used with certain cages (??) 
+kPCCardInsertionRequestMessage	EQU		$00000040			; request to insert a card using insertion motor 
+kPCCardInsertionCompleteMessage	EQU		$00000080			; insertion motor has finished inserting a card 
+kPCCardEjectionRequestMessage	EQU		$00000100			; user or other client is requesting a card ejection
+kPCCardEjectionCompleteMessage	EQU		$00000200			; card ejection succeeded- do not touch hardware! 
+kPCCardEjectionFailedMessage	EQU		$00000400			; eject failure due to electrical/mechanical problems
+kPCCardPMResumeMessage			EQU		$00000800			; power management resume 
+kPCCardPMSuspendMessage			EQU		$00001000			; power management suspend 
+kPCCardPMSuspendRequest			EQU		$00002000			; power management sleep request 
+kPCCardPMSuspendRevoke			EQU		$00004000			; power management sleep revoke 
+kPCCardResetPhysicalMessage		EQU		$00008000			; physical reset is about to occur on this card -- this event is never sent! 
+kPCCardResetRequestMessage		EQU		$00010000			; physical reset has been requested by a client
+kPCCardResetCompleteMessage		EQU		$00020000			; ResetCard() background reset has completed
+kPCCardBatteryDeadMessage		EQU		$00040000			; battery is no longer useable, data will be lost
+kPCCardBatteryLowMessage		EQU		$00080000			; battery is weak and should be replaced
+kPCCardWriteProtectMessage		EQU		$00100000			; card is now write protected
+kPCCardWriteEnabledMessage		EQU		$00200000			; card is now write enabled
+kPCCardDisplayEjectDSATMessage	EQU		$00400000			; about to display a DSAT for the user to re-insert a manually ejected card 
+kPCCardUnexpectedRemovalMessage	EQU		$02000000			; card has unexpectedly been manually ejected 
+															; Unconfigured is a (currently unused) holdover from PC Card 2.x 
+kPCCardUnconfiguredMessage		EQU		$04000000			; a CARD_READY was delivered to all clients and no client 
+															;    requested a configuration for the socket -- this event is never sent under PCCard 3.0! 
+kPCCardStatusChangedMessage		EQU		$08000000			; status change for cards in I/O mode
+kPCCardTimerExpiredMessage		EQU		$10000000			; message sent when requested time has expired 
+kPCCardRequestAttentionMessage	EQU		$20000000
+kPCCardEraseCompleteMessage		EQU		$40000000
+kPCCardRegistrationCompleteMessage EQU	$80000000			; notifications available only in PCCard 3.1 and later 
+kPCCardPMEnabledMessage			EQU		$00800000			; power management has been enabled by the user; if appropriate, clients should call PCCardSetPowerLevel(off) 
+; typedef OptionBits 					PCCardWindowAttributes
+
+;   window state (values of PCCardWindowAttributes) 
+
+kWSCommon						EQU		$0001				; common memory window 
+kWSAttribute					EQU		$0002				; attribute memory window
+kWSIO							EQU		$0004				; I/O window
+kWSCardBus						EQU		$0800				; CardBus bridge window 
+kWSTypeMask						EQU		$0807				; window type mask
+kWSEnabled						EQU		$0008				; window enabled
+kWS8bit							EQU		$0010				; 8-bit data width window
+kWS16bit						EQU		$0020				; 16-bit data width window
+kWS32bit						EQU		$0040				; 32-bit data width window
+kWSAutoSize						EQU		$0080				; auto-size data width window
+kWSWidthMask					EQU		$00F0				; window data width mask
+kWSProtected					EQU		$0100				; window write protected
+kWSPrefetchable					EQU		$0200				; bridge window prefetchable
+kWSPageShared					EQU		$0400				; page register is shared
+kWSWindowSizeOffset				EQU		$4000
+kWSChangeAccessSpeed			EQU		$8000				; Used by CSModifyWindow only 
+;  window speed (sample values of PCCardAccessSpeed) for use in PCCardRequestWindow  
+
+kAccessSpeed600ns				EQU		$006A
+kAccessSpeed500ns				EQU		$005A
+kAccessSpeed400ns				EQU		$004A
+kAccessSpeed300ns				EQU		$003A
+kAccessSpeed250ns				EQU		$0001
+kAccessSpeed200ns				EQU		$0002
+kAccessSpeed150ns				EQU		$0003
+kAccessSpeed100ns				EQU		$0004
+; typedef UInt32 						PCCardInterfaceType
+
+;  InterfaceType bit-mask (values of PCCardInterfaceType) 
+
+kIFTypeMask						EQU		$03					; IO & memory type mask
+kIFCardBus						EQU		$00					; if bits 0 & 1 are zero then cardbus interface
+kIFMemory						EQU		$01					; if bit 0 set memory IF
+kIFIO							EQU		$02					; if bit 1 set IO IF
+kIFReserved						EQU		$03					; bits 0 and 1 set is reserved 
+kIFDMA							EQU		$08					; if bit 3 set DMA supported
+kIFVSKey						EQU		$10					; if bit 4 set supports low Voltage key
+kIF33VCC						EQU		$20					; if bit 5 set socket suports 3.3v
+kIFXXVCC						EQU		$40					; if bit 6 set socket supports X.X voltage
+kIFYYVCC						EQU		$80					; if bit 7 set socket supports Y.Y voltage
+; typedef UInt32 						PCCardCustomInterfaceID
+
+;  Custom Interface Identifiers (values of PCCardCustomInterfaceID) 
+
+kIFCustom_None					EQU		$00					; no custom interface ID 
+kIFCustom_ZOOM					EQU		$41					; ZOOM Video Mode custom interface identifier 
+; typedef OptionBits 					PCCardConfigOptions
+
+;  Bit mask values for PCCardConfigOptions in the configuration calls 
+
+kEnableIRQSteering				EQU		$0002
+kIRQChangeValid					EQU		$0004
+kVppChangeValid					EQU		$0010
+kEnableDMAChannel				EQU		$0040
+kDMAChangeValid					EQU		$0080
+kVSOverride						EQU		$0200				; Bits 10..31 reserved 
+
+;   Configuration Registers Presence Mask for the FCR
+;   Used by PCCardConfigPresentMask
+
+
+
+kConfigOptionPresent			EQU		$00000001
+kConfigStatusPresent			EQU		$00000002
+kPinReplacePresent				EQU		$00000004
+kSocketCopyPresent				EQU		$00000008
+kExtendedStatusPresent			EQU		$00000010
+kIOBase0Present					EQU		$00000020
+kIOBase1Present					EQU		$00000040
+kIOBase2Present					EQU		$00000080
+kIOBase3Present					EQU		$00000100
+kIOLimitPresent					EQU		$00000200
+; typedef UInt32 						PCCardConfigPresentMask
+
+; typedef UInt32 						PCCardConfigRegisterIndex
+
+; typedef UInt32 						PCCardConfigRegisterOffset
+
+PCCardFunctionConfigReg	RECORD 0
+configOptionReg			 ds.b	1				; offset: $0 (0)
+configStatusReg			 ds.b	1				; offset: $1 (1)
+pinReplaceReg			 ds.b	1				; offset: $2 (2)
+socketCopyReg			 ds.b	1				; offset: $3 (3)
+extendedStatusReg		 ds.b	1				; offset: $4 (4)
+ioBase0					 ds.b	1				; offset: $5 (5)
+ioBase1					 ds.b	1				; offset: $6 (6)
+ioBase2					 ds.b	1				; offset: $7 (7)
+ioBase3					 ds.b	1				; offset: $8 (8)
+ioLimit					 ds.b	1				; offset: $9 (9)
+sizeof					 EQU *					; size:   $A (10)
+						ENDR
+; typedef OptionBits 					PCCardSocketStatus
+
+;   general socket status bits (values of PCCardSocketStatus) 
+
+kSTBatteryDead					EQU		$0001				; battery dead
+kSTBatteryLow					EQU		$0002				; battery low
+kSTBatteryGood					EQU		$0004				; battery good
+kSTPower						EQU		$0008				; power is applied
+kST16bit						EQU		$0010				; 16-bit PC Card present
+kSTCardBus						EQU		$0020				; CardBus PC Card present
+kSTMemoryCard					EQU		$0040				; memory card present
+kSTIOCard						EQU		$0080				; I/O card present
+kSTNotACard						EQU		$0100				; unrecognizable PC Card detected
+kSTReady						EQU		$0200				; ready
+kSTWriteProtect					EQU		$0400				; card is write-protected
+kSTDataLost						EQU		$0800				; data may have been lost due to card removal
+kSTRingIndicate					EQU		$1000				; ring indicator is active
+kSTReserved						EQU		$E000
+;  Bit mask for PCCardPowerOptions in the power management calls 
+; typedef OptionBits 					PCCardPowerOptions
+
+
+kPCCardPowerOn					EQU		$00000001
+kPCCardPowerOff					EQU		$00000002
+kPCCardLowPower					EQU		$00000004
+; typedef OptionBits 					PCCardAdapterCapabilities
+
+; typedef UInt32 						PCCardAdapterPowerState
+
+; typedef OptionBits 					PCCardSCEvents
+
+; typedef UInt32 						PCCardWindow
+
+; typedef UInt32 						PCCardIRQ
+
+; typedef UInt32 						PCCardDMA
+
+;  Selectors for PCCardGetGlobalOptions 
+;   The type of the "value" parameter is provided for each selector. 
+; typedef UInt32 						PCCardOptionSelector
+
+
+kPCCardPowerManagementAttrib	EQU		1					; value = (Boolean*) enabled  
+
+
+;  Types and structures for accessing the PCCard Assigned-Address property.
+
+
+kPCCardNonRelocatableSpace		EQU		$80
+kPCCardPrefetchableSpace		EQU		$40
+kPCCard16BitSpace				EQU		$20
+kPCCardAddressTypeCodeMask		EQU		$07
+kPCCardConfigSpace				EQU		0
+kPCCardIOSpace					EQU		1
+kPCCardMemorySpace				EQU		2
+kPCCardAttributeMemorySpace		EQU		4
+; typedef UInt8 						PCCardAddressSpaceFlags
+
+
+kPCCardSocketNumberMask			EQU		$F8
+kPCCardFunctionNumberMask		EQU		$07
+; typedef UInt8 						PCCardSocketFunction
+
+; typedef UInt8 						PCCardBusNumber
+
+; typedef UInt8 						PCCardRegisterNumber
+
+
+;   note: this structure is similar, but not the same as the PCIAssignedAddress structure
+;         16-bit cards use this structure, CardBus cards use PCIAssignedAddress
+
+
+PCCardAssignedAddress	RECORD 0
+addressSpaceFlags		 ds.b	1				; offset: $0 (0)
+reserved				 ds.b	1				; offset: $1 (1)
+socketFunctionNumber	 ds.b	1				; offset: $2 (2)
+registerNumber			 ds.b	1				; offset: $3 (3)
+address					 ds.l	1				; offset: $4 (4)
+size					 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct PCCardAssignedAddress * PCCardAssignedAddressPtr
+
+; ----------------------------------------------------------------------
+;    Client Support
+;----------------------------------------------------------------------
+
+;  Prototype for client callback 
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PCCardRegisterClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardRegisterClient(const RegEntryID *deviceRef, PCCardEventMask eventMask, PCCardEventHandler clientCallBack, void *clientParam, PCCardClientID *newClientID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardRegisterClient
+	ENDIF
+
+
+; *  PCCardDeRegisterClient()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardDeRegisterClient(PCCardClientID theClientID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardDeRegisterClient
+	ENDIF
+
+
+; *  PCCardRegisterTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardRegisterTimer(PCCardClientID registeredClientID, PCCardTimerID *lpNewTimerID, long delay)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardRegisterTimer
+	ENDIF
+
+
+; *  PCCardDeRegisterTimer()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern void PCCardDeRegisterTimer(PCCardTimerID timerID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardDeRegisterTimer
+	ENDIF
+
+
+; *  PCCardSetEventMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardSetEventMask(PCCardClientID theClientID, PCCardEventMask newEventMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardSetEventMask
+	ENDIF
+
+
+; *  PCCardGetEventMask()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetEventMask(PCCardClientID theClientID, PCCardEventMask *newEventMask)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetEventMask
+	ENDIF
+
+
+; *  PCCardGetCardServicesInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetCardServicesInfo(ItemCount *socketCount, UInt32 *complianceLevel, UInt32 *version)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetCardServicesInfo
+	ENDIF
+
+
+; *  PCCardGetSocketRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetSocketRef(PCCardSocket vSocket, RegEntryID *socketRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetSocketRef
+	ENDIF
+
+
+; *  PCCardGetCardRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetCardRef(PCCardSocket vSocket, RegEntryID *cardRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetCardRef
+	ENDIF
+
+
+; *  PCCardGetDeviceRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetDeviceRef(PCCardSocket vSocket, UInt32 device, RegEntryID *deviceRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetDeviceRef
+	ENDIF
+
+
+; *  PCCardGetSocketAndDeviceFromDeviceRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetSocketAndDeviceFromDeviceRef(const RegEntryID *deviceRef, PCCardSocket *vSocket, UInt32 *device)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetSocketAndDeviceFromDeviceRef
+	ENDIF
+
+
+; *  PCCardGetCardRefFromDeviceRef()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.1 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetCardRefFromDeviceRef(const RegEntryID *deviceRef, RegEntryID *cardRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetCardRefFromDeviceRef
+	ENDIF
+
+
+; ----------------------------------------------------------------------
+;    Resource Management
+;----------------------------------------------------------------------
+
+
+; *  PCCardRequestWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardRequestWindow(const RegEntryID *deviceRef, PCCardWindowAttributes windowAttributes, LogicalAddress *windowBase, ByteCount *windowSize, PCCardAccessSpeed *windowSpeed, PCCardWindowOffset *windowOffset, PCCardWindowID *windowID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardRequestWindow
+	ENDIF
+
+
+; *  PCCardModifyWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardModifyWindow(PCCardWindowID windowID, PCCardWindowAttributes windowAttributes, PCCardAccessSpeed windowSpeed, PCCardWindowOffset windowOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardModifyWindow
+	ENDIF
+
+
+; *  PCCardReleaseWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardReleaseWindow(PCCardWindowID windowID)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardReleaseWindow
+	ENDIF
+
+
+; *  PCCardInquireWindow()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardInquireWindow(const RegEntryID *deviceRef, PCCardWindowID windowID, PCCardWindowAttributes *windowAttributes, LogicalAddress *windowBase, ByteCount *windowSize, PCCardAccessSpeed *windowSpeed, PCCardWindowOffset *windowOffset)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardInquireWindow
+	ENDIF
+
+
+; *  PCCardGetStatus()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetStatus(const RegEntryID *deviceRef, UInt32 *currentState, UInt32 *changedState, PCCardVoltage *Vcc, PCCardVoltage *Vpp)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetStatus
+	ENDIF
+
+
+; *  PCCardRequestConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardRequestConfiguration(const RegEntryID *deviceRef, PCCardConfigOptions configOptions, PCCardInterfaceType ifType, PCCardCustomInterfaceID ifCustomType, PCCardVoltage vcc, PCCardVoltage vpp, LogicalAddress configRegistersBase, PCCardConfigPresentMask configRegistersPresent, PCCardFunctionConfigReg *configRegisterValues)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardRequestConfiguration
+	ENDIF
+
+
+; *  PCCardReleaseConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardReleaseConfiguration(const RegEntryID *deviceRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardReleaseConfiguration
+	ENDIF
+
+
+; *  PCCardModifyConfiguration()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardModifyConfiguration(const RegEntryID *deviceRef, PCCardConfigOptions configOptions, PCCardVoltage vpp)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardModifyConfiguration
+	ENDIF
+
+
+; *  PCCardReadConfigurationRegister()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardReadConfigurationRegister(const RegEntryID *deviceRef, PCCardConfigRegisterIndex whichRegister, PCCardConfigRegisterOffset offset, UInt8 *value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardReadConfigurationRegister
+	ENDIF
+
+
+; *  PCCardWriteConfigurationRegister()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardWriteConfigurationRegister(const RegEntryID *deviceRef, PCCardConfigRegisterIndex whichRegister, PCCardConfigRegisterOffset offset, UInt8 value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardWriteConfigurationRegister
+	ENDIF
+
+
+; *  PCCardResetFunction()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardResetFunction(const RegEntryID *deviceRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardResetFunction
+	ENDIF
+
+; ----------------------------------------------------------------------
+;    Client Utilities
+;----------------------------------------------------------------------
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef UInt8 						PCCardTupleKind
+
+
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PCCardNewTupleIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern PCCardTupleIterator PCCardNewTupleIterator(void )
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardNewTupleIterator
+	ENDIF
+
+
+; *  PCCardDisposeTupleIterator()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardDisposeTupleIterator(PCCardTupleIterator tupleIterator)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardDisposeTupleIterator
+	ENDIF
+
+
+; *  PCCardGetFirstTuple()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetFirstTuple(const RegEntryID *deviceID, PCCardTupleKind desiredTuple, PCCardTupleIterator tupleIterator, void *dataBuffer, UInt32 *dataBufferSize, PCCardTupleKind *foundTuple, UInt32 *foundTupleDataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetFirstTuple
+	ENDIF
+
+
+; *  PCCardGetNextTuple()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetNextTuple(const RegEntryID *deviceRef, PCCardTupleKind desiredTuple, PCCardTupleIterator tupleIterator, void *dataBuffer, UInt32 *dataBufferSize, PCCardTupleKind *foundTuple, UInt32 *foundTupleDataSize)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetNextTuple
+	ENDIF
+
+; ----------------------------------------------------------------------
+;    Miscellaneous
+;----------------------------------------------------------------------
+
+
+; *  PCCardEject()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardEject(const RegEntryID *cardRef)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardEject
+	ENDIF
+
+
+; *  PCCardEnableModemSound()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardEnableModemSound(const RegEntryID *cardRef, Boolean enableSound)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardEnableModemSound
+	ENDIF
+
+
+; *  PCCardEnableZoomedVideo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardEnableZoomedVideo(const RegEntryID *cardRef, Boolean enableZoomedVideo)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardEnableZoomedVideo
+	ENDIF
+
+
+; *  PCCardEnableZoomedVideoSound()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardEnableZoomedVideoSound(const RegEntryID *cardRef, Boolean enableSound)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardEnableZoomedVideoSound
+	ENDIF
+
+
+; *  PCCardSetPowerLevel()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardSetPowerLevel(const RegEntryID *deviceRef, PCCardPowerOptions powerLevel)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardSetPowerLevel
+	ENDIF
+
+
+; *  PCCardSetRingIndicate()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardSetRingIndicate(const RegEntryID *deviceRef, Boolean setRingIndicate)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardSetRingIndicate
+	ENDIF
+
+
+; *  PCCardGetGlobalOptions()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetGlobalOptions(PCCardOptionSelector selector, void *value)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetGlobalOptions
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+; typedef UInt32 						PCCardDevType
+
+; typedef UInt32 						PCCardSubType
+
+;  values for PCCardType and PCCardSubType
+
+kPCCardUnknownType				EQU		0
+kPCCardMultiFunctionType		EQU		1
+kPCCardMemoryType				EQU		2
+kPCCardNullSubType				EQU		0					; Memory sub types 
+kPCCardRomSubType				EQU		1
+kPCCardOTPromSubType			EQU		2
+kPCCardEpromSubType				EQU		3
+kPCCardEEpromSubType			EQU		4
+kPCCardFlashSubType				EQU		5
+kPCCardSramSubType				EQU		6
+kPCCardDramSubType				EQU		7
+kPCCardSerialPortType			EQU		3
+kPCCardSerialOnlySubType		EQU		0
+kPCCardDataModemSubType			EQU		1
+kPCCardFaxModemSubType			EQU		2
+kPCCardFaxAndDataModemMask		EQU		3
+kPCCardVoiceEncodingSubType		EQU		4
+kPCCardParallelPortType			EQU		4
+kPCCardFixedDiskType			EQU		5
+kPCCardUnknownFixedDiskType		EQU		0
+kPCCardATAInterfaceDiskSubType	EQU		1
+kPCCardRotatingDeviceSubType	EQU		$00
+kPCCardSiliconDevice			EQU		$80
+kPCCardVideoAdaptorType			EQU		6
+kPCCardNetworkAdaptorType		EQU		7
+kPCCardArcNetSubType			EQU		1					; network sub types 
+kPCCardEthernetSubType			EQU		2
+kPCCardTokenRingSubType			EQU		3
+kPCCardLocalTalkSubType			EQU		4
+kPCCardFDDI_CDDISubType			EQU		5
+kPCCardATMSubType				EQU		6
+kPCCardWirelessSubType			EQU		7
+kPCCardAIMSType					EQU		8
+kPCCardSCSIType					EQU		9
+kPCCardSerialBusType			EQU		10
+kPCCardUSBBusSubType			EQU		1
+kPCCardFirewireBusSubType		EQU		2
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PCCardGetCardInfo()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetCardInfo(const RegEntryID *cardRef, PCCardDevType *cardType, PCCardSubType *cardSubType, StringPtr cardName, StringPtr vendorName)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetCardInfo
+	ENDIF
+
+	ENDIF	; CALL_NOT_IN_CARBON
+
+kPCCard16HardwareType			EQU		'pc16'
+kCardBusHardwareType			EQU		'cdbs'
+; typedef UInt32 						PCCardHardwareType
+
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  PCCardGetCardType()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   in PCCard 3.0 and later
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+;
+; extern OSStatus PCCardGetCardType(const RegEntryID *socketRef, PCCardHardwareType *cardType)
+;
+	IF TARGET_OS_MAC ** TARGET_RT_MAC_CFM THEN
+		IMPORT_CFM_FUNCTION PCCardGetCardType
+	ENDIF
+
+
+	ENDIF	; CALL_NOT_IN_CARBON
+	ENDIF ; __PCCARD__ 
+

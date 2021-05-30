@@ -1,0 +1,138 @@
+;
+;    File:       Traps.a
+;
+;    Contains:   A-Trap constants.
+;
+;    Version:    Technology: Mac OS 9
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1985-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__TRAPS__') = 'UNDEFINED' THEN
+__TRAPS__ SET 1
+
+	IF &TYPE('__CONDITIONALMACROS__') = 'UNDEFINED' THEN
+	include 'ConditionalMacros.a'
+	ENDIF
+
+ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+;        Trap OPWORDS are now defined in each manager    
+;       
+;           Example:
+;           
+;               _GetResource    OPWORD  $A9A0
+;               
+;           is now in the file 'Resources.a'
+;       
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+
+ 
+; 
+;   The floating point traps are needed because SANEMacs.a relies on Traps.a
+;   defining them.  We won't be fixing SANEMacs.a, so putting the traps here
+;   allows developers to use Universal AIncludes more easily.
+;
+    IF TARGET_CPU_68K THEN
+        UnimplementedTrap:  EQU     $A89F
+        _Unimplemented:     OPWORD  $A89F
+        _FP68K:             OPWORD  $A9EB
+        _Elems68K:          OPWORD  $A9EC
+        _DecStr68K:         OPWORD  $A9EE
+    ENDIF
+
+
+ 
+    IF TARGET_CPU_68K THEN
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+;   MoveTrapWord
+;       
+;   This macro allows OPWORDs to be used as parameters to Get/SetTrapAddress.
+;   For examples:
+;
+;           MoveTrapWord    _GetResource,D0     ; ->    Move.w  #$A9A0,D0
+;           _GetToolboxTrapAddress
+;
+;           MoveTrapWord    $A060,D0            ; ->    Move.w  #$A060,D0
+;           _GetOSTrapAddress
+;       
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+    Macro
+    MoveTrapWord &trap,&dest=D0
+        gbla &trapNum
+
+        If &trap = '' then
+            AError 'must specify trap number or name'
+            Exitm
+        Elseif &type(&upcase(&trap)) = 'OPWORD' then
+            If &findsym(&sysglobal, &upcase(&trap)) then
+                &trapNum: seta &sysvalue
+            Elseif &findsym(&syslocal, &upcase(&trap)) then
+                &trapNum: seta &sysvalue
+            Else
+                aerror 'internal error in MoveTrapWord (an OPWORD, but not in any symbol table??)'
+                ExitM
+            endif
+        Else
+            &trapNum: seta &eval(&trap)
+        Endif
+        If ((&trapNum < 0) or (&trapNum > $3FFC)) and ((&trapNum and $F000) ≠ $A000) then
+            AError 'not a valid trap number ($A000 - $AFFF)'
+            ExitM
+        Endif
+        move.w  #&trapNum,&dest
+    EndM
+    ENDIF   ; TARGET_CPU_68K
+
+
+
+ 
+    IF OLDROUTINENAMES THEN
+; 
+; 
+;       The following equates are for compatibility with old option bits
+;       
+;           Example:
+;                   _NewPtr, sys        ; old way
+;       
+;       The new way is to use the C name:
+;       
+;           Examle:
+;                   _NewPtrSys          ; new way
+;
+;
+
+;
+; for Device and File Manager routines 
+immed                           EQU     $200                ; execute immediately, bypass I/O queue
+async                           EQU     $400                ; asynchronous, don't wait for completion
+;
+; for Memory Manager routines 
+clear                           EQU     $200
+sys                             EQU     $400
+;
+; for string routines 
+marks                           EQU     $200                ; set to ignore/strip diacriticals
+Case                            EQU     $400                ; set for case sensitivity      
+autoPop                         EQU     $400                ; set to pop an extra return address
+;
+; for Get/Set & NGet/NSet TrapAddress 
+newTool                         EQU     $600                ; Toolbox trap, under new ordering
+newOS                           EQU     $200                ; OS trap, under new ordering
+;
+; for HFS routines 
+newHFS                          EQU     $200
+
+    ENDIF   ; OLDROUTINENAMES
+
+	ENDIF ; __TRAPS__ 
+

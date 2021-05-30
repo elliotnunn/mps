@@ -1,0 +1,157 @@
+;
+;    File:       DriverFamilyMatching.a
+;
+;    Contains:   Interfaces for create native drivers NDRV
+;
+;    Version:    Technology: 
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1995-2001 by Apple Computer, Inc., all rights reserved.
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DRIVERFAMILYMATCHING__') = 'UNDEFINED' THEN
+__DRIVERFAMILYMATCHING__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__NAMEREGISTRY__') = 'UNDEFINED' THEN
+	include 'NameRegistry.a'
+	ENDIF
+	IF &TYPE('__CODEFRAGMENTS__') = 'UNDEFINED' THEN
+	include 'CodeFragments.a'
+	ENDIF
+
+
+;  ##############################################
+;   Well known properties in the Name Registry
+;  ##############################################
+
+
+;  CPassThru 
+
+;  #########################################################
+;   Descriptor for Drivers and NDRVs
+;  #########################################################
+
+
+;  
+;    QuickTime 3.0: "DriverType" has a name collision with cross-platform code.
+;    Use Mac prefix to avoid collision 
+;
+
+;  Driver Typing Information Used to Match Drivers With Devices 
+MacDriverType			RECORD 0
+nameInfoStr				 ds		Str31			; offset: $0 (0)		;  Driver Name/Info String
+version					 ds		NumVersion		; offset: $20 (32)		;  Driver Version Number
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+	IF TARGET_OS_MAC THEN
+DriverType				RECORD 0
+f						 ds		MacDriverType
+sizeof					 EQU *					; size:   $24 (36)
+						ENDR
+
+
+	ENDIF	; TARGET_OS_MAC
+; typedef struct MacDriverType *		DriverTypePtr
+
+;  OS Runtime Information Used to Setup and Maintain a Driver's Runtime Environment 
+; typedef OptionBits 					RuntimeOptions
+
+
+kDriverIsLoadedUponDiscovery	EQU		$00000001			; auto-load driver when discovered
+kDriverIsOpenedUponLoad			EQU		$00000002			; auto-open driver when loaded
+kDriverIsUnderExpertControl		EQU		$00000004			; I/O expert handles loads/opens
+kDriverIsConcurrent				EQU		$00000008			; supports concurrent requests
+kDriverQueuesIOPB				EQU		$00000010			; device manager doesn't queue IOPB
+kDriverIsLoadedAtBoot			EQU		$00000020			; Driver is loaded at the boot time 
+kDriverIsForVirtualDevice		EQU		$00000040			; Driver is for a virtual Device 
+kDriverSupportDMSuspendAndResume EQU	$00000080			; Driver supports Device Manager Suspend and Resume command 
+DriverOSRuntime			RECORD 0
+driverRuntime			 ds.l	1				; offset: $0 (0)		;  Options for OS Runtime
+driverName				 ds		Str31			; offset: $4 (4)		;  Driver's name to the OS
+driverDescReserved		 ds.l	8				; offset: $24 (36)		;  Reserved area
+sizeof					 EQU *					; size:   $44 (68)
+						ENDR
+; typedef struct DriverOSRuntime *		DriverOSRuntimePtr
+
+;  OS Service Information Used To Declare What APIs a Driver Supports 
+; typedef UInt32 						ServiceCount
+
+DriverServiceInfo		RECORD 0
+serviceCategory			 ds.l	1				; offset: $0 (0)		;  Service Category Name
+serviceType				 ds.l	1				; offset: $4 (4)		;  Type within Category
+serviceVersion			 ds		NumVersion		; offset: $8 (8)		;  Version of service
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+; typedef struct DriverServiceInfo *	DriverServiceInfoPtr
+
+DriverOSService			RECORD 0
+nServices				 ds.l	1				; offset: $0 (0)		;  Number of Services Supported
+service					 ds		DriverServiceInfo ; offset: $4 (4) <-- really an array of length one ;  The List of Services (at least one)
+sizeof					 EQU *					; size:   $10 (16)
+						ENDR
+; typedef struct DriverOSService *		DriverOSServicePtr
+
+;  Categories 
+
+kServiceCategoryDisplay			EQU		'disp'				; Display Manager
+kServiceCategoryOpenTransport	EQU		'otan'				; Open Transport
+kServiceCategoryBlockStorage	EQU		'blok'				; Block Storage
+kServiceCategoryNdrvDriver		EQU		'ndrv'				; Generic Native Driver
+kServiceCategoryScsiSIM			EQU		'scsi'				; SCSI 
+kServiceCategoryFileManager		EQU		'file'				; File Manager 
+kServiceCategoryIDE				EQU		'ide-'				; ide 
+kServiceCategoryADB				EQU		'adb-'				; adb 
+kServiceCategoryPCI				EQU		'pci-'				; pci bus 
+															; Nu Bus 
+kServiceCategoryDFM				EQU		'dfm-'				; DFM 
+kServiceCategoryMotherBoard		EQU		'mrbd'				; mother Board 
+kServiceCategoryKeyboard		EQU		'kybd'				; Keyboard 
+kServiceCategoryPointing		EQU		'poit'				; Pointing 
+kServiceCategoryRTC				EQU		'rtc-'				; RTC 
+kServiceCategoryNVRAM			EQU		'nram'				; NVRAM 
+kServiceCategorySound			EQU		'sond'				; Sound (1/3/96 MCS) 
+kServiceCategoryPowerMgt		EQU		'pgmt'				; Power Management 
+kServiceCategoryGeneric			EQU		'genr'				; Generic Service Category to receive general Events 
+;  Ndrv ServiceCategory Types 
+
+kNdrvTypeIsGeneric				EQU		'genr'				; generic
+kNdrvTypeIsVideo				EQU		'vido'				; video
+kNdrvTypeIsBlockStorage			EQU		'blok'				; block storage
+kNdrvTypeIsNetworking			EQU		'netw'				; networking
+kNdrvTypeIsSerial				EQU		'serl'				; serial
+kNdrvTypeIsParallel				EQU		'parl'				; parallel 
+kNdrvTypeIsSound				EQU		'sond'				; sound
+kNdrvTypeIsBusBridge			EQU		'brdg'
+kNdrvTypeIsFWConference			EQU		'crsh'				; FireWire conference camera 
+kNdrvTypeIsAVC					EQU		'avc '				; FireWire AVC devices (DV cameras) 
+; typedef UInt32 						DriverDescVersion
+
+;   The Driver Description 
+
+kTheDescriptionSignature		EQU		'mtej'
+kDriverDescriptionSignature		EQU		'pdes'
+
+kInitialDriverDescriptor		EQU		0
+kVersionOneDriverDescriptor		EQU		1
+DriverDescription		RECORD 0
+driverDescSignature		 ds.l	1				; offset: $0 (0)		;  Signature field of this structure
+driverDescVersion		 ds.l	1				; offset: $4 (4)		;  Version of this data structure
+driverType				 ds		MacDriverType	; offset: $8 (8)		;  Type of Driver
+driverOSRuntimeInfo		 ds		DriverOSRuntime ; offset: $2C (44)		;  OS Runtime Requirements of Driver
+driverServices			 ds		DriverOSService ; offset: $70 (112)		;  Apple Service API Membership
+sizeof					 EQU *					; size:   $80 (128)
+						ENDR
+; typedef struct DriverDescription *	DriverDescriptionPtr
+
+
+
+	ENDIF ; __DRIVERFAMILYMATCHING__ 
+

@@ -1,0 +1,409 @@
+;
+;    File:       DesktopPrinting.a
+;
+;    Contains:   Print driver declarations for classic PrintMonitor and Desktop PrintMonitor
+;
+;    Version:    Technology: Mac OS 8.5
+;                Release:    Universal Interfaces 3.4
+;
+;    Copyright:  © 1998-2001 by Apple Computer, Inc., all rights reserved
+;
+;    Bugs?:      For bug reports, consult the following page on
+;                the World Wide Web:
+;
+;                    http://developer.apple.com/bugreporter/
+;
+;
+	IF &TYPE('__DESKTOPPRINTING__') = 'UNDEFINED' THEN
+__DESKTOPPRINTING__ SET 1
+
+	IF &TYPE('__MACTYPES__') = 'UNDEFINED' THEN
+	include 'MacTypes.a'
+	ENDIF
+	IF &TYPE('__FILES__') = 'UNDEFINED' THEN
+	include 'Files.a'
+	ENDIF
+	IF &TYPE('__PRINTING__') = 'UNDEFINED' THEN
+	include 'Printing.a'
+	ENDIF
+	IF &TYPE('__QUICKDRAW__') = 'UNDEFINED' THEN
+	include 'Quickdraw.a'
+	ENDIF
+	IF &TYPE('__MACERRORS__') = 'UNDEFINED' THEN
+	include 'MacErrors.a'
+	ENDIF
+
+;  PrGeneral opcodes for desktop printng
+;  DTP printer types (address types)
+
+kDTPUnknownPrinterType			EQU		-1					; unknown address type
+kDTPSerialPrinterType			EQU		0					; serial printer
+kDTPAppleTalkPrinterType		EQU		1					; AppleTalk printer
+kDTPTCPIPPrinterType			EQU		2					; TCP/IP printer
+kDTPSCSIPrinterType				EQU		3					; SCSI printer
+kDTPUSBPrinterType				EQU		4					; USB printer
+;  serial ports
+
+kDTPUnknownPort					EQU		-1					; for drivers that support serial connection by the 
+															; Comm Toolbox other than modem and printer port
+kDTPPrinterPort					EQU		0					; printer port
+kDTPModemPort					EQU		1					; modem port
+;  PrGeneral opcodes
+
+kDTPGetPrinterInfo				EQU		23
+kDTPIsSamePrinterInfo			EQU		24
+kDTPSetDefaultPrinterInfo		EQU		25
+;  serial printer address
+DTPSerialAddress		RECORD 0
+port					 ds.w	1				; offset: $0 (0)		;  kDTPPrinterPort, kDTPModemPort or kDTPUnknownPort
+portName				 ds		Str31			; offset: $2 (2)		;  name of the port specified in the port field
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+;  AppleTalk printer address
+DTPAppleTalkAddress		RECORD 0
+nbpName					 ds.b	33				; offset: $0 (0)
+nbpZone					 ds.b	33				; offset: $21 (33)
+nbpType					 ds.b	33				; offset: $42 (66)
+						 ORG 100
+sizeof					 EQU *					; size:   $64 (100)
+						ENDR
+;  TCP/IP printer address
+DTPTCPIPAddress			RECORD 0
+TCPIPAddress			 ds		Str255			; offset: $0 (0)
+queueName				 ds		Str255			; offset: $100 (256)
+sizeof					 EQU *					; size:   $200 (512)
+						ENDR
+;  SCSI printer address
+DTPSCSIAddress			RECORD 0
+id						 ds.w	1				; offset: $0 (0)		;  SCSI id
+sizeof					 EQU *					; size:   $2 (2)
+						ENDR
+;  USB printer address
+DTPUSBAddress			RECORD 0
+name					 ds		Str255			; offset: $0 (0)		;  printer name
+sizeof					 EQU *					; size:   $100 (256)
+						ENDR
+;  data passed into the PrGeneral calls
+DTPPrinterInfo			RECORD 0
+dtpDefaultName			 ds		Str31			; offset: $0 (0)		;  default name for the desktop printer.
+printerType				 ds.w	1				; offset: $20 (32)		;  kDTPSerialPrinterType, kDTPAppleTalkPrinterType, kDTPTCPIPPrinterType,
+;  kDTPSCSIPrinterType, kDTPUSBPrinterType or kDTPUnknownPrinterType
+;  Info specific to each type of printers
+serial					 ds		DTPSerialAddress ; offset: $22 (34)
+						 ORG 34
+appleTalk				 ds		DTPAppleTalkAddress ; offset: $22 (34)
+						 ORG 34
+tcpip					 ds		DTPTCPIPAddress ; offset: $22 (34)
+						 ORG 34
+scsi					 ds		DTPSCSIAddress ; offset: $22 (34)
+						 ORG 34
+usb						 ds		DTPUSBAddress	; offset: $22 (34)
+						 ORG 546
+;  optional driver-specific information can be appended here
+sizeof					 EQU *					; size:   $222 (546)
+						ENDR
+; typedef struct DTPPrinterInfo *		DTPPrinterInfoPtr
+
+; typedef DTPPrinterInfoPtr *			DTPPrinterInfoHandle
+
+TDTPPrGeneralData		RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)		;  kDTPGetPrinterInfo, kDTPIsSamePrinterInfo or kDTPSetDefaultPrinterInfo
+iError					 ds.w	1				; offset: $2 (2)
+iCommand				 ds.l	1				; offset: $4 (4)
+printerInfo				 ds.l	1				; offset: $8 (8)
+sizeof					 EQU *					; size:   $C (12)
+						ENDR
+;  desktop printer info resource
+
+kDTPInfoResType					EQU		'dtpi'
+kDTPInfoResID					EQU		-8192
+;  connection types supported
+
+kDTPUnknownConnection			EQU		$00000000			; unknown connection type
+kDTPSerialConnection			EQU		$00000001			; serial connection
+kDTPSCSIConnection				EQU		$00000002			; SCSI connection
+kDTPAppleTalkConnection			EQU		$00000004			; AppleTalk connection
+kDTPTCPIPConnection				EQU		$00000008			; TCP/IP connection
+kDTPUSBConnection				EQU		$00000010			; USB connection
+;  dtp extra features supported
+
+kDTPBasicFeatures				EQU		$00000000			; only basic dtp funtionalities are supported
+DTPInfoResource			RECORD 0
+features				 ds.l	1				; offset: $0 (0)		;  kDTPBasicFeatures (only basic features are supported for MacOS 8.5)
+connectionType			 ds.l	1				; offset: $4 (4)		;  can be kDTPUnknownConnection or any combination of kDTPSerialConnection, 
+;  kDTPSCSIConnection, kDTPAppleTalkConnection, kDTPTCPIPConnection and kDTPUSBConnection
+sizeof					 EQU *					; size:   $8 (8)
+						ENDR
+
+															; GestaltDTPInfoRec.version
+kDTPGestaltStructVersion2		EQU		$02008000			; version 2.0f0 (for Mac OS 8.0, 8.1 and 7.x)
+kDTPGestaltStructVersion3		EQU		$03000000			; version 3.0 (for Mac OS 8.5)
+;  DTPInfo
+DTPInfo					RECORD 0
+vRefNum					 ds.w	1				; offset: $0 (0)		;  vRefNum of the DTP folder
+dirID					 ds.l	1				; offset: $2 (2)		;  directory ID of the DTP folder
+dtpName					 ds		Str31			; offset: $6 (6)		;  name of the DTP folder
+driverType				 ds.l	1				; offset: $26 (38)		;  creator type of the print driver for this DTP
+current					 ds.b	1				; offset: $2A (42)		;  is this DTP currently the default printer?
+printerName				 ds.b	33				; offset: $2B (43)		;  name of the acutal printer on the net (only for LaserWriter 8 dtps)
+zoneName				 ds.b	33				; offset: $4C (76)		;  zone where this printer resides (only for LaserWriter 8 dtps)
+						 ORG 110
+sizeof					 EQU *					; size:   $6E (110)
+						ENDR
+;  data associated with the desktop printer info gestalt
+GestaltDTPInfoRec		RECORD 0
+version					 ds.l	1				; offset: $0 (0)		;  kDTPGestaltStructVersion3 or kDTPGestaltStructVersion2
+numDTPs					 ds.w	1				; offset: $4 (4)		;  number of the active dtps
+theDTPList				 ds.l	1				; offset: $6 (6)		;  handle to a list of DTPInfo for the active dtps
+theDTPDriverList		 ds.l	1				; offset: $A (10)		;  handle to a list of print driver file specs for each of the active dtp in theDTPList
+reserved				 ds.l	1				; offset: $E (14)
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+; typedef struct GestaltDTPInfoRec *	GestaltDTPInfoPtr
+
+; typedef GestaltDTPInfoPtr *			GestaltDTPInfoHdle
+
+;  AppleEvents 
+
+kDTPSignature					EQU		'dtpx'
+
+aeDTPSetDefaultEventType		EQU		'pfsd'				; for setting a desktop printer to be the default
+aeDTPSyncEventType				EQU		'pfsc'				; for notifying Desktop PrintMonitor of a new spool file created in a desktop printer folder
+;  event data
+DTPAppleEventData		RECORD 0
+dtpSignature			 ds.l	1				; offset: $0 (0)		;  kDTPSignature
+dtpEventType			 ds.l	1				; offset: $4 (4)		;  aeDTPSetDefaultEventType or aeDTPSyncEventType
+dtpSpec					 ds		FSSpec			; offset: $8 (8)		;  the file spec of the target dtp
+sizeof					 EQU *					; size:   $4E (78)
+						ENDR
+;  Notification during de-spooling
+;  DTPAsyncErrorNotificationUPP
+;  DTPEndNotificationUPP
+;  DTPInForegroundUPP
+;  DTPStatusMessageUPP
+	IF CALL_NOT_IN_CARBON THEN
+
+; *  NewDTPAsyncErrorNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDTPEndNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDTPInForegroundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  NewDTPStatusMessageUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDTPAsyncErrorNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDTPEndNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDTPInForegroundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  DisposeDTPStatusMessageUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDTPAsyncErrorNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDTPEndNotificationUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDTPInForegroundUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+
+; *  InvokeDTPStatusMessageUPP()
+; *  
+; *  Availability:
+; *    Non-Carbon CFM:   available as macro/inline
+; *    CarbonLib:        not available
+; *    Mac OS X:         not available
+; 
+
+	ENDIF	; CALL_NOT_IN_CARBON
+;  PrGeneral call that PrintMonitor/Desktop PrintMonitor use to set up the notification procs
+
+kPrintMonitorPrGeneral			EQU		-3
+
+;   TPrintMonitorPrintingData:
+;   for classic background printing and desktop printing that does not support third-party drivers 
+
+
+TPrintMonitorPrintingData RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)		;  kPrintMonitorPrGeneral
+iError					 ds.w	1				; offset: $2 (2)
+iReserved				 ds.l	1				; offset: $4 (4)		;  0 - classic PrintMonitor is running
+hPrint					 ds.l	1				; offset: $8 (8)
+noProcs					 ds.w	1				; offset: $C (12)		;  number of notification procs
+iReserved2				 ds.l	1				; offset: $E (14)
+pAsyncNotificationProc	 ds.l	1				; offset: $12 (18)		;  UPP to put up a notification
+pAsyncEndnotifyProc		 ds.l	1				; offset: $16 (22)		;  UPP to take down the notification
+pDTPInForegroundProc	 ds.l	1				; offset: $1A (26)		;  UPP to check if PrintMonitor is in foreground
+sizeof					 EQU *					; size:   $1E (30)
+						ENDR
+
+;   TDesktopPrintMonitorPrintingData:
+;   for desktop printing that supports third-party print drivers
+
+
+TDesktopPrintMonitorPrintingData RECORD 0
+iOpCode					 ds.w	1				; offset: $0 (0)		;  kPrintMonitorPrGeneral
+iError					 ds.w	1				; offset: $2 (2)
+iReserved				 ds.l	1				; offset: $4 (4)		;  1 - Desktop PrintMonitor is running
+hPrint					 ds.l	1				; offset: $8 (8)
+noProcs					 ds.w	1				; offset: $C (12)		;  number of notification procs
+iReserved2				 ds.l	1				; offset: $E (14)
+pAsyncNotificationProc	 ds.l	1				; offset: $12 (18)		;  UPP to put up a notification
+pAsyncEndnotifyProc		 ds.l	1				; offset: $16 (22)		;  UPP to take down the notification
+pInForegroundProc		 ds.l	1				; offset: $1A (26)		;  UPP to check if desktop printing is in foreground
+pStatusMessageProc		 ds.l	1				; offset: $1E (30)		;  UPP to update the printing status message in the desktop printer window
+sizeof					 EQU *					; size:   $22 (34)
+						ENDR
+;  Spool file data
+
+;  spool file data fork
+SpoolFileHeader			RECORD 0
+version					 ds.w	1				; offset: $0 (0)		;  should always be 1
+fileLen					 ds.l	1				; offset: $2 (2)		;  length of the spool file including the spool file header
+fileFlags				 ds.l	1				; offset: $6 (6)		;  should always be 0
+numPages				 ds.w	1				; offset: $A (10)		;  total number of pages in the spool file
+printRecord				 ds		TPrint			; offset: $C (12)		;  used only if PREC 3 can't be read
+sizeof					 EQU *					; size:   $84 (132)
+						ENDR
+; typedef struct SpoolFileHeader *		SpoolFileHeaderPtr
+
+; typedef SpoolFileHeaderPtr *			SpoolFileHeaderHandle
+
+SpoolPage				RECORD 0
+pictFlags				 ds.l	1				; offset: $0 (0)		;  should always be 0
+thePict					 ds		Picture			; offset: $4 (4)		;  variable length
+pageOffset				 ds.l	1				; offset: $E (14)		;  offset to the beginning of this page's PICT
+sizeof					 EQU *					; size:   $12 (18)
+						ENDR
+
+;   spool file resource fork
+;   PREC 126
+
+
+SpoolPREC126Record		RECORD 0
+version					 ds.w	1				; offset: $0 (0)		;  always 1
+flags					 ds.w	1				; offset: $2 (2)		;  always 0
+numPages				 ds.w	1				; offset: $4 (4)		;  total number of pages in the spool file
+numCopies				 ds.w	1				; offset: $6 (6)		;  total number of copies for the spool file
+creator					 ds.l	1				; offset: $8 (8)		;  the creator type of the print driver that creates the spool file
+appName					 ds		Str31			; offset: $C (12)		;  the name of the application used to create the spool file
+sizeof					 EQU *					; size:   $2C (44)
+						ENDR
+; typedef struct SpoolPREC126Record *	SpoolPREC126Ptr
+
+; typedef SpoolPREC126Ptr *				SpoolPREC126Handle
+
+;  PINX -8200 (page index resource)
+SpoolPageIndex			RECORD 0
+count					 ds.w	1				; offset: $0 (0)		;  number of elements in the pageOffset array
+pageOffset				 ds.l	1				; offset: $2 (2) <-- really an array of length one ;  the offset from the beginning of the file to the page record
+;  e.g. it would be sizeof(SpoolFileHeader) for the first page.
+sizeof					 EQU *					; size:   $6 (6)
+						ENDR
+; typedef struct SpoolPageIndex *		SpoolPageIndexPtr
+
+; typedef SpoolPageIndexPtr *			SpoolPageIndexHandle
+
+
+;   jobi 1 (DTP print job information resource)
+;   print priorities
+
+
+
+kDTPPrintJobUrgent				EQU		$00000001
+kDTPPrintJobAtTime				EQU		$00000002
+kDTPPrintJobNormal				EQU		$00000003
+kDTPPrintJobHolding				EQU		$00001003
+DTPPrintJobInfo			RECORD 0
+firstPageToPrint		 ds.w	1				; offset: $0 (0)		;  first page in the spool file to print
+priority				 ds.w	1				; offset: $2 (2)		;  print priority (eg kDTPPrintJobNormal)
+numCopies				 ds.w	1				; offset: $4 (4)		;  total number of copies
+numPages				 ds.w	1				; offset: $6 (6)		;  total number of pages in the spool file
+timeToPrint				 ds.l	1				; offset: $8 (8)		;  time to print (in seconds) when priority is kDTPPrintJobAtTime
+documentName			 ds		Str31			; offset: $C (12)		;  name of the document
+applicationName			 ds		Str31			; offset: $2C (44)		;  name of the application that's used to create this spool file
+printerName				 ds.b	33				; offset: $4C (76)		;  name of the target printer (should be the same as what's in PREC 124)
+						 ORG 110
+sizeof					 EQU *					; size:   $6E (110)
+						ENDR
+; typedef struct DTPPrintJobInfo *		DTPPrintJobInfoPtr
+
+; typedef DTPPrintJobInfoPtr *			DTPPrintJobInfoHandle
+
+	ENDIF ; __DESKTOPPRINTING__ 
+

@@ -1,0 +1,140 @@
+#   File:       Makefile
+#   Target:     AppearanceSample
+#   Created:    Monday, October 30, 2000 05:02:53 PM
+
+
+MAKEFILE        = Makefile
+•MondoBuild•    = {MAKEFILE}  # Make blank to avoid rebuilds when makefile is modified
+
+ObjDir          = :obj:
+Includes        = 
+TypeAndCreator	= -t APPL -c AppS
+
+Sym-cbn         = -sym off
+
+PPCCOptions     = {Includes} {Sym-cbn} -w 18 -d TARGET_API_MAC_CARBON
+PPCCPlusOptions = {PPCCOptions} -bool on
+
+
+### Source Files ###
+
+SrcFiles        =  ∂
+				AppearanceSampleMain.c ∂
+				MenuDrawing.c ∂
+				MegaDialog.cp ∂
+				MegaPane.cp ∂
+				ClassicPane.cp ∂
+				LayoutPane.cp ∂
+				ProgressPane.cp ∂
+				NewButtonPane.cp ∂
+				SliderPane.cp ∂
+				Offscreen.cp ∂
+				TextPane.cp ∂
+				FinderWindow.cp ∂
+				DialogWindow.cp ∂
+				CDEFTester.cp ∂
+				CDEFTesterUtils.cp ∂
+				BevelDialog.cp ∂
+				LiveFeedbackDialog.cp ∂
+				BaseWindow.cp ∂
+				BevelImageAPIWindow.cp ∂
+				RadioGroup.cp ∂
+				UtilityWindow.cp ∂
+				SideUtilityWindow.cp ∂
+				BaseDialog.cp ∂
+				StandardAlert.c ∂
+				UDialogUtils.cp ∂
+				AppearanceHelpers.c ∂
+				ProxyDialog.cp ∂
+				#
+
+
+### Object Files ###
+
+ObjFiles-cbn    =  ∂
+				"{ObjDir}AppearanceSampleMain.c.y" ∂
+				"{ObjDir}MenuDrawing.c.y" ∂
+				"{ObjDir}StandardAlert.c.y" ∂
+				"{ObjDir}AppearanceHelpers.c.y" ∂
+				"{ObjDir}MegaDialog.cp.y" ∂
+				"{ObjDir}MegaPane.cp.y" ∂
+				"{ObjDir}ClassicPane.cp.y" ∂
+				"{ObjDir}LayoutPane.cp.y" ∂
+				"{ObjDir}ProgressPane.cp.y" ∂
+				"{ObjDir}NewButtonPane.cp.y" ∂
+				"{ObjDir}SliderPane.cp.y" ∂
+				"{ObjDir}Offscreen.cp.y" ∂
+				"{ObjDir}TextPane.cp.y" ∂
+				"{ObjDir}FinderWindow.cp.y" ∂
+				"{ObjDir}DialogWindow.cp.y" ∂
+				"{ObjDir}CDEFTester.cp.y" ∂
+				"{ObjDir}CDEFTesterUtils.cp.y" ∂
+				"{ObjDir}BevelDialog.cp.y" ∂
+				"{ObjDir}LiveFeedbackDialog.cp.y" ∂
+				"{ObjDir}BaseWindow.cp.y" ∂
+				"{ObjDir}BevelImageAPIWindow.cp.y" ∂
+				"{ObjDir}RadioGroup.cp.y" ∂
+				"{ObjDir}UtilityWindow.cp.y" ∂
+				"{ObjDir}SideUtilityWindow.cp.y" ∂
+				"{ObjDir}BaseDialog.cp.y" ∂
+				"{ObjDir}UDialogUtils.cp.y" ∂
+				"{ObjDir}ProxyDialog.cp.y" ∂
+				#
+
+
+### Libraries ###
+
+LibFiles-cbn    =  ∂
+				  "{SharedLibraries}CarbonLib" ∂
+				  "{SharedLibraries}StdCLib" ∂
+				  "{PPCLibraries}PPCCRuntime.o" ∂
+				  "{PPCLibraries}MrCPlusLib.o" ∂
+#				  "{SharedLibraries}MathLib" ∂
+#				  "{PPCLibraries}StdCRuntime.o" ∂
+#				  "{PPCLibraries}PPCToolLibs.o"
+
+
+### Default Rules ###
+
+"{ObjDir}"	ƒ	:
+
+.c.y  ƒ  .c  {•MondoBuild•}
+	{PPCCPlus} {depDir}{default}.c -o {targDir}{default}.c.y {PPCCPlusOptions}
+
+.cp.y  ƒ  .cp  {•MondoBuild•}
+	{PPCCPlus} {depDir}{default}.cp -o {targDir}{default}.cp.y {PPCCPlusOptions}
+
+
+### Build Rules ###
+
+AppearanceSample	ƒƒ	AppearanceSampleCarbon
+
+AppearanceSampleCarbon	ƒƒ  {ObjFiles-cbn} {LibFiles-cbn} {•MondoBuild•}
+	PPCLink ∂
+		-o {Targ} -m main ∂
+		{ObjFiles-cbn} ∂
+		{LibFiles-cbn} ∂
+		{Sym-cbn} ∂
+		-mf -d ∂
+		{TypeAndCreator}
+
+AppearanceSampleCarbon  ƒƒ AppearanceSample.r AppearanceSample2.r MegaDialog.r
+	Rez -o {Targ} {TypeAndCreator} -a {NewerDeps}
+
+### Optional Dependencies ###
+### Build this target to generate "include file" dependencies. ###
+
+Dependencies  ƒ  $OutOfDate
+	MakeDepend ∂
+		-append {MAKEFILE} ∂
+		-ignore "{CIncludes}" ∂
+		-objdir "{ObjDir}" ∂
+		-objext .x ∂
+		{Includes} ∂
+		{SrcFiles}
+
+Clean		ƒ	$OutOfDate
+	Delete -i -y ∂
+		{ObjFiles-cbn} ∂
+		AppearanceSampleCarbon
+
