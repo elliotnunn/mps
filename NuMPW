@@ -1488,7 +1488,7 @@ def open_trap(trap, d0, a0, a1):
         retval = 0
 
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[0] = open_trap
 
@@ -1496,7 +1496,7 @@ def close_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     macclose(ioRefNum)
     write(2, a0 + 16, 0) # ioResult
-    return 0, 'completionroutine'
+    return 0, 'has_paramblk'
 
 os_traps[1] = close_trap
 
@@ -1533,7 +1533,7 @@ def read_trap(trap, d0, a0, a1):
 
     retval = -39 if len(data) < ioReqCount else 0 # eofErr or noErr
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[2] = read_trap
 
@@ -1553,9 +1553,19 @@ def write_trap(trap, d0, a0, a1):
     write(4, a0 + 46, f.__mpw_mark) # ioPosOffset
 
     write(2, a0 + 16, 0) # ioResult
-    return 0, 'completionroutine'
+    return 0, 'has_paramblk'
 
 os_traps[3] = write_trap
+
+def getvinfo_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    write(2, a0 + 62, 0) # ioVFrBlk
+    name = b'\x07whoknows'
+    if ioNamePtr: mem[ioNamePtr:ioNamePtr+len(name)] = name
+    # ioVDrvNum (input) and ioVRefNum (output) are at the same location
+    return 0, 'has_paramblk'
+
+os_traps[7] = getvinfo_trap
 
 def create_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
@@ -1572,7 +1582,7 @@ def create_trap(trap, d0, a0, a1):
         retval = -48 # dupFNErr
 
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[8] = create_trap
 
@@ -1588,7 +1598,7 @@ def delete_trap(trap, d0, a0, a1):
         pass
 
     write(2, a0 + 16, 0) # ioResult
-    return 0, 'completionroutine'
+    return 0, 'has_paramblk'
 
 os_traps[9] = delete_trap
 
@@ -1613,7 +1623,7 @@ def getfinfo_trap(trap, d0, a0, a1):
         retval = -43 # fnfErr
 
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[0xc] = getfinfo_trap
 
@@ -1633,7 +1643,7 @@ def setfinfo_trap(trap, d0, a0, a1):
         retval = -43 # fnfErr
 
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[0xd] = setfinfo_trap
 
@@ -1650,22 +1660,34 @@ def seteof_trap(trap, d0, a0, a1):
         retval = -51 # rfNumErr
 
     write(2, a0 + 16, retval) # ioResult
-    return retval, 'completionroutine'
+    return retval, 'has_paramblk'
 
 os_traps[0x12] = seteof_trap
 
 def flushvol_trap(trap, d0, a0, a1):
     write(2, a0 + 16, 0) # ioResult
-    return 0, 'completionroutine'
+    return 0, 'has_paramblk'
 
 os_traps[0x13] = flushvol_trap
+
+def getvol_trap(trap, d0, a0, a1):
+    ioVNPtr = read(4, a0 + 18)
+    if ioVNPtr: write(1, ioVNPtr, 0) # return blank string
+    write(2, a0 + 22, 0) # ioVRefNum = zero (hopefully okay)
+    if trap & 0x200: write(4, a0 + 48, 0) # HGetVol, clear ioDirID
+    return 0, 'has_paramblk'
+os_traps[0x14] = getvol_trap
 
 def fsdispatch_trap(trap, d0, a0, a1):
     d0 &= 0xffff # word-size selector
     if d0 == 0: # FSControl
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 1: # OpenWD
-        raise NotImplementedError('fsdispatch', d0)
+        ioWDProcID = read(4, a0 + 28)
+        if ioWDProcID != int.from_bytes(b'ERIK', 'big'):
+            raise NotImplementedError('OpenWD other than SysEnvirons')
+        write(2, a0 + 22, 0) # ioVRefNum (a working directory)
+        return 0, 'has_paramblk'
     elif d0 == 2: # CloseWD
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 5: # CatMove
@@ -1675,7 +1697,11 @@ def fsdispatch_trap(trap, d0, a0, a1):
     elif d0 == 7: # GetWDInfo
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 8: # GetFCBInfo
-        raise NotImplementedError('fsdispatch', d0)
+        ioRefNum = read(2, a0 + 24) or read(2, a0 + 28) # or ioFCBIndx
+        f = refnums[ioRefNum]
+        write(30, a0 + 32, 0) # clear the FCB fields
+        ioNamePtr = read(4, a0 + 18)
+        if ioNamePtr: raise ValueError('ioNamePtr')
     elif d0 == 9: # GetCatInfo
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 10: # SetCatInfo
@@ -1710,7 +1736,7 @@ def fsdispatch_trap(trap, d0, a0, a1):
         raise NotImplementedError('fsdispatch', d0)
 
     write(2, a0 + 16, 0) # ioResult
-    return 0, 'completionroutine'
+    return 0, 'has_paramblk'
 
 os_traps[0x60] = fsdispatch_trap
 
@@ -1849,9 +1875,17 @@ def recoverhandle_trap(trap, d0, a0, a1):
 os_traps[0x28] = recoverhandle_trap
 
 def hlock_nop_trap(trap, d0, a0, a1):
-    return d0, a0
+    return 0 # noErr
 os_traps[0x29] = hlock_nop_trap # _HLock
 os_traps[0x2a] = hlock_nop_trap # _HUnlock
+os_traps[0x49] = hlock_nop_trap # _HPurge
+os_traps[0x4a] = hlock_nop_trap # _HNoPurge
+os_traps[0x4b] = hlock_nop_trap # _SetGrowZone
+
+
+def compactmem_trap(trap, d0, a0, a1):
+    return 0, 0x100000 # noErr, can allocate a megabyte
+os_traps[0x4c] = compactmem_trap
 
 def emptyhandle(handle):
     ptr = read(4, handle)
@@ -1882,6 +1916,10 @@ def blockmove_trap(trap, d0, a0, a1):
     return 0, 0
 os_traps[0x2e] = blockmove_trap
 
+def moremasters_trap(trap, d0, a0, a1):
+    return 0 # noErr
+os_traps[0x36] = moremasters_trap
+
 def resrvmem_trap(trap, d0, a0, a1):
     return 0, 0
 os_traps[0x40] = resrvmem_trap
@@ -1891,6 +1929,10 @@ def stripaddress_trap(trap, d0, a0, a1):
         d0 &= 0xffffff
     return d0, 0
 os_traps[0x55] = stripaddress_trap
+
+def maxapplzone_trap(trap, d0, a0, a1):
+    return 0, 0
+os_traps[0x63] = maxapplzone_trap
 
 def movehhi_trap(trap, d0, a0, a1):
     return 0, 0
@@ -2124,7 +2166,7 @@ def initgraf_trap():
     a5 = read(4, regs + 32 + 5 * 4)
     qd = pop(4)
     write(4, a5, qd)
-    write(qd, 0xf8f8f8f8) # illegal thePort address
+    write(4, qd, 0xf8f8f8f8) # illegal thePort address
 toolbox_traps[0x6e] = initgraf_trap
 
 def setport_trap():
@@ -2188,6 +2230,15 @@ toolbox_traps[0x1c9] = syserror_trap
 def gestalt(selector):
     if selector == b'sysv':
         return 0x09228000 # highest possible
+
+def sysenvirons_trap(trap, d0, a0, a1):
+    write(16, a0, 0) # wipe
+    write(2, a0, 2) # environsVersion = 2
+    write(2, a0 + 2, 3) # machineType = SE
+    write(2, a0 + 4, 0x0700) # systemVersion = seven
+    write(2, a0 + 6, 3) # processor = 68020
+    return 0
+os_traps[0x90] = sysenvirons_trap
 
 def gestalt_trap(trap, d0, a0, a1):
     print('gestalt', hex(d0))
@@ -2293,10 +2344,10 @@ def lineAF(inst):
             retval = implementation_python(trapword,
                 read(4, regs), read(4, regs + 32), read(4, regs + 36)) # d0,a0,a1
 
-            # returned a0 or (a0, d0) or (a0, d0, 'completionroutine')
+            # returned a0 or (a0, d0) or (a0, d0, 'has_paramblk')
             if not isinstance(retval, tuple): retval = (retval,)
-            completionroutine = (retval[-1] == 'completionroutine')
-            if completionroutine: retval = retval[:-1]
+            has_paramblk = (retval[-1] == 'has_paramblk')
+            if has_paramblk: retval = retval[:-1]
 
             if len(retval) > 0 and retval[0] != None:
                 write(4, regs, retval[0]) # result in d0.l
@@ -2304,8 +2355,11 @@ def lineAF(inst):
                 write(4, regs + 32, retval[1]) # result in a0.l
             set_nz(read(2, regs + 2), 2) # tst.w d0
 
-            if completionroutine and trapword & 0x400:
-                raise NotImplementedError('completion routine')
+            if has_paramblk:
+                a0 = read(4, regs + 32); d0 = read(2, regs + 2)
+                write(2, a0 + 16, d0) # write ioResult same as d0
+                if trapword & 0x400:
+                    raise NotImplementedError('completion routine')
 
         elif implementation_68k == ftrap_table_addr + 0x89f * 2:
             raise NotImplementedError(hex(inst))
