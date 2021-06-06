@@ -1256,18 +1256,44 @@ def readrez(path):
     return retval
 
 ########################################################################
-# Filesystem access, used by both the Toolbox and MPW code
+# The Macintosh Toolbox. Wish me luck...
 ########################################################################
+
+os_traps = {}
+toolbox_traps = {}
+ftrap_table_addr = 0xb0000 # every permutation of f-trap
+
+# File Manager OS traps
+
+refnums = []
+
+def folderfromid(id):
+    if id == 2: raise ValueError('titties')
 
 import sys
 import os
-from os import path
+from pathlib import Path # let's try these new abstract paths!
+from functools import lru_cache
+
+# need to go from host path to wd/id (rarely), with persistent ids
+
+# the host provides native path access (only)
+# the guest asks for path strings in Mac format, which need to be converted to native paths
+# native paths (rarely) need to be
+
+curdir =
+
+wdrefnums = [] # we conflate these with 32-bit file IDs
+def mkwd(path):
+    path = normcase
+
+
+
+
 
 def path_to_native(s):
-    try:
-        s = s.decode('mac_roman')
-    except AttributeError:
-        pass
+    try: s = s.decode('mac_roman')
+    except AttributeError: pass
 
     if path.__name__ == 'posixpath': # gives faithful but quite verbose paths
         # Expand repeated separators to ..
@@ -1279,7 +1305,8 @@ def path_to_native(s):
         elif ':' not in s: # implicitly relative, with no :
             pass
         else: # absolute, with : but no leading :
-            s = ':' + s
+            if not s.lower().startswith('macos:'): raise FileNotFoundError(s)
+            s = ':' + s.partition(':')[2]
 
         # Swap separators
         s = ''.join((':' if c == path.sep else path.sep if c == ':' else c) for c in s)
@@ -1353,8 +1380,6 @@ def set_typecreator(f, t=None, c=None):
     except FileNotFoundError:
         pass
 
-refnums = []
-
 # Reimplement Unix io syscall interface atop Python
 # Slurp and blat all files wholesale
 
@@ -1366,51 +1391,6 @@ def text_to_mac(x):
         return x.decode('utf8').encode('mac_roman').replace(b'\n', b'\r')
     except UnicodeError:
         return x
-
-# MPW open() and OS PBOpen() call me
-def macopen(macname, readable=False, writable=False, exclusive=False, create=False, append=False, truncate=False, rsrcfork=False):
-    fname = macname
-
-    # Hack to allow resource forks to be copied wholesale
-    if rsrcfork: fname = path.readlink(fname) + '.rdump'
-
-    # Will error out if the path is ambiguous
-    fname = normcase(path_to_native(fname))
-
-    if exclusive and path.exists(fname): raise FileExistsError(fname)
-    if not create and not path.exists(fname): raise FileNotFoundError(fname)
-
-    if readable and writable:
-        mode = 'r+'
-    elif readable:
-        mode = 'r'
-    elif writable:
-        mode = 'w'
-    else: raise ValueError(macname, 'neither readable nor writable')
-
-    if fname.startswith('/dev/'):
-        f = open(fname, mode, encoding='utf8')
-    else:
-        f = open(fname, mode + 'b')
-
-    refnums.append(f)
-
-    f.__mpw_name = macname
-    f.__mpw_mark = 0
-    f.__mpw_append = append
-
-    f.__mpw_contents = bytearray() if (truncate or not readable or fname.startswith('/dev/')) else bytearray(f.read())
-
-    # Make our own decision about textfiles
-    ftype = get_typecreator(fname)[0]
-    if ftype in (b'TEXT', b'ttro') or (ftype == b'????' and not fname.endswith(('.o', '.x'))):
-        f.__mpw_contents[:] = text_to_mac(f.__mpw_contents)
-
-    return len(refnums) - 1
-
-macopen('Dev:StdIn', readable=True) # this is hacky but maybe can stay?
-macopen('Dev:StdOut', writable=True)
-macopen('Dev:StdErr', writable=True)
 
 def macclose(refnum):
     file = refnums[refnum]
@@ -1456,22 +1436,55 @@ def macdelete(f):
         except FileNotFoundError:
             pass
 
-########################################################################
-# The Macintosh Toolbox. Wish me luck...
-########################################################################
-
-os_traps = {}
-toolbox_traps = {}
-ftrap_table_addr = 0xb0000 # every permutation of f-trap
-
-# File Manager OS traps
-
 def open_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioVRefNum = read(2, a0 + 22)
     ioPermssn = read(1, a0 + 27)
+    if trap & 0x200: ioDirID = read(4, a0 + 48)
+    resourcefork = (trap & 0xff) == 0xa
 
-    name = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    # need to expend considerable effort figuring out which file to access!
+
+
+
+
+    ioName = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]].decode('mac_roman')
+    hName = ioName
+    if (trap & 0xff) == 0xa: hName = path.readlink(hName) + '.rdump'
+    hName = normcase(path_to_native(hName))
+
+    if not path.exists(hName): raise FileNotFoundError(hName)
+
+    if ioPermssn != 1: # attempt write access
+        try:
+            f = open(hName, 'r+b')
+        except PermissionError:
+            if ioPermssn == 0: # fsCurPerm, i.e. "try rw otherwise ro"
+                ioPermssn = 1 # treat as fsRdPerm
+            else:
+                return -54, 'has_paramblk' # permErr
+
+    if ioPermssn == 1: # attempt read access, assume it will work
+        f = open(hName, 'rb')
+
+
+    refnums.append(f)
+
+    f.__mpw_name = macname
+    f.__mpw_mark = 0
+    f.__mpw_append = append
+
+    f.__mpw_contents = bytearray() if (truncate or not readable or fname.startswith('/dev/')) else bytearray(f.read())
+
+    # Make our own decision about textfiles
+    ftype = get_typecreator(fname)[0]
+    if ftype in (b'TEXT', b'ttro') or (ftype == b'????' and not fname.endswith(('.o', '.x'))):
+        f.__mpw_contents[:] = text_to_mac(f.__mpw_contents)
+
+    return len(refnums) - 1
+
+
+
 #     print('PBOpen', hex(ioNamePtr), mem[ioNamePtr:ioNamePtr+32].hex(), mem[ioNamePtr:ioNamePtr+32])
 
     try:
@@ -1490,7 +1503,8 @@ def open_trap(trap, d0, a0, a1):
     write(2, a0 + 16, retval) # ioResult
     return retval, 'has_paramblk'
 
-os_traps[0] = open_trap
+os_traps[0] = open_trap # _Open
+os_traps[0xa] = open_trap # _OpenRF
 
 def close_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
