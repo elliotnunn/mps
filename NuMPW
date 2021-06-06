@@ -1451,8 +1451,8 @@ os_traps[0x1b] = zone_nop_trap # _SetZone
 def freemem_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
 
-os_traps[0x1c] = freemem_trap
-os_traps[0x1d] = freemem_trap
+os_traps[0x1c] = freemem_trap # _FreeMem
+os_traps[0x1d] = freemem_trap # _MaxMem
 
 def newptr(size): # fixed 16b header before all "heap" blocks
     mem.extend(bytes(0x20000))
@@ -1660,7 +1660,8 @@ os_traps[0x47] = settrapaddress_trap
 # Resource Manager Toolbox traps
 
 def getresource(type, id='', name=-1, topmap=False): # defaults are chosen to NEVER match
-    for file in reversed(resource_chain):
+    curmap = read(2, 0xa5a)
+    for file in reversed(resource_chain[:curmap+1]):
         for resource in file:
             thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
             if thistype == type and (thisid == id or thisname == name):
@@ -1704,6 +1705,15 @@ def getnamedresource_trap():
     pop(4)
     push(4, getresource(type=type, name=name, topmap=False))
 toolbox_traps[0x1a1] = getnamedresource_trap
+
+def curresfile_trap():
+    curmap = read(2, 0xa5a) # CurMap global
+    pop(2); push(2, curmap)
+toolbox_traps[0x194] = curresfile_trap
+
+def useresfile_trap():
+    curmap = write(2, 0xa5a, pop(2)) # CurMap global
+toolbox_traps[0x198] = useresfile_trap
 
 def setresload_trap():
     pop(2) # trash the parameter
@@ -1799,8 +1809,10 @@ toolbox_traps[0x1ee] = pack7_trap
 
 # QuickDraw Toolbox traps
 def qd_nop_trap(): pass
+def qd_pop2_trap(): pop(2)
 def qd_pop4_trap(): pop(4)
 def qd_pop8_trap(): pop(8)
+toolbox_traps[0x34] = qd_pop2_trap # _SetFScaleDisable
 toolbox_traps[0x50] = qd_nop_trap # _InitCursor
 toolbox_traps[0x51] = qd_pop4_trap # _SetCursor
 toolbox_traps[0x52] = qd_nop_trap # _HideCursor
@@ -1878,6 +1890,34 @@ def getport_trap():
     retaddr = pop(4)
     write(4, retaddr, port)
 toolbox_traps[0x74] = getport_trap
+
+def initnonexistentmanager_trap(): pass
+toolbox_traps[0xfe] = initnonexistentmanager_trap # _InitFonts
+toolbox_traps[0x112] = initnonexistentmanager_trap # _InitWindows
+toolbox_traps[0x130] = initnonexistentmanager_trap # _InitMenus
+toolbox_traps[0x1cc] = initnonexistentmanager_trap # _TEInit
+
+# OS and Toolbox Event Manager traps
+
+def flushevents_trap(trap, d0, a0, a1): return 0 # all events removed
+os_traps[0x32] = flushevents_trap
+
+# Menu Manager traps
+
+def setmenubar_trap(): pop(4)
+toolbox_traps[0x13c] = setmenubar_trap
+
+def drawmenubar_trap(): pass
+toolbox_traps[0x137] = drawmenubar_trap
+
+def getmenuhandle_trap(): pop(2); push(4, -1)
+toolbox_traps[0x149] = getmenuhandle_trap
+
+def appendresmenu_trap(): pop(8)
+toolbox_traps[0x14d] = appendresmenu_trap
+
+def getnewmbar_trap(): pop(6); push(4, -1) # entirely fake handle
+toolbox_traps[0x1c0] = getnewmbar_trap
 
 # Misc traps
 
@@ -2172,6 +2212,7 @@ write(4, 0xa06, 0xffffffff)
 write(4, 0x130, 0) # ApplLimit
 write(4, 0x908, 0x70000000) # CurStackBase
 mem[0x910:0x910+5] = b'\x04Sort'
+write(2, 0xa5a, 1) # CurMap = app map
 
 # Make an a5 world
 abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
