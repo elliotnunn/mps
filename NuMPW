@@ -1267,6 +1267,174 @@ ftrap_table_addr = 0xb0000 # every permutation of f-trap
 
 # File Manager OS traps
 
+from pathlib import Path
+
+dnums = [ # both dirIDs and wdRefNums
+    Path('/'), # wdRefNum 0 means current directory
+    None,      # dirID 1 means imaginary parent of volume
+    Path('/'), # dirID 2 means the volume (and we only have one)
+]
+
+def get_host_path(number=0, string=''):
+    # Get a host Path object from optional number
+    # (can be a wdRefNum or dirID, because we treat them the same)
+    # and an optional string.
+
+    try: string = string.decode('mac_roman')
+    except: pass
+
+    # If string is abolute then ignore the number, use the special root ID
+    if ':' in string and not string.startswith(':'):
+        number = 2
+        string = string.partition(':')[2] # assume the correct volume name
+
+    accum = dnums[number]
+
+    components = string.split(':')
+
+    # remove stray empty components, because they behave like '..'
+    if components[:1] == ['']: del components[:1]
+    if components[-1:] == ['']: del components[-1:]
+
+    for component in components:
+        if component:
+           accum /= component # TODO: fix case and encoding
+        else:
+            accum = accum.parent
+
+    return accum
+
+def get_macos_dnum(path):
+    idx = dnums.find(path, 1)
+    if idx == -1:
+        idx = len(dnums)
+        dnums.append(path)
+    return idx
+
+import types
+class OpenFile(types.SimpleNamespace): pass
+refnums = []
+def open_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioName = mem[ioNamePtr+1:ioNamePtr+1+mem[ioNamePtr]]
+    ioPermssn = read(1, a0 + 27)
+    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
+    else: number = read(2, a0 + 22) # ioVRefNum
+
+    path = get_host_path(number=number, string=ioName)
+    try: data = bytearray(path.read_bytes())
+    except: return -37, 'has_paramblk' # bdNamErr
+
+    refnums.append(OpenFile(open=True, path=path, mark=0, data=data))
+    write(2, a0 + 24, len(refnums) - 1) # ioRefNum
+    return 0, 'has_paramblk'
+os_traps[0] = open_trap
+
+def getvinfo_trap(trap, d0, a0, a1):
+    ioVNPtr = read(4, a0 + 18)
+    if ioVNPtr: mem[ioVNPtr:ioVNPtr+2] = b'\x01@'
+    write(2, a0 + 22, 2) # ioVRefNum: our "root volume" is 2
+
+    write(4, a0 + 30, 0) # ioVCrDate
+    write(4, a0 + 34, 0) # ioVLsMod
+    write(2, a0 + 38, 0) # ioVAtrb
+    write(2, a0 + 40, 100) # ioVNmFls
+    write(2, a0 + 42, 0) # ioVBitMap
+    write(2, a0 + 44, 0) # ioVAllocPtr
+    write(2, a0 + 46, 0xffff) # ioVNmAlBlks
+    write(4, a0 + 48, 0x200) # ioVAlBlkSiz
+    if trap & 0x200:
+        write(4, a0 + 52, 0x200) # ioVClpSiz
+        write(2, a0 + 56, 0x1000) # ioAlBlSt
+        write(4, a0 + 58, 0) # ioVNxtFNum
+        write(2, a0 + 62, 0xfff0) # ioVFrBlk
+        write(2, a0 + 64, 0) # ioVSig2
+        write(2, a0 + 66, 0) # ioVDrvInfo
+        write(2, a0 + 68, 2) # ioVDRefNum
+        write(2, a0 + 70, 0) # ioVFSID
+        write(4, a0 + 72, 0) # ioVBkUp
+        write(2, a0 + 76, 0) # ioVSeqNum
+        write(4, a0 + 78, 0) # ioVWrCnt
+        write(4, a0 + 82, 0) # ioVFilCnt
+        write(4, a0 + 86, 0) # ioVDirCnt
+        write(32, a0 + 90, 0) # ioVFndrInfo
+os_traps[7] = getvinfo_trap
+
+def getvol_trap(trap, d0, a0, a1):
+    ioVNPtr = read(4, a0 + 18)
+    if ioVNPtr: mem[ioVNPtr:ioVNPtr+2] = b'\x01@'
+    write(2, a0 + 22, 2) # ioVRefNum: our "root volume" is 2
+    if trap & 0x200: write(4, a0 + 48, get_macos_dnum[dnums[0]]) # HGetVol
+    return 0, 'has_paramblk'
+os_traps[0x14] = getvol_trap
+
+def fsdispatch_trap(trap, d0, a0, a1):
+    d0 &= 0xffff # word-size selector
+    if d0 == 0: # FSControl
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 1: # OpenWD
+        # just return dirID as wdRefNum, because we treat them the same
+        ioWDDirID = read(4, a0 + 48)
+        write(2, a0 + 22, ioWDDirID) # ioVRefNum technically
+        return 0, 'has_paramblk'
+
+    elif d0 == 2: # CloseWD
+        # do nothing
+        return 0, 'has_paramblk'
+
+    elif d0 == 5: # CatMove
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 6: # DirCreate
+        raise NotImplementedError('fsdispatch', d0)
+
+    elif d0 == 7: # GetWDInfo
+        # the opposite transformation to OpenWD
+        ioVRefNum = read(2, a0 + 22)
+        write(4, a0 + 48, ioVRefNum) # ioWDDirID
+        write(2, a0 + 32, 2) # ioWDVRefNum = 2 (our root)
+        write(4, a0 + 28, 0) # ioWDProcID = who cares who created it
+        return 0, 'has_paramblk'
+
+    elif d0 == 8: # GetFCBInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 9: # GetCatInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 10: # SetCatInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 11: # SetVolInfo
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 12: # SetPMSP
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 13: # SetupWDCB
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 14: # SetupDef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 15: # ReadWDCB
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 16: # LockRng
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 17: # UnlockRng
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 20: # CreateFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 21: # DeleteFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 22: # ResolveFileIDRef
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 23: # ExchangeFiles
+        raise NotImplementedError('fsdispatch', d0)
+    elif d0 == 26: # OpenDF
+        return open_trap(trap, d0, a0, a1)
+    elif d0 == 27: # MakeFSSpec
+        raise NotImplementedError('fsdispatch', d0)
+    else: # probably Desktop Manager stuff, ignore for now
+        raise NotImplementedError('fsdispatch', d0)
+
+    write(2, a0 + 16, 0) # ioResult
+    return 0, 'has_paramblk'
+
+os_traps[0x60] = fsdispatch_trap
+
 # Memory Manager OS traps
 
 heap_blocks = {} # addr: size
