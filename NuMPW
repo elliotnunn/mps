@@ -1825,6 +1825,17 @@ def getport_trap():
     write(4, retaddr, port)
 toolbox_traps[0x74] = getport_trap
 
+def setrect_trap():
+    br = pop(4); tl = pop(4); rectptr = pop(4)
+    write(4, rectptr, tl); write(4, rectptr + 4, br)
+toolbox_traps[0xa7] = setrect_trap
+
+def offsetrect_trap():
+    dv = pop(2); dh = pop(2); rectptr = pop(4)
+    for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)):
+        write(2, rectptr + ptr, read(2, rectptr + ptr) + delta)
+toolbox_traps[0xa8] = offsetrect_trap
+
 # OS and Toolbox Event Manager traps
 
 # Misc traps
@@ -1943,11 +1954,13 @@ def tb_pop2_trap(): pop(2)
 def tb_pop4_trap(): pop(4)
 def tb_pop6_trap(): pop(6)
 def tb_pop8_trap(): pop(8)
+def tb_pop10_trap(): pop(10)
 def tb_nop_ret0l_trap(): pop(0+4); push(4, 0)
 def tb_pop2_ret0l_trap(): pop(2+4); push(4, 0)
 def tb_pop4_ret0l_trap(): pop(4+4); push(4, 0)
 def tb_pop6_ret0l_trap(): pop(6+4); push(4, 0)
 def tb_pop8_ret0l_trap(): pop(8+4); push(4, 0)
+def tb_pop10_ret0l_trap(): pop(10+4); push(4, 0)
 
 toolbox_traps[0x034] = tb_pop2_trap       # _SetFScaleDisable
 toolbox_traps[0x050] = tb_nop_trap        # _InitCursor
@@ -1964,6 +1977,9 @@ toolbox_traps[0x13c] = tb_pop4_trap       # _SetMenuBar
 toolbox_traps[0x149] = tb_pop2_ret0l_trap # _GetMenuHandle
 toolbox_traps[0x14d] = tb_pop8_trap       # _AppendResMenu
 toolbox_traps[0x175] = tb_nop_ret0l_trap  # _TickCount
+toolbox_traps[0x179] = tb_pop2_trap       # _CouldDialog
+toolbox_traps[0x17b] = tb_nop_trap        # _InitDialogs
+toolbox_traps[0x17c] = tb_pop10_ret0l_trap# _GetNewDialog
 toolbox_traps[0x19b] = tb_pop2_trap       # _SetResLoad
 toolbox_traps[0x1a3] = tb_pop4_trap       # _ReleaseResource
 toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
