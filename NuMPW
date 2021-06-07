@@ -1442,12 +1442,6 @@ master_ptrs = {}
 
 # os_traps[0x19] = initzone_trap
 
-def zone_nop_trap(trap, d0, a0, a1):
-    return 0, 0
-
-os_traps[0x1a] = zone_nop_trap # _GetZone
-os_traps[0x1b] = zone_nop_trap # _SetZone
-
 def freemem_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
 
@@ -1549,10 +1543,6 @@ def gethandlesize_trap(trap, d0, a0, a1):
     return gethandlesize(a0), 0
 os_traps[0x25] = gethandlesize_trap
 
-def handlezone_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x26] = handlezone_trap
-
 def reallochandle(handle, size):
     emptyhandle(handle)
     sethandlesize(handle, size)
@@ -1569,15 +1559,6 @@ def recoverhandle_trap(trap, d0, a0, a1):
     return 0, recoverhandle(a0)
 os_traps[0x28] = recoverhandle_trap
 
-def hlock_nop_trap(trap, d0, a0, a1):
-    return 0 # noErr
-os_traps[0x29] = hlock_nop_trap # _HLock
-os_traps[0x2a] = hlock_nop_trap # _HUnlock
-os_traps[0x49] = hlock_nop_trap # _HPurge
-os_traps[0x4a] = hlock_nop_trap # _HNoPurge
-os_traps[0x4b] = hlock_nop_trap # _SetGrowZone
-
-
 def compactmem_trap(trap, d0, a0, a1):
     return 0, 0x100000 # noErr, can allocate a megabyte
 os_traps[0x4c] = compactmem_trap
@@ -1593,14 +1574,6 @@ def emptyhandle_trap(trap, d0, a0, a1):
     return 0, 0
 os_traps[0x2b] = emptyhandle_trap
 
-def initapplzone_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x2c] = initapplzone_trap
-
-def setappllimit_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x2d] = setappllimit_trap
-
 def blockmove(src, dest, size):
     shouldbe = len(mem)
     mem[dest:dest+size] = mem[src:src+size]
@@ -1611,27 +1584,11 @@ def blockmove_trap(trap, d0, a0, a1):
     return 0, 0
 os_traps[0x2e] = blockmove_trap
 
-def moremasters_trap(trap, d0, a0, a1):
-    return 0 # noErr
-os_traps[0x36] = moremasters_trap
-
-def resrvmem_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x40] = resrvmem_trap
-
 def stripaddress_trap(trap, d0, a0, a1):
     if len(mem) <= 0x1000000:
         d0 &= 0xffffff
     return d0, 0
 os_traps[0x55] = stripaddress_trap
-
-def maxapplzone_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x63] = maxapplzone_trap
-
-def movehhi_trap(trap, d0, a0, a1):
-    return 0, 0
-os_traps[0x64] = movehhi_trap
 
 # Trap Manager OS traps
 
@@ -1715,14 +1672,6 @@ def useresfile_trap():
     curmap = write(2, 0xa5a, pop(2)) # CurMap global
 toolbox_traps[0x198] = useresfile_trap
 
-def setresload_trap():
-    pop(2) # trash the parameter
-toolbox_traps[0x19b] = setresload_trap
-
-def releaseresource_trap():
-    pop(4) # trash the parameter
-toolbox_traps[0x1a3] = releaseresource_trap
-
 def getpattern_trap():
     id = pop(2)
     pop(4)
@@ -1785,11 +1734,6 @@ def loadseg_trap():
 
 toolbox_traps[0x1f0] = loadseg_trap
 
-def unloadseg_trap():
-    pop(4) # ignore
-
-toolbox_traps[0x1f1] = unloadseg_trap
-
 # Package Toolbox traps
 
 def pack4_trap(): # FP68K
@@ -1808,18 +1752,6 @@ def pack7_trap(): # DecStr68K
 toolbox_traps[0x1ee] = pack7_trap
 
 # QuickDraw Toolbox traps
-def qd_nop_trap(): pass
-def qd_pop2_trap(): pop(2)
-def qd_pop4_trap(): pop(4)
-def qd_pop8_trap(): pop(8)
-toolbox_traps[0x34] = qd_pop2_trap # _SetFScaleDisable
-toolbox_traps[0x50] = qd_nop_trap # _InitCursor
-toolbox_traps[0x51] = qd_pop4_trap # _SetCursor
-toolbox_traps[0x52] = qd_nop_trap # _HideCursor
-toolbox_traps[0x53] = qd_nop_trap # _ShowCursor
-toolbox_traps[0x55] = qd_pop8_trap # _ShieldCursor
-toolbox_traps[0x56] = qd_nop_trap # _ObscureCursor
-
 def bitand_trap():
     result = pop(4) & pop(4)
     pop(4); push(4, result)
@@ -1891,39 +1823,9 @@ def getport_trap():
     write(4, retaddr, port)
 toolbox_traps[0x74] = getport_trap
 
-def initnonexistentmanager_trap(): pass
-toolbox_traps[0xfe] = initnonexistentmanager_trap # _InitFonts
-toolbox_traps[0x112] = initnonexistentmanager_trap # _InitWindows
-toolbox_traps[0x130] = initnonexistentmanager_trap # _InitMenus
-toolbox_traps[0x1cc] = initnonexistentmanager_trap # _TEInit
-
 # OS and Toolbox Event Manager traps
 
-def flushevents_trap(trap, d0, a0, a1): return 0 # all events removed
-os_traps[0x32] = flushevents_trap
-
-# Menu Manager traps
-
-def setmenubar_trap(): pop(4)
-toolbox_traps[0x13c] = setmenubar_trap
-
-def drawmenubar_trap(): pass
-toolbox_traps[0x137] = drawmenubar_trap
-
-def getmenuhandle_trap(): pop(2); push(4, -1)
-toolbox_traps[0x149] = getmenuhandle_trap
-
-def appendresmenu_trap(): pop(8)
-toolbox_traps[0x14d] = appendresmenu_trap
-
-def getnewmbar_trap(): pop(6); push(4, -1) # entirely fake handle
-toolbox_traps[0x1c0] = getnewmbar_trap
-
 # Misc traps
-
-def tickcount_trap():
-    pop(4); push(4, 0) # always zero
-toolbox_traps[0x175] = tickcount_trap
 
 def purgespace_trap(trap, d0, a0, a1):
     return 0x7fffffff, 0x7fffffff # d0, a0
@@ -2018,13 +1920,56 @@ def cmpstring_trap(trap, d0, a0, a1):
 
 os_traps[0x3c] = cmpstring_trap
 
+# Trivial do-nothing traps
+def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
 
+os_traps[0x1a] = os_00_trap # _GetZone
+os_traps[0x1b] = os_00_trap # _SetZone
+os_traps[0x26] = os_00_trap # _HandleZone
+os_traps[0x29] = os_00_trap # _HLock
+os_traps[0x2a] = os_00_trap # _HUnlock
+os_traps[0x2c] = os_00_trap # _InitApplZone
+os_traps[0x2d] = os_00_trap # _SetApplLimit
+os_traps[0x32] = os_00_trap # _FlushEvents
+os_traps[0x36] = os_00_trap # _MoreMasters
+os_traps[0x40] = os_00_trap # _ResrvMem
+os_traps[0x49] = os_00_trap # _HPurge
+os_traps[0x4a] = os_00_trap # _HNoPurge
+os_traps[0x4b] = os_00_trap # _SetGrowZone
+os_traps[0x63] = os_00_trap # _MaxApplZone
+os_traps[0x64] = os_00_trap # _MoveHHi
 
+def tb_nop_trap(): pass
+def tb_pop2_trap(): pop(2)
+def tb_pop4_trap(): pop(4)
+def tb_pop6_trap(): pop(6)
+def tb_pop8_trap(): pop(8)
+def tb_nop_ret0l_trap(): pop(0+4); push(4, 0)
+def tb_pop2_ret0l_trap(): pop(2+4); push(4, 0)
+def tb_pop4_ret0l_trap(): pop(4+4); push(4, 0)
+def tb_pop6_ret0l_trap(): pop(6+4); push(4, 0)
+def tb_pop8_ret0l_trap(): pop(8+4); push(4, 0)
 
-
-
-
-
+toolbox_traps[0x034] = tb_pop2_trap       # _SetFScaleDisable
+toolbox_traps[0x050] = tb_nop_trap        # _InitCursor
+toolbox_traps[0x051] = tb_pop4_trap       # _SetCursor
+toolbox_traps[0x052] = tb_nop_trap        # _HideCursor
+toolbox_traps[0x053] = tb_nop_trap        # _ShowCursor
+toolbox_traps[0x055] = qd_pop8_trap       # _ShieldCursor
+toolbox_traps[0x056] = tb_nop_trap        # _ObscureCursor
+toolbox_traps[0x0fe] = tb_nop_trap        # _InitFonts
+toolbox_traps[0x112] = tb_nop_trap        # _InitWindows
+toolbox_traps[0x130] = tb_nop_trap        # _InitMenus
+toolbox_traps[0x137] = tb_nop_trap        # _DrawMenuBar
+toolbox_traps[0x13c] = tb_pop4_trap       # _SetMenuBar
+toolbox_traps[0x149] = tb_pop2_ret0l_trap # _GetMenuHandle
+toolbox_traps[0x14d] = tb_pop8_trap       # _AppendResMenu
+toolbox_traps[0x175] = tb_nop_ret0l_trap  # _TickCount
+toolbox_traps[0x19b] = tb_pop2_trap       # _SetResLoad
+toolbox_traps[0x1a3] = tb_pop4_trap       # _ReleaseResource
+toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
+toolbox_traps[0x1cc] = tb_nop_trap        # _TEInit
+toolbox_traps[0x1f1] = tb_pop4_trap       # _UnloadSeg
 
 # Populate the "classic" trap table, and also our list of implementations
 # The user-visible trap table initially points to _Unimplemented
