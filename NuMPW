@@ -1358,6 +1358,8 @@ def getvinfo_trap(trap, d0, a0, a1):
         write(4, a0 + 82, 0) # ioVFilCnt
         write(4, a0 + 86, 0) # ioVDirCnt
         write(32, a0 + 90, 0) # ioVFndrInfo
+
+    return 0, 'has_paramblk'
 os_traps[7] = getvinfo_trap
 
 def getvol_trap(trap, d0, a0, a1):
@@ -1444,9 +1446,13 @@ master_ptrs = {}
 
 def freemem_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
+os_traps[0x1c] = freemem_trap # _FreeMem = total free space
+os_traps[0x1d] = freemem_trap # _MaxMem = largest free block
+os_traps[0x4c] = freemem_trap # _CompactMem = largest free block
 
-os_traps[0x1c] = freemem_trap # _FreeMem
-os_traps[0x1d] = freemem_trap # _MaxMem
+def purgespace_trap(trap, d0, a0, a1):
+    return 0x7ffffffe, 0x7ffffffe # d0=total, a0=contig
+os_traps[0x62] = purgespace_trap
 
 def newptr(size): # fixed 16b header before all "heap" blocks
     mem.extend(bytes(0x20000))
@@ -1457,7 +1463,7 @@ def newptr(size): # fixed 16b header before all "heap" blocks
     return retval
 
 def newptr_trap(trap, d0, a0, a1):
-    return 0, newptr(d0) # a0,d0
+    return 0, newptr(d0) # noErr, ptr
 os_traps[0x1e] = newptr_trap
 
 def disposptr(ptr):
@@ -1468,7 +1474,7 @@ def disposptr(ptr):
 
 def disposptr_trap(trap, d0, a0, a1):
     disposptr(a0)
-    return 0, 0
+    return 0 # noErr
 os_traps[0x1f] = disposptr_trap
 
 def setptrsize(ptr, size):
@@ -1480,16 +1486,16 @@ def setptrsize(ptr, size):
 
 def setptrsize_trap(trap, d0, a0, a1):
     if setptrsize(a0, d0):
-        return 0, 0 # noErr
+        return 0 # noErr
     else:
-        return -108, 0 # memFullErr
+        return -108 # memFullErr
 os_traps[0x20] = setptrsize_trap
 
 def getptrsize(ptr):
     return heap_blocks[ptr]
 
 def getptrsize_trap(trap, d0, a0, a1):
-    return getptrsize(ptr), 0
+    return getptrsize(ptr)
 os_traps[0x21] = getptrsize_trap
 
 def newhandle(size):
@@ -1500,7 +1506,7 @@ def newhandle(size):
     return ptr - 4 # a handle points to its owning pointer
 
 def newhandle_trap(trap, d0, a0, a1):
-    return 0, newhandle(d0)
+    return 0, newhandle(d0) # noErr, handle
 os_traps[0x22] = newhandle_trap
 
 def disposhandle(handle):
@@ -1513,7 +1519,7 @@ def disposhandle(handle):
 
 def disposhandle_trap(trap, d0, a0, a1):
     disposhandle(a0)
-    return 0, 0
+    return 0 # noErr
 os_traps[0x23] = disposhandle_trap
 
 def sethandlesize(handle, size):
@@ -1532,7 +1538,7 @@ def sethandlesize(handle, size):
 
 def sethandlesize_trap(trap, d0, a0, a1):
     sethandlesize(a0, d0)
-    return 0, 0
+    return 0 # noErr
 os_traps[0x24] = sethandlesize_trap
 
 def gethandlesize(handle):
@@ -1540,7 +1546,7 @@ def gethandlesize(handle):
     return heap_blocks[ptr] if ptr else 0
 
 def gethandlesize_trap(trap, d0, a0, a1):
-    return gethandlesize(a0), 0
+    return gethandlesize(a0)
 os_traps[0x25] = gethandlesize_trap
 
 def reallochandle(handle, size):
@@ -1549,19 +1555,15 @@ def reallochandle(handle, size):
 
 def reallochandle_trap(trap, d0, a0, a1):
     reallochandle(a0, d0)
-    return 0, 0
+    return 0 # noErr
 os_traps[0x27] = reallochandle_trap
 
 def recoverhandle(ptr):
     return master_ptrs[ptr]
 
 def recoverhandle_trap(trap, d0, a0, a1):
-    return 0, recoverhandle(a0)
+    return d0, recoverhandle(a0) # preserve d0, return a0
 os_traps[0x28] = recoverhandle_trap
-
-def compactmem_trap(trap, d0, a0, a1):
-    return 0, 0x100000 # noErr, can allocate a megabyte
-os_traps[0x4c] = compactmem_trap
 
 def emptyhandle(handle):
     ptr = read(4, handle)
@@ -1571,7 +1573,7 @@ def emptyhandle(handle):
 
 def emptyhandle_trap(trap, d0, a0, a1):
     emptyhandle(a0)
-    return 0, 0
+    return 0 # d0 = noErr, must preserve a0
 os_traps[0x2b] = emptyhandle_trap
 
 def blockmove(src, dest, size):
@@ -1581,13 +1583,13 @@ def blockmove(src, dest, size):
 
 def blockmove_trap(trap, d0, a0, a1):
     blockmove(a0, a1, d0)
-    return 0, 0
+    return 0 # a0 (and a1) must be preserved!
 os_traps[0x2e] = blockmove_trap
 
 def stripaddress_trap(trap, d0, a0, a1):
     if len(mem) <= 0x1000000:
         d0 &= 0xffffff
-    return d0, 0
+    return d0
 os_traps[0x55] = stripaddress_trap
 
 # Trap Manager OS traps
@@ -1605,13 +1607,13 @@ def trap_kind(trapnum, flags):
 def gettrapaddress_trap(trap, d0, a0, a1):
     trapnum, trapkind = trap_kind(d0, trap)
     traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
-    return 0, traplist[trapnum]
+    return d0, traplist[trapnum] # d0 undefined
 os_traps[0x46] = gettrapaddress_trap
 
 def settrapaddress_trap(trap, d0, a0, a1):
     trapnum, trapkind = trap_kind(d0, trap)
     traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
-    return 0, 0
+    # registers on exit undefined
 os_traps[0x47] = settrapaddress_trap
 
 # Resource Manager Toolbox traps
@@ -1827,10 +1829,6 @@ toolbox_traps[0x74] = getport_trap
 
 # Misc traps
 
-def purgespace_trap(trap, d0, a0, a1):
-    return 0x7fffffff, 0x7fffffff # d0, a0
-os_traps[0x62] = purgespace_trap
-
 def debugstr_trap():
     strstart = pop(4)
     lenbyte = mem[strstart]
@@ -1936,6 +1934,7 @@ os_traps[0x40] = os_00_trap # _ResrvMem
 os_traps[0x49] = os_00_trap # _HPurge
 os_traps[0x4a] = os_00_trap # _HNoPurge
 os_traps[0x4b] = os_00_trap # _SetGrowZone
+os_traps[0x4d] = os_00_trap # _PurgeMem
 os_traps[0x63] = os_00_trap # _MaxApplZone
 os_traps[0x64] = os_00_trap # _MoveHHi
 
@@ -1955,7 +1954,7 @@ toolbox_traps[0x050] = tb_nop_trap        # _InitCursor
 toolbox_traps[0x051] = tb_pop4_trap       # _SetCursor
 toolbox_traps[0x052] = tb_nop_trap        # _HideCursor
 toolbox_traps[0x053] = tb_nop_trap        # _ShowCursor
-toolbox_traps[0x055] = qd_pop8_trap       # _ShieldCursor
+toolbox_traps[0x055] = tb_pop8_trap       # _ShieldCursor
 toolbox_traps[0x056] = tb_nop_trap        # _ObscureCursor
 toolbox_traps[0x0fe] = tb_nop_trap        # _InitFonts
 toolbox_traps[0x112] = tb_nop_trap        # _InitWindows
@@ -2024,15 +2023,14 @@ def lineAF(inst):
             retval = implementation_python(trapword,
                 read(4, regs), read(4, regs + 32), read(4, regs + 36)) # d0,a0,a1
 
-            # returned a0 or (a0, d0) or (a0, d0, 'has_paramblk')
+            # returned None or d0 or (d0, a0) or (d0, a0, 'has_paramblk')
+            if retval is None: retval = ()
             if not isinstance(retval, tuple): retval = (retval,)
-            has_paramblk = (retval[-1] == 'has_paramblk')
+            has_paramblk = (retval[-1:] == ('has_paramblk',))
             if has_paramblk: retval = retval[:-1]
 
-            if len(retval) > 0 and retval[0] != None:
-                write(4, regs, retval[0]) # result in d0.l
-            if len(retval) > 1 and retval[1] != None:
-                write(4, regs + 32, retval[1]) # result in a0.l
+            if len(retval) > 0: write(4, regs, retval[0]) # result in d0.l
+            if len(retval) > 1: write(4, regs + 32, retval[1]) # result in a0.l
             set_nz(read(2, regs + 2), 2) # tst.w d0
 
             if has_paramblk:
