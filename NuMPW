@@ -14,6 +14,7 @@ class IllegalInstruction(Exception): pass
 regs = 0
 pc = 0
 x = n = z = v = c = 0
+mem = bytearray()
 
 def push(size, data):
     ptr = address_by_mode(39, size) # -(A7)
@@ -708,19 +709,20 @@ def run_m68k_interpreter():
     global pc
     instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
         line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
+    mymem = mem
 
 #     import pdb; pdb.set_trace()
     wse = None
     watched = 0x14885c
     while True: # need a way to bust out of this loop
         try:
-            inst = read(2, pc)
+            inst = (mymem[pc] << 8) | mymem[pc+1] # the ONLY place the 68k em accesses mem directly
 #             wse2 = mem[watched:watched+4]
 #             if wse2 != wse: print('CHANGED! ', end='')
 #             print(hex(watched), '=', wse2.hex() if wse2 else 'nonexistent')
 #             wse = wse2
-            print_state(); print()
-            print(roughly_where_we_are(pc)); print()
+#             print_state(); print()
+#             print(roughly_where_we_are(pc)); print()
             pc += 2
             instruction_lines[inst >> 12](inst)
         except IllegalInstruction as e:
@@ -2131,7 +2133,7 @@ lineA = lineF = lineAF # cheating cleverly
 import struct
 
 # A memory, and some memory-mapped registers
-mem = bytearray(0x100000) # plenty of room for globals
+mem[:] = bytes(0x100000) # plenty of room for globals
 regs = 0x40000
 
 mem[0xc0000:0xc0000+len(pack4)] = pack4
