@@ -5,7 +5,9 @@
 #
 # Notes:
 # - all "sizes" are in bytes
-# - define read(), write() and lineA() somewhere outside this block
+# - mem is a bytearray, which must be populated from outside the block
+# - minimise direct access to the mem bytearray, preferring read()/write()
+# - define lineA() and lineF() somewhere outside this block
 ########################################################################
 
 class IllegalInstruction(Exception): pass
@@ -16,6 +18,14 @@ pc = 0
 x = n = z = v = c = 0
 mem = bytearray()
 
+def read(numbytes, addr):
+    mem[addr] # canary in the coalmine
+    return int.from_bytes(mem[addr:addr+numbytes], 'big')
+
+def write(numbytes, addr, val):
+    val &= (1 << (numbytes * 8)) - 1
+    mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
+
 def push(size, data):
     ptr = address_by_mode(39, size) # -(A7)
     write(size, ptr, data)
@@ -24,12 +34,8 @@ def pop(size):
     ptr = address_by_mode(31, size) # (A7)+
     return read(size, ptr)
 
-def sign_extend(n, size):
-    bitsize = size * 8
-    n &= (1 << bitsize) - 1 # clip to size
-    signbit = 1 << (bitsize - 1)
-    if n & (1 << (bitsize - 1)): n -= (1 << bitsize)
-    return n
+def signed(size, n):
+    return n - ((n & (1 << (size * 8 - 1))) << 1)
 
 def add_then_set_vc(a, b, size):
     global v, c
@@ -96,26 +102,26 @@ def address_by_mode(mode, size): # mode given by bottom 6 bits
         write(4, regptr, ptr)
     elif mode >> 3 == 5: # d16(An)
         regptr = regs + 32 + (mode & 7) * 4
-        ptr = (read(4, regptr) + read(2, pc, signed=True)); pc += 2
+        ptr = read(4, regptr) + signed(2, read(2, pc)); pc += 2
     elif mode >> 3 == 6: # d8(An,Xn)
         ptr = regs + 32 + (mode & 7) * 4
         ptr = read(4, ptr) # get An
         #
         xreg = read(1, pc); pc += 1
-        xofs = read(1, pc, signed=True); pc += 1
+        xofs = signed(1, read(1, pc)); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = read(4, whichreg, signed=True)
-        else: rofs = read(2, whichreg + 2, signed=True)
+        if xreg & 8: rofs = signed(4, read(4, whichreg))
+        else: rofs = signed(2, read(2, whichreg + 2))
         ptr += xofs + rofs
     elif mode == 58: # d16(PC)
-        ptr = pc + read(2, pc, signed=True); pc += 2
+        ptr = pc + signed(2, read(2, pc)); pc += 2
     elif mode == 59: # d8(PC,Xn)
         ptr = pc
         xreg = read(1, pc); pc += 1
-        xofs = read(1, pc, signed=True); pc += 1
+        xofs = signed(1, read(1, pc)); pc += 1
         whichreg = regs + (xreg >> 4) * 4 # could be D or A
-        if xreg & 8: rofs = read(4, whichreg, signed=True)
-        else: rofs = read(2, whichreg + 2, signed=True)
+        if xreg & 8: rofs = signed(4, read(4, whichreg))
+        else: rofs = signed(2, read(2, whichreg + 2))
         ptr += xofs + rofs
     elif mode == 56: # abs.W
         ptr = read(2, pc); pc += 2
@@ -250,7 +256,7 @@ def line123(inst): # move, and movea which is a special-ish case
     src_mode = inst & 63
 
     src = address_by_mode(src_mode, size)
-    datum = read(size, src, signed=True)
+    datum = signed(size, read(size, src))
 
     if dest_mode >> 3 == 1: # movea: sign extend to 32 bits
         size = 4
@@ -308,7 +314,7 @@ def line4(inst): # very,crowded,line
         dn = inst & 7
         src = regs + dn * 4 + 4 - size//2
         dest = regs + dn * 4 + 4 - size
-        datum = read(size//2, src, signed=True)
+        datum = signed(size//2, read(size//2, src))
         set_nz(datum, size)
         v = c = False
         write(size, dest, datum)
@@ -336,7 +342,7 @@ def line4(inst): # very,crowded,line
 
     elif inst & 0xFF8 == 0xE50: # link
         an = inst & 7; an_ea = regs + 32 + an * 4
-        imm = read(2, pc, signed=True); pc += 2
+        imm = signed(2, read(2, pc)); pc += 2
 
         push(4, read(4, an_ea)) # move.l a6,-(sp)
         sp = read(4, regs+60)
@@ -380,7 +386,7 @@ def line4(inst): # very,crowded,line
 
         for reg in which:
             if dir_to_reg:
-                datum = read(size, ptr, signed=True); ptr += size
+                datum = signed(size, read(size, ptr)); ptr += size
                 write(4, regs+reg*4, datum)
             else:
                 datum = read(size, regs + reg * 4 + 4 - size)
@@ -393,9 +399,9 @@ def line4(inst): # very,crowded,line
 
     elif inst & 0x1C0 == 0x180: # chk
         dn = (inst >> 9) & 7
-        testee = read(2, regs + 4 * dn + 2, signed=True)
+        testee = signed(2, read(2, regs + 4 * dn + 2))
         ea = address_by_mode(inst & 63, 2)
-        ubound = read(2, ea, signed=True)
+        ubound = signed(2, read(2, ea))
         if not 0 <= testee <= ubound: raise ValueError('chk failed') # raise exception
 
 def line5(inst): # addq,subq,scc,dbcc
@@ -419,7 +425,7 @@ def line5(inst): # addq,subq,scc,dbcc
         write(size, dest, datum)
 
     elif (inst >> 3) & 7 == 1: # dbcc
-        disp = read(2, pc, signed=True) - 2; pc += 2
+        disp = signed(2, read(2, pc)) - 2; pc += 2
 
         cond = (inst >> 8) & 15 # if cond satisfied then DO NOT take loop
         if test_condition(cond): return
@@ -440,9 +446,9 @@ def line5(inst): # addq,subq,scc,dbcc
 
 def line6(inst): # bra,bsr,bcc
     global pc
-    disp = sign_extend(inst & 255, 1)
+    disp = signed(1, inst & 255)
     if disp == 0: # word displacement
-        disp = read(2, pc, signed=True) - 2; pc += 2
+        disp = signed(2, read(2, pc)) - 2; pc += 2
 
     cond = (inst >> 8) & 15
     if cond > 1 and not test_condition(cond): return # not taken
@@ -455,7 +461,7 @@ def line6(inst): # bra,bsr,bcc
 def line7(inst): # moveq
     global n, z, v, c
     dn = (inst >> 9) & 7
-    val = sign_extend(inst & 255, 1)
+    val = signed(1, inst & 255)
     n = (val < 0); z = (val == 0); v = c = 0
     write(4, regs + dn * 4, val)
 
@@ -464,12 +470,14 @@ def line8(inst): # divu,divs,sbcd,or
     if inst & 0x1F0 == 0x100: # sbcd
         raise IllegalInstruction('sbcd')
     elif inst & 0x0C0 == 0x0C0: # divu,divs
-        signed = bool(inst & 0x100)
+        is_signed = bool(inst & 0x100)
         ea = address_by_mode(inst & 63, 2)
-        divisor = read(2, ea, signed)
+        divisor = read(2, ea)
+        if is_signed: divisor = signed(2, divisor)
         if divisor == 0: 1/0 # div0 error
         dn = (inst >> 9) & 7
-        dividend = read(4, regs + dn * 4, signed)
+        dividend = read(4, regs + dn * 4)
+        if is_signed: dividend = signed(4, dividend)
 
         # remainder is 0 or has same sign as dividend
         quotient = abs(dividend) // abs(divisor)
@@ -512,7 +520,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         size = 4 if inst & 0x100 else 2
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = read(4, regs + 32 + an * 4, signed=True) + sign * read(size, ea, signed=True)
+        result = signed(4, read(4, regs + 32 + an * 4)) + sign * signed(size, read(size, ea))
         write(4, regs + 32 + an * 4, result)
 
     elif inst & 0x130 == 0x100: # subx,addx: only two addressing modes allowed
@@ -552,7 +560,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         size = 4 if inst & 0x100 else 2 # size of ea but An is always .L
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = sub_then_set_vc(read(4, regs + 32 + an * 4, signed=True), read(size, ea, signed=True), 4)
+        result = sub_then_set_vc(signed(4, read(4, regs + 32 + an * 4)), signed(size, read(size, ea)), 4)
         set_nz(result, 4)
 
     elif inst & 0x100 == 0x000: # cmp
@@ -585,12 +593,14 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
 
 def lineC(inst):
     if inst & 0xC0 == 0xC0: # mulu,muls
-        signed = bool(inst & 0x100)
+        is_signed = bool(inst & 0x100)
         src = address_by_mode(inst & 63, 2) # ea.w
         dest = regs + ((inst >> 9) & 7) * 4 # dn.l
 
-        datum = read(2, dest+2, signed=signed) # read dn.w
-        datum *= read(2, src, signed=signed)
+        m1 = read(2, dest+2); m2 = read(2, src)
+        if is_signed:
+            m1 = signed(2, m1); m2 = signed(2, m2)
+        datum = m1 * m2
         set_nz(datum, 4)
         v = c = False
         write(4, dest, datum) # write dn.l
@@ -1639,7 +1649,7 @@ def getresource(type, id='', name=-1, topmap=False): # defaults are chosen to NE
     return 0
 
 def get1resource_trap():
-    id = sign_extend(pop(2), 2)
+    id = signed(2, pop(2))
     type = pop(4).to_bytes(4, 'big')
     push(4, getresource(type=type, id=id, topmap=True))
 toolbox_traps[0x1f] = get1resource_trap
@@ -1653,7 +1663,7 @@ def get1namedresource_trap():
 toolbox_traps[0x20] = get1namedresource_trap
 
 def getresource_trap():
-    id = sign_extend(pop(2), 2)
+    id = signed(2, pop(2))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, id=id, topmap=False))
@@ -1777,7 +1787,7 @@ def bitor_trap():
 toolbox_traps[0x5b] = bitor_trap
 
 def bitshift_trap():
-    by = sign_extend(pop(2), 2)
+    by = signed(2, pop(2))
     result = pop(4)
     if by > 0: result <<= by % 32
     else: result >>= (-by) % 32
@@ -1865,7 +1875,7 @@ def syserror(n):
 
 def syserror_trap():
     # trap is in toolbox table but actually uses registers
-    err = read(2, regs + 2, signed=True)
+    err = signed(2, read(2, regs + 2))
     if err == -491: # display string on stack
         strstart = pop(4)
         lenbyte = mem[strstart]
@@ -2139,15 +2149,6 @@ regs = 0x40000
 mem[0xc0000:0xc0000+len(pack4)] = pack4
 mem[0xd0000:0xd0000+len(pack5)] = pack5
 mem[0xe0000:0xe0000+len(pack7)] = pack7
-
-def read(numbytes, addr, signed=False):
-#     if addr < 0x1000: print('read lowmem', hex(addr))
-    return int.from_bytes(mem[addr:addr+numbytes], 'big', signed=signed)
-
-def write(numbytes, addr, val):
-    val &= (1 << (numbytes * 8)) - 1
-    mem[addr:addr+numbytes] = val.to_bytes(numbytes, 'big')
-#     print('write', numbytes, hex(addr), val.to_bytes(numbytes, 'big').hex())
 
 write(4, regs + 8 * 4 + 7 * 4, 0x40000) # stack growing down from registers
 
