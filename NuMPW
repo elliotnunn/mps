@@ -1281,9 +1281,14 @@ from pathlib import Path
 
 dnums = [ # both dirIDs and wdRefNums
     Path('/'), # wdRefNum 0 means current directory
-    None,      # dirID 1 means imaginary parent of volume
+    Path(''),  # dirID 1 means imaginary parent of volume
     Path('/'), # dirID 2 means the volume (and we only have one)
 ]
+
+def read_pstring(addr): return mem[addr+1:addr+1+mem[addr]].decode('mac_roman')
+def write_pstring(addr, str):
+    str = str.encode('mac_roman')
+    mem[addr:addr+1+len(str)] = bytes([len(str)]) + len(str)
 
 def get_host_path(number=0, string=''):
     # Get a host Path object from optional number
@@ -1314,12 +1319,57 @@ def get_host_path(number=0, string=''):
 
     return accum
 
+from functools import lru_cache
+@lru_cache(1)
+def listdir(path):
+    sortorder = (
+        b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
+        b'\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f'
+        b'\x20\x22\x23\x28\x29\x2a\x2b\x2c\x2f\x30\x31\x32\x33\x34\x35\x36'
+        b'\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f\x40\x41\x42\x43\x44\x45\x46'
+        b'\x47\x48\x58\x5a\x5e\x60\x67\x69\x6b\x6d\x73\x75\x77\x79\x7b\x7f'
+        b'\x8d\x8f\x91\x93\x96\x98\x9f\xa1\xa3\xa5\xa8\xaa\xab\xac\xad\xae'
+        b'\x54\x48\x58\x5a\x5e\x60\x67\x69\x6b\x6d\x73\x75\x77\x79\x7b\x7f'
+        b'\x8d\x8f\x91\x93\x96\x98\x9f\xa1\xa3\xa5\xa8\xaf\xb0\xb1\xb2\xb3'
+        b'\x4c\x50\x5c\x62\x7d\x81\x9a\x55\x4a\x56\x4c\x4e\x50\x5c\x62\x64'
+        b'\x65\x66\x6f\x70\x71\x72\x7d\x89\x8a\x8b\x81\x83\x9c\x9d\x9e\x9a'
+        b'\xb4\xb5\xb6\xb7\xb8\xb9\xba\x95\xbb\xbc\xbd\xbe\xbf\xc0\x52\x85'
+        b'\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\x57\x8c\xcc\x52\x85'
+        b'\xcd\xce\xcf\xd0\xd1\xd2\xd3\x26\x27\xd4\x20\x4a\x4e\x83\x87\x87'
+        b'\xd5\xd6\x24\x25\x2d\x2e\xd7\xd8\xa7\xd9\xda\xdb\xdc\xdd\xde\xdf'
+        b'\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef'
+        b'\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff')
+
+    from collections import Counter
+    uniqueness = Counter()
+
+    ls = []
+    for s in path.iterdir():
+        s = s.name.replace(':', '/')
+
+        if s.startswith('.') or len(s) > 31: continue
+
+        try: b = s.encode('mac_roman')
+        except UnicodeError: continue
+
+        ls.append((s, b))
+        uniqueness.update([s.upper()])
+
+    ls = [b for (s, b) in ls if uniqueness[s.upper()] == 1]
+    ls.sort(key=lambda b: b.translate(sortorder))
+    ls = [b.decode('mac_roman') for b in ls]
+    return ls
+
 def get_macos_dnum(path):
     try: idx = dnums.index(path, 1)
     except ValueError:
         idx = len(dnums)
         dnums.append(path)
     return idx
+
+def get_macos_date(path):
+    n = path.stat().st_mtime_ns // 1000000000 + 24107*24*60*60
+    return min(max(n, 0x80000000), 0xffffffff)
 
 import types
 class OpenFile(types.SimpleNamespace): pass
@@ -1342,7 +1392,7 @@ os_traps[0] = open_trap
 
 def getvinfo_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
-    if ioVNPtr: mem[ioVNPtr:ioVNPtr+2] = b'\x01@'
+    if ioVNPtr: write_pstring(ioVNPtr, '@')
     write(2, a0 + 22, 2) # ioVRefNum: our "root volume" is 2
 
     write(4, a0 + 30, 0) # ioVCrDate
@@ -1372,13 +1422,49 @@ def getvinfo_trap(trap, d0, a0, a1):
     return 0, 'has_paramblk'
 os_traps[7] = getvinfo_trap
 
+def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
+    ioNamePtr = read(4, a0 + 18)
+
+    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
+    else: number = read(2, a0 + 22) # ioVRefNum
+
+    ioFDirIndex = signed(2, read(2, a0 + 28))
+    if ioFDirIndex > 0:
+        try: string = listdir(get_host_path(number))[ioFDirIndex - 1]
+        except IndexError: return -43, 'has_paramblk' # fnfErr
+        if ioNamePtr: write_pstring(ioNamePtr, string)
+    else:
+        string = read_pstring(ioNamePtr)
+
+    write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
+    p = get_host_path(number=number, string=string)
+    if not p.exists(): return -43, 'has_paramblk' # fnfErr
+
+    if p.is_dir():
+        write(1, a0 + 30, 1 << 4) # is a directory
+        write(4, a0 + 48, get_macos_dnum(p)) # ioDrDirID
+        write(2, a0 + 52, len(listdir(p)))
+    else:
+        write(4, a0 + 54, (p.stat().st_size + 511) & -512) # ioFlLgLen
+        # todo: resource fork size
+        # todo: finder info
+
+    date = get_macos_date(p)
+    write(4, a0 + 72, date); write(4, a0 + 76, date) # ioFlCr/MdDat
+    return 0, 'has_paramblk'
+os_traps[0xc] = getfinfo_trap
+
 def getvol_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
-    if ioVNPtr: mem[ioVNPtr:ioVNPtr+2] = b'\x01@'
+    if ioVNPtr: write_pstring(ioVNPtr, '@')
     write(2, a0 + 22, 2) # ioVRefNum: our "root volume" is 2
     if trap & 0x200: write(4, a0 + 48, get_macos_dnum(dnums[0])) # HGetVol
     return 0, 'has_paramblk'
 os_traps[0x14] = getvol_trap
+
+def setvol_trap(trap, d0, a0, a1):
+    return 0, 'has_paramblk'
+os_traps[0x15] = setvol_trap
 
 def fsdispatch_trap(trap, d0, a0, a1):
     d0 &= 0xffff # word-size selector
@@ -1410,7 +1496,7 @@ def fsdispatch_trap(trap, d0, a0, a1):
     elif d0 == 8: # GetFCBInfo
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 9: # GetCatInfo
-        raise NotImplementedError('fsdispatch', d0)
+        return getfinfo_trap(trap, d0, a0, a1)
     elif d0 == 10: # SetCatInfo
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 11: # SetVolInfo
@@ -1939,6 +2025,48 @@ def cmpstring_trap(trap, d0, a0, a1):
 
 os_traps[0x3c] = cmpstring_trap
 
+# Munger and related traps
+
+def handtohand_trap():
+    hdl = read(4, regs + 32); ptr = read(4, hdl)
+    size = gethandlesize(hdl)
+    hdl2 = newhandle(size); ptr2 = read(4, hdl2)
+    mem[ptr2:ptr2+size] = mem[ptr:ptr+size]
+    write(4, regs + 32, hdl2) # a0 = result
+    write(4, regs, 0) # d0 = noErr
+toolbox_traps[0x1e1] = handtohand_trap
+
+def ptrtoxhand_trap():
+    srcptr = read(4, regs + 32) # a0
+    dsthdl = read(4, regs + 32 + 4) # a1
+    size = read(4, regs) # d0
+    sethandlesize(dsthdl, size)
+    dstptr = read(4, dsthdl)
+    mem[dstptr:dstptr+size] = mem[srcptr:srcptr+size]
+    write(4, regs + 32, dsthdl) # a0
+    write(4, regs, 0) # d0 = noErr
+toolbox_traps[0x1e2] = ptrtoxhand_trap
+
+def ptrtohand_trap():
+    srcptr = read(4, regs + 32) # a0
+    size = read(4, regs) # d0
+    dsthdl = newhandle(size)
+    dstptr = read(4, dsthdl)
+    mem[dstptr:dstptr+size] = mem[srcptr:srcptr+size]
+    write(4, regs + 32, dsthdl) # a0
+    write(4, regs, 0) # d0 = noErr
+toolbox_traps[0x1e3] = ptrtohand_trap
+
+def handandhand_trap():
+    ahdl = read(4, regs + 32); asize = gethandlesize(ahdl) # a0
+    bhdl = read(4, regs + 32 + 4); bsize = gethandlesize(bhdl) # a1
+    sethandlesize(bhdl, asize + bsize)
+    aptr = read(4, ahdl); bptr = read(4, bhdl)
+    mem[bptr+bsize:bptr+bsize+asize] = mem[aptr:aptr+asize]
+    write(4, regs + 32, bhdl) # a0 = dest handle
+    write(4, regs, 0) # d0 = noErr
+toolbox_traps[0x1e4] = handandhand_trap
+
 # Trivial do-nothing traps
 def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
 
@@ -1958,6 +2086,8 @@ os_traps[0x4b] = os_00_trap # _SetGrowZone
 os_traps[0x4d] = os_00_trap # _PurgeMem
 os_traps[0x63] = os_00_trap # _MaxApplZone
 os_traps[0x64] = os_00_trap # _MoveHHi
+os_traps[0x69] = os_00_trap # _HGetState
+os_traps[0x6a] = os_00_trap # _HSetState
 
 def tb_nop_trap(): pass
 def tb_pop2_trap(): pop(2)
@@ -1979,6 +2109,7 @@ toolbox_traps[0x052] = tb_nop_trap        # _HideCursor
 toolbox_traps[0x053] = tb_nop_trap        # _ShowCursor
 toolbox_traps[0x055] = tb_pop8_trap       # _ShieldCursor
 toolbox_traps[0x056] = tb_nop_trap        # _ObscureCursor
+toolbox_traps[0x0d8] = tb_nop_ret0l_trap  # _NewRgn
 toolbox_traps[0x0fe] = tb_nop_trap        # _InitFonts
 toolbox_traps[0x112] = tb_nop_trap        # _InitWindows
 toolbox_traps[0x130] = tb_nop_trap        # _InitMenus
@@ -1992,6 +2123,7 @@ toolbox_traps[0x17b] = tb_nop_trap        # _InitDialogs
 toolbox_traps[0x17c] = tb_pop10_ret0l_trap# _GetNewDialog
 toolbox_traps[0x19b] = tb_pop2_trap       # _SetResLoad
 toolbox_traps[0x1a3] = tb_pop4_trap       # _ReleaseResource
+toolbox_traps[0x1bd] = tb_pop10_ret0l_trap# _GetNewWindow
 toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
 toolbox_traps[0x1cc] = tb_nop_trap        # _TEInit
 toolbox_traps[0x1f1] = tb_pop4_trap       # _UnloadSeg
