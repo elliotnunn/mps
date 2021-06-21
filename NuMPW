@@ -1280,15 +1280,16 @@ ftrap_table_addr = 0xb0000 # every permutation of f-trap
 from pathlib import Path
 
 dnums = [ # both dirIDs and wdRefNums
-    Path('/'), # wdRefNum 0 means current directory
+    Path('/Users/elliotnunn'), # wdRefNum 0 means current directory
     Path(''),  # dirID 1 means imaginary parent of volume
     Path('/'), # dirID 2 means the volume (and we only have one)
 ]
 
+def read_cstring(addr): return mem[addr:mem.index(0, addr)].decode('mac_roman')
 def read_pstring(addr): return mem[addr+1:addr+1+mem[addr]].decode('mac_roman')
 def write_pstring(addr, str):
     str = str.encode('mac_roman')
-    mem[addr:addr+1+len(str)] = bytes([len(str)]) + len(str)
+    mem[addr:addr+1+len(str)] = bytes([len(str)]) + str
 
 def get_host_path(number=0, string=''):
     # Get a host Path object from optional number
@@ -1423,22 +1424,36 @@ def getvinfo_trap(trap, d0, a0, a1):
 os_traps[7] = getvinfo_trap
 
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
+    ioFDirIndex = signed(2, read(2, a0 + 28))
+
     ioNamePtr = read(4, a0 + 18)
 
-    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
-    else: number = read(2, a0 + 22) # ioVRefNum
+    if trap & 0x2ff == 0x20c or (trap & 0xff == 0x60 and ioFDirIndex < 0):
+        # HGetFInfo, or GetCatInfo on ioDirID
+        number = read(4, a0 + 48) # ioDirID
+    else:
+        number = read(2, a0 + 22) # ioVRefNum
 
-    ioFDirIndex = signed(2, read(2, a0 + 28))
-    if ioFDirIndex > 0:
+    print('GetFInfo/GetCatInfo...', ioFDirIndex, hex(ioNamePtr))
+
+    if trap & 0xff == 0x60 and ioFDirIndex < 0:
+        string = ''
+        return_string = True
+    elif ioFDirIndex > 0:
         try: string = listdir(get_host_path(number))[ioFDirIndex - 1]
         except IndexError: return -43, 'has_paramblk' # fnfErr
-        if ioNamePtr: write_pstring(ioNamePtr, string)
+        return_string = True
     else:
         string = read_pstring(ioNamePtr)
+        return_string = False
 
     write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
     p = get_host_path(number=number, string=string)
+    print(p)
     if not p.exists(): return -43, 'has_paramblk' # fnfErr
+
+    if return_string and ioNamePtr:
+        write_pstring(ioNamePtr, p.name.replace(':', '/'))
 
     if p.is_dir():
         write(1, a0 + 30, 1 << 4) # is a directory
@@ -1449,21 +1464,44 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
         # todo: resource fork size
         # todo: finder info
 
+    parent = get_macos_dnum(p.parent) if p != p.parent else 1 # mythical "parent of root"
+    write(4, a0 + 100, parent) # ioFlParID
+
     date = get_macos_date(p)
     write(4, a0 + 72, date); write(4, a0 + 76, date) # ioFlCr/MdDat
     return 0, 'has_paramblk'
 os_traps[0xc] = getfinfo_trap
 
 def getvol_trap(trap, d0, a0, a1):
+    if trap & 0x200: # HGetVol
+        write(2, a0 + 22, 2) # ioVRefNum = 2
+        write(4, a0 + 48, get_macos_dnum(dnums[0])) # ioDirID = number
+    else: # plain GetVol
+        write(2, a0 + 22, get_macos_dnum(dnums[0])) # ioVRefNum = number
+
     ioVNPtr = read(4, a0 + 18)
-    if ioVNPtr: write_pstring(ioVNPtr, '@')
-    write(2, a0 + 22, 2) # ioVRefNum: our "root volume" is 2
-    if trap & 0x200: write(4, a0 + 48, get_macos_dnum(dnums[0])) # HGetVol
+    if ioVNPtr: write_pstring(ioVNPtr, dnums[0].name.replace(':', '/'))
+
     return 0, 'has_paramblk'
+
 os_traps[0x14] = getvol_trap
 
 def setvol_trap(trap, d0, a0, a1):
+    ioVNPtr = read(4, a0 + 18)
+    if ioVNPtr:
+        volname = read_pstring(ioVNPtr)
+        if ':' not in volname: volname += ':' # this is an absolute path
+        try: dnums[0] = get_host_path(string=volname)
+        except FileNotFoundError: return -43, 'has_paramblk' # fnfErr
+
+    elif trap & 0x200: # HGetVol
+        dnums[0] = dnums[read(4, a0 + 48)] # ioDirID
+
+    else: # plain GetVol
+        dnums[0] = dnums[read(2, a0 + 2)] # ioVRefNum
+
     return 0, 'has_paramblk'
+
 os_traps[0x15] = setvol_trap
 
 def fsdispatch_trap(trap, d0, a0, a1):
@@ -2011,6 +2049,7 @@ os_traps[0xad] = gestalt_trap
 def cmpstring_trap(trap, d0, a0, a1):
     l0 = d0 >> 16       # corresponds with a0 ptr
     l1 = d0 & 0xffff    # corresponds with a1 ptr
+    if l0 != l1: return 1
     both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode('mac_roman')
 
     if trap & 0x200: # ignore diacritics
@@ -2021,9 +2060,16 @@ def cmpstring_trap(trap, d0, a0, a1):
     if trap & 0x400: # ignore case
         both = both.lower()
 
-    return int(bool(both[:len(both)//2] != both[len(both)//2:]))
+    return int(both[:len(both)//2] != both[len(both)//2:])
 
 os_traps[0x3c] = cmpstring_trap
+
+def sysbeep_trap():
+    a4 = read(4, regs + 32 + 4 * 4) # hack hack hack for ToolServer alerts
+    s = read_cstring(a4)
+    print('SysBeep message:', s.replace('\r', '\n'), file=sys.stderr)
+    pass
+toolbox_traps[0x1c8] = sysbeep_trap
 
 # Munger and related traps
 
@@ -2312,5 +2358,26 @@ a5world = 0x80000
 write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
 mem[a5world+jtoffset:a5world+jtoffset+jtsize] = code0[16:16+jtsize]
 pc = a5world + jtoffset + 2
+
+# Tell the app to open a tempfile
+import tempfile
+import atexit
+tmp = tempfile.TemporaryDirectory()
+atexit.register(tmp.cleanup)
+tmppath = Path(tmp.name)
+tmpwdrefnum = get_macos_dnum(tmppath)
+(tmppath/'stdin').write_bytes(b'echo hello; quit\r')
+(tmppath/'stdin.idump').write_bytes(b'TEXTMPS ')
+params = (
+    b'\x00\x00' # message 0=open 1=print
+    b'\x00\x01' # count
+    + tmpwdrefnum.to_bytes(2, 'big') + # vRefNum
+    b'TEXT' # file type
+    b'\x00\x00' # version number and padding
+    b'\x05stdin') # pascal name string
+hdl = newhandle(len(params)); ptr = read(4, hdl)
+mem[ptr:ptr+len(params)] = params
+write(4, 0xaec, hdl) # AppParmHandle global
+write(4, a5world + 16, hdl) # segment loader puts it here too
 
 run_m68k_interpreter()
