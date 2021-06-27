@@ -1281,11 +1281,19 @@ ftrap_table_addr = 0xb0000 # every permutation of f-trap
 everyfref = range(2, 2 + 348 * 94, 94)
 
 from pathlib import Path
+import tempfile
+
+tmp = tempfile.TemporaryDirectory()
+tmppath = Path(tmp.name)
+
+systemfolder = tmppath/'System Folder'; systemfolder.mkdir()
+mpwfolder = tmppath/'MPW'; mpwfolder.mkdir()
 
 dnums = [ # both dirIDs and wdRefNums
-    Path('/Users/elliotnunn'), # wdRefNum 0 means current directory
+    mpwfolder, # the "current directory", where ToolServer finds its log etc
     Path(''),  # dirID 1 means imaginary parent of volume
     Path('/'), # dirID 2 means the volume (and we only have one)
+    systemfolder, # dirID 3 is convenient for the System Folder
 ]
 
 def read_cstring(addr): return mem[addr:mem.index(0, addr)].decode('mac_roman')
@@ -1384,8 +1392,9 @@ def open_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
     ioPermssn = read(1, a0 + 27)
-    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
-    else: number = read(2, a0 + 22) # ioVRefNum
+
+    # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
+    number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
     try:
@@ -1511,6 +1520,7 @@ def getvinfo_trap(trap, d0, a0, a1):
         write(4, a0 + 82, 0) # ioVFilCnt
         write(4, a0 + 86, 0) # ioVDirCnt
         write(32, a0 + 90, 0) # ioVFndrInfo
+        write(4, a0 + 90, get_macos_dnum(systemfolder)) # must match BootDrive
 
     return 0, 'has_paramblk'
 os_traps[7] = getvinfo_trap
@@ -1518,8 +1528,9 @@ os_traps[7] = getvinfo_trap
 def delete_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
-    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
-    else: number = read(2, a0 + 22) # ioVRefNum
+
+    # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
+    number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
     import shutil
@@ -1532,14 +1543,19 @@ os_traps[9] = delete_trap
 
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
     ioFDirIndex = signed(2, read(2, a0 + 28))
-
     ioNamePtr = read(4, a0 + 18)
 
-    if trap & 0x2ff == 0x20c or (trap & 0xff == 0x60 and ioFDirIndex < 0):
-        # HGetFInfo, or GetCatInfo on ioDirID
-        number = read(4, a0 + 48) # ioDirID
-    else:
-        number = read(2, a0 + 22) # ioVRefNum
+    # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
+    number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
+
+    # weird case for _GetCatInfo, a literal reading of Inside Mac
+#     if trap & 0xff == 0x60 and ioFDirIndex <= 0:
+#         number = 2 # always on the root... doesn't make much sense???
+
+    # weird case for _HGetFInfo
+    if trap & 0xff == 0x0c and trap & 0x200:
+        if read(2, a0 + 22) != 2: # a non-root wdRefNum overrides dirID
+            number = read(2, a0 + 22)
 
     if trap & 0xff == 0x60 and ioFDirIndex < 0:
         string = ''
@@ -1573,8 +1589,9 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
             pass
         mem[a0+32:a0+40] = typecreator
 
-    parent = get_macos_dnum(p.parent) if p != p.parent else 1 # mythical "parent of root"
-    write(4, a0 + 100, parent) # ioFlParID
+    if trap & 0xff == 0x60:
+        parent = get_macos_dnum(p.parent) if p != p.parent else 1 # mythical "parent of root"
+        write(4, a0 + 100, parent) # ioFlParID
 
     date = get_macos_date(p)
     write(4, a0 + 72, date); write(4, a0 + 76, date) # ioFlCr/MdDat
@@ -1584,8 +1601,9 @@ os_traps[0xc] = getfinfo_trap
 def setfinfo_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
-    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
-    else: number = read(2, a0 + 22) # ioVRefNum
+
+    # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
+    number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
     if not path.exists(): return -43, 'has_paramblk' # fnfErr
@@ -2607,6 +2625,7 @@ write(4, 0x908, 0x70000000) # CurStackBase
 mem[0x910:0x910+5] = b'\x04Sort'
 write(2, 0xa5a, 1) # CurMap = app map
 write(4, 0xa1c, newhandle(6)) # empty MenuList
+write(2, 0x210, get_macos_dnum(systemfolder)) # BootDrive
 
 # FCB block and a single VCB
 write(4, 0x34e, 0xa0000) # FCBSPtr
@@ -2623,11 +2642,7 @@ write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
 mem[a5world+jtoffset:a5world+jtoffset+jtsize] = code0[16:16+jtsize]
 pc = a5world + jtoffset + 2
 
-# Temporary directory of useful things
-import tempfile
-tmp = tempfile.TemporaryDirectory()
-tmppath = Path(tmp.name)
-
+# Create scripts in the temporary directory
 files_to_run = [
     ('stdin', b'set\r'),
 ]
