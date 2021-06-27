@@ -1310,6 +1310,13 @@ def write_pstring(addr, str):
     str = str.encode('mac_roman')
     mem[addr:addr+1+len(str)] = bytes([len(str)]) + str
 
+def memcpy(dst, src, cnt):
+    if dst < 0: raise Exception('memcpy to negative memory')
+    if src < 0: raise Exception('memcpy from negative memory')
+    if dst + cnt > len(mem): raise Exception('memcpy to above valid memory')
+    if src + cnt > len(mem): raise Exception('memcpy from above valid memory')
+    mem[dst:dst+cnt] = mem[src:src+cnt]
+
 def get_host_path(number=0, string=''):
     # Get a host Path object from optional number
     # (can be a wdRefNum or dirID, because we treat them the same)
@@ -1756,7 +1763,7 @@ def fsdispatch_trap(trap, d0, a0, a1):
             return -38, 'has_paramblk' # fnOpnErr
 
         write(2, a0 + 24, ioRefNum)
-        mem[a0+32:a0+52] = mem[fcb:fcb+20] # straight copy some
+        memcpy(a0 + 32, fcb, 20)
         write(2, a0 + 52, 2) # ioFCBVRefNum
         write(4, a0 + 54, 0) # ioFCBClpSiz, don't care
         write(4, a0 + 58, read(4, fcb + 58)) # ioFCBParID
@@ -1808,6 +1815,12 @@ os_traps[0x60] = fsdispatch_trap
 
 heap_blocks = {} # addr: size
 master_ptrs = {}
+
+def getzone_trap(trap, d0, a0, a1):
+    return 0, read(4, 0x2aa) # noErr, ApplZone
+os_traps[0x1a] = getzone_trap # _GetZone
+os_traps[0x26] = getzone_trap # _HandleZone
+os_traps[0x48] = getzone_trap # _PtrZone
 
 # os_traps[0x19] = initzone_trap
 
@@ -1899,7 +1912,7 @@ def sethandlesize(handle, size):
         ptr2 = newptr(size)
         del master_ptrs[ptr]
         master_ptrs[ptr2] = handle
-        mem[ptr2:ptr2+oldsize] = mem[ptr:ptr+oldsize]
+        memcpy(ptr2, ptr, oldsize)
         disposptr(ptr)
         write(4, handle, ptr2)
 
@@ -1943,13 +1956,8 @@ def emptyhandle_trap(trap, d0, a0, a1):
     return 0 # d0 = noErr, must preserve a0
 os_traps[0x2b] = emptyhandle_trap
 
-def blockmove(src, dest, size):
-    shouldbe = len(mem)
-    mem[dest:dest+size] = mem[src:src+size]
-    if len(mem) != shouldbe: raise ValueError('hopelessly corrupted memory')
-
 def blockmove_trap(trap, d0, a0, a1):
-    blockmove(a0, a1, d0)
+    memcpy(a1, a0, d0)
     return 0 # a0 (and a1) must be preserved!
 os_traps[0x2e] = blockmove_trap
 
@@ -2010,8 +2018,7 @@ def get1resource_trap():
 toolbox_traps[0x1f] = get1resource_trap
 
 def get1namedresource_trap():
-    name = pop(4)
-    name = mem[name+1:name+1+mem[name]]
+    name = read_pstring(pop(4))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=True))
@@ -2025,8 +2032,7 @@ def getresource_trap():
 toolbox_traps[0x1a0] = getresource_trap
 
 def getnamedresource_trap():
-    name = pop(4)
-    name = mem[name+1:name+1+mem[name]]
+    name = read_pstring(pop(4))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=False))
@@ -2216,9 +2222,7 @@ toolbox_traps[0xa8] = offsetrect_trap
 # Misc traps
 
 def debugstr_trap():
-    strstart = pop(4)
-    lenbyte = mem[strstart]
-    string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
+    string = read_pstring(pop(4))
     print('_DebugStr', string, flush=True, file=sys.stderr)
     if string.startswith('python:'): eval(string[7:])
 toolbox_traps[0x3ff] = debugstr_trap
@@ -2345,7 +2349,7 @@ def handtohand_trap():
     hdl = read(4, regs + 32); ptr = read(4, hdl)
     size = gethandlesize(hdl)
     hdl2 = newhandle(size); ptr2 = read(4, hdl2)
-    mem[ptr2:ptr2+size] = mem[ptr:ptr+size]
+    memcpy(ptr2, ptr, size)
     write(4, regs + 32, hdl2) # a0 = result
     write(4, regs, 0) # d0 = noErr
 toolbox_traps[0x1e1] = handtohand_trap
@@ -2356,7 +2360,7 @@ def ptrtoxhand_trap():
     size = read(4, regs) # d0
     sethandlesize(dsthdl, size)
     dstptr = read(4, dsthdl)
-    mem[dstptr:dstptr+size] = mem[srcptr:srcptr+size]
+    memcpy(dstptr, srcptr, size)
     write(4, regs + 32, dsthdl) # a0
     write(4, regs, 0) # d0 = noErr
 toolbox_traps[0x1e2] = ptrtoxhand_trap
@@ -2366,7 +2370,7 @@ def ptrtohand_trap():
     size = read(4, regs) # d0
     dsthdl = newhandle(size)
     dstptr = read(4, dsthdl)
-    mem[dstptr:dstptr+size] = mem[srcptr:srcptr+size]
+    memcpy(dstptr, srcptr, size)
     write(4, regs + 32, dsthdl) # a0
     write(4, regs, 0) # d0 = noErr
 toolbox_traps[0x1e3] = ptrtohand_trap
@@ -2376,34 +2380,33 @@ def handandhand_trap():
     bhdl = read(4, regs + 32 + 4); bsize = gethandlesize(bhdl) # a1
     sethandlesize(bhdl, asize + bsize)
     aptr = read(4, ahdl); bptr = read(4, bhdl)
-    mem[bptr+bsize:bptr+bsize+asize] = mem[aptr:aptr+asize]
+    memcpy(bptr, aptr, size)
     write(4, regs + 32, bhdl) # a0 = dest handle
     write(4, regs, 0) # d0 = noErr
 toolbox_traps[0x1e4] = handandhand_trap
 
 # Trivial do-nothing traps
+def os_0_trap(trap, d0, a0, a1): return 0 # clear d0, leave a0
 def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
 def os_pb_trap(trap, d0, a0, a1): return 0, 'has_paramblk'
 
 os_traps[0x13] = os_pb_trap # _FlushVol
-os_traps[0x1a] = os_00_trap # _GetZone
 os_traps[0x1b] = os_00_trap # _SetZone
-os_traps[0x26] = os_00_trap # _HandleZone
-os_traps[0x29] = os_00_trap # _HLock
-os_traps[0x2a] = os_00_trap # _HUnlock
+os_traps[0x29] = os_0_trap  # _HLock -- some code depends on this preserving a0
+os_traps[0x2a] = os_0_trap  # _HUnlock
 os_traps[0x2c] = os_00_trap # _InitApplZone
 os_traps[0x2d] = os_00_trap # _SetApplLimit
 os_traps[0x32] = os_00_trap # _FlushEvents
 os_traps[0x36] = os_00_trap # _MoreMasters
 os_traps[0x40] = os_00_trap # _ResrvMem
-os_traps[0x49] = os_00_trap # _HPurge
-os_traps[0x4a] = os_00_trap # _HNoPurge
-os_traps[0x4b] = os_00_trap # _SetGrowZone
+os_traps[0x49] = os_0_trap  # _HPurge
+os_traps[0x4a] = os_0_trap  # _HNoPurge
+os_traps[0x4b] = os_0_trap  # _SetGrowZone
 os_traps[0x4d] = os_00_trap # _PurgeMem
 os_traps[0x63] = os_00_trap # _MaxApplZone
-os_traps[0x64] = os_00_trap # _MoveHHi
-os_traps[0x69] = os_00_trap # _HGetState
-os_traps[0x6a] = os_00_trap # _HSetState
+os_traps[0x64] = os_0_trap  # _MoveHHi
+os_traps[0x69] = os_0_trap  # _HGetState
+os_traps[0x6a] = os_0_trap  # _HSetState
 
 def tb_nop_trap(): pass
 def tb_pop2_trap(): pop(2)
@@ -2614,6 +2617,9 @@ import struct
 mem[:] = bytes(0x100000) # plenty of room for globals
 regs = 0x40000
 
+# "Poison" low memory to discourage reads
+for i in range(0x40, 0x10000, 2): mem[i:i+2] = b'\x68\xf1'
+
 mem[0xc0000:0xc0000+len(pack4)] = pack4
 mem[0xd0000:0xd0000+len(pack5)] = pack5
 mem[0xe0000:0xe0000+len(pack7)] = pack7
@@ -2650,6 +2656,14 @@ mem[0x910:0x910+5] = b'\x04Sort'
 write(2, 0xa5a, 1) # CurMap = app map
 write(4, 0xa1c, newhandle(6)) # empty MenuList
 write(2, 0x210, get_macos_dnum(systemfolder)) # BootDrive
+write(4, 0x316, 0) # we don't implement the 'MPGM' interface
+write(4, 0x8e0, ftrap_table_addr + 0x89f * 2) # JSwapFont = unimplemented
+
+# DrvQHdr and one Drive Queue Element
+dqe = 0xa9000
+# don't bother actually populating the dqe (note it has 4 bytes BELOW)
+write(4, 0x308+2, dqe) # DrvQHdr.QHead
+write(4, 0x308+6, dqe) # DrvQHdr.QTail
 
 # FCB block and a single VCB
 write(4, 0x34e, 0xa0000) # FCBSPtr
