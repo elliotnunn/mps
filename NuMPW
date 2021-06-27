@@ -375,12 +375,16 @@ def line4(inst): # very,crowded,line
         which = read(2, pc); pc += 2
         mode = inst & 63
 
-        if mode >> 3 == 4: # predecrement, reverse "which"
+        is_predecrement = mode >> 3 == 4
+
+        if is_predecrement: # predecrement, reverse "which"
             which = [r for r in range(16) if which & (0x8000 >> r)]
         else:
             which = [r for r in range(16) if which & (1 << r)]
 
+        if is_predecrement: regsave = mem[regs:regs+64]
         ptr = address_by_mode(mode, len(which) * size)
+        if is_predecrement: mem[regs:regs+64] = regsave
 
         for reg in which:
             if dir_to_reg:
@@ -389,6 +393,8 @@ def line4(inst): # very,crowded,line
             else:
                 datum = read(size, regs + reg * 4 + 4 - size)
                 write(size, ptr, datum); ptr += size
+
+        if is_predecrement: address_by_mode(mode, len(which) * size) # delay the side effect
 
     elif inst & 0x1C0 == 0x1C0: # lea
         an = (inst >> 9) & 7
@@ -720,22 +726,17 @@ def run_m68k_interpreter():
     mymem = mem
 
 #     import pdb; pdb.set_trace()
-    wse = None
-    watched = 0x14885c
     while True: # need a way to bust out of this loop
         try:
             inst = (mymem[pc] << 8) | mymem[pc+1] # the ONLY place the 68k em accesses mem directly
-#             wse2 = mem[watched:watched+4]
-#             if wse2 != wse: print('CHANGED! ', end='')
-#             print(hex(watched), '=', wse2.hex() if wse2 else 'nonexistent')
-#             wse = wse2
 #             print_state(); print()
-#             print(roughly_where_we_are(pc)); print()
+#             wwe = roughly_where_we_are(pc)
+#             print(wwe); print()
             pc += 2
             instruction_lines[inst >> 12](inst)
         except IllegalInstruction as e:
-            print(e, hex(inst), file=sys.stderr)
-            sys.exit(1)
+            e.args = (hex(inst),) + e.args
+            raise
 
 def roughly_where_we_are(pc):
     # This might be adapted to shell out to a disassembler?
@@ -1301,8 +1302,7 @@ def get_host_path(number=0, string=''):
     try: string = string.decode('mac_roman')
     except: pass
 
-    print(f'get_host_path({number}, {repr(string)})', end='')
-
+#     print(f'get_host_path({number}, {repr(string)})', end='')
 
     # If string is abolute then ignore the number, use the special root ID
     if ':' in string and not string.startswith(':'):
@@ -1324,7 +1324,7 @@ def get_host_path(number=0, string=''):
         else:
             accum = accum.parent
 
-    print(f' = {repr(accum)}')
+#     print(f' = {repr(accum)}')
 
     return accum
 
@@ -1396,6 +1396,7 @@ def open_trap(trap, d0, a0, a1):
         data = bytearray(path.read_bytes())
     except FileNotFoundError:
         if ioPermssn == 1: return -37, 'has_paramblk' # bdNamErr if read-only
+        path.touch()
         data = bytearray()
 
     for ioRefNum in everyfref:
@@ -1409,7 +1410,7 @@ def open_trap(trap, d0, a0, a1):
     # also need to set "am a resource fork" flags
 
     filebuffers[ioRefNum] = data
-    write(94, ioRefNum, 0) # zero the block for safety
+    write(94, fcbPtr, 0) # zero the block for safety
     write(4, fcbPtr + 0, 1) # fake non-zero fcbFlNum
     write(1, fcbPtr + 4, flags) # fcbMdRByt
     write(4, fcbPtr + 8, len(data)) # fcbEOF
@@ -1418,12 +1419,13 @@ def open_trap(trap, d0, a0, a1):
     write_pstring(fcbPtr + 62, path.name.replace(':', '/')) # fcbCName
 
     write(2, a0 + 24, ioRefNum)
+    print(f'_Open {number}.{ioName} = {path}, refnum {ioRefNum}')
     return 0, 'has_paramblk'
 
 os_traps[0] = open_trap
 
-def close_trap(trap, d0, a0, a1):
-    ioRefNum = read(2, a0 + 24)
+def close_trap(trap, d0, a0, a1, ioRefNum=None):
+    if ioRefNum is None: ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38, 'has_paramblk' # fnOpnErr
@@ -1432,11 +1434,14 @@ def close_trap(trap, d0, a0, a1):
     string = read_pstring(fcb + 62)
     path = get_host_path(number=number, string=string)
 
+    fcbMdRByt = read(1, fcb + 4)
     buf = filebuffers[ioRefNum]
-    path.write_bytes(buf)
+    if fcbMdRByt & 1: path.write_bytes(buf)
 
     write(94, fcb, 0) # free the fcb
     del filebuffers[ioRefNum]
+
+    print(f'_Close {path} len={len(buf)}')
 
     return 0, 'has_paramblk'
 
@@ -1445,8 +1450,11 @@ os_traps[1] = close_trap
 def readwrite_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
+    print(f'_Read/_Write/_SetEOF {hex(trap)} ioRefNum={ioRefNum}')
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38, 'has_paramblk' # fnOpnErr
+
+    print(f'...name={read_pstring(fcb+62)}')
 
     buf = filebuffers[ioRefNum]
     ioBuffer = read(4, a0 + 32)
@@ -1456,32 +1464,34 @@ def readwrite_trap(trap, d0, a0, a1):
     fcbCrPs = read(4, fcb + 16) # the mark
     fcbEOF = read(4, fcb + 8) # leof
 
+    print(f'...ioReqCount={ioReqCount} ioPosMode={ioPosMode} ioPosOffset={ioPosOffset} fcbCrPs={fcbCrPs} fcbEOF={fcbEOF}')
+
     if fcbEOF != len(buf): raise ValueError # totally effed
 
-    if ioPosMode == 1: mark = 0
-    elif ioPosMode == 3: mark = fcbCrPs
-    else: mark = fcbEOF
+    # fsAtMark, fsFromStart, fsFromLEOF, fsFromMark
+    trymark = [fcbCrPs, ioPosOffset, fcbEOF + ioPosOffset, fcbCrPs + ioPosOffset][ioPosMode & 3]
+    mark = max(min(trymark, fcbEOF), 0)
 
-    mark += ioPosOffset
+    if mark != trymark: # forbid mark outside file
+        write(4, a0 + 46, mark) # ioPosOffset
+        write(4, fcb + 16, mark) # fcbCrPs
+        write(4, a0 + 40, 0) # ioActCount
+        return (-40 if trymark < mark else -39), has_paramblk # pos/eofErr
 
-    attempted_mark = mark
-    mark = max(min(attempted_mark, fcbEOF), 0)
-
-    write(4, a0 + 46, mark) # return actual mark in ioPosOffset
-    if attempted_mark < mark: return -40, 'has_paramblk' # posErr
-    if attempted_mark > mark: return -39, 'has_paramblk' # eofEff
-
-    if trap & 1: # write
+    if trap & 1: # _Write
         ioActCount = ioReqCount
         buf[mark:mark+ioActCount] = mem[ioBuffer:ioBuffer+ioActCount]
         write(4, fcb + 8, len(buf)) # fcbEOF
-    else: # read
+    else: # _Read
         ioActCount = min(ioReqCount, fcbEOF - mark)
         mem[ioBuffer:ioBuffer+ioActCount] = buf[mark:mark+ioActCount]
 
     mark += ioActCount
     write(4, a0 + 40, ioActCount)
     write(4, a0 + 46, mark) # ioPosOffset
+    write(4, fcb + 16, mark) # fcbCrPs
+
+    print(f'...succeeded {ioActCount}/{ioReqCount} bytes')
 
     return 0, 'has_paramblk'
 
@@ -1518,6 +1528,21 @@ def getvinfo_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 os_traps[7] = getvinfo_trap
+
+def delete_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioName = read_pstring(ioNamePtr)
+    if trap & 0x200: number = read(4, a0 + 48) # ioDirID
+    else: number = read(2, a0 + 22) # ioVRefNum
+
+    path = get_host_path(number=number, string=ioName)
+    import shutil
+    try: shutil.rmtree(path)
+    except: pass
+
+    return 0, 'has_paramblk'
+
+os_traps[9] = delete_trap
 
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
     ioFDirIndex = signed(2, read(2, a0 + 28))
@@ -1645,11 +1670,11 @@ def setvol_trap(trap, d0, a0, a1):
         try: dnums[0] = get_host_path(string=volname)
         except FileNotFoundError: return -43, 'has_paramblk' # fnfErr
 
-    elif trap & 0x200: # HGetVol
+    elif trap & 0x200: # HSetVol
         dnums[0] = dnums[read(4, a0 + 48)] # ioDirID
 
-    else: # plain GetVol
-        dnums[0] = dnums[read(2, a0 + 2)] # ioVRefNum
+    else: # plain SetVol
+        dnums[0] = dnums[read(2, a0 + 22)] # ioVRefNum
 
     return 0, 'has_paramblk'
 
@@ -1670,7 +1695,7 @@ os_traps[0x44] = getfpos_trap
 
 def setfpos_trap(trap, d0, a0, a1):
     write(4, a0 + 36, 0) # Act like _Read with ioReqCount=0
-    return readwrite_trap(0xa002, d0, a0, a1)
+    return readwrite_trap(trap, d0, a0, a1)
 
 os_traps[0x44] = setfpos_trap
 
@@ -1680,8 +1705,11 @@ def fsdispatch_trap(trap, d0, a0, a1):
         raise NotImplementedError('fsdispatch', d0)
     elif d0 == 1: # OpenWD
         # just return dirID as wdRefNum, because we treat them the same
+        ioNamePtr = read(4, a0 + 18)
         ioWDDirID = read(4, a0 + 48)
-        write(2, a0 + 22, ioWDDirID) # ioVRefNum technically
+        ioName = read_pstring(ioNamePtr) if ioNamePtr else ''
+        ioVRefNum = get_macos_dnum(get_host_path(number=ioWDDirID, string=ioName))
+        write(2, a0 + 22, ioVRefNum)
         return 0, 'has_paramblk'
 
     elif d0 == 2: # CloseWD
@@ -2133,6 +2161,14 @@ def random_trap():
     pop(2); push(2, random.randint(0x10000))
 toolbox_traps[0x61] = random_trap
 
+def hiword_trap():
+    x = pop(2); pop(2); pop(2); push(2, x)
+toolbox_traps[0x6a] = hiword_trap
+
+def loword_trap():
+    pop(2); x = pop(2); pop(2); push(2, x)
+toolbox_traps[0x6b] = loword_trap
+
 def initgraf_trap():
     a5 = read(4, regs + 32 + 5 * 4)
     qd = pop(4)
@@ -2189,7 +2225,7 @@ def unimplemented_trap(*args):
 toolbox_traps[0x9f] = unimplemented_trap
 
 def syserror(n):
-    sys.exit('System error %d' % n)
+    raise Exception('System error %d' % n)
 
 def syserror_trap():
     # trap is in toolbox table but actually uses registers
@@ -2230,15 +2266,15 @@ def gestalt_trap(trap, d0, a0, a1):
 
     elif trap & 0x600 == 0x200: # ab=01
         # _NewGestalt
-        sys.exit('NewGestalt %r' % selector)
+        raise Exception('NewGestalt %r' % selector)
 
     elif trap & 0x600 == 0x400: # ab=10
         # _ReplaceGestalt
-        sys.exit('ReplaceGestalt %r' % selector)
+        raise Exception('ReplaceGestalt %r' % selector)
 
     else: # ab=11
         # _GetGestaltProcPtr
-        sys.exit('GetGestaltProcPtr %r' % selector)
+        raise Exception('GetGestaltProcPtr %r' % selector)
 
 os_traps[0xad] = gestalt_trap
 
@@ -2267,15 +2303,41 @@ def getosevent_trap(trap, d0, a0, a1):
 
 os_traps[0x30] = os_traps[0x31] = getosevent_trap # GetOSEvent/OSEventAvail
 
+def menukey_trap():
+    # ToolServer-specific code
+    keycode = pop(2) & 0xff
+    if keycode == 12: # cmd-Q
+        pop(4); push(4, 0x00810005) # quit menu item, hardcoded sadly
+        return
+
+    pop(4); push(4, 0) # return nothing
+
+toolbox_traps[0x13e] = menukey_trap
+
 def getnextevent_trap():
     eventrecord = pop(4); write(16, eventrecord, 0)
-    pop(2); pop(2); push(2, 0)
+    mask = pop(2)
+
+    # ToolServer-specific code: if accepting high-level events then do cmd-Q
+    if mask & 0x400:
+        write(2, eventrecord, 3) # keyDown
+        write(4, eventrecord + 2, 12) # Q
+        write(2, eventrecord + 14, 0x100) # command
+        pop(2); push(2, -1) # return true
+        return
+
+    pop(2); push(2, 0) # return false
+
 toolbox_traps[0x170] = getnextevent_trap
 
 def waitnextevent_trap():
     pop(8) # ignore sleep and mouseRgn args
     getnextevent_trap()
 toolbox_traps[0x60] = waitnextevent_trap
+
+def exittoshell_trap():
+    raise SystemExit
+toolbox_traps[0x1f4] = exittoshell_trap
 
 def sysbeep_trap():
     a4 = read(4, regs + 32 + 4 * 4) # hack hack hack for ToolServer alerts
@@ -2328,7 +2390,9 @@ toolbox_traps[0x1e4] = handandhand_trap
 
 # Trivial do-nothing traps
 def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
+def os_pb_trap(trap, d0, a0, a1): return 0, 'has_paramblk'
 
+os_traps[0x13] = os_pb_trap # _FlushVol
 os_traps[0x1a] = os_00_trap # _GetZone
 os_traps[0x1b] = os_00_trap # _SetZone
 os_traps[0x26] = os_00_trap # _HandleZone
@@ -2371,8 +2435,12 @@ toolbox_traps[0x056] = tb_nop_trap        # _ObscureCursor
 toolbox_traps[0x0d8] = tb_nop_ret0l_trap  # _NewRgn
 toolbox_traps[0x0fe] = tb_nop_trap        # _InitFonts
 toolbox_traps[0x112] = tb_nop_trap        # _InitWindows
+toolbox_traps[0x124] = tb_nop_ret0l_trap  # _FrontWindow
 toolbox_traps[0x130] = tb_nop_trap        # _InitMenus
 toolbox_traps[0x137] = tb_nop_trap        # _DrawMenuBar
+toolbox_traps[0x138] = tb_pop2_trap       # _HiliteMenu
+toolbox_traps[0x139] = tb_pop6_trap       # _EnableItem
+toolbox_traps[0x13a] = tb_pop6_trap       # _DisableItem
 toolbox_traps[0x13c] = tb_pop4_trap       # _SetMenuBar
 toolbox_traps[0x149] = tb_pop2_ret0l_trap # _GetMenuHandle
 toolbox_traps[0x14d] = tb_pop8_trap       # _AppendResMenu
@@ -2387,6 +2455,8 @@ toolbox_traps[0x1bd] = tb_pop10_ret0l_trap# _GetNewWindow
 toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
 toolbox_traps[0x1cc] = tb_nop_trap        # _TEInit
 toolbox_traps[0x1f1] = tb_pop4_trap       # _UnloadSeg
+toolbox_traps[0x1fa] = tb_nop_ret0l_trap  # _UnlodeScrap
+toolbox_traps[0x1fb] = tb_nop_ret0l_trap  # _LodeScrap
 
 # Populate the "classic" trap table, and also our list of implementations
 # The user-visible trap table initially points to _Unimplemented
@@ -2550,7 +2620,7 @@ write(4, regs + 8 * 4 + 7 * 4, 0x40000) # stack growing down from registers
 for i in range(0x1000):
     struct.pack_into('>H', mem, ftrap_table_addr + i * 2, 0xf000 + i)
 
-push(4, ftrap_table_addr + 0x9f9 * 2) # ExitToShell return addr
+push(4, ftrap_table_addr + 0x9f4 * 2) # ExitToShell return addr
 
 resource_chain = [ # system and app
     [
@@ -2568,6 +2638,7 @@ write(4, 0x130, 0) # ApplLimit
 write(4, 0x908, 0x70000000) # CurStackBase
 mem[0x910:0x910+5] = b'\x04Sort'
 write(2, 0xa5a, 1) # CurMap = app map
+write(4, 0xa1c, newhandle(6)) # empty MenuList
 
 # FCB block and a single VCB
 write(4, 0x34e, 0xa0000) # FCBSPtr
@@ -2584,34 +2655,43 @@ write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
 mem[a5world+jtoffset:a5world+jtoffset+jtsize] = code0[16:16+jtsize]
 pc = a5world + jtoffset + 2
 
-# Tell the app to open a tempfile
+# Temporary directory of useful things
 import tempfile
-import atexit
 tmp = tempfile.TemporaryDirectory()
-atexit.register(tmp.cleanup)
 tmppath = Path(tmp.name)
-tmpwdrefnum = get_macos_dnum(tmppath)
-print('tmpwdrefnum', tmpwdrefnum)
-(tmppath/'jinn').write_bytes(b'echo hello; quit\r')
-(tmppath/'jinn.idump').write_bytes(b'TEXTMPS ')
-params = (
-    b'\x00\x00' # message 0=open 1=print
-    b'\x00\x01' # count
-    + tmpwdrefnum.to_bytes(2, 'big') + # vRefNum
-    b'TEXT' # file type
-    b'\x01\x01' # version number and padding
-    b'') # pascal name string
 
-pascalpath = b'@' + tmp.name.replace('/', ':').encode('mac_roman') + b':jinn'
-pascalpath = bytes([len(pascalpath)]) + pascalpath
-params += pascalpath
+files_to_run = [
+    ('stdin', b'set\r'),
+]
+
+params = bytearray(b'\0\0\0\0') # message 0=open 1=print; cnt = 0
+for name, text in files_to_run:
+    (tmppath/name).write_bytes(text)
+    (tmppath/(name+'.idump')).write_bytes(b'TEXTMPS ')
+    params[3] += 1
+
+    params += get_macos_dnum(tmppath).to_bytes(2, 'big') # vRefNum
+    params += b'TEXT' # file type
+    params += b'\0\0' # file version and pad byte
+    name = name.encode('mac_roman')
+    params += bytes([len(name)]) + name
+    if len(params) & 1: params += b'\0'
 
 hdl = newhandle(len(params)); ptr = read(4, hdl)
 mem[ptr:ptr+len(params)] = params
 write(4, 0xaec, hdl) # AppParmHandle global
 write(4, a5world + 16, hdl) # segment loader puts it here too
 
-atexit.register(lambda: print(dnums))
-atexit.register(lambda: print(filebuffers))
+(tmppath/'stdin.out').touch() # just make sure it exists
 
-run_m68k_interpreter()
+try:
+    run_m68k_interpreter()
+except SystemExit: # happens when we reach ExitToShell
+    pass
+finally:
+    for ioRefNum in everyfref:
+        close_trap(-1, -1, -1, -1, ioRefNum=ioRefNum)
+
+    sys.stdout.write((tmppath/'stdin.out').read_text(encoding='mac_roman').replace('\r', '\n'))
+
+    tmp.cleanup()
