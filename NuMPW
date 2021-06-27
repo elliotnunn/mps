@@ -1813,9 +1813,30 @@ os_traps[0x60] = fsdispatch_trap
 
 # Memory Manager OS traps
 
+import functools # prettifies our decorated functions
+
+def sets_memerr_to_d0(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        retval = func(*args, **kwargs)
+        d0 = retval[0] if isinstance(retval, tuple) else retval
+        write(2, 0x220, d0)
+        return retval
+
+    return wrapper
+
+def clears_memerr(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        write(2, 0x220, 0)
+        return func(*args, **kwargs)
+
+    return wrapper
+
 heap_blocks = {} # addr: size
 master_ptrs = {}
 
+@sets_memerr_to_d0
 def getzone_trap(trap, d0, a0, a1):
     return 0, read(4, 0x2aa) # noErr, ApplZone
 os_traps[0x1a] = getzone_trap # _GetZone
@@ -1824,12 +1845,14 @@ os_traps[0x48] = getzone_trap # _PtrZone
 
 # os_traps[0x19] = initzone_trap
 
+@sets_memerr_to_d0
 def freemem_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
 os_traps[0x1c] = freemem_trap # _FreeMem = total free space
 os_traps[0x1d] = freemem_trap # _MaxMem = largest free block
 os_traps[0x4c] = freemem_trap # _CompactMem = largest free block
 
+@clears_memerr
 def purgespace_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0x7ffffffe # d0=total, a0=contig
 os_traps[0x62] = purgespace_trap
@@ -1842,6 +1865,7 @@ def newptr(size): # fixed 16b header before all "heap" blocks
     heap_blocks[retval] = size
     return retval
 
+@sets_memerr_to_d0
 def newptr_trap(trap, d0, a0, a1):
     return 0, newptr(d0) # noErr, ptr
 os_traps[0x1e] = newptr_trap
@@ -1852,6 +1876,7 @@ def disposptr(ptr):
     except:
         pass
 
+@sets_memerr_to_d0
 def disposptr_trap(trap, d0, a0, a1):
     disposptr(a0)
     return 0 # noErr
@@ -1864,6 +1889,7 @@ def setptrsize(ptr, size):
     else:
         return False # failure
 
+@sets_memerr_to_d0
 def setptrsize_trap(trap, d0, a0, a1):
     if setptrsize(a0, d0):
         return 0 # noErr
@@ -1874,6 +1900,7 @@ os_traps[0x20] = setptrsize_trap
 def getptrsize(ptr):
     return heap_blocks[ptr]
 
+@sets_memerr_to_d0
 def getptrsize_trap(trap, d0, a0, a1):
     return getptrsize(ptr)
 os_traps[0x21] = getptrsize_trap
@@ -1885,6 +1912,7 @@ def newhandle(size):
     master_ptrs[ptr] = ptr - 4
     return ptr - 4 # a handle points to its owning pointer
 
+@sets_memerr_to_d0
 def newhandle_trap(trap, d0, a0, a1):
     return 0, newhandle(d0) # noErr, handle
 os_traps[0x22] = newhandle_trap
@@ -1897,6 +1925,7 @@ def disposhandle(handle):
     except:
         pass
 
+@sets_memerr_to_d0
 def disposhandle_trap(trap, d0, a0, a1):
     disposhandle(a0)
     return 0 # noErr
@@ -1916,6 +1945,7 @@ def sethandlesize(handle, size):
         disposptr(ptr)
         write(4, handle, ptr2)
 
+@sets_memerr_to_d0
 def sethandlesize_trap(trap, d0, a0, a1):
     sethandlesize(a0, d0)
     return 0 # noErr
@@ -1925,6 +1955,7 @@ def gethandlesize(handle):
     ptr = read(4, handle)
     return heap_blocks[ptr] if ptr else 0
 
+@clears_memerr
 def gethandlesize_trap(trap, d0, a0, a1):
     return gethandlesize(a0)
 os_traps[0x25] = gethandlesize_trap
@@ -1933,6 +1964,7 @@ def reallochandle(handle, size):
     emptyhandle(handle)
     sethandlesize(handle, size)
 
+@sets_memerr_to_d0
 def reallochandle_trap(trap, d0, a0, a1):
     reallochandle(a0, d0)
     return 0 # noErr
@@ -1941,6 +1973,7 @@ os_traps[0x27] = reallochandle_trap
 def recoverhandle(ptr):
     return master_ptrs[ptr]
 
+@clears_memerr
 def recoverhandle_trap(trap, d0, a0, a1):
     return d0, recoverhandle(a0) # preserve d0, return a0
 os_traps[0x28] = recoverhandle_trap
@@ -1951,6 +1984,7 @@ def emptyhandle(handle):
     disposptr(ptr)
     write(4, handle, 0)
 
+@sets_memerr_to_d0
 def emptyhandle_trap(trap, d0, a0, a1):
     emptyhandle(a0)
     return 0 # d0 = noErr, must preserve a0
@@ -2391,20 +2425,20 @@ def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
 def os_pb_trap(trap, d0, a0, a1): return 0, 'has_paramblk'
 
 os_traps[0x13] = os_pb_trap # _FlushVol
-os_traps[0x1b] = os_00_trap # _SetZone
-os_traps[0x29] = os_0_trap  # _HLock -- some code depends on this preserving a0
-os_traps[0x2a] = os_0_trap  # _HUnlock
-os_traps[0x2c] = os_00_trap # _InitApplZone
-os_traps[0x2d] = os_00_trap # _SetApplLimit
+os_traps[0x1b] = sets_memerr_to_d0(os_00_trap) # _SetZone
+os_traps[0x29] = sets_memerr_to_d0(os_0_trap)  # _HLock -- preserve a0!
+os_traps[0x2a] = sets_memerr_to_d0(os_0_trap)  # _HUnlock
+os_traps[0x2c] = sets_memerr_to_d0(os_00_trap) # _InitApplZone
+os_traps[0x2d] = sets_memerr_to_d0(os_00_trap) # _SetApplLimit
 os_traps[0x32] = os_00_trap # _FlushEvents
-os_traps[0x36] = os_00_trap # _MoreMasters
-os_traps[0x40] = os_00_trap # _ResrvMem
-os_traps[0x49] = os_0_trap  # _HPurge
-os_traps[0x4a] = os_0_trap  # _HNoPurge
-os_traps[0x4b] = os_0_trap  # _SetGrowZone
-os_traps[0x4d] = os_00_trap # _PurgeMem
-os_traps[0x63] = os_00_trap # _MaxApplZone
-os_traps[0x64] = os_0_trap  # _MoveHHi
+os_traps[0x36] = sets_memerr_to_d0(os_00_trap) # _MoreMasters
+os_traps[0x40] = sets_memerr_to_d0(os_00_trap) # _ResrvMem
+os_traps[0x49] = sets_memerr_to_d0(os_0_trap)  # _HPurge
+os_traps[0x4a] = sets_memerr_to_d0(os_0_trap)  # _HNoPurge
+os_traps[0x4b] = sets_memerr_to_d0(os_0_trap)  # _SetGrowZone
+os_traps[0x4d] = sets_memerr_to_d0(os_00_trap) # _PurgeMem
+os_traps[0x63] = sets_memerr_to_d0(os_00_trap) # _MaxApplZone
+os_traps[0x64] = sets_memerr_to_d0(os_0_trap) # _MoveHHi
 os_traps[0x69] = os_0_trap  # _HGetState
 os_traps[0x6a] = os_0_trap  # _HSetState
 
@@ -2658,6 +2692,9 @@ write(4, 0xa1c, newhandle(6)) # empty MenuList
 write(2, 0x210, get_macos_dnum(systemfolder)) # BootDrive
 write(4, 0x316, 0) # we don't implement the 'MPGM' interface
 write(4, 0x8e0, ftrap_table_addr + 0x89f * 2) # JSwapFont = unimplemented
+write(4, 0x2f4, 0) # CaretTime = 0 ticks
+write(4, 0x9d6, 0) # WindowList = empty
+write(4, 0x33c, 0) # IAZNotify = nothing to do when swapping worlds
 
 # DrvQHdr and one Drive Queue Element
 dqe = 0xa9000
