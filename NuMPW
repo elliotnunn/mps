@@ -1280,9 +1280,23 @@ def readrez(path):
 
 import sys
 
-os_traps = {}
-toolbox_traps = {}
+def unimplemented_trap(*args):
+    raise NotImplementedError('somebody deliberately called the address of _Unimplemented')
+
 ftrap_table_addr = 0xb0000 # every permutation of f-trap
+
+# 0x100 OS and 0x400 Toolbox traps, in a single table
+trap_address_table = [ftrap_table_addr + 0x89f * 2] * 0x500
+trap_function_table = [unimplemented_trap] * 0x500
+
+def trap(kind, number):
+    idx = number + (0x100 if kind == 'toolbox' else 0)
+    addr = ftrap_table_addr + 2 * (number + (0x800 if kind == 'toolbox' else 0))
+    def decorator(func):
+        trap_address_table[idx] = addr
+        trap_function_table[idx] = func
+        return func
+    return decorator
 
 # File Manager OS traps
 
@@ -1403,6 +1417,7 @@ def get_macos_date(path):
 
 filebuffers = {} # keys are refNums, values are bytearrays
 
+@trap('os', 0)
 def open_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1441,8 +1456,7 @@ def open_trap(trap, d0, a0, a1):
     write(2, a0 + 24, ioRefNum)
     return 0, 'has_paramblk'
 
-os_traps[0] = open_trap
-
+@trap('os', 1)
 def close_trap(trap, d0, a0, a1, ioRefNum=None):
     if ioRefNum is None: ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
@@ -1462,8 +1476,8 @@ def close_trap(trap, d0, a0, a1, ioRefNum=None):
 
     return 0, 'has_paramblk'
 
-os_traps[1] = close_trap
-
+@trap('os', 2) # _Read
+@trap('os', 3) # _Write
 def readwrite_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
@@ -1505,8 +1519,7 @@ def readwrite_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[2] = os_traps[3] = readwrite_trap
-
+@trap('os', 7)
 def getvinfo_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
     if ioVNPtr: write_pstring(ioVNPtr, onlyvolname)
@@ -1538,8 +1551,8 @@ def getvinfo_trap(trap, d0, a0, a1):
         write(4, a0 + 90, get_macos_dnum(systemfolder)) # must match BootDrive
 
     return 0, 'has_paramblk'
-os_traps[7] = getvinfo_trap
 
+@trap('os', 9)
 def delete_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1554,8 +1567,7 @@ def delete_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[9] = delete_trap
-
+@trap('os', 0xc)
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
     ioFDirIndex = signed(2, read(2, a0 + 28))
     ioNamePtr = read(4, a0 + 18)
@@ -1611,8 +1623,8 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
     date = get_macos_date(p)
     write(4, a0 + 72, date); write(4, a0 + 76, date) # ioFlCr/MdDat
     return 0, 'has_paramblk'
-os_traps[0xc] = getfinfo_trap
 
+@trap('os', 0xd)
 def setfinfo_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1632,8 +1644,7 @@ def setfinfo_trap(trap, d0, a0, a1):
 
     # todo: mtime
 
-os_traps[0xd] = setfinfo_trap
-
+@trap('os', 0x11)
 def geteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
@@ -1643,8 +1654,7 @@ def geteof_trap(trap, d0, a0, a1):
     write(4, a0 + 28, read(4, fcb + 8)) # ioMisc = fcbEOF
     return 0, 'has_paramblk'
 
-os_traps[0x11] = geteof_trap
-
+@trap('os', 0x12)
 def seteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
@@ -1662,8 +1672,7 @@ def seteof_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[0x12] = seteof_trap
-
+@trap('os', 0x14)
 def getvol_trap(trap, d0, a0, a1):
     if trap & 0x200: # HGetVol
         write(2, a0 + 22, 2) # ioVRefNum = 2
@@ -1676,8 +1685,7 @@ def getvol_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[0x14] = getvol_trap
-
+@trap('os', 0x15)
 def setvol_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
     if ioVNPtr:
@@ -1694,8 +1702,7 @@ def setvol_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[0x15] = setvol_trap
-
+@trap('os', 0x18)
 def getfpos_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
@@ -1707,14 +1714,12 @@ def getfpos_trap(trap, d0, a0, a1):
 
     return 0, 'has_paramblk'
 
-os_traps[0x18] = getfpos_trap
-
+@trap('os', 0x44)
 def setfpos_trap(trap, d0, a0, a1):
     write(4, a0 + 36, 0) # Act like _Read with ioReqCount=0
     return readwrite_trap(trap, d0, a0, a1)
 
-os_traps[0x44] = setfpos_trap
-
+@trap('os', 0x60)
 def fsdispatch_trap(trap, d0, a0, a1):
     d0 &= 0xffff # word-size selector
     if d0 == 0: # FSControl
@@ -1809,7 +1814,6 @@ def fsdispatch_trap(trap, d0, a0, a1):
     write(2, a0 + 16, 0) # ioResult
     return 0, 'has_paramblk'
 
-os_traps[0x60] = fsdispatch_trap
 
 # Memory Manager OS traps
 
@@ -1836,26 +1840,24 @@ def clears_memerr(func):
 heap_blocks = {} # addr: size
 master_ptrs = {}
 
+@trap('os', 0x1a)
+@trap('os', 0x26)
+@trap('os', 0x48)
 @sets_memerr_to_d0
 def getzone_trap(trap, d0, a0, a1):
     return 0, read(4, 0x2aa) # noErr, ApplZone
-os_traps[0x1a] = getzone_trap # _GetZone
-os_traps[0x26] = getzone_trap # _HandleZone
-os_traps[0x48] = getzone_trap # _PtrZone
 
-# os_traps[0x19] = initzone_trap
-
+@trap('os', 0x1c)
+@trap('os', 0x1d)
+@trap('os', 0x4c)
 @sets_memerr_to_d0
 def freemem_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0 # d0=free, a0=growable (MaxMem only)
-os_traps[0x1c] = freemem_trap # _FreeMem = total free space
-os_traps[0x1d] = freemem_trap # _MaxMem = largest free block
-os_traps[0x4c] = freemem_trap # _CompactMem = largest free block
 
+@trap('os', 0x62)
 @clears_memerr
 def purgespace_trap(trap, d0, a0, a1):
     return 0x7ffffffe, 0x7ffffffe # d0=total, a0=contig
-os_traps[0x62] = purgespace_trap
 
 def newptr(size): # fixed 16b header before all "heap" blocks
     mem.extend(bytes(0x20000))
@@ -1865,10 +1867,10 @@ def newptr(size): # fixed 16b header before all "heap" blocks
     heap_blocks[retval] = size
     return retval
 
+@trap('os', 0x1e)
 @sets_memerr_to_d0
 def newptr_trap(trap, d0, a0, a1):
     return 0, newptr(d0) # noErr, ptr
-os_traps[0x1e] = newptr_trap
 
 def disposptr(ptr):
     try:
@@ -1876,11 +1878,11 @@ def disposptr(ptr):
     except:
         pass
 
+@trap('os', 0x1f)
 @sets_memerr_to_d0
 def disposptr_trap(trap, d0, a0, a1):
     disposptr(a0)
     return 0 # noErr
-os_traps[0x1f] = disposptr_trap
 
 def setptrsize(ptr, size):
     if heap_blocks[ptr] >= size:
@@ -1889,21 +1891,21 @@ def setptrsize(ptr, size):
     else:
         return False # failure
 
+@trap('os', 0x20)
 @sets_memerr_to_d0
 def setptrsize_trap(trap, d0, a0, a1):
     if setptrsize(a0, d0):
         return 0 # noErr
     else:
         return -108 # memFullErr
-os_traps[0x20] = setptrsize_trap
 
 def getptrsize(ptr):
     return heap_blocks[ptr]
 
+@trap('os', 0x21)
 @sets_memerr_to_d0
 def getptrsize_trap(trap, d0, a0, a1):
     return getptrsize(ptr)
-os_traps[0x21] = getptrsize_trap
 
 def newhandle(size):
     ptr = newptr(size)
@@ -1912,10 +1914,10 @@ def newhandle(size):
     master_ptrs[ptr] = ptr - 4
     return ptr - 4 # a handle points to its owning pointer
 
+@trap('os', 0x22)
 @sets_memerr_to_d0
 def newhandle_trap(trap, d0, a0, a1):
     return 0, newhandle(d0) # noErr, handle
-os_traps[0x22] = newhandle_trap
 
 def disposhandle(handle):
     try:
@@ -1925,11 +1927,11 @@ def disposhandle(handle):
     except:
         pass
 
+@trap('os', 0x23)
 @sets_memerr_to_d0
 def disposhandle_trap(trap, d0, a0, a1):
     disposhandle(a0)
     return 0 # noErr
-os_traps[0x23] = disposhandle_trap
 
 def sethandlesize(handle, size):
     ptr = read(4, handle)
@@ -1945,38 +1947,38 @@ def sethandlesize(handle, size):
         disposptr(ptr)
         write(4, handle, ptr2)
 
+@trap('os', 0x24)
 @sets_memerr_to_d0
 def sethandlesize_trap(trap, d0, a0, a1):
     sethandlesize(a0, d0)
     return 0 # noErr
-os_traps[0x24] = sethandlesize_trap
 
 def gethandlesize(handle):
     ptr = read(4, handle)
     return heap_blocks[ptr] if ptr else 0
 
+@trap('os', 0x25)
 @clears_memerr
 def gethandlesize_trap(trap, d0, a0, a1):
     return gethandlesize(a0)
-os_traps[0x25] = gethandlesize_trap
 
 def reallochandle(handle, size):
     emptyhandle(handle)
     sethandlesize(handle, size)
 
+@trap('os', 0x27)
 @sets_memerr_to_d0
 def reallochandle_trap(trap, d0, a0, a1):
     reallochandle(a0, d0)
     return 0 # noErr
-os_traps[0x27] = reallochandle_trap
 
 def recoverhandle(ptr):
     return master_ptrs[ptr]
 
+@trap('os', 0x28)
 @clears_memerr
 def recoverhandle_trap(trap, d0, a0, a1):
     return d0, recoverhandle(a0) # preserve d0, return a0
-os_traps[0x28] = recoverhandle_trap
 
 def emptyhandle(handle):
     ptr = read(4, handle)
@@ -1984,22 +1986,22 @@ def emptyhandle(handle):
     disposptr(ptr)
     write(4, handle, 0)
 
+@trap('os', 0x2b)
 @sets_memerr_to_d0
 def emptyhandle_trap(trap, d0, a0, a1):
     emptyhandle(a0)
     return 0 # d0 = noErr, must preserve a0
-os_traps[0x2b] = emptyhandle_trap
 
+@trap('os', 0x2e)
 def blockmove_trap(trap, d0, a0, a1):
     memcpy(a1, a0, d0)
     return 0 # a0 (and a1) must be preserved!
-os_traps[0x2e] = blockmove_trap
 
+@trap('os', 0x55)
 def stripaddress_trap(trap, d0, a0, a1):
     if len(mem) <= 0x1000000:
         d0 &= 0xffffff
     return d0
-os_traps[0x55] = stripaddress_trap
 
 # Trap Manager OS traps
 
@@ -2013,17 +2015,18 @@ def trap_kind(trapnum, flags):
         if trapnum <= 0x4f or trapnum in (0x54, 0x57): return trapnum, 'os'
         else: return trapnum, 'toolbox'
 
+@trap('os', 0x46)
 def gettrapaddress_trap(trap, d0, a0, a1):
     trapnum, trapkind = trap_kind(d0, trap)
-    traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
-    return d0, traplist[trapnum] # d0 undefined
-os_traps[0x46] = gettrapaddress_trap
+    index = trapnum + (0x100 if trapkind == 'toolbox' else 0)
+    return d0, trap_address_table[index] # d0 undefined
 
+@trap('os', 0x47)
 def settrapaddress_trap(trap, d0, a0, a1):
     trapnum, trapkind = trap_kind(d0, trap)
-    traplist = os_trap_table if trapkind == 'os' else toolbox_trap_table
+    index = trapnum + (0x100 if trapkind == 'toolbox' else 0)
+    # trap_address_table[index] = a0 # this never worked!
     # registers on exit undefined
-os_traps[0x47] = settrapaddress_trap
 
 # Resource Manager Toolbox traps
 
@@ -2045,74 +2048,75 @@ def getresource(type, id='', name=-1, topmap=False): # defaults are chosen to NE
 
     return 0
 
+@trap('toolbox', 0x1f)
 def get1resource_trap():
     id = signed(2, pop(2))
     type = pop(4).to_bytes(4, 'big')
     push(4, getresource(type=type, id=id, topmap=True))
-toolbox_traps[0x1f] = get1resource_trap
 
+@trap('toolbox', 0x20)
 def get1namedresource_trap():
     name = read_pstring(pop(4))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=True))
-toolbox_traps[0x20] = get1namedresource_trap
 
+@trap('toolbox', 0x1a0)
 def getresource_trap():
     id = signed(2, pop(2))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, id=id, topmap=False))
-toolbox_traps[0x1a0] = getresource_trap
 
+@trap('toolbox', 0x1a1)
 def getnamedresource_trap():
     name = read_pstring(pop(4))
     type = pop(4).to_bytes(4, 'big')
     pop(4)
     push(4, getresource(type=type, name=name, topmap=False))
-toolbox_traps[0x1a1] = getnamedresource_trap
 
+@trap('toolbox', 0x194)
 def curresfile_trap():
     curmap = read(2, 0xa5a) # CurMap global
     pop(2); push(2, curmap)
-toolbox_traps[0x194] = curresfile_trap
 
+@trap('toolbox', 0x198)
 def useresfile_trap():
     curmap = write(2, 0xa5a, pop(2)) # CurMap global
-toolbox_traps[0x198] = useresfile_trap
 
+@trap('toolbox', 0x1b8)
 def getpattern_trap():
     id = pop(2)
     pop(4)
     push(4, getresource(b'PAT ', id))
-toolbox_traps[0x1b8] = getpattern_trap
 
+@trap('toolbox', 0x1b9)
 def getcursor_trap():
     id = pop(2)
     pop(4)
     push(4, getresource(b'CURS', id))
-toolbox_traps[0x1b9] = getcursor_trap
 
+@trap('toolbox', 0x1ba)
 def getstring_trap():
     id = pop(2)
     pop(4)
     push(4, getresource(b'STR ', id))
-toolbox_traps[0x1ba] = getstring_trap
 
+@trap('toolbox', 0x1bb)
 def geticon_trap():
     id = pop(2)
     pop(4)
     push(4, getresource(b'ICON', id))
-toolbox_traps[0x1bb] = geticon_trap
 
+@trap('toolbox', 0x1bc)
 def getpicture_trap():
     id = pop(2)
     pop(4)
     push(4, getresource(b'PICT', id))
-toolbox_traps[0x1bc] = getpicture_trap
 
 # Segment Loader Toolbox traps
 
+@trap('toolbox', 0x1f0)
 def loadseg_trap():
     global pc
 
@@ -2141,136 +2145,129 @@ def loadseg_trap():
 
     pc -= 6 # re-execute the jump table instruction
 
-toolbox_traps[0x1f0] = loadseg_trap
-
 # Package Toolbox traps
 
+@trap('toolbox', 0x1eb)
 def pack4_trap(): # FP68K
     global pc
     push(4, pc); pc = 0xc0000
-toolbox_traps[0x1eb] = pack4_trap
 
+@trap('toolbox', 0x1ec)
 def pack5_trap(): # Elems68K
     global pc
     push(4, pc); pc = 0xd0000
-toolbox_traps[0x1ec] = pack5_trap
 
+@trap('toolbox', 0x1ee)
 def pack7_trap(): # DecStr68K
     global pc
     push(4, pc); pc = 0xe0000
-toolbox_traps[0x1ee] = pack7_trap
 
 # QuickDraw Toolbox traps
+@trap('toolbox', 0x58)
 def bitand_trap():
     result = pop(4) & pop(4)
     pop(4); push(4, result)
-toolbox_traps[0x58] = bitand_trap
 
+@trap('toolbox', 0x59)
 def bitxor_trap():
     result = pop(4) ^ pop(4)
     pop(4); push(4, result)
-toolbox_traps[0x59] = bitxor_trap
 
+@trap('toolbox', 0x5a)
 def bitnot_trap():
     result = ~pop(4)
     pop(4); push(4, result)
-toolbox_traps[0x5a] = bitnot_trap
 
+@trap('toolbox', 0x5b)
 def bitor_trap():
     result = pop(4) | pop(4)
     pop(4); push(4, result)
-toolbox_traps[0x5b] = bitor_trap
 
+@trap('toolbox', 0x5c)
 def bitshift_trap():
     by = signed(2, pop(2))
     result = pop(4)
     if by > 0: result <<= by % 32
     else: result >>= (-by) % 32
     pop(4); push(4, result)
-toolbox_traps[0x5c] = bitshift_trap
 
+@trap('toolbox', 0x5d)
 def bittst_trap():
     idx = pop(2) + 8 * pop(4)
     result = mem[idx // 8] & (0x80 >> (idx % 8))
     pop(2); push(2, 0x100 if result else 0)
-toolbox_traps[0x5d] = bittst_trap
 
+@trap('toolbox', 0x5e)
 def bitset_trap():
     idx = pop(2) + 8 * pop(4)
     mem[idx // 8] |= 0x80 >> (idx % 8)
-toolbox_traps[0x5e] = bitset_trap
 
+@trap('toolbox', 0x5f)
 def bitclr_trap():
     idx = pop(2) + 8 * pop(4)
     mem[idx // 8] &= ~(0x80 >> (idx % 8))
-toolbox_traps[0x5f] = bitclr_trap
 
+@trap('toolbox', 0x61)
 def random_trap():
     import random
     pop(2); push(2, random.randint(0x10000))
-toolbox_traps[0x61] = random_trap
 
+@trap('toolbox', 0x6a)
 def hiword_trap():
     x = pop(2); pop(2); pop(2); push(2, x)
-toolbox_traps[0x6a] = hiword_trap
 
+@trap('toolbox', 0x6b)
 def loword_trap():
     pop(2); x = pop(2); pop(2); push(2, x)
-toolbox_traps[0x6b] = loword_trap
 
+@trap('toolbox', 0x6e)
 def initgraf_trap():
     a5 = read(4, regs + 32 + 5 * 4)
     qd = pop(4)
     write(4, a5, qd)
     write(4, qd, 0xf8f8f8f8) # illegal thePort address
-toolbox_traps[0x6e] = initgraf_trap
 
+@trap('toolbox', 0x73)
 def setport_trap():
     a5 = read(4, regs + 32 + 5 * 4)
     qd = read(4, a5)
     port = pop(4)
     write(4, qd, port)
-toolbox_traps[0x73] = setport_trap
 
+@trap('toolbox', 0x74)
 def getport_trap():
     a5 = read(4, regs + 32 + 5 * 4)
     qd = read(4, a5)
     port = read(4, qd)
     retaddr = pop(4)
     write(4, retaddr, port)
-toolbox_traps[0x74] = getport_trap
 
+@trap('toolbox', 0xa7)
 def setrect_trap():
     br = pop(4); tl = pop(4); rectptr = pop(4)
     write(4, rectptr, tl); write(4, rectptr + 4, br)
-toolbox_traps[0xa7] = setrect_trap
 
+@trap('toolbox', 0xa8)
 def offsetrect_trap():
     dv = pop(2); dh = pop(2); rectptr = pop(4)
     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)):
         write(2, rectptr + ptr, read(2, rectptr + ptr) + delta)
-toolbox_traps[0xa8] = offsetrect_trap
 
 # OS and Toolbox Event Manager traps
 
 # Misc traps
 
+@trap('toolbox', 0x3ff)
 def debugstr_trap():
     string = read_pstring(pop(4))
     print('_DebugStr', string, flush=True, file=sys.stderr)
     if string.startswith('python:'): eval(string[7:])
-toolbox_traps[0x3ff] = debugstr_trap
 
+@trap('toolbox', 0x1ff)
 def debugger_trap():
     import pdb; pdb.set_trace()
 
-toolbox_traps[0x1ff] = debugger_trap
-
-def unimplemented_trap(*args):
-    raise NotImplementedError('trap, not sure which')
-
-toolbox_traps[0x9f] = unimplemented_trap
-
+@trap('toolbox', 0x1c9)
 def syserror_trap():
     # trap is in toolbox table but actually uses registers
     err = signed(2, read(2, regs + 2))
@@ -2278,7 +2275,6 @@ def syserror_trap():
         raise Exception('_SysError', err, read_pstring(pop(4)))
     raise Exception('_SysError', err)
 
-toolbox_traps[0x1c9] = syserror_trap
 
 def gestalt(selector):
     if selector == b'sysv':
@@ -2286,6 +2282,7 @@ def gestalt(selector):
     elif selector == b'fold':
         return 1 # Folder Manager present
 
+@trap('os', 0x90)
 def sysenvirons_trap(trap, d0, a0, a1):
     write(16, a0, 0) # wipe
     write(2, a0, 2) # environsVersion = 2
@@ -2293,8 +2290,8 @@ def sysenvirons_trap(trap, d0, a0, a1):
     write(2, a0 + 4, 0x0700) # systemVersion = seven
     write(2, a0 + 6, 3) # processor = 68020
     return 0
-os_traps[0x90] = sysenvirons_trap
 
+@trap('os', 0xad)
 def gestalt_trap(trap, d0, a0, a1):
     selector = d0.to_bytes(4, 'big')
 
@@ -2318,8 +2315,7 @@ def gestalt_trap(trap, d0, a0, a1):
         # _GetGestaltProcPtr
         raise Exception('GetGestaltProcPtr %r' % selector)
 
-os_traps[0xad] = gestalt_trap
-
+@trap('toolbox', 0x23)
 def aliasdispatch_trap():
     selector = read(4, regs)
     if selector == 0: # FindFolder
@@ -2347,8 +2343,7 @@ def aliasdispatch_trap():
     else:
         raise NotImplementedError(f'_AliasDispatch {selector}')
 
-toolbox_traps[0x23] = aliasdispatch_trap
-
+@trap('os', 0x3c)
 def cmpstring_trap(trap, d0, a0, a1):
     l0 = d0 >> 16       # corresponds with a0 ptr
     l1 = d0 & 0xffff    # corresponds with a1 ptr
@@ -2364,14 +2359,13 @@ def cmpstring_trap(trap, d0, a0, a1):
 
     return int(both[:l0] != both[l0:])
 
-os_traps[0x3c] = cmpstring_trap
-
+@trap('os', 0x30) # _GetOSEvent
+@trap('os', 0x31) # _OSEventAvail
 def getosevent_trap(trap, d0, a0, a1):
     write(16, a0, 0) # null event
     return -1 # null event
 
-os_traps[0x30] = os_traps[0x31] = getosevent_trap # GetOSEvent/OSEventAvail
-
+@trap('toolbox', 0x13e)
 def menukey_trap():
     # ToolServer-specific code
     keycode = pop(2) & 0xff
@@ -2381,8 +2375,7 @@ def menukey_trap():
 
     pop(4); push(4, 0) # return nothing
 
-toolbox_traps[0x13e] = menukey_trap
-
+@trap('toolbox', 0x170)
 def getnextevent_trap():
     eventrecord = pop(4); write(16, eventrecord, 0)
     mask = pop(2)
@@ -2397,19 +2390,18 @@ def getnextevent_trap():
 
     pop(2); push(2, 0) # return false
 
-toolbox_traps[0x170] = getnextevent_trap
-
+@trap('toolbox', 0x60)
 def waitnextevent_trap():
     pop(8) # ignore sleep and mouseRgn args
     getnextevent_trap()
-toolbox_traps[0x60] = waitnextevent_trap
 
+@trap('toolbox', 0x1f4)
 def exittoshell_trap():
     raise SystemExit
-toolbox_traps[0x1f4] = exittoshell_trap
 
 # Munger and related traps
 
+@trap('toolbox', 0x1e1)
 def handtohand_trap():
     hdl = read(4, regs + 32); ptr = read(4, hdl)
     size = gethandlesize(hdl)
@@ -2417,8 +2409,8 @@ def handtohand_trap():
     memcpy(ptr2, ptr, size)
     write(4, regs + 32, hdl2) # a0 = result
     write(4, regs, 0) # d0 = noErr
-toolbox_traps[0x1e1] = handtohand_trap
 
+@trap('toolbox', 0x1e2)
 def ptrtoxhand_trap():
     srcptr = read(4, regs + 32) # a0
     dsthdl = read(4, regs + 32 + 4) # a1
@@ -2428,8 +2420,8 @@ def ptrtoxhand_trap():
     memcpy(dstptr, srcptr, size)
     write(4, regs + 32, dsthdl) # a0
     write(4, regs, 0) # d0 = noErr
-toolbox_traps[0x1e2] = ptrtoxhand_trap
 
+@trap('toolbox', 0x1e3)
 def ptrtohand_trap():
     srcptr = read(4, regs + 32) # a0
     size = read(4, regs) # d0
@@ -2438,8 +2430,8 @@ def ptrtohand_trap():
     memcpy(dstptr, srcptr, size)
     write(4, regs + 32, dsthdl) # a0
     write(4, regs, 0) # d0 = noErr
-toolbox_traps[0x1e3] = ptrtohand_trap
 
+@trap('toolbox', 0x1e4)
 def handandhand_trap():
     ahdl = read(4, regs + 32); asize = gethandlesize(ahdl) # a0
     bhdl = read(4, regs + 32 + 4); bsize = gethandlesize(bhdl) # a1
@@ -2448,30 +2440,29 @@ def handandhand_trap():
     memcpy(bptr, aptr, size)
     write(4, regs + 32, bhdl) # a0 = dest handle
     write(4, regs, 0) # d0 = noErr
-toolbox_traps[0x1e4] = handandhand_trap
 
 # Trivial do-nothing traps
 def os_0_trap(trap, d0, a0, a1): return 0 # clear d0, leave a0
 def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
 def os_pb_trap(trap, d0, a0, a1): return 0, 'has_paramblk'
 
-os_traps[0x13] = os_pb_trap # _FlushVol
-os_traps[0x1b] = sets_memerr_to_d0(os_00_trap) # _SetZone
-os_traps[0x29] = sets_memerr_to_d0(os_0_trap)  # _HLock -- preserve a0!
-os_traps[0x2a] = sets_memerr_to_d0(os_0_trap)  # _HUnlock
-os_traps[0x2c] = sets_memerr_to_d0(os_00_trap) # _InitApplZone
-os_traps[0x2d] = sets_memerr_to_d0(os_00_trap) # _SetApplLimit
-os_traps[0x32] = os_00_trap # _FlushEvents
-os_traps[0x36] = sets_memerr_to_d0(os_00_trap) # _MoreMasters
-os_traps[0x40] = sets_memerr_to_d0(os_00_trap) # _ResrvMem
-os_traps[0x49] = sets_memerr_to_d0(os_0_trap)  # _HPurge
-os_traps[0x4a] = sets_memerr_to_d0(os_0_trap)  # _HNoPurge
-os_traps[0x4b] = sets_memerr_to_d0(os_0_trap)  # _SetGrowZone
-os_traps[0x4d] = sets_memerr_to_d0(os_00_trap) # _PurgeMem
-os_traps[0x63] = sets_memerr_to_d0(os_00_trap) # _MaxApplZone
-os_traps[0x64] = sets_memerr_to_d0(os_0_trap) # _MoveHHi
-os_traps[0x69] = os_0_trap  # _HGetState
-os_traps[0x6a] = os_0_trap  # _HSetState
+trap('os', 0x13)(os_pb_trap)                    # _FlushVol
+trap('os', 0x1b)(sets_memerr_to_d0(os_00_trap)) # _SetZone
+trap('os', 0x29)(sets_memerr_to_d0(os_0_trap))  # _HLock -- preserve a0!
+trap('os', 0x2a)(sets_memerr_to_d0(os_0_trap))  # _HUnlock
+trap('os', 0x2c)(sets_memerr_to_d0(os_00_trap)) # _InitApplZone
+trap('os', 0x2d)(sets_memerr_to_d0(os_00_trap)) # _SetApplLimit
+trap('os', 0x32)(os_00_trap)                    # _FlushEvents
+trap('os', 0x36)(sets_memerr_to_d0(os_00_trap)) # _MoreMasters
+trap('os', 0x40)(sets_memerr_to_d0(os_00_trap)) # _ResrvMem
+trap('os', 0x49)(sets_memerr_to_d0(os_0_trap))  # _HPurge
+trap('os', 0x4a)(sets_memerr_to_d0(os_0_trap))  # _HNoPurge
+trap('os', 0x4b)(sets_memerr_to_d0(os_0_trap))  # _SetGrowZone
+trap('os', 0x4d)(sets_memerr_to_d0(os_00_trap)) # _PurgeMem
+trap('os', 0x63)(sets_memerr_to_d0(os_00_trap)) # _MaxApplZone
+trap('os', 0x64)(sets_memerr_to_d0(os_0_trap))  # _MoveHHi
+trap('os', 0x69)(os_0_trap)                     # _HGetState
+trap('os', 0x6a)(os_0_trap)                     # _HSetState
 
 def tb_nop_trap(): pass
 def tb_pop2_trap(): pop(2)
@@ -2486,55 +2477,39 @@ def tb_pop6_ret0l_trap(): pop(6+4); push(4, 0)
 def tb_pop8_ret0l_trap(): pop(8+4); push(4, 0)
 def tb_pop10_ret0l_trap(): pop(10+4); push(4, 0)
 
-toolbox_traps[0x034] = tb_pop2_trap       # _SetFScaleDisable
-toolbox_traps[0x050] = tb_nop_trap        # _InitCursor
-toolbox_traps[0x051] = tb_pop4_trap       # _SetCursor
-toolbox_traps[0x052] = tb_nop_trap        # _HideCursor
-toolbox_traps[0x053] = tb_nop_trap        # _ShowCursor
-toolbox_traps[0x055] = tb_pop8_trap       # _ShieldCursor
-toolbox_traps[0x056] = tb_nop_trap        # _ObscureCursor
-toolbox_traps[0x0d8] = tb_nop_ret0l_trap  # _NewRgn
-toolbox_traps[0x0fe] = tb_nop_trap        # _InitFonts
-toolbox_traps[0x112] = tb_nop_trap        # _InitWindows
-toolbox_traps[0x124] = tb_nop_ret0l_trap  # _FrontWindow
-toolbox_traps[0x130] = tb_nop_trap        # _InitMenus
-toolbox_traps[0x137] = tb_nop_trap        # _DrawMenuBar
-toolbox_traps[0x138] = tb_pop2_trap       # _HiliteMenu
-toolbox_traps[0x139] = tb_pop6_trap       # _EnableItem
-toolbox_traps[0x13a] = tb_pop6_trap       # _DisableItem
-toolbox_traps[0x13c] = tb_pop4_trap       # _SetMenuBar
-toolbox_traps[0x149] = tb_pop2_ret0l_trap # _GetMenuHandle
-toolbox_traps[0x14d] = tb_pop8_trap       # _AppendResMenu
-toolbox_traps[0x175] = tb_nop_ret0l_trap  # _TickCount
-toolbox_traps[0x179] = tb_pop2_trap       # _CouldDialog
-toolbox_traps[0x17b] = tb_nop_trap        # _InitDialogs
-toolbox_traps[0x17c] = tb_pop10_ret0l_trap# _GetNewDialog
-toolbox_traps[0x19b] = tb_pop2_trap       # _SetResLoad
-toolbox_traps[0x1a3] = tb_pop4_trap       # _ReleaseResource
-toolbox_traps[0x1b4] = tb_nop_trap        # _SystemTask
-toolbox_traps[0x1bd] = tb_pop10_ret0l_trap# _GetNewWindow
-toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
-toolbox_traps[0x1c8] = tb_nop_trap        # _SysBeep
-toolbox_traps[0x1cc] = tb_nop_trap        # _TEInit
-toolbox_traps[0x1f1] = tb_pop4_trap       # _UnloadSeg
-toolbox_traps[0x1fa] = tb_nop_ret0l_trap  # _UnlodeScrap
-toolbox_traps[0x1fb] = tb_nop_ret0l_trap  # _LodeScrap
-
-# Populate the "classic" trap table, and also our list of implementations
-# The user-visible trap table initially points to _Unimplemented
-toolbox_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x400
-os_trap_table = [ftrap_table_addr + 0x89f * 2] * 0x100
-
-for trapnum, traphandler in toolbox_traps.items():
-    ftrap_addr = ftrap_table_addr + (0x800 + trapnum) * 2
-    toolbox_trap_table[trapnum] = ftrap_addr
-
-for trapnum, traphandler in os_traps.items():
-    ftrap_addr = ftrap_table_addr + trapnum * 2
-    os_trap_table[trapnum] = ftrap_addr
-
-toolbox_traps = [toolbox_traps.get(i, unimplemented_trap) for i in range(1024)]
-os_traps = [os_traps.get(i, unimplemented_trap) for i in range(256)]
+trap('toolbox', 0x034)(tb_pop2_trap)            # _SetFScaleDisable
+trap('toolbox', 0x050)(tb_nop_trap)             # _InitCursor
+trap('toolbox', 0x051)(tb_pop4_trap)            # _SetCursor
+trap('toolbox', 0x052)(tb_nop_trap)             # _HideCursor
+trap('toolbox', 0x053)(tb_nop_trap)             # _ShowCursor
+trap('toolbox', 0x055)(tb_pop8_trap)            # _ShieldCursor
+trap('toolbox', 0x056)(tb_nop_trap)             # _ObscureCursor
+trap('toolbox', 0x0d8)(tb_nop_ret0l_trap)       # _NewRgn
+trap('toolbox', 0x0fe)(tb_nop_trap)             # _InitFonts
+trap('toolbox', 0x112)(tb_nop_trap)             # _InitWindows
+trap('toolbox', 0x124)(tb_nop_ret0l_trap)       # _FrontWindow
+trap('toolbox', 0x130)(tb_nop_trap)             # _InitMenus
+trap('toolbox', 0x137)(tb_nop_trap)             # _DrawMenuBar
+trap('toolbox', 0x138)(tb_pop2_trap)            # _HiliteMenu
+trap('toolbox', 0x139)(tb_pop6_trap)            # _EnableItem
+trap('toolbox', 0x13a)(tb_pop6_trap)            # _DisableItem
+trap('toolbox', 0x13c)(tb_pop4_trap)            # _SetMenuBar
+trap('toolbox', 0x149)(tb_pop2_ret0l_trap)      # _GetMenuHandle
+trap('toolbox', 0x14d)(tb_pop8_trap)            # _AppendResMenu
+trap('toolbox', 0x175)(tb_nop_ret0l_trap)       # _TickCount
+trap('toolbox', 0x179)(tb_pop2_trap)            # _CouldDialog
+trap('toolbox', 0x17b)(tb_nop_trap)             # _InitDialogs
+trap('toolbox', 0x17c)(tb_pop10_ret0l_trap)     # _GetNewDialog
+trap('toolbox', 0x19b)(tb_pop2_trap)            # _SetResLoad
+trap('toolbox', 0x1a3)(tb_pop4_trap)            # _ReleaseResource
+trap('toolbox', 0x1b4)(tb_nop_trap)             # _SystemTask
+trap('toolbox', 0x1bd)(tb_pop10_ret0l_trap)     # _GetNewWindow
+trap('toolbox', 0x1c0)(tb_pop2_ret0l_trap)      # _GetNewMBar
+trap('toolbox', 0x1c8)(tb_nop_trap)             # _SysBeep
+trap('toolbox', 0x1cc)(tb_nop_trap)             # _TEInit
+trap('toolbox', 0x1f1)(tb_pop4_trap)            # _UnloadSeg
+trap('toolbox', 0x1fa)(tb_nop_ret0l_trap)       # _UnlodeScrap
+trap('toolbox', 0x1fb)(tb_nop_ret0l_trap)       # _LodeScrap
 
 def lineAF(inst):
     global pc
@@ -2543,14 +2518,14 @@ def lineAF(inst):
 
     if inst & 0x800: # Toolbox trap
         trapnum = inst & 0x3ff
-        implementation_68k = toolbox_trap_table[trapnum]
+        implementation_68k = trap_address_table[0x100 + trapnum]
 
 #         if inst & 0xf000 == 0xf000: # for stress-testing traps
         if inst & 0xf000 == 0xf000 or implementation_68k == ftrap_table_addr + (0x800 + trapnum) * 2:
             # Non-SetTrapAddress'd A-trap OR direct F-trap
             if inst & 0x400 or inst & 0xf000 == 0xf000: pc = pop(4) # autoPop
 
-            implementation_python = toolbox_traps[trapnum]
+            implementation_python = trap_function_table[0x100 + trapnum]
             implementation_python()
 
         elif implementation_68k == ftrap_table_addr + 0x89f * 2:
@@ -2564,14 +2539,14 @@ def lineAF(inst):
     elif inst & 0xf000 == 0xa000 or inst & 0x0f00 == 0: # OS trap
         # note on the condition above!!!
         trapnum = inst & 0xff
-        implementation_68k = os_trap_table[trapnum]
+        implementation_68k = trap_address_table[trapnum]
 
 #         if inst & 0xf000 == 0xf000: # for stress-testing traps
         if inst & 0xf000 == 0xf000 or implementation_68k == ftrap_table_addr + trapnum * 2:
             # Non-SetTrapAddress'd A-trap OR direct F-trap
             if inst & 0xf000 == 0xf000: pc = pop(4) # return address
 
-            implementation_python = os_traps[trapnum]
+            implementation_python = trap_function_table[trapnum]
             trapword = read(2, regs + 6) if inst & 0x1000 else inst # d1.w
             retval = implementation_python(trapword,
                 read(4, regs), read(4, regs + 32), read(4, regs + 36)) # d0,a0,a1
