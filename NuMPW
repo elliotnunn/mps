@@ -2283,6 +2283,8 @@ toolbox_traps[0x1c9] = syserror_trap
 def gestalt(selector):
     if selector == b'sysv':
         return 0x09228000 # highest possible
+    elif selector == b'fold':
+        return 1 # Folder Manager present
 
 def sysenvirons_trap(trap, d0, a0, a1):
     write(16, a0, 0) # wipe
@@ -2317,6 +2319,35 @@ def gestalt_trap(trap, d0, a0, a1):
         raise Exception('GetGestaltProcPtr %r' % selector)
 
 os_traps[0xad] = gestalt_trap
+
+def aliasdispatch_trap():
+    selector = read(4, regs)
+    if selector == 0: # FindFolder
+        foundDirID = pop(4); foundVRefNum = pop(4)
+        createFolder = pop(2) >> 8
+        folderType = pop(4).to_bytes(4, 'big')
+        vRefNum = pop(2) # ignore volume number
+
+        known = {b'pref': 'Preferences'}
+        filename = known.get(folderType, folderType.decode('ascii', 'ignore'))
+        path = systemfolder/filename
+
+        if createFolder:
+            path.mkdir(exist_ok=True)
+
+        if createFolder or path.exists():
+            oserr = 0 # noErr
+            write(2, foundVRefNum, 2)
+            write(4, foundDirID, get_macos_dnum(path))
+        else:
+            oserr = -43 # fnfErr
+
+        pop(2); push(2, oserr)
+
+    else:
+        raise NotImplementedError(f'_AliasDispatch {selector}')
+
+toolbox_traps[0x23] = aliasdispatch_trap
 
 def cmpstring_trap(trap, d0, a0, a1):
     l0 = d0 >> 16       # corresponds with a0 ptr
