@@ -1302,8 +1302,6 @@ def get_host_path(number=0, string=''):
     try: string = string.decode('mac_roman')
     except: pass
 
-#     print(f'get_host_path({number}, {repr(string)})', end='')
-
     # If string is abolute then ignore the number, use the special root ID
     if ':' in string and not string.startswith(':'):
         number = 2
@@ -1323,8 +1321,6 @@ def get_host_path(number=0, string=''):
            accum /= component # TODO: fix case and encoding
         else:
             accum = accum.parent
-
-#     print(f' = {repr(accum)}')
 
     return accum
 
@@ -1419,7 +1415,6 @@ def open_trap(trap, d0, a0, a1):
     write_pstring(fcbPtr + 62, path.name.replace(':', '/')) # fcbCName
 
     write(2, a0 + 24, ioRefNum)
-    print(f'_Open {number}.{ioName} = {path}, refnum {ioRefNum}')
     return 0, 'has_paramblk'
 
 os_traps[0] = open_trap
@@ -1441,8 +1436,6 @@ def close_trap(trap, d0, a0, a1, ioRefNum=None):
     write(94, fcb, 0) # free the fcb
     del filebuffers[ioRefNum]
 
-    print(f'_Close {path} len={len(buf)}')
-
     return 0, 'has_paramblk'
 
 os_traps[1] = close_trap
@@ -1450,11 +1443,8 @@ os_traps[1] = close_trap
 def readwrite_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
-    print(f'_Read/_Write/_SetEOF {hex(trap)} ioRefNum={ioRefNum}')
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38, 'has_paramblk' # fnOpnErr
-
-    print(f'...name={read_pstring(fcb+62)}')
 
     buf = filebuffers[ioRefNum]
     ioBuffer = read(4, a0 + 32)
@@ -1463,8 +1453,6 @@ def readwrite_trap(trap, d0, a0, a1):
     ioPosOffset = signed(4, read(4, a0 + 46))
     fcbCrPs = read(4, fcb + 16) # the mark
     fcbEOF = read(4, fcb + 8) # leof
-
-    print(f'...ioReqCount={ioReqCount} ioPosMode={ioPosMode} ioPosOffset={ioPosOffset} fcbCrPs={fcbCrPs} fcbEOF={fcbEOF}')
 
     if fcbEOF != len(buf): raise ValueError # totally effed
 
@@ -1490,8 +1478,6 @@ def readwrite_trap(trap, d0, a0, a1):
     write(4, a0 + 40, ioActCount)
     write(4, a0 + 46, mark) # ioPosOffset
     write(4, fcb + 16, mark) # fcbCrPs
-
-    print(f'...succeeded {ioActCount}/{ioReqCount} bytes')
 
     return 0, 'has_paramblk'
 
@@ -1555,8 +1541,6 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
     else:
         number = read(2, a0 + 22) # ioVRefNum
 
-    print('GetFInfo/GetCatInfo...', ioFDirIndex, hex(ioNamePtr))
-
     if trap & 0xff == 0x60 and ioFDirIndex < 0:
         string = ''
         return_string = True
@@ -1570,7 +1554,6 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
 
     write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
     p = get_host_path(number=number, string=string)
-    print('GetFInfo', p)
     if not p.exists(): return -43, 'has_paramblk' # fnfErr
 
     if return_string and ioNamePtr:
@@ -2224,18 +2207,12 @@ def unimplemented_trap(*args):
 
 toolbox_traps[0x9f] = unimplemented_trap
 
-def syserror(n):
-    raise Exception('System error %d' % n)
-
 def syserror_trap():
     # trap is in toolbox table but actually uses registers
     err = signed(2, read(2, regs + 2))
     if err == -491: # display string on stack
-        strstart = pop(4)
-        lenbyte = mem[strstart]
-        string = mem[strstart+1:strstart+1+lenbyte].decode('mac_roman')
-        print('SysErr -491 string:', string, flush=True, file=sys.stderr)
-    syserror(err)
+        raise Exception('_SysError', err, read_pstring(pop(4)))
+    raise Exception('_SysError', err)
 
 toolbox_traps[0x1c9] = syserror_trap
 
@@ -2253,7 +2230,6 @@ def sysenvirons_trap(trap, d0, a0, a1):
 os_traps[0x90] = sysenvirons_trap
 
 def gestalt_trap(trap, d0, a0, a1):
-    print('gestalt', d0.to_bytes(4, 'big'))
     selector = d0.to_bytes(4, 'big')
 
     if trap & 0x600 == 0: # ab=00
@@ -2282,8 +2258,6 @@ def cmpstring_trap(trap, d0, a0, a1):
     l0 = d0 >> 16       # corresponds with a0 ptr
     l1 = d0 & 0xffff    # corresponds with a1 ptr
     both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode('mac_roman')
-
-    print(f'_CmpString {repr(both[:l0])} {repr(both[l0:])}')
 
     if trap & 0x200: # ignore diacritics
         import unicodedata
@@ -2338,13 +2312,6 @@ toolbox_traps[0x60] = waitnextevent_trap
 def exittoshell_trap():
     raise SystemExit
 toolbox_traps[0x1f4] = exittoshell_trap
-
-def sysbeep_trap():
-    a4 = read(4, regs + 32 + 4 * 4) # hack hack hack for ToolServer alerts
-    s = read_cstring(a4)
-    print('SysBeep message:', s.replace('\r', '\n'), file=sys.stderr)
-    pass
-toolbox_traps[0x1c8] = sysbeep_trap
 
 # Munger and related traps
 
@@ -2453,6 +2420,7 @@ toolbox_traps[0x1a3] = tb_pop4_trap       # _ReleaseResource
 toolbox_traps[0x1b4] = tb_nop_trap        # _SystemTask
 toolbox_traps[0x1bd] = tb_pop10_ret0l_trap# _GetNewWindow
 toolbox_traps[0x1c0] = tb_pop2_ret0l_trap # _GetNewMBar
+toolbox_traps[0x1c8] = tb_nop_trap        # _SysBeep
 toolbox_traps[0x1cc] = tb_nop_trap        # _TEInit
 toolbox_traps[0x1f1] = tb_pop4_trap       # _UnloadSeg
 toolbox_traps[0x1fa] = tb_nop_ret0l_trap  # _UnlodeScrap
