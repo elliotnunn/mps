@@ -7,7 +7,7 @@
 # - all "sizes" are in bytes
 # - mem is a bytearray, which must be populated from outside the block
 # - minimise direct access to the mem bytearray, preferring read()/write()
-# - define lineA() and lineF() somewhere outside this block
+# - define lineA(), lineF(), check_for_lurkers() somewhere outside this block
 ########################################################################
 
 class IllegalInstruction(Exception): pass
@@ -357,6 +357,7 @@ def line4(inst): # very,crowded,line
         pass
 
     elif inst & 0xFFF == 0xE75: # rts
+        check_for_lurkers()
         pc = pop(4)
 
     elif inst & 0xFFF == 0xE77: # rtr
@@ -366,6 +367,7 @@ def line4(inst): # very,crowded,line
     elif inst & 0xF80 == 0xE80: # jsr/jmp
         targ = address_by_mode(inst & 63, 4) # any size
         if not inst & 0x40:
+            check_for_lurkers() # don't slow down jmp's, we do them a lot
             push(4, pc)
         pc = targ
 
@@ -429,6 +431,8 @@ def line5(inst): # addq,subq,scc,dbcc
         write(size, dest, datum)
 
     elif (inst >> 3) & 7 == 1: # dbcc
+        check_for_lurkers()
+
         disp = signed(2, read(2, pc)) - 2; pc += 2
 
         cond = (inst >> 8) & 15 # if cond satisfied then DO NOT take loop
@@ -450,6 +454,9 @@ def line5(inst): # addq,subq,scc,dbcc
 
 def line6(inst): # bra,bsr,bcc
     global pc
+
+    check_for_lurkers()
+
     disp = signed(1, inst & 255)
     if disp == 0: # word displacement
         disp = signed(2, read(2, pc)) - 2; pc += 2
@@ -729,6 +736,7 @@ def run_m68k_interpreter():
     while True: # need a way to bust out of this loop
         try:
             inst = (mymem[pc] << 8) | mymem[pc+1] # the ONLY place the 68k em accesses mem directly
+#             check_for_lurkers()
 #             print_state(); print()
 #             wwe = roughly_where_we_are(pc)
 #             print(wwe); print()
@@ -2462,6 +2470,9 @@ os_traps = [os_traps.get(i, unimplemented_trap) for i in range(256)]
 
 def lineAF(inst):
     global pc
+
+    check_for_lurkers()
+
     if inst & 0x800: # Toolbox trap
         trapnum = inst & 0x3ff
         implementation_68k = toolbox_trap_table[trapnum]
@@ -2589,6 +2600,14 @@ lineA = lineF = lineAF # cheating cleverly
 #                100000
 #                 heap
 
+def check_for_lurkers():
+    # we might do more involved things here, like check for heap corruption
+    if __debug__:
+        if any(mem[:64]):
+            raise Exception(f'low-memory corruption {mem[:64].hex()}')
+    else:
+        mem[:64] = bytes(64)
+
 import struct
 
 # A memory, and some memory-mapped registers
@@ -2601,6 +2620,11 @@ mem[0xe0000:0xe0000+len(pack7)] = pack7
 
 write(4, regs + 8 * 4 + 7 * 4, 0x40000) # stack growing down from registers
 
+# Fake heap-zone
+write(4, 0x118, len(mem)) # TheZone
+write(4, 0x2a6, len(mem)) # SysZone
+write(4, 0x2aa, len(mem)) # ApplZone
+mem.extend(struct.pack('>L 16x H 30x', 0xffffffe, 32)) # bkLim, mAllocCnt
 
 # Big table of every permutation of f-trap at b0000
 for i in range(0x1000):
