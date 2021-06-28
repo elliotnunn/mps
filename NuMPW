@@ -1300,6 +1300,23 @@ def trap(kind, number):
 
 # File Manager OS traps
 
+def paramblock(func):
+    import functools
+    @functools.wraps(func)
+    def wrapper(trap, d0, a0, a1, *args, **kwargs):
+        oserr = func(trap, d0, a0, a1, *args, **kwargs) or 0 # default to noErr
+
+        # There is no PB for "fake" calls from other Python code
+        if a0 is not None:
+            write(2, a0 + 16, oserr) # ioResult
+
+            if trap & 0x400 and read(4, a0 + 12):
+                raise NotImplementedError(f'{hex(trap)} with completion routine')
+
+        return oserr
+
+    return wrapper
+
 everyfref = range(2, 2 + 348 * 94, 94)
 
 from pathlib import Path
@@ -1418,6 +1435,7 @@ def get_macos_date(path):
 filebuffers = {} # keys are refNums, values are bytearrays
 
 @trap('os', 0)
+@paramblock
 def open_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1430,7 +1448,7 @@ def open_trap(trap, d0, a0, a1):
     try:
         data = bytearray(path.read_bytes())
     except FileNotFoundError:
-        if ioPermssn == 1: return -37, 'has_paramblk' # bdNamErr if read-only
+        if ioPermssn == 1: return -37 # bdNamErr if read-only
         path.touch()
         data = bytearray()
 
@@ -1454,14 +1472,14 @@ def open_trap(trap, d0, a0, a1):
     write_pstring(fcbPtr + 62, path.name.replace(':', '/')) # fcbCName
 
     write(2, a0 + 24, ioRefNum)
-    return 0, 'has_paramblk'
 
 @trap('os', 1)
+@paramblock
 def close_trap(trap, d0, a0, a1, ioRefNum=None):
     if ioRefNum is None: ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
-        return -38, 'has_paramblk' # fnOpnErr
+        return -38 # fnOpnErr
 
     number = read(4, fcb + 58)
     string = read_pstring(fcb + 62)
@@ -1474,15 +1492,14 @@ def close_trap(trap, d0, a0, a1, ioRefNum=None):
     write(94, fcb, 0) # free the fcb
     del filebuffers[ioRefNum]
 
-    return 0, 'has_paramblk'
-
 @trap('os', 2) # _Read
 @trap('os', 3) # _Write
+@paramblock
 def readwrite_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
-        return -38, 'has_paramblk' # fnOpnErr
+        return -38 # fnOpnErr
 
     buf = filebuffers[ioRefNum]
     ioBuffer = read(4, a0 + 32)
@@ -1502,7 +1519,7 @@ def readwrite_trap(trap, d0, a0, a1):
         write(4, a0 + 46, mark) # ioPosOffset
         write(4, fcb + 16, mark) # fcbCrPs
         write(4, a0 + 40, 0) # ioActCount
-        return (-40 if trymark < mark else -39), has_paramblk # pos/eofErr
+        return (-40 if trymark < mark else -39) # pos/eofErr
 
     if trap & 1: # _Write
         ioActCount = ioReqCount
@@ -1517,9 +1534,8 @@ def readwrite_trap(trap, d0, a0, a1):
     write(4, a0 + 46, mark) # ioPosOffset
     write(4, fcb + 16, mark) # fcbCrPs
 
-    return 0, 'has_paramblk'
-
 @trap('os', 7)
+@paramblock
 def getvinfo_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
     if ioVNPtr: write_pstring(ioVNPtr, onlyvolname)
@@ -1550,9 +1566,8 @@ def getvinfo_trap(trap, d0, a0, a1):
         write(32, a0 + 90, 0) # ioVFndrInfo
         write(4, a0 + 90, get_macos_dnum(systemfolder)) # must match BootDrive
 
-    return 0, 'has_paramblk'
-
 @trap('os', 9)
+@paramblock
 def delete_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1564,8 +1579,6 @@ def delete_trap(trap, d0, a0, a1):
     import shutil
     try: shutil.rmtree(path)
     except: pass
-
-    return 0, 'has_paramblk'
 
 @trap('os', 0xc)
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
@@ -1589,7 +1602,7 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
         return_string = True
     elif ioFDirIndex > 0:
         try: string = listdir(get_host_path(number))[ioFDirIndex - 1]
-        except IndexError: return -43, 'has_paramblk' # fnfErr
+        except IndexError: return -43 # fnfErr
         return_string = True
     else:
         string = read_pstring(ioNamePtr)
@@ -1597,7 +1610,7 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
 
     write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
     p = get_host_path(number=number, string=string)
-    if not p.exists(): return -43, 'has_paramblk' # fnfErr
+    if not p.exists(): return -43 # fnfErr
 
     if return_string and ioNamePtr:
         write_pstring(ioNamePtr, p.name.replace(':', '/') if p != p.parent else onlyvolname)
@@ -1622,9 +1635,9 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
 
     date = get_macos_date(p)
     write(4, a0 + 72, date); write(4, a0 + 76, date) # ioFlCr/MdDat
-    return 0, 'has_paramblk'
 
 @trap('os', 0xd)
+@paramblock
 def setfinfo_trap(trap, d0, a0, a1):
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
@@ -1633,33 +1646,32 @@ def setfinfo_trap(trap, d0, a0, a1):
     number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
-    if not path.exists(): return -43, 'has_paramblk' # fnfErr
+    if not path.exists(): return -43 # fnfErr
 
     idump = path.parent / (path.name + '.idump')
     typecreator = mem[a0+32:a0+40]
     if typecreator != b'????????' or idump.exists():
         idump.write_bytes(typecreator)
 
-    return 0, 'has_paramblk'
-
     # todo: mtime
 
 @trap('os', 0x11)
+@paramblock
 def geteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
-        return -38, 'has_paramblk' # fnOpnErr
+        return -38 # fnOpnErr
 
     write(4, a0 + 28, read(4, fcb + 8)) # ioMisc = fcbEOF
-    return 0, 'has_paramblk'
 
 @trap('os', 0x12)
+@paramblock
 def seteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
-        return -38, 'has_paramblk' # fnOpnErr
+        return -38 # fnOpnErr
 
     buf = filebuffers[ioRefNum]
     ioMisc = read(4, a0 + 28)
@@ -1670,9 +1682,8 @@ def seteof_trap(trap, d0, a0, a1):
     fcbCrPs = min(fcbCrPs, ioMisc)
     write(4, fcb + 16, fcbCrPs)
 
-    return 0, 'has_paramblk'
-
 @trap('os', 0x14)
+@paramblock
 def getvol_trap(trap, d0, a0, a1):
     if trap & 0x200: # HGetVol
         write(2, a0 + 22, 2) # ioVRefNum = 2
@@ -1683,16 +1694,15 @@ def getvol_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
     if ioVNPtr: write_pstring(ioVNPtr, dnums[0].name.replace(':', '/'))
 
-    return 0, 'has_paramblk'
-
 @trap('os', 0x15)
+@paramblock
 def setvol_trap(trap, d0, a0, a1):
     ioVNPtr = read(4, a0 + 18)
     if ioVNPtr:
         volname = read_pstring(ioVNPtr)
         if ':' not in volname: volname += ':' # this is an absolute path
         try: dnums[0] = get_host_path(string=volname)
-        except FileNotFoundError: return -43, 'has_paramblk' # fnfErr
+        except FileNotFoundError: return -43 # fnfErr
 
     elif trap & 0x200: # HSetVol
         dnums[0] = dnums[read(4, a0 + 48)] # ioDirID
@@ -1700,26 +1710,25 @@ def setvol_trap(trap, d0, a0, a1):
     else: # plain SetVol
         dnums[0] = dnums[read(2, a0 + 22)] # ioVRefNum
 
-    return 0, 'has_paramblk'
-
 @trap('os', 0x18)
+@paramblock
 def getfpos_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
     fcb = 0xa0000 + ioRefNum
     if ioRefNum not in everyfref or read(4, fcb) == 0:
-        return -38, 'has_paramblk' # fnOpnErr
+        return -38 # fnOpnErr
 
     write(10, a0 + 36, 0) # zero ioReqCount ioActCount ioPosMode
     write(4, a0 + 46, read(4, fcb + 16)) # ioPosOffset = fcbCrPs
 
-    return 0, 'has_paramblk'
-
 @trap('os', 0x44)
+@paramblock
 def setfpos_trap(trap, d0, a0, a1):
     write(4, a0 + 36, 0) # Act like _Read with ioReqCount=0
     return readwrite_trap(trap, d0, a0, a1)
 
 @trap('os', 0x60)
+@paramblock
 def fsdispatch_trap(trap, d0, a0, a1):
     d0 &= 0xffff # word-size selector
     if d0 == 0: # FSControl
@@ -1731,11 +1740,10 @@ def fsdispatch_trap(trap, d0, a0, a1):
         ioName = read_pstring(ioNamePtr) if ioNamePtr else ''
         ioVRefNum = get_macos_dnum(get_host_path(number=ioWDDirID, string=ioName))
         write(2, a0 + 22, ioVRefNum)
-        return 0, 'has_paramblk'
 
     elif d0 == 2: # CloseWD
         # do nothing
-        return 0, 'has_paramblk'
+        pass
 
     elif d0 == 5: # CatMove
         raise NotImplementedError('fsdispatch', d0)
@@ -1748,7 +1756,6 @@ def fsdispatch_trap(trap, d0, a0, a1):
         write(4, a0 + 48, ioVRefNum) # ioWDDirID
         write(2, a0 + 32, 2) # ioWDVRefNum = 2 (our root)
         write(4, a0 + 28, 0) # ioWDProcID = who cares who created it
-        return 0, 'has_paramblk'
 
     elif d0 == 8: # GetFCBInfo
         ioFCBIndx = read(4, a0 + 28)
@@ -1765,7 +1772,7 @@ def fsdispatch_trap(trap, d0, a0, a1):
         fcb = 0xa0000 + ioRefNum
 
         if ioRefNum not in everyfref or read(4, fcb) == 0:
-            return -38, 'has_paramblk' # fnOpnErr
+            return -38 # fnOpnErr
 
         write(2, a0 + 24, ioRefNum)
         memcpy(a0 + 32, fcb, 20)
@@ -1775,8 +1782,6 @@ def fsdispatch_trap(trap, d0, a0, a1):
 
         ioNamePtr = read(4, a0 + 18)
         if ioNamePtr: write_pstring(ioNamePtr, read_pstring(fcb + 62))
-
-        return 0, 'has_paramblk'
 
     elif d0 == 9: # GetCatInfo
         return getfinfo_trap(trap, d0, a0, a1)
@@ -1811,9 +1816,6 @@ def fsdispatch_trap(trap, d0, a0, a1):
     else: # probably Desktop Manager stuff, ignore for now
         raise NotImplementedError('fsdispatch', d0)
 
-    write(2, a0 + 16, 0) # ioResult
-    return 0, 'has_paramblk'
-
 
 # Memory Manager OS traps
 
@@ -1822,9 +1824,10 @@ import functools # prettifies our decorated functions
 def sets_memerr_to_d0(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        retval = func(*args, **kwargs)
-        d0 = retval[0] if isinstance(retval, tuple) else retval
-        write(2, 0x220, d0)
+        d0a0 = retval = func(*args, **kwargs)
+        d0a0 = d0a0 or 0 # unfortunately duplicates code from trap dispatcher
+        if not isinstance(d0a0, tuple): d0a0 = (d0a0,)
+        write(2, 0x220, d0a0[0])
         return retval
 
     return wrapper
@@ -1882,7 +1885,6 @@ def disposptr(ptr):
 @sets_memerr_to_d0
 def disposptr_trap(trap, d0, a0, a1):
     disposptr(a0)
-    return 0 # noErr
 
 def setptrsize(ptr, size):
     if heap_blocks[ptr] >= size:
@@ -1931,7 +1933,6 @@ def disposhandle(handle):
 @sets_memerr_to_d0
 def disposhandle_trap(trap, d0, a0, a1):
     disposhandle(a0)
-    return 0 # noErr
 
 def sethandlesize(handle, size):
     ptr = read(4, handle)
@@ -1951,7 +1952,6 @@ def sethandlesize(handle, size):
 @sets_memerr_to_d0
 def sethandlesize_trap(trap, d0, a0, a1):
     sethandlesize(a0, d0)
-    return 0 # noErr
 
 def gethandlesize(handle):
     ptr = read(4, handle)
@@ -1970,7 +1970,6 @@ def reallochandle(handle, size):
 @sets_memerr_to_d0
 def reallochandle_trap(trap, d0, a0, a1):
     reallochandle(a0, d0)
-    return 0 # noErr
 
 def recoverhandle(ptr):
     return master_ptrs[ptr]
@@ -1990,12 +1989,10 @@ def emptyhandle(handle):
 @sets_memerr_to_d0
 def emptyhandle_trap(trap, d0, a0, a1):
     emptyhandle(a0)
-    return 0 # d0 = noErr, must preserve a0
 
 @trap('os', 0x2e)
 def blockmove_trap(trap, d0, a0, a1):
     memcpy(a1, a0, d0)
-    return 0 # a0 (and a1) must be preserved!
 
 @trap('os', 0x55)
 def stripaddress_trap(trap, d0, a0, a1):
@@ -2289,7 +2286,6 @@ def sysenvirons_trap(trap, d0, a0, a1):
     write(2, a0 + 2, 3) # machineType = SE
     write(2, a0 + 4, 0x0700) # systemVersion = seven
     write(2, a0 + 6, 3) # processor = 68020
-    return 0
 
 @trap('os', 0xad)
 def gestalt_trap(trap, d0, a0, a1):
@@ -2444,7 +2440,8 @@ def handandhand_trap():
 # Trivial do-nothing traps
 def os_0_trap(trap, d0, a0, a1): return 0 # clear d0, leave a0
 def os_00_trap(trap, d0, a0, a1): return 0, 0 # clear d0 and a0
-def os_pb_trap(trap, d0, a0, a1): return 0, 'has_paramblk'
+@paramblock
+def os_pb_trap(trap, d0, a0, a1): return 0
 
 trap('os', 0x13)(os_pb_trap)                    # _FlushVol
 trap('os', 0x1b)(sets_memerr_to_d0(os_00_trap)) # _SetZone
@@ -2548,24 +2545,16 @@ def lineAF(inst):
 
             implementation_python = trap_function_table[trapnum]
             trapword = read(2, regs + 6) if inst & 0x1000 else inst # d1.w
-            retval = implementation_python(trapword,
+            d0a0 = implementation_python(trapword,
                 read(4, regs), read(4, regs + 32), read(4, regs + 36)) # d0,a0,a1
 
-            # returned None or d0 or (d0, a0) or (d0, a0, 'has_paramblk')
-            if retval is None: retval = ()
-            if not isinstance(retval, tuple): retval = (retval,)
-            has_paramblk = (retval[-1:] == ('has_paramblk',))
-            if has_paramblk: retval = retval[:-1]
+            # returned None or d0 or (d0, a0)
+            d0a0 = d0a0 or 0 # return d0 = 0 by default
+            if not isinstance(d0a0, tuple): d0a0 = (d0a0,)
+            for value, address in zip(d0a0, (regs, regs + 32)):
+                write(4, address, value)
 
-            if len(retval) > 0: write(4, regs, retval[0]) # result in d0.l
-            if len(retval) > 1: write(4, regs + 32, retval[1]) # result in a0.l
             set_nz(read(2, regs + 2), 2) # tst.w d0
-
-            if has_paramblk:
-                a0 = read(4, regs + 32); d0 = read(2, regs + 2)
-                write(2, a0 + 16, d0) # write ioResult same as d0
-                if trapword & 0x400:
-                    raise NotImplementedError('completion routine')
 
         elif implementation_68k == ftrap_table_addr + 0x89f * 2:
             raise NotImplementedError(hex(inst))
