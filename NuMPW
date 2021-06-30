@@ -1309,6 +1309,19 @@ def trap(kind, number):
         return func
     return decorator
 
+# One-off functions to clean up after running 68k code
+
+callback_trap_word = 0xaa69
+my_callbacks = []
+
+def oneoff_callback(func):
+    my_callbacks.append(func)
+    return func
+
+@trap('toolbox', callback_trap_word & 0x3ff)
+def my_callback_trap():
+    my_callbacks.pop()()
+
 # File Manager OS traps
 
 def paramblock(func):
@@ -1820,9 +1833,126 @@ def fsdispatch_trap(trap, d0, a0, a1):
     elif d0 == 26: # OpenDF
         return open_trap(trap, d0, a0, a1)
     elif d0 == 27: # MakeFSSpec
-        raise NotImplementedError('fsdispatch', d0)
+        ioVRefNum = read(2, a0 + 22)
+        ioDirID = read(4, a0 + 48)
+        ioNamePtr = read(4, a0 + 18)
+        ptr = read(4, a0 + 28) # ioMisc
+
+        ioName = read_pstring(ioNamePtr) if ioNamePtr else ''
+
+        path = get_host_path(number=ioDirID or ioVRefNum, string=ioName)
+
+        write(2, ptr, 2) # vRefNum = 2 always
+        write(4, ptr + 2, get_macos_dnum(path.parent))
+        write_pstring(ptr + 6, path.name)
+
     else: # probably Desktop Manager stuff, ignore for now
         raise NotImplementedError('fsdispatch', d0)
+
+def read_fsspec(ptr):
+    return read(2, ptr), read(4, ptr + 2), ptr + 6 # pointer to name string only
+
+@trap('toolbox', 0x252)
+def highlevelhfsdispatch():
+    global pc
+
+    # ToolServer relies on this to call other traps, which is a problem
+    selector = read(1, regs + 3) # d0.b
+
+    if selector == 1:   # pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpecPtr spec)
+        spec = pop(4)
+        ioNamePtr = pop(4)
+        ioDirID = pop(4)
+        ioVRefNum = pop(2)
+
+        # Get ready to return when a callback_trap_word is executed
+        return_pc = pc
+        return_sp = get_sp()
+
+        # Create and populate a param block (longer than it needs to be)
+        push(128, 0)
+        pb = get_sp()
+        write(4, regs + 32, pb) # a0 = pb
+
+        write(2, pb + 22, ioVRefNum)
+        write(4, pb + 48, ioDirID)
+        write(4, pb + 18, ioNamePtr)
+        write(4, pb + 28, spec) # ioMisc
+
+        # Push _Open and then another special word to the stack, and run them
+        push(2, callback_trap_word)
+        push(2, 0xa260)
+        push(2, 0x701b) # _MakeFSSpec
+        pc = get_sp()
+
+        # Return here when the special word gets called
+        @oneoff_callback
+        def finish():
+            global pc
+            pc = return_pc
+            set_sp(return_sp)
+
+            ioResult = read(2, pb + 16)
+            write(2, get_sp(), ioResult)
+
+    elif selector in (2, 3): # pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
+        refNumPtr = pop(4)
+        ioPermssn = pop(2) >> 8
+        ioVRefNum, ioDirID, ioNamePtr = read_fsspec(pop(4))
+
+        # Get ready to return when a callback_trap_word is executed
+        return_pc = pc
+        return_sp = get_sp()
+
+        # Create and populate a param block (longer than it needs to be)
+        push(128, 0)
+        pb = get_sp()
+        write(4, regs + 32, pb) # a0 = pb
+
+        write(2, pb + 22, ioVRefNum)
+        write(4, pb + 48, ioDirID)
+        write(4, pb + 18, ioNamePtr)
+        write(1, pb + 27, ioPermssn)
+
+        # Push _Open and then another special word to the stack, and run them
+        push(2, callback_trap_word)
+        push(2, 0xa000 if selector == 3 else 0xa00a) # _Open or _OpenRF
+        pc = get_sp()
+
+        # Return here when the special word gets called
+        @oneoff_callback
+        def finish():
+            global pc
+            pc = return_pc
+            set_sp(return_sp)
+
+            ioRefnum = read(2, pb + 24)
+            write(2, refNumPtr, ioRefNum)
+            ioResult = read(2, pb + 16)
+            write(2, get_sp(), ioResult)
+
+    elif selector == 0x4: # pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
+        pass
+    elif selector == 0x5: # pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
+        pass
+    elif selector == 0x6: # pascal OSErr FSpDelete(const FSSpec *spec)
+        pass
+    elif selector == 0x7: # pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
+        pass
+    elif selector == 0x8: # pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
+        pass
+    elif selector == 0x9: # pascal OSErr FSpSetFLock(const FSSpec *spec)
+        pass
+    elif selector == 0xa: # pascal OSErr FSpRstFLock(const FSSpec *spec)
+        pass
+    elif selector == 0xb: # pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
+        pass
+    elif selector == 0xc: # pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
+        pass
+    elif selector == 0xd: # pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
+        pass
+    else:
+        raise NotImplementedError(f'AA52 {hex(selector)}')
 
 
 # Memory Manager OS traps
@@ -2281,6 +2411,8 @@ def syserror_trap():
 def gestalt(selector):
     if selector == b'sysv':
         return 0x09228000 # highest possible
+    elif selector == b'fs  ':
+        return 2 # FSSpec calls, not much else
     elif selector == b'fold':
         return 1 # Folder Manager present
 
