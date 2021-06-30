@@ -1333,7 +1333,10 @@ def my_callback_trap():
 def paramblock(func):
     @functools.wraps(func)
     def wrapper(trap, d0, a0, a1, *args, **kwargs):
-        oserr = func(trap, d0, a0, a1, *args, **kwargs) or 0 # default to noErr
+        try:
+            oserr = func(trap, d0, a0, a1, *args, **kwargs) or 0 # default to noErr
+        except FileNotFoundError:
+            oserr = -43 # fnfErr
 
         # There is no PB for "fake" calls from other Python code
         if a0 is not None:
@@ -1388,7 +1391,10 @@ def get_host_path(number=0, string=''):
         volname, _, string = string.partition(':')
         if volname != onlyvolname: raise FileNotFoundError
 
-    accum = dnums[number]
+    try:
+        accum = dnums[number]
+    except IndexError:
+        raise FileNotFoundError
 
     components = string.split(':')
 
