@@ -1458,7 +1458,7 @@ def open_trap(trap, d0, a0, a1):
         data = bytearray()
 
     for ioRefNum in everyfref:
-        fcbPtr = 0xa0000 + ioRefNum
+        fcbPtr = read(4, 0x34e) + ioRefNum # FSFCBPtr
         if read(4, fcbPtr) == 0: break # fcbFlNum indicates free
     else:
         raise IndexError('out of FCBs')
@@ -1482,7 +1482,7 @@ def open_trap(trap, d0, a0, a1):
 @paramblock
 def close_trap(trap, d0, a0, a1, ioRefNum=None):
     if ioRefNum is None: ioRefNum = read(2, a0 + 24)
-    fcb = 0xa0000 + ioRefNum
+    fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38 # fnOpnErr
 
@@ -1502,7 +1502,7 @@ def close_trap(trap, d0, a0, a1, ioRefNum=None):
 @paramblock
 def readwrite_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
-    fcb = 0xa0000 + ioRefNum
+    fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38 # fnOpnErr
 
@@ -1663,7 +1663,7 @@ def setfinfo_trap(trap, d0, a0, a1):
 @paramblock
 def geteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
-    fcb = 0xa0000 + ioRefNum
+    fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38 # fnOpnErr
 
@@ -1673,7 +1673,7 @@ def geteof_trap(trap, d0, a0, a1):
 @paramblock
 def seteof_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
-    fcb = 0xa0000 + ioRefNum
+    fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38 # fnOpnErr
 
@@ -1718,7 +1718,7 @@ def setvol_trap(trap, d0, a0, a1):
 @paramblock
 def getfpos_trap(trap, d0, a0, a1):
     ioRefNum = read(2, a0 + 24)
-    fcb = 0xa0000 + ioRefNum
+    fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
     if ioRefNum not in everyfref or read(4, fcb) == 0:
         return -38 # fnOpnErr
 
@@ -1768,12 +1768,12 @@ def fsdispatch_trap(trap, d0, a0, a1):
             ioRefNum = read(2, a0 + 24)
         else: # fcb by indexing among the open ones
             for ioRefNum in everyfref:
-                if read(4, 0xa0000 + ioRefNum): ioFCBIndx -= 1
+                if read(4, read(4, 0x34e) + ioRefNum): ioFCBIndx -= 1 # FSFCBPtr
                 if ioFCBIndx == 0: break
             else:
                 ioRefNum = -1 # invalid, fail below
 
-        fcb = 0xa0000 + ioRefNum
+        fcb = read(4, 0x34e) + ioRefNum # FSFCBPtr
 
         if ioRefNum not in everyfref or read(4, fcb) == 0:
             return -38 # fnOpnErr
@@ -2698,7 +2698,7 @@ write(4, 0x308+6, dqe) # DrvQHdr.QTail
 # FCB block and a single VCB
 write(4, 0x34e, 0xa0000) # FCBSPtr
 write(2, 0x3f6, 94) # FSFCBLen
-write(2, 0xa0000, 2 + 94 * 348) # size of FCB table
+write(2, read(4, 0x34e), 2 + 94 * 348) # size of FCB table
 vcb = 0xa8000 # VCB needed for the ubiquitous GetVRefNum glue
 write(2, vcb + 78, 2) # vcbVRefNum
 write_pstring(vcb + 44, onlyvolname) # vcbVName
