@@ -811,6 +811,21 @@ def where_string_is(string):
     return '\n'.join(retval)
 
 ########################################################################
+# All imports for use outside the 68k interpreter
+########################################################################
+
+import collections
+import functools
+import random
+import re
+import shutil
+import struct
+import sys
+import tempfile
+import unicodedata
+from pathlib import Path
+
+########################################################################
 # SANE -- blobs from Mac Plus ROM
 ########################################################################
 
@@ -1143,8 +1158,6 @@ C003 0C00 0009 6302 5E00 0600 0030 4E75 48E7 3C00 4E56 0000 206E 0020 2A10 206E
 # Resources! At least we can be slow when dealing with them.
 ########################################################################
 
-import re # the below code could be turned into one giant regex if we were brave
-
 rez_tokens = [
     ((),         r'(\s|//.*?\n|/\*.*?\*/)+'),                                   # 0 whitespace/comment (gets ignored)
     ((1,11),     r'\$"\s*((?:[0-9A-Fa-f]{2}\s*)*)"'),                           # 1 hex data
@@ -1278,8 +1291,6 @@ def readrez(path):
 # The Macintosh Toolbox. Wish me luck...
 ########################################################################
 
-import sys
-
 def unimplemented_trap(*args):
     raise NotImplementedError('somebody deliberately called the address of _Unimplemented')
 
@@ -1301,7 +1312,6 @@ def trap(kind, number):
 # File Manager OS traps
 
 def paramblock(func):
-    import functools
     @functools.wraps(func)
     def wrapper(trap, d0, a0, a1, *args, **kwargs):
         oserr = func(trap, d0, a0, a1, *args, **kwargs) or 0 # default to noErr
@@ -1318,9 +1328,6 @@ def paramblock(func):
     return wrapper
 
 everyfref = range(2, 2 + 348 * 94, 94)
-
-from pathlib import Path
-import tempfile
 
 tmp = tempfile.TemporaryDirectory()
 tmppath = Path(tmp.name)
@@ -1378,8 +1385,7 @@ def get_host_path(number=0, string=''):
 
     return accum
 
-from functools import lru_cache
-@lru_cache(1)
+@functools.lru_cache(1)
 def listdir(path):
     sortorder = (
         b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
@@ -1399,8 +1405,7 @@ def listdir(path):
         b'\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef'
         b'\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff')
 
-    from collections import Counter
-    uniqueness = Counter()
+    uniqueness = collections.Counter()
 
     ls = []
     for s in path.iterdir():
@@ -1576,7 +1581,6 @@ def delete_trap(trap, d0, a0, a1):
     number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
-    import shutil
     try: shutil.rmtree(path)
     except: pass
 
@@ -1818,8 +1822,6 @@ def fsdispatch_trap(trap, d0, a0, a1):
 
 
 # Memory Manager OS traps
-
-import functools # prettifies our decorated functions
 
 def sets_memerr_to_d0(func):
     @functools.wraps(func)
@@ -2206,7 +2208,6 @@ def bitclr_trap():
 
 @trap('toolbox', 0x61)
 def random_trap():
-    import random
     pop(2); push(2, random.randint(0x10000))
 
 @trap('toolbox', 0x6a)
@@ -2346,7 +2347,6 @@ def cmpstring_trap(trap, d0, a0, a1):
     both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode('mac_roman')
 
     if trap & 0x200: # ignore diacritics
-        import unicodedata
         both = unicodedata.normalize('NFKD', both)
         both = ''.join(c for c in both if not unicodedata.combining(c))
 
@@ -2639,8 +2639,6 @@ def check_for_lurkers():
             raise Exception(f'low-memory corruption {mem[:64].hex()}')
     else:
         mem[:64] = bytes(64)
-
-import struct
 
 # A memory, and some memory-mapped registers
 mem[:] = bytes(0x100000) # plenty of room for globals
