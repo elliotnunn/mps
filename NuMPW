@@ -1882,6 +1882,11 @@ def fsdispatch_trap(trap, d0, a0, a1):
 def read_fsspec(ptr):
     return read(2, ptr), read(4, ptr + 2), ptr + 6 # pointer to name string only
 
+def fsspec_to_pb(fsspec, pb):
+    write(2, pb + 22, read(2, fsspec)) # ioVRefNum
+    write(4, pb + 48, read(2, fsspec + 2)) # ioDirID
+    write(4, pb + 18, fsspec + 6) # ioNamePtr
+
 @trap('toolbox', 0x252)
 def highlevelhfsdispatch():
     global pc
@@ -1928,7 +1933,7 @@ def highlevelhfsdispatch():
     elif selector in (2, 3): # pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
         refNumPtr = pop(4)
         ioPermssn = pop(2) >> 8
-        ioVRefNum, ioDirID, ioNamePtr = read_fsspec(pop(4))
+        fsspec = pop(4)
 
         # Get ready to return when a callback_trap_word is executed
         return_pc = pc
@@ -1939,9 +1944,7 @@ def highlevelhfsdispatch():
         pb = get_sp()
         write(4, regs + 32, pb) # a0 = pb
 
-        write(2, pb + 22, ioVRefNum)
-        write(4, pb + 48, ioDirID)
-        write(4, pb + 18, ioNamePtr)
+        fsspec_to_pb(fsspec, pb)
         write(1, pb + 27, ioPermssn)
 
         # Push _Open and then another special word to the stack, and run them
