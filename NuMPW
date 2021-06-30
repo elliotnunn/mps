@@ -1613,8 +1613,12 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
         return_string = False
 
     write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
-    p = get_host_path(number=number, string=string)
-    if not p.exists(): return -43 # fnfErr
+
+    try:
+        p = get_host_path(number=number, string=string)
+        if not p.exists(): raise FileNotFoundError
+    except FileNotFoundError:
+        return -43 # fnfErr
 
     if return_string and ioNamePtr:
         write_pstring(ioNamePtr, p.name.replace(':', '/') if p != p.parent else onlyvolname)
