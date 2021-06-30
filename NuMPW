@@ -1657,11 +1657,8 @@ def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
 
     write(56 if trap & 0xff == 0xc else 84, a0 + 24, 0) # clear (most of) our return values
 
-    try:
-        p = get_host_path(number=number, string=string)
-        if not p.exists(): raise FileNotFoundError
-    except FileNotFoundError:
-        return -43 # fnfErr
+    p = get_host_path(number=number, string=string)
+    if not p.exists(): raise FileNotFoundError
 
     if return_string and ioNamePtr:
         write_pstring(ioNamePtr, p.name.replace(':', '/') if p != p.parent else onlyvolname)
@@ -1752,8 +1749,7 @@ def setvol_trap(trap, d0, a0, a1):
     if ioVNPtr:
         volname = read_pstring(ioVNPtr)
         if ':' not in volname: volname += ':' # this is an absolute path
-        try: dnums[0] = get_host_path(string=volname)
-        except FileNotFoundError: return -43 # fnfErr
+        dnums[0] = get_host_path(string=volname)
 
     elif trap & 0x200: # HSetVol
         dnums[0] = dnums[read(4, a0 + 48)] # ioDirID
