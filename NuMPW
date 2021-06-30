@@ -1596,6 +1596,20 @@ def getvinfo_trap(trap, d0, a0, a1):
         write(32, a0 + 90, 0) # ioVFndrInfo
         write(4, a0 + 90, get_macos_dnum(systemfolder)) # must match BootDrive
 
+@trap('os', 8)
+@paramblock
+def create_trap(trap, d0, a0, a1):
+    ioNamePtr = read(4, a0 + 18)
+    ioName = read_pstring(ioNamePtr)
+
+    # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
+    number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
+
+    path = get_host_path(number=number, string=ioName).unlink()
+
+    if path.exists(): return -48 # dupFNErr
+    path.touch()
+
 @trap('os', 9)
 @paramblock
 def delete_trap(trap, d0, a0, a1):
@@ -1605,9 +1619,13 @@ def delete_trap(trap, d0, a0, a1):
     # idiom to get dirID for hierarchical call, but fall back on ioVRefNum
     number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
-    path = get_host_path(number=number, string=ioName)
-    try: shutil.rmtree(path)
-    except: pass
+    get_host_path(number=number, string=ioName).unlink()
+
+    for suffix in ('.rdump', '.idump'):
+        try:
+            get_host_path(number=number, string=ioName).unlink()
+        except:
+            pass
 
 @trap('os', 0xc)
 def getfinfo_trap(trap, d0, a0, a1): # also implements GetCatInfo
