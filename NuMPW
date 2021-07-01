@@ -781,18 +781,18 @@ def roughly_where_we_are(pc):
         funcname = '<unknownfunc>'
 
     # Find out which segment this is:
-    found = '<unknownseg>'
-    for segment in resource_chain[1]:
-        if len(segment) == 6:
-            ptr = read(4, segment[5])
-            endptr = ptr + len(segment[4])
-            if ptr <= pc < endptr:
-                found = 'seg-' + str(segment[1])
-                if segment[2]: found += '-' + segment[2].decode('mac_roman')
-                found += '+' + hex(pc - ptr)
-                break
+#     found = '<unknownseg>'
+#     for segment in resource_chain[1]:
+#         if len(segment) == 6:
+#             ptr = read(4, segment[5])
+#             endptr = ptr + len(segment[4])
+#             if ptr <= pc < endptr:
+#                 found = 'seg-' + str(segment[1])
+#                 if segment[2]: found += '-' + segment[2].decode('mac_roman')
+#                 found += '+' + hex(pc - ptr)
+#                 break
 
-    return hex(pc) + ' ' + funcname + ' ' + found + ' ' + (mem[pc:pc+2].hex())
+    return hex(pc) + ' ' + funcname + ' ' + (mem[pc:pc+2].hex())
 
     # search backwards and confirm we are after an 'NV'
 
@@ -1161,137 +1161,129 @@ C003 0C00 0009 6302 5E00 0600 0030 4E75 48E7 3C00 4E56 0000 206E 0020 2A10 206E
 ''')
 
 ########################################################################
-# Resources! At least we can be slow when dealing with them.
+# Code for reading Finder info and resource forks
 ########################################################################
 
-rez_tokens = [
-    ((),         r'(\s|//.*?\n|/\*.*?\*/)+'),                                   # 0 whitespace/comment (gets ignored)
-    ((1,11),     r'\$"\s*((?:[0-9A-Fa-f]{2}\s*)*)"'),                           # 1 hex data
-    ((3,),       r'(data)'),                                                    # 2 start of raw resource
-    ((4,),       r"('(?:[^'\\]|\\0x[0-9A-Fa-f]{2}|\\[\\'\\?btrvfn])*')"),       # 3 type
-    ((5,),       r'(\()'),                                                      # 4 start of bracketed resource info
-    ((6,7,8,9),  r'(-?\d+)'),                                                   # 5 ID
-    ((7,8,9),    r',gap("(?:[^"\\]|\\0x[0-9A-Fa-f]{2}|\\[\\"\\?btrvfn])*")'),   # 6 name
-    ((9,),       r',gap\$([0-9a-fA-F]{1,2})'),                                  # 7 attribs (hex)
-    ((8,9),      r',gap(sysheap|purgeable|locked|protected|preload)'),          # 8 attribs (specific)
-    ((10,),      r'(\))'),                                                      # 9 end of bracketed resource info
-    ((1,11),     r'(\{)'),                                                      # 10 start of hex block
-    ((12,),      r'(\})'),                                                      # 11 end of hex block
-    ((2,-1),     r'(;)'),                                                       # 12 the end for real
-    ((),         r'(.)'),                                                       # 13 unexpected character (always errors)
-]
+def rez_strip_comments(rez):
+    def sub(m):
+        if m.group(0)[:1] == b'/':
+            return b' '
+        else:
+            return m.group(0)
 
-allowed_to_follow_kind, token_regexen = zip(*rez_tokens)
+    return re.sub(rb'''(//[^\n]*|/\*.*?\*/|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')''', sub, rez)
 
-# The 'gap' hack turns ', sysheap' etc into a single token
-gap = r'(?:\s|//.*?\n|/\*.*?\*/)*'
-rez_tokenizer = '|'.join(token_regexen).replace('gap', gap).encode('ascii')
-rez_tokenizer = re.compile(rez_tokenizer)
+def rez_string_literal(string_with_quotes):
+    def sub(m):
+        m = m.group(0)[1:]
 
-def string_surrogate(m):
-    m = m.group(0)
+        if len(m) == 4: # hexadecimal \0xFF
+            return bytes([int(m[-2:], 16)])
+        else:
+            return {
+                b'b': b'\x08',          # backspace
+                b't': b'\t',            # tab
+                b'r': b'\n',            # CR <-> LF
+                b'v': b'\x0b',          # vertical tab
+                b'f': b'\x0c',          # form feed
+                b'n': b'\r',            # LF <-> CR
+                b'?': b'\x7f'}.get(m, m)# backspace
 
-    if len(m) == 5: # \0xFF is the most common
-        return bytes([int(m[3:], 16)])
-    elif m == b'\\"':
-        return b'"'
-    elif m == b"\\'":
-        return b"'"
-    elif m == b'\\b':
-        return b'\x08' # backspace
-    elif m == b'\\t':
-        return b'\t'
-    elif m == b'\\r':
-        return b'\n'
-    elif m == b'\\v':
-        return b'\x0b' # vertical tab
-    elif m == b'\\f':
-        return b'\x0c' # form feed
-    elif m == b'\\n':
-        return b'\r'
-    elif m == b'\\?':
-        return b'\x7f' # del
+    return re.sub(rb'(\\0x..|\\.)', sub, string_with_quotes[1:-1])
 
-def string_literal(string):
-    return re.sub(rb'(\\0x..|\\.)', string_surrogate, string[1:-1])
+def rez_extract_hex(hex):
+    return bytes.fromhex(hex.translate(
+        b'                                '
+        b'                0123456789      '
+        b' ABCDEF                         '
+        b' abcdef                         '
+        b'                                '
+        b'                                '
+        b'                                '
+        b'                                ').decode('ascii'))
 
-def readrez(path):
-    # lifted from my macresources package, but a little bit 'nastier'
-    # returns a list of [type, id, name, flags, data]'s
-    retval = []
+def rez(path):
+    rez = path.read_bytes()
+    rez = rez.replace(b'\r', b'\n')
+    rez = rez_strip_comments(rez)
 
-    with open(path, 'rb') as f: from_rezcode = f.read()
-    from_rezcode = from_rezcode.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    regex = (
+        rb'''data\s*(?P<type>'(?:[^'\\]|\\.)*')\s*'''
+        rb'''\(\s*'''
+        rb'''(?P<id>-?\d+)\s*'''
+        rb'''(?:,\s*(?P<name>"(?:[^"\\]|\\.)*")\s*)?'''
+        rb'''(?P<args>(?:,\s*[\$\w]+\s*)*)'''
+        rb'''\)\s*'''
+        rb'''\{\s*'''
+        rb'''(?P<data>(?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*'''
+        rb'''\}\s*;\s*|.''')
 
-    # Slightly faster than finditer
-    all_tokens = rez_tokenizer.findall(from_rezcode)
-    def line_no_for_error(token_idx):
-        # Redo all the lexing with finditer, which is slower but
-        # gives us Match objects with a byte offset
-        work_redoer = rez_tokenizer.finditer(from_rezcode)
-        match_obj = next(m for i, m in enumerate(work_redoer) if i == token_idx)
-        line_no = from_rezcode[:match_obj.start()].count(ord('\n')) + 1
+    types = {}
 
-    allowed_token_kinds = (2,-1)
-    for token_idx, token_captures in enumerate(all_tokens):
-        # Which single capture is non-empty?
-        for token_kind, payload in enumerate(token_captures):
-            if payload: break
+    for m in re.finditer(regex, rez):
+        if m.end() - m.start() == 1:
+            lineno = rez[:m.start()].count(b'\n') + 1
+            raise ValueError(f'Rez: {path.name}:{lineno}')
 
-        # Ignore whitespace
-        if not token_kind: continue
+        type = rez_string_literal(m.group('type'))
+        id = int(m.group('id'))
+        data = rez_extract_hex(m.group('data'))
 
-        # Unexpected token!
-        if token_kind not in allowed_token_kinds:
-            raise ValueError('File %r, line %r' % (original_file, line_no_for_error(token_idx)))
+        if m.group('name'):
+            name = rez_string_literal(m.group('name'))
+        else:
+            name = None
 
-        elif token_kind == 1:
-            hex_accum.append(payload)
+        flags = 0
+        args = [a.strip() for a in m.group('args').split(b',')]
+        for arg in args:
+            if arg == b'sysheap':
+                flags |= 0x40
+            elif arg == b'purgeable':
+                flags |= 0x20
+            elif arg == b'locked':
+                flags |= 0x10
+            elif arg == b'protected':
+                flags |= 0x08
+            elif arg == b'preload':
+                flags |= 0x04
+            elif re.fullmatch(b'\$[A-Fa-f0-9]{2}', arg):
+                flags |= int(arg[1:], 16)
 
-        elif token_kind == 2:
-            res = [b'type', 9999, None, 0, b'']; retval.append(res)
-            hex_accum = []
+        types.setdefault(type, {})[id] = (flags, name, data)
 
-        elif token_kind == 3:
-            res[0] = string_literal(payload)
-            if len(res[0]) != 4:
-                raise ValueError('File %r, line %r, type not 4 chars' % (original_file, line_no_for_error(token_idx)))
+    fork = bytearray(256) # append resource data as we go
+    type_list = bytearray(2 + 8 * len(types)) # alloc type list, append ref list
+    name_list = bytearray()
 
-        elif token_kind == 5:
-            res[1] = int(payload)
-            if not (-32768 <= res[1] < 32767):
-                raise ValueError('File %r, line %r, ID out of 16-bit range' % (original_file, line_no_for_error(token_idx)))
+    struct.pack_into('>H', type_list, 0, (len(types) - 1) % 0xffff)
 
-        elif token_kind == 6:
-            res[2] = string_literal(payload)
-            if len(res[2]) > 255:
-                raise ValueError('File %r, line %r, name > 255 chars' % (original_file, line_no_for_error(token_idx)))
+    for type_n, (type, ids) in enumerate(types.items()):
+        struct.pack_into('>4sHH', type_list, 2+8*type_n, type, len(ids)-1, len(type_list))
 
-        elif token_kind == 7:
-            res[3] = int(payload, 16)
+        for id, (flags, name, data) in ids.items():
+            if name is None:
+                name_offset = 0xffff
+            else:
+                name_offset = len(name_list)
+                name_list += bytes([len(name)]) + name
 
-        elif token_kind == 8:
-            if payload == b'sysheap':
-                res[3] |= 0x40
-            elif payload == b'purgeable':
-                res[3] |= 0x20
-            elif payload == b'locked':
-                res[3] |= 0x10
-            elif payload == b'protected':
-                res[3] |= 0x08
-            elif payload == b'preload':
-                res[3] |= 0x04
+            type_list += struct.pack('>hHB', id, name_offset, flags)
+            type_list += (len(fork) - 256).to_bytes(3, 'big')
+            type_list += bytes(4)
 
-        elif token_kind == 12:
-            res[4] = bytes.fromhex(b''.join(hex_accum).decode('ascii'))
+            fork += struct.pack('>L', len(data))
+            fork += data
+            while len(fork) % 4: fork += b'\0'
 
-        allowed_token_kinds = allowed_to_follow_kind[token_kind]
+    boundary = len(fork) # between resource data and resource map
+    fork += bytes(24)
+    fork += struct.pack('>HH', 28, 28+len(type_list)) # offset to type list and name list
+    fork += type_list
+    fork += name_list
+    struct.pack_into('>LLLL', fork, 0, 256, boundary, boundary-256, len(fork)-boundary)
 
-    # Premature EOF
-    if -1 not in allowed_token_kinds:
-        raise ValueError('File %r, unexpected end of file' % original_file)
-
-    return retval
+    return fork
 
 ########################################################################
 # The Macintosh Toolbox. Wish me luck...
@@ -1326,7 +1318,9 @@ def oneoff_callback(func):
 
 @trap('toolbox', callback_trap_word & 0x3ff)
 def my_callback_trap():
-    my_callbacks.pop()()
+    popped = my_callbacks.pop()
+#     print('running callback trap', popped.__name__)
+    popped()
 
 # File Manager OS traps
 
@@ -1464,9 +1458,11 @@ def get_macos_date(path):
 
 filebuffers = {} # keys are refNums, values are bytearrays
 
-@trap('os', 0)
+@trap('os', 0) # _Open, also implements _OpenDF of FSDispatch
+@trap('os', 0xa) # _OpenRF
 @paramblock
 def open_trap(trap, d0, a0, a1):
+    fork = 'r' if trap & 0xff == 0xa else 'd'
     ioNamePtr = read(4, a0 + 18)
     ioName = read_pstring(ioNamePtr)
     ioPermssn = read(1, a0 + 27)
@@ -1475,22 +1471,31 @@ def open_trap(trap, d0, a0, a1):
     number = (read(4, a0 + 48) if trap & 0x200 else 0) or read(2, a0 + 22)
 
     path = get_host_path(number=number, string=ioName)
-    try:
-        data = bytearray(path.read_bytes())
-    except FileNotFoundError:
-        if ioPermssn == 1: return -37 # bdNamErr if read-only
-        path.touch()
-        data = bytearray()
+    if not path.exists(): raise FileNotFoundError
 
     for ioRefNum in everyfref:
         fcbPtr = read(4, 0x34e) + ioRefNum # FSFCBPtr
         if read(4, fcbPtr) == 0: break # fcbFlNum indicates free
     else:
-        raise IndexError('out of FCBs')
+        return -42 # tmfoErr
+
+    if fork == 'd':
+        data = path.read_bytes()
+    elif fork == 'r':
+        # Try various resource fork schemes
+        if (rpath := (path.parent/'RESOURCE.FRK'/path.name)).exists():
+            data = rpath.read_bytes()
+        elif (rpath := (path.parent/(path.name+'.rdump'))).exists():
+            data = rez(rpath)
+        else:
+            data = b''
+
+    # Keep the whole buffer as a bytearray
+    data = bytearray(data)
 
     flags = 0
     if ioPermssn != 1: flags |= 1
-    # also need to set "am a resource fork" flags
+    if fork == 'r': flags |= 2
 
     filebuffers[ioRefNum] = data
     write(94, fcbPtr, 0) # zero the block for safety
@@ -1502,6 +1507,7 @@ def open_trap(trap, d0, a0, a1):
     write_pstring(fcbPtr + 62, path.name.replace(':', '/')) # fcbCName
 
     write(2, a0 + 24, ioRefNum)
+
 
 @trap('os', 1)
 @paramblock
@@ -1920,7 +1926,7 @@ def highlevelhfsdispatch():
 
         # Return here when the special word gets called
         @oneoff_callback
-        def finish():
+        def fsmakefsspec_finish():
             global pc
             pc = return_pc
             set_sp(return_sp)
@@ -1952,7 +1958,7 @@ def highlevelhfsdispatch():
 
         # Return here when the special word gets called
         @oneoff_callback
-        def finish():
+        def fspopendf_finish():
             global pc
             pc = return_pc
             set_sp(return_sp)
@@ -2194,50 +2200,244 @@ def settrapaddress_trap(trap, d0, a0, a1):
 
 # Resource Manager Toolbox traps
 
-def getresource(type, id='', name=-1, topmap=False): # defaults are chosen to NEVER match
-    curmap = read(2, 0xa5a)
-    for file in reversed(resource_chain[:curmap+1]):
-        for resource in file:
-            thistype, thisid, thisname, thisflags, thisdata, *thishandle = resource
-            if thistype == type and (thisid == id or thisname == name):
-                if thishandle:
-                    return thishandle[0]
-                else:
-                    handle = newhandle(len(thisdata))
-                    mem[handle+4:handle+4+len(thisdata)] = thisdata
-                    resource.append(handle)
-                    return handle
+@trap('toolbox', 0x197)
+def openresfile_trap():
+    strarg = pop(4)
+    push(6, 0) # zero vRefNum and dirID
+    push(4, strarg)
+    push(2, 0) # zero permission
+    hopenresfile_trap()
 
-        if topmap: break
+@trap('toolbox', 0x1a)
+def hopenresfile_trap():
+    global pc
 
-    return 0
+    permission = pop(2)
+    ioNamePtr = pop(4)
+    ioDirID = pop(4)
+    ioVRefNum = pop(2)
+
+    return_pc = pc
+    return_sp = get_sp()
+
+    # a0 -> _OpenRF param block on stack
+    push(128, 0)
+    pb = get_sp(); write(4, regs + 32, pb) # a0 = pb
+    write(2, pb + 22, ioVRefNum)
+    write(4, pb + 48, ioDirID)
+    write(4, pb + 18, ioNamePtr)
+
+    # Run this stuff
+    push(2, callback_trap_word)
+    push(2, 0xa20a) # _HOpenRF
+    pc = get_sp()
+
+    @oneoff_callback
+    def hopenresfile_finish():
+        global pc
+        pc = return_pc
+        set_sp(return_sp)
+
+        ioRefNum = read(2, pb + 24)
+        ioResult = read(2, pb + 16)
+
+        write(2, 0xa60, ioResult) # set ResError
+        write(2, get_sp(), -1) # return "failed" refnum
+
+        if ioResult != 0: return
+
+        forkdata = filebuffers[ioRefNum] # don't use trap calls to read data
+        if len(forkdata) < 256:
+            write(2, 0xa60, -39) # ResErr = eofErr
+            return
+
+        mapstart, maplen = struct.unpack_from('>LxxxxL', forkdata, 4)
+        map = forkdata[mapstart:mapstart+maplen]
+
+        map[:16] = forkdata[:16] # copy of header of file
+        maphdl = newhandle(len(map)); mapptr = read(4, maphdl)
+        mem[mapptr:mapptr+len(map)] = map
+
+        write(4, mapptr + 16, read(4, 0xa50)) # point to TopMapHndl
+        write(2, mapptr + 20, ioRefNum)
+
+        write(4, 0xa50, maphdl) # this is now TopMapHndl
+        write(2, 0xa5a, ioRefNum) # also CurMap
+
+        write(2, get_sp(), ioRefNum) # return refnum
+
+# def listify(func):
+#     @wraps(func)
+#     def wrapper(*args, **kw):
+#         return list(func(*args, **kw))
+#     return wrapper
+#
+def iter_resource_maps(top_only=False):
+    curmap = read(2, 0xa5a) # CurMap
+    handle = read(4, 0xa50) # TopMapHndl
+
+    seen_top_map = False
+
+    while handle != 0:
+        pointer = read(4, handle)
+
+        if seen_top_map or curmap == read(2, pointer + 20):
+            yield handle
+            seen_top_map = True
+            if top_only: break
+
+        handle = read(4, pointer + 16)
+
+def resource_in_map(handle, type, id=None, name=None): # return type_entry, resource_entry
+    pointer = read(4, handle)
+
+    refbase = pointer + read(2, pointer + 24)
+    namebase = pointer + read(2, pointer + 26)
+    type_count = (read(2, refbase) + 1) & 0xffff
+
+    for type_entry in range(refbase + 2, refbase + 2 + 8*type_count, 8):
+        if read(4, type_entry).to_bytes(4, 'big') == type:
+            res_count = (read(2, type_entry + 4) + 1) & 0xffff
+            res_entry = refbase + read(2, type_entry + 6)
+
+            for res_entry in range(res_entry, res_entry + 12*res_count, 12):
+                res_id = read(2, res_entry)
+                res_name = read(2, res_entry + 2)
+
+                if res_id == id or (res_name != 0xffff and read_pstring(namebase + res_name) == name):
+                    return type_entry, res_entry
+
+    return None, None
+
+# This is some truly awful code.
+def map_insert_resource(handle, type, id): # return type_entry, resource_entry
+    pointer = read(4, handle)
+    map = mem[pointer:pointer+gethandlesize(handle)]
+
+    refbase = read(2, pointer + 24)
+    namebase = read(2, pointer + 26)
+    type_count = (read(2, refbase) + 1) & 0xffff
+
+    type_entry_offsets = list(range(refbase + 2, refbase + 2 + 8*type_count, 8))
+    for type_entry in type_entry_offsets:
+        numresources, res_entry = struct.unpack_from('>HH', map, type_entry + 4)
+        res_entry = refbase + res_entry + 12*((numresources+1) & 0xffff)
+        if map[type_entry:type_entry+4] == type: break
+
+    else:
+        # Insert a new type entry
+        type_entry = refbase + 2 + 8*type_count
+        type_count += 1
+        new_type_entry = struct.pack('>4s H H', type, 0xffff, res_entry)
+        mem[type_entry:type_entry+8] = new_type_entry
+
+        # Fixup header fields
+        namebase += 8; struct.pack_into('>H', map, 26, namebase)
+        struct.pack_into('>H', map, refbase, type_count - 1)
+
+        # Fixup the offsets in the preceding type entries
+        for other_type_entry in type_entry_offsets:
+            res_entry, = struct.unpack_from('>H', map, other_type_entry + 6)
+            struct.pack_into('>H', map, other_type_entry + 6, res_entry + 8)
+
+    # Now type_entry is accurate, so insert a res_entry
+    numresources, res_entry = struct.unpack_from('>HH', map, type_entry + 4)
+    res_entry = refbase + res_entry + 12*((numresources+1) & 0xffff)
+    new_res_entry = b'\0\0\xff\xff\0\0\0\0\0\0\0\0'
+    map[res_entry:new_res_entry+12] = new_res_entry
+
+    # Increment numresources
+    numresources += 1
+    struct.pack_into('>H', map, type_entry + 4, numresources & 0xffff)
+
+    # Again, fixup offsets
+    namebase += 12; struct.pack_into('>H', map, 26, namebase)
+
+    for other_type_entry in type_entry_offsets:
+        other_res_entry, = struct.unpack_from('>H', map, other_type_entry + 6)
+        if other_res_entry >= res_entry - refbase:
+            struct.pack_into('>H', map, other_type_entry + 6, other_res_entry + 12)
+
+    sethandlesize(handle, len(map))
+    pointer = read(4, handle)
+    mem[pointer:pointer+len(map)] = map
+
+    return pointer + type_entry, pointer + res_entry
 
 @trap('toolbox', 0x1f)
 def get1resource_trap():
-    id = signed(2, pop(2))
-    type = pop(4).to_bytes(4, 'big')
-    push(4, getresource(type=type, id=id, topmap=True))
+    getresource_common('id', True)
 
 @trap('toolbox', 0x20)
 def get1namedresource_trap():
-    name = read_pstring(pop(4))
-    type = pop(4).to_bytes(4, 'big')
-    pop(4)
-    push(4, getresource(type=type, name=name, topmap=True))
+    getresource_common('name', True)
 
 @trap('toolbox', 0x1a0)
 def getresource_trap():
-    id = signed(2, pop(2))
-    type = pop(4).to_bytes(4, 'big')
-    pop(4)
-    push(4, getresource(type=type, id=id, topmap=False))
+    getresource_common('id', False)
 
 @trap('toolbox', 0x1a1)
 def getnamedresource_trap():
-    name = read_pstring(pop(4))
+    getresource_common('name', False)
+
+def getresource_common(id_or_name, top_only):
+    global pc
+
+    write(2, 0xa60, 0) # ResErr = noErr
+
+    if id_or_name == 'id':
+        id = signed(2, pop(2))
+        name = None
+    else:
+        id = None
+        name = read_pstring(pop(4))
     type = pop(4).to_bytes(4, 'big')
-    pop(4)
-    push(4, getresource(type=type, name=name, topmap=False))
+
+    for map_handle in iter_resource_maps(top_only):
+        type_entry, resource_entry = resource_in_map(map_handle, type, id=id, name=name)
+        if type_entry: break
+    else:
+        # We failed...
+        write(2, 0xa60, -192) # ResErr = resNotFound
+        return 0
+
+    # Perhaps it is already in memory?
+    handle = read(4, resource_entry + 8)
+    if handle:
+        write(4, get_sp(), handle)
+        return
+
+    # No such luck. Load it from the file.
+    map_pointer = read(4, map_handle)
+    refnum = read(2, map_pointer + 20)
+    filedata = filebuffers[refnum]
+    data_offset, = struct.unpack_from('>L', filedata)
+    data_offset += read(4, resource_entry + 4) & 0xffffff # three byte field
+    data_len, = struct.unpack_from('>L', filedata, data_offset)
+    data_offset += 4
+    data = filedata[data_offset:data_offset+data_len]
+
+    # Run NewHandle, allowing ToolServer patches to run
+    return_pc = pc
+    return_sp = get_sp()
+
+    push(2, callback_trap_word)
+    push(2, 0xa122) # _NewHandle
+    write(4, regs, data_len)
+    pc = get_sp()
+
+    @oneoff_callback
+    def getresource_finish():
+        global pc
+
+        pc = return_pc
+        set_sp(return_sp)
+
+        new_handle = read(4, regs + 32) # a0
+        new_pointer = read(4, new_handle)
+        mem[new_pointer:new_pointer+len(data)] = data
+
+        write(4, get_sp(), new_handle)
 
 @trap('toolbox', 0x194)
 def curresfile_trap():
@@ -2250,33 +2450,28 @@ def useresfile_trap():
 
 @trap('toolbox', 0x1b8)
 def getpattern_trap():
-    id = pop(2)
-    pop(4)
-    push(4, getresource(b'PAT ', id))
+    push(4, int.from_bytes(b'PAT ', 'big'))
+    getresource_trap()
 
 @trap('toolbox', 0x1b9)
 def getcursor_trap():
-    id = pop(2)
-    pop(4)
-    push(4, getresource(b'CURS', id))
+    push(4, int.from_bytes(b'CURS', 'big'))
+    getresource_trap()
 
 @trap('toolbox', 0x1ba)
 def getstring_trap():
-    id = pop(2)
-    pop(4)
-    push(4, getresource(b'STR ', id))
+    push(4, int.from_bytes(b'STR ', 'big'))
+    getresource_trap()
 
 @trap('toolbox', 0x1bb)
 def geticon_trap():
-    id = pop(2)
-    pop(4)
-    push(4, getresource(b'ICON', id))
+    push(4, int.from_bytes(b'ICON', 'big'))
+    getresource_trap()
 
 @trap('toolbox', 0x1bc)
 def getpicture_trap():
-    id = pop(2)
-    pop(4)
-    push(4, getresource(b'PICT', id))
+    push(4, int.from_bytes(b'PICT', 'big'))
+    getresource_trap()
 
 # Segment Loader Toolbox traps
 
@@ -2288,26 +2483,40 @@ def loadseg_trap():
 
     jumptable = read(4, regs + 32 + 20) + 32 # $20(a5)
 
-    seg_handle = getresource(b'CODE', seg_num)
-    seg_ptr = read(4, seg_handle)
+    # Do the evil thing where we create a new handle
+    return_pc = pc
+    return_regs = mem[regs:regs+64]
 
-    first = read(2, seg_ptr) # index of first entry within jump table
-    count = read(2, seg_ptr + 2) # number of jump table entries
+    # Code to run
+    push(2, callback_trap_word)
+    push(2, 0xa9a0) # _GetResource
+    pc = get_sp()
 
-    for i in range(count):
-        jt_entry = jumptable + first + 8 * i
-        code_offset = read(2, jt_entry)
+    # Arguments to GetResource
+    push(4, 0) # room for handle
+    push(4, int.from_bytes(b'CODE', 'big'))
+    push(2, seg_num)
 
-#         magic = read(2, jt_entry + 2) # move.w #imm,-(sp) instruction
-#         if magic != 0x3f3c: sys.exit('corrupt jump table %04x' % magic)
-#         magic = read(2, jt_entry + 4) # move.w #imm,-(sp) instruction
-#         if magic != seg_num: sys.exit('corrupt jump table sn %04x' % seg_num)
+    @oneoff_callback
+    def loadseg_finish():
+        global pc
 
-        write(2, jt_entry, seg_num)
-        write(2, jt_entry + 2, 0x4ef9) # jmp
-        write(4, jt_entry + 4, seg_ptr + 4 + code_offset)
+        seg_handle = pop(4)
+        seg_ptr = read(4, seg_handle)
 
-    pc -= 6 # re-execute the jump table instruction
+        first = read(2, seg_ptr) # index of first entry within jump table
+        count = read(2, seg_ptr + 2) # number of jump table entries
+
+        for i in range(count):
+            jt_entry = jumptable + first + 8 * i
+            code_offset = read(2, jt_entry)
+
+            write(2, jt_entry, seg_num)
+            write(2, jt_entry + 2, 0x4ef9) # jmp
+            write(4, jt_entry + 4, seg_ptr + 4 + code_offset)
+
+        pc = return_pc - 6 # re-execute the jump table instruction
+        mem[regs:regs+64] = return_regs
 
 # Package Toolbox traps
 
@@ -2830,16 +3039,6 @@ mem.extend(struct.pack('>L 16x H 30x', 0xffffffe, 32)) # bkLim, mAllocCnt
 for i in range(0x1000):
     struct.pack_into('>H', mem, ftrap_table_addr + i * 2, 0xf000 + i)
 
-push(4, ftrap_table_addr + 0x9f4 * 2) # ExitToShell return addr
-
-resource_chain = [ # system and app
-    [
-        [b'STR ', -16096, None, 0x40, b'\x06drongo'],
-    ],
-    readrez(sys.argv[1] + '.rdump')
-]
-code0 = next(r for r in resource_chain[1] if r[0] == b'CODE' and r[1] == 0)[-1]
-
 # Some misc globals
 write(4, 0x31a, 0x00ffffff)
 write(4, 0xa02, 0x00010001)
@@ -2847,7 +3046,7 @@ write(4, 0xa06, 0xffffffff)
 write(4, 0x130, 0) # ApplLimit
 write(4, 0x908, 0x70000000) # CurStackBase
 mem[0x910:0x910+5] = b'\x04Sort'
-write(2, 0xa5a, 1) # CurMap = app map
+write(4, 0xa50, 0) # TopMapHndl
 write(4, 0xa1c, newhandle(6)) # empty MenuList
 write(2, 0x210, get_macos_dnum(systemfolder)) # BootDrive
 write(4, 0x316, 0) # we don't implement the 'MPGM' interface
@@ -2871,11 +3070,8 @@ write(2, vcb + 78, 2) # vcbVRefNum
 write_pstring(vcb + 44, onlyvolname) # vcbVName
 
 # Make an a5 world
-abovea5, belowa5, jtsize, jtoffset = struct.unpack_from('>LLLL', code0)
 a5world = 0x80000
 write(4, regs + 8 * 4 + 5 * 4, a5world); write(4, 0x904, a5world)
-mem[a5world+jtoffset:a5world+jtoffset+jtsize] = code0[16:16+jtsize]
-pc = a5world + jtoffset + 2
 
 # Disable the status window in preferences
 prefs = systemfolder/'Preferences'/'MPW'/'ToolServer Prefs'
@@ -2907,6 +3103,60 @@ write(4, a5world + 16, hdl) # segment loader puts it here too
 
 (tmppath/'stdin.out').touch()
 (tmppath/'stdin.err').touch()
+
+# Do some prep that requires loading code
+
+push(2, callback_trap_word)
+pc = get_sp()
+
+@oneoff_callback
+def open_toolserver():
+    global pc
+
+    push(2, callback_trap_word)
+    push(2, 0xa81a) # _HOpenResFile
+    pc = get_sp()
+
+    toolserver = Path(sys.argv[1]).resolve()
+    push(32, 0); filenameptr = get_sp()
+    write_pstring(filenameptr, toolserver.name.replace(':', '/'))
+
+    push(2, 0) # space for return, we don't use it
+    push(2, 2) # vRefNum
+    push(4, get_macos_dnum(toolserver.parent)) # dirID
+    push(4, filenameptr)
+    push(2, 0) # permission
+
+    @oneoff_callback
+    def load_code():
+        global pc
+
+        write(2, 0xa58, read(2, 0xa5a)) # SysMap = CurMap
+
+        push(2, callback_trap_word)
+        push(2, 0xa9a0) # _GetResource
+        pc = get_sp()
+
+        push(4, 0) # space for returned CODE 0 handle
+        push(4, int.from_bytes(b'CODE', 'big'))
+        push(2, 0)
+
+        @oneoff_callback
+        def run_code():
+            global pc
+
+            handle = pop(4)
+            if not handle: 1/0
+            pointer = read(4, handle)
+
+            jtsize = read(4, pointer + 8)
+            jtoffset = read(4, pointer + 12)
+
+            memcpy(a5world + jtoffset, pointer + 16, jtsize)
+
+            pc = a5world + jtoffset + 2
+            push(2, 0xa9f4) # _ExitToShell
+            push(4, get_sp()) # ...which is where we will return
 
 try:
     run_m68k_interpreter()
