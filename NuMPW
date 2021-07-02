@@ -2169,6 +2169,10 @@ def settrapaddress_trap(trap, d0, a0, a1):
 
 # Resource Manager Toolbox traps
 
+@trap('toolbox', 0x1af)
+def reserror_trap():
+    write(2, get_sp(), read(2, 0xa60))
+
 @trap('toolbox', 0x197)
 def openresfile_trap():
     strarg = pop(4)
@@ -2267,6 +2271,56 @@ def iter_resource_maps(top_only=False):
             if top_only: break
 
         handle = read(4, pointer + 16)
+
+def iter_map(handle):
+    pointer = read(4, handle)
+
+    refbase = pointer + read(2, pointer + 24)
+    namebase = pointer + read(2, pointer + 26)
+    type_count = (read(2, refbase) + 1) & 0xffff
+
+    for type_entry in range(refbase + 2, refbase + 2 + 8*type_count, 8):
+        if read(4, type_entry).to_bytes(4, 'big') == type:
+            res_count = (read(2, type_entry + 4) + 1) & 0xffff
+            res_entry = refbase + read(2, type_entry + 6)
+
+            for res_entry in range(res_entry, res_entry + 12*res_count, 12):
+                yield type_entry, res_entry
+
+@trap('toolbox', 0x19e)
+def counttypes_trap():
+    write(2, get_sp(), len(resource_types(False)))
+
+@trap('toolbox', 0x1c)
+def count1types_trap():
+    write(2, get_sp(), len(resource_types(True)))
+
+@trap('toolbox', 0x19f)
+def getindtype_trap():
+    ind = pop(2)
+    retptr = pop(4)
+    types = list(resource_types(False))
+    try: type = types[(ind - 1) & 0xffff]
+    except IndexError: type = 0
+    write(4, retptr, type)
+
+@trap('toolbox', 0xf)
+def get1indtype_trap():
+    ind = pop(2)
+    retptr = pop(4)
+    types = list(resource_types(True))
+    try: type = types[(ind - 1) & 0xffff]
+    except IndexError: type = 0
+    write(4, retptr, type)
+
+def resource_types(top_only):
+    types = set()
+
+    for map in iter_resource_maps(top_only):
+        for type_entry, res_entry in iter_map(map):
+            types.add(read(4, type_entry))
+
+    return types
 
 def resource_in_map(handle, type, id=None, name=None): # return type_entry, resource_entry
     pointer = read(4, handle)
