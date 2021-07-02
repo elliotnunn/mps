@@ -754,7 +754,7 @@ def run_m68k_interpreter():
 
 debug_segment_list = []
 def roughly_where_we_are(pc):
-    retval = f'{pc}:x'
+    retval = f'{pc:x}'
 
     for seg_num, start, end in reversed(debug_segment_list):
         if start <= pc < end:
@@ -769,6 +769,9 @@ def roughly_where_we_are(pc):
                         if len(trystring) == strlen and all(0x20 < x < 0x7f for x in trystring):
                             retval += f' {trystring.decode("mac_roman")}-{i+2-pc:x}'
                     break
+
+    if mem[pc:pc+2] == b'\xaa\x69':
+        retval += ' callback:' + my_callbacks[-1].__name__
 
     retval += f' {mem[pc:pc+2].hex()}'
 
@@ -2174,6 +2177,17 @@ def openresfile_trap():
     push(2, 0) # zero permission
     hopenresfile_trap()
 
+@trap('toolbox', 0x1c4)
+def openrfperm_trap():
+    permission = pop(2)
+    vRefNum = pop(2)
+    fileName = pop(4)
+    push(2, vRefNum)
+    push(4, 0) # dirID
+    push(4, fileName)
+    push(2, permission)
+    hopenresfile_trap()
+
 @trap('toolbox', 0x1a)
 def hopenresfile_trap():
     global pc
@@ -2403,6 +2417,8 @@ def getresource_common(id_or_name, top_only):
         new_pointer = read(4, new_handle)
         mem[new_pointer:new_pointer+len(data)] = data
 
+        write(4, resource_entry + 8, new_handle)
+
         write(4, get_sp(), new_handle)
 
 @trap('toolbox', 0x194)
@@ -2438,6 +2454,31 @@ def geticon_trap():
 def getpicture_trap():
     push(4, int.from_bytes(b'PICT', 'big'))
     getresource_trap()
+
+@trap('toolbox', 0x1a4)
+def homeresfile_trap():
+    handle = pop(4)
+
+    for map_handle in iter_resource_maps(top_only=False):
+        map_pointer = read(4, map_handle)
+        refnum = read(2, map_pointer + 20)
+        ref_table = map_pointer + read(2, map_pointer + 24)
+        type_count = (read(2, ref_table) + 1) & 0xffff
+
+        for i in range(type_count):
+            type_entry = ref_table + 2 + 8*i
+            res_count = (read(2, type_entry + 4) + 1) & 0xffff
+            first_res_entry = ref_table + read(2, type_entry + 6)
+
+            for j in range(res_count):
+                res_entry = first_res_entry + 12*j
+                res_handle = read(4, res_entry + 8)
+
+                if res_handle == handle:
+                    write(2, get_sp(), refnum)
+
+    write(2, get_sp(), -1)
+    write(2, 0xa60, -192) # resNotFound
 
 # Segment Loader Toolbox traps
 
@@ -2841,6 +2882,7 @@ trap('toolbox', 0x175)(tb_nop_ret0l_trap)       # _TickCount
 trap('toolbox', 0x179)(tb_pop2_trap)            # _CouldDialog
 trap('toolbox', 0x17b)(tb_nop_trap)             # _InitDialogs
 trap('toolbox', 0x17c)(tb_pop10_ret0l_trap)     # _GetNewDialog
+trap('toolbox', 0x199)(tb_pop2_trap)            # _UpdateResFile
 trap('toolbox', 0x19b)(tb_pop2_trap)            # _SetResLoad
 trap('toolbox', 0x1a3)(tb_pop4_trap)            # _ReleaseResource
 trap('toolbox', 0x1b4)(tb_nop_trap)             # _SystemTask
@@ -2848,6 +2890,8 @@ trap('toolbox', 0x1bd)(tb_pop10_ret0l_trap)     # _GetNewWindow
 trap('toolbox', 0x1c0)(tb_pop2_ret0l_trap)      # _GetNewMBar
 trap('toolbox', 0x1c8)(tb_nop_trap)             # _SysBeep
 trap('toolbox', 0x1cc)(tb_nop_trap)             # _TEInit
+trap('toolbox', 0x1e5)(tb_pop2_trap)            # _InitPack
+trap('toolbox', 0x1e6)(tb_nop_trap)             # _InitAllPacks
 trap('toolbox', 0x1f1)(tb_pop4_trap)            # _UnloadSeg
 trap('toolbox', 0x1fa)(tb_nop_ret0l_trap)       # _UnlodeScrap
 trap('toolbox', 0x1fb)(tb_nop_ret0l_trap)       # _LodeScrap
