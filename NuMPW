@@ -752,49 +752,27 @@ def run_m68k_interpreter():
             e.args = (hex(inst),) + e.args
             raise
 
+debug_segment_list = []
 def roughly_where_we_are(pc):
-    # This might be adapted to shell out to a disassembler?
-    is_after_NV = False
-    for i in reversed(range(pc-1000, pc+2, 2)):
-        if mem[i:i+2] == b'NV':
-            is_after_NV = True
-            break
-#         elif mem[i:i+2] in (b'Nu', b'\x4e\xd0'):
-#             is_after_NV = False
-#             break
+    retval = f'{pc}:x'
 
-    is_before_rts = False
-    for j in range(pc+2, pc+1000, 2):
-        if mem[j:j+2] == b'NV':
-            is_before_rts = False
-            break
-        elif mem[j:j+2] in (b'Nu', b'\x4e\xd0'):
-            is_before_rts = True
-            break
+    for seg_num, start, end in reversed(debug_segment_list):
+        if start <= pc < end:
+            retval += f' seg{seg_num:x}+{pc-start:x}'
 
-#     print(is_after_NV, is_before_rts)
+            for i in range(pc, end, 2):
+                if i + 4 >= len(mem): break
+                if mem[i:i+2] in (b'Nu', b'\x4e\xd0'):
+                    if 0x81 <= mem[i+2] < 0xc0:
+                        strlen = mem[i+2] & 0x7f
+                        trystring = mem[i+3:i+3+strlen]
+                        if len(trystring) == strlen and all(0x20 < x < 0x7f for x in trystring):
+                            retval += f' {trystring.decode("mac_roman")}-{i+2-pc:x}'
+                    break
 
-    if is_after_NV and is_before_rts and j+2 < len(mem) and mem[j+2] & 0x80:
-        funcname = mem[j+3:j+3+(mem[j+2] & 0x7f)].decode('mac_roman')
-        funcname += '+' + hex(pc-i)
-    else:
-        funcname = '<unknownfunc>'
+    retval += f' {mem[pc:pc+2].hex()}'
 
-    # Find out which segment this is:
-#     found = '<unknownseg>'
-#     for segment in resource_chain[1]:
-#         if len(segment) == 6:
-#             ptr = read(4, segment[5])
-#             endptr = ptr + len(segment[4])
-#             if ptr <= pc < endptr:
-#                 found = 'seg-' + str(segment[1])
-#                 if segment[2]: found += '-' + segment[2].decode('mac_roman')
-#                 found += '+' + hex(pc - ptr)
-#                 break
-
-    return hex(pc) + ' ' + funcname + ' ' + (mem[pc:pc+2].hex())
-
-    # search backwards and confirm we are after an 'NV'
+    return retval
 
 def print_state():
 #     global pc, x, n, z, v, c
@@ -2301,7 +2279,7 @@ def resource_in_map(handle, type, id=None, name=None): # return type_entry, reso
             res_entry = refbase + read(2, type_entry + 6)
 
             for res_entry in range(res_entry, res_entry + 12*res_count, 12):
-                res_id = read(2, res_entry)
+                res_id = signed(2, read(2, res_entry))
                 res_name = read(2, res_entry + 2)
 
                 if res_id == id or (res_name != 0xffff and read_pstring(namebase + res_name) == name):
@@ -2503,6 +2481,8 @@ def loadseg_trap():
 
         seg_handle = pop(4)
         seg_ptr = read(4, seg_handle)
+
+        debug_segment_list.append((seg_num, seg_ptr, seg_ptr + heap_blocks[seg_ptr]))
 
         first = read(2, seg_ptr) # index of first entry within jump table
         count = read(2, seg_ptr + 2) # number of jump table entries
