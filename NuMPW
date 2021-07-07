@@ -2359,28 +2359,6 @@ def resource_ids(top_only, type):
 
     return list(ids)
 
-# id and type are both unsigned ints
-def resource_in_map(handle, type, id=None, name=None): # return type_entry, resource_entry
-    pointer = read(4, handle)
-
-    refbase = pointer + read(2, pointer + 24)
-    namebase = pointer + read(2, pointer + 26)
-    type_count = (read(2, refbase) + 1) & 0xffff
-
-    for type_entry in range(refbase + 2, refbase + 2 + 8*type_count, 8):
-        if read(4, type_entry) == type:
-            res_count = (read(2, type_entry + 4) + 1) & 0xffff
-            res_entry = refbase + read(2, type_entry + 6)
-
-            for res_entry in range(res_entry, res_entry + 12*res_count, 12):
-                res_id = read(2, res_entry)
-                res_name = read(2, res_entry + 2)
-
-                if res_id == id or (res_name != 0xffff and read_pstring(namebase + res_name) == name):
-                    return type_entry, res_entry
-
-    return None, None
-
 # This is some truly awful code.
 def map_insert_resource(handle, type, id): # return type_entry, resource_entry
     pointer = read(4, handle)
@@ -2528,9 +2506,15 @@ def getresource_common(type, id=None, name=None, top_only=False):
     write(4, get_sp(), 0)
     write(2, 0xa60, 0) # ResErr = noErr
 
-    for map_handle in iter_resource_maps(top_only=top_only):
-        type_entry, resource_entry = resource_in_map(map_handle, type, id=id, name=name)
-        if type_entry: break
+    iterator = ((mh, te, re) for mh in iter_resource_maps(top_only=top_only) for te, re in iter_map(mh))
+
+    for map_handle, type_entry, resource_entry in iterator:
+        if read(4, type_entry) == type:
+            if id is not None and id == read(2, resource_entry):
+                break
+            if name is not None and name == get_resource_name(map_handle, resource_entry):
+                break
+
     else:
         # We failed...
         write(2, 0xa60, -192) # ResErr = resNotFound
