@@ -2142,6 +2142,16 @@ def stripaddress_trap(trap, d0, a0, a1):
         d0 &= 0xffffff
     return d0
 
+@trap('os', 0x69)
+@clears_memerr
+def hgetstate_trap(trap, d0, a0, a1):
+    return read(1, a0 - 5)
+
+@trap('os', 0x6a)
+@sets_memerr_to_d0
+def hsetstate_trap(trap, d0, a0, a1):
+    write(1, a0 - 5, d0)
+
 # Trap Manager OS traps
 
 # For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
@@ -2256,7 +2266,7 @@ def hopenresfile_trap():
 #         return list(func(*args, **kw))
 #     return wrapper
 #
-def iter_resource_maps(top_only=False):
+def iter_resource_maps(top_only=False, include_inactive=False):
     curmap = read(2, 0xa5a) # CurMap
     handle = read(4, 0xa50) # TopMapHndl
 
@@ -2265,7 +2275,7 @@ def iter_resource_maps(top_only=False):
     while handle != 0:
         pointer = read(4, handle)
 
-        if seen_top_map or curmap == read(2, pointer + 20):
+        if include_inactive or seen_top_map or curmap == read(2, pointer + 20):
             yield handle
             seen_top_map = True
             if top_only: break
@@ -2280,20 +2290,29 @@ def iter_map(handle):
     type_count = (read(2, refbase) + 1) & 0xffff
 
     for type_entry in range(refbase + 2, refbase + 2 + 8*type_count, 8):
-        if read(4, type_entry).to_bytes(4, 'big') == type:
-            res_count = (read(2, type_entry + 4) + 1) & 0xffff
-            res_entry = refbase + read(2, type_entry + 6)
+        res_count = (read(2, type_entry + 4) + 1) & 0xffff
+        res_entry = refbase + read(2, type_entry + 6)
 
-            for res_entry in range(res_entry, res_entry + 12*res_count, 12):
-                yield type_entry, res_entry
+        for res_entry in range(res_entry, res_entry + 12*res_count, 12):
+            yield type_entry, res_entry
 
 @trap('toolbox', 0x19e)
 def counttypes_trap():
-    write(2, get_sp(), len(resource_types(False)))
+    write(2, get_sp(), len(resource_types(top_only=False)))
 
 @trap('toolbox', 0x1c)
 def count1types_trap():
-    write(2, get_sp(), len(resource_types(True)))
+    write(2, get_sp(), len(resource_types(top_only=True)))
+
+@trap('toolbox', 0x19c)
+def countresources():
+    type = pop(4)
+    write(2, get_sp(), len(resource_ids(top_only=False, type=type)))
+
+@trap('toolbox', 0xd)
+def count1resources():
+    type = pop(4)
+    write(2, get_sp(), len(resource_ids(top_only=True, type=type)))
 
 @trap('toolbox', 0x19f)
 def getindtype_trap():
@@ -2316,12 +2335,23 @@ def get1indtype_trap():
 def resource_types(top_only):
     types = set()
 
-    for map in iter_resource_maps(top_only):
+    for map in iter_resource_maps(top_only=top_only):
         for type_entry, res_entry in iter_map(map):
             types.add(read(4, type_entry))
 
-    return types
+    return list(types)
 
+def resource_ids(top_only, type):
+    ids = set()
+
+    for map in iter_resource_maps(top_only=top_only):
+        for type_entry, res_entry in iter_map(map):
+            if read(4, type_entry) == type:
+                ids.add(read(2, res_entry))
+
+    return list(ids)
+
+# id and type are both unsigned ints
 def resource_in_map(handle, type, id=None, name=None): # return type_entry, resource_entry
     pointer = read(4, handle)
 
@@ -2330,12 +2360,12 @@ def resource_in_map(handle, type, id=None, name=None): # return type_entry, reso
     type_count = (read(2, refbase) + 1) & 0xffff
 
     for type_entry in range(refbase + 2, refbase + 2 + 8*type_count, 8):
-        if read(4, type_entry).to_bytes(4, 'big') == type:
+        if read(4, type_entry) == type:
             res_count = (read(2, type_entry + 4) + 1) & 0xffff
             res_entry = refbase + read(2, type_entry + 6)
 
             for res_entry in range(res_entry, res_entry + 12*res_count, 12):
-                res_id = signed(2, read(2, res_entry))
+                res_id = read(2, res_entry)
                 res_name = read(2, res_entry + 2)
 
                 if res_id == id or (res_name != 0xffff and read_pstring(namebase + res_name) == name):
@@ -2398,36 +2428,99 @@ def map_insert_resource(handle, type, id): # return type_entry, resource_entry
 
     return pointer + type_entry, pointer + res_entry
 
-@trap('toolbox', 0x1f)
-def get1resource_trap():
-    getresource_common('id', True)
+def get_resource_name(map_handle, res_entry_ptr):
+    map_ptr = read(4, map_handle)
+    name_list_ptr = map_ptr + read(2, map_ptr + 26)
 
-@trap('toolbox', 0x20)
-def get1namedresource_trap():
-    getresource_common('name', True)
+    name_offset = read(2, res_entry_ptr + 2)
+    if name_offset == 0xffff:
+        return None
+    else:
+        return read_pstring(name_list_ptr + name_offset)
+
+def set_resource_name(map_handle, res_entry_ptr, name):
+    if name is None:
+        write(2, res_entry_ptr + 2, 0xffff)
+
+    else:
+        name_list_offset = read(2, read(4, map_handle) + 26) # from start of map
+        name_offset = gethandlesize(map_handle) # from start of map
+        write(2, res_entry_ptr + 2, name_offset - name_list_offset)
+
+        # after set_handle_size, all pointers into the map are invalid
+        set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
+        write_pstring(read(4, map_handle) + name_offset, name)
+
+@trap('toolbox', 0x1a8)
+def getresinfo_trap():
+    nameptr = pop(4)
+    typeptr = pop(4)
+    idptr = pop(4)
+    handle = pop(4)
+
+    for map in iter_resource_maps(top_only=False, include_inactive=True):
+        for type_entry, res_entry in iter_map(map):
+            if read(4, res_entry + 8) == handle:
+                if nameptr: write_pstring(nameptr, get_resource_name(map, res_entry) or '')
+                if typeptr: write(4, typeptr, read(4, type_entry))
+                if idptr: write(2, idptr, read(2, res_entry))
+
+                write(2, 0xa60, 0) # ResErr = noErr
+                return
+
+    write(2, 0xa60, -192) # ResErr = resNotFound
 
 @trap('toolbox', 0x1a0)
 def getresource_trap():
-    getresource_common('id', False)
+    id = pop(2)
+    type = pop(4)
+    getresource_common(type, id=id, top_only=False)
+
+@trap('toolbox', 0x1f)
+def get1resource_trap():
+    id = pop(2)
+    type = pop(4)
+    getresource_common(type, id=id, top_only=True)
 
 @trap('toolbox', 0x1a1)
 def getnamedresource_trap():
-    getresource_common('name', False)
+    name = read_pstring(pop(4))
+    type = pop(4)
+    getresource_common(type, name=name, top_only=False)
 
-def getresource_common(id_or_name, top_only):
+@trap('toolbox', 0x20)
+def get1namedresource_trap():
+    name = read_pstring(pop(4))
+    type = pop(4)
+    getresource_common(type, name=name, top_only=True)
+
+@trap('toolbox', 0x19d)
+def getindresource_trap():
+    idx = pop(2)
+    type = pop(4)
+
+    ids = resource_ids(top_only=False, type=type)
+    id = ids[idx - 1] if (1 <= idx <= len(ids)) else None
+
+    getresource_common(type, id=id, top_only=False)
+
+@trap('toolbox', 0xe)
+def get1indresource_trap():
+    idx = pop(2)
+    type = pop(4)
+
+    ids = resource_ids(top_only=True, type=type)
+    id = ids[idx - 1] if (1 <= idx <= len(ids)) else None
+
+    getresource_common(type, id=id, top_only=False)
+
+def getresource_common(type, id=None, name=None, top_only=False):
     global pc
 
+    write(4, get_sp(), 0)
     write(2, 0xa60, 0) # ResErr = noErr
 
-    if id_or_name == 'id':
-        id = signed(2, pop(2))
-        name = None
-    else:
-        id = None
-        name = read_pstring(pop(4))
-    type = pop(4).to_bytes(4, 'big')
-
-    for map_handle in iter_resource_maps(top_only):
+    for map_handle in iter_resource_maps(top_only=top_only):
         type_entry, resource_entry = resource_in_map(map_handle, type, id=id, name=name)
         if type_entry: break
     else:
@@ -2471,6 +2564,7 @@ def getresource_common(id_or_name, top_only):
         new_pointer = read(4, new_handle)
         mem[new_pointer:new_pointer+len(data)] = data
 
+        write(1, new_handle - 5, 0x20) # set resourceBit
         write(4, resource_entry + 8, new_handle)
 
         write(4, get_sp(), new_handle)
@@ -2513,26 +2607,36 @@ def getpicture_trap():
 def homeresfile_trap():
     handle = pop(4)
 
-    for map_handle in iter_resource_maps(top_only=False):
-        map_pointer = read(4, map_handle)
-        refnum = read(2, map_pointer + 20)
-        ref_table = map_pointer + read(2, map_pointer + 24)
-        type_count = (read(2, ref_table) + 1) & 0xffff
-
-        for i in range(type_count):
-            type_entry = ref_table + 2 + 8*i
-            res_count = (read(2, type_entry + 4) + 1) & 0xffff
-            first_res_entry = ref_table + read(2, type_entry + 6)
-
-            for j in range(res_count):
-                res_entry = first_res_entry + 12*j
-                res_handle = read(4, res_entry + 8)
-
-                if res_handle == handle:
-                    write(2, get_sp(), refnum)
+    for map in iter_resource_maps(top_only=False, include_inactive=True):
+        for type_entry, res_entry in iter_map(map):
+            if read(4, res_entry + 8) == handle:
+                map_pointer = read(4, map)
+                refnum = read(2, map_pointer + 20)
+                write(2, get_sp(), refnum)
+                write(2, 0xa60, 0) # ResError = noErr
+                return
 
     write(2, get_sp(), -1)
-    write(2, 0xa60, -192) # resNotFound
+    write(2, 0xa60, -192) # ResError = resNotFound
+
+@trap('toolbox', 0x1a5)
+def sizersrc_trap():
+    handle = pop(4)
+
+    for map in iter_resource_maps(top_only=False, include_inactive=True):
+        for type_entry, res_entry in iter_map(map):
+            if read(4, res_entry + 8) == handle:
+                map_pointer = read(4, map)
+                refnum = read(2, map_pointer + 20)
+                offset = read(4, map_pointer) + (read(4, res_entry + 4) & 0xffffff)
+                size = int.from_bytes(filebuffers[refnum][offset:offset+4], 'big')
+
+                write(4, get_sp(), size)
+                write(2, 0xa60, 0) # ResError = noErr
+                return
+
+    write(2, get_sp(), -1)
+    write(2, 0xa60, -192) # ResError = resNotFound
 
 # Segment Loader Toolbox traps
 
@@ -2897,8 +3001,6 @@ trap('os', 0x4b)(sets_memerr_to_d0(os_0_trap))  # _SetGrowZone
 trap('os', 0x4d)(sets_memerr_to_d0(os_00_trap)) # _PurgeMem
 trap('os', 0x63)(sets_memerr_to_d0(os_00_trap)) # _MaxApplZone
 trap('os', 0x64)(sets_memerr_to_d0(os_0_trap))  # _MoveHHi
-trap('os', 0x69)(os_0_trap)                     # _HGetState
-trap('os', 0x6a)(os_0_trap)                     # _HSetState
 
 def tb_nop_trap(): pass
 def tb_pop2_trap(): pop(2)
