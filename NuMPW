@@ -2577,6 +2577,10 @@ def getresource_common(type, id=None, name=None, top_only=False):
 
         write(4, get_sp(), new_handle)
 
+        # hook to patch CODE for speed hacks, might need better checks
+        if type == 0x434f4445:
+            speed_hack_segment(new_pointer, data_len)
+
 @trap('toolbox', 0x194)
 def curresfile_trap():
     curmap = read(2, 0xa5a) # CurMap global
@@ -3150,6 +3154,52 @@ def lineAF(inst):
         mpw_ftrap(inst)
 
 lineA = lineF = lineAF # cheating cleverly
+
+########################################################################
+# Speed hacks
+########################################################################
+
+speed_hack_list = []
+
+@trap('toolbox', 0x26a)
+def speed_hack_trap():
+    n = read(4, regs) # d0
+    speed_hack_list[n][1]()
+
+def speed_hack_segment(ptr, length):
+    for i, (code, func) in enumerate(speed_hack_list):
+        loc = mem.find(code, ptr, ptr + length)
+        if loc != -1:
+            write(2, loc, 0x7000 | i)
+            write(2, loc + 2, 0xae6a) # autoPop bit
+
+def speed_hack(code):
+    def decorator(func):
+        speed_hack_list.append((code, func))
+        return func
+    return decorator
+
+@speed_hack(
+    b'\x20\x2f\x00\x04'   # move.l     $0004(a7),d0
+    b'\x67\x1c'           # beq.s      *+$001e
+    b'\x20\x40'           # movea.l    d0,a0
+    b'\x22\x40'           # movea.l    d0,a1
+    b'\x34\x3c\x00\xff'   # move.w     #$00ff,d2
+    b'\x12\x10'           # move.b     (a0),d1
+    b'\x10\xc0'           # move.b     d0,(a0)+
+    b'\x10\x01'           # move.b     d1,d0
+    b'\x57\xca\xff\xf8'   # dbeq       d2,*-$0006
+    b'\x22\x08'           # move.l     a0,d1
+    b'\x20\x09'           # move.l     a1,d0
+    b'\x92\x80'           # sub.l      d0,d1
+    b'\x53\x01'           # subq.b     #1,d1
+    b'\x12\x81'           # move.b     d1,(a1)
+    b'\x4e\x75')          # rts
+def c2pstring_hack():
+    ptr = read(4, get_sp())
+    len = min(mem.index(0, ptr) - ptr, 255)
+    mem[ptr+1:ptr+len+1] = mem[ptr:ptr+len]
+    mem[ptr] = len
 
 ########################################################################
 # Initialise an MPW environment
