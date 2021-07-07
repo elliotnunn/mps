@@ -1530,6 +1530,14 @@ def readwrite_trap(trap, d0, a0, a1):
         ioActCount = ioReqCount
         buf[mark:mark+ioActCount] = mem[ioBuffer:ioBuffer+ioActCount]
         write(4, fcb + 8, len(buf)) # fcbEOF
+
+        # special case for standard streams
+        fname = read_pstring(fcb + 62)
+        if fname in ('stdin.out', 'stdin.err'):
+            if read(4, fcb + 58) == get_macos_dnum(tmppath): # fcbDirID
+                stream = (sys.stdout if fname.endswith('out') else sys.stderr)
+                stream.write(mem[ioBuffer:ioBuffer+ioActCount].replace(b'\r', b'\n').decode('mac_roman'))
+
     else: # _Read
         ioActCount = min(ioReqCount, fcbEOF - mark)
         mem[ioBuffer:ioBuffer+ioActCount] = buf[mark:mark+ioActCount]
@@ -3333,8 +3341,5 @@ except SystemExit: # happens when we reach ExitToShell
 finally:
     for ioRefNum in everyfref:
         close_trap(-1, -1, -1, -1, ioRefNum=ioRefNum)
-
-    for name, stream in (('stdin.out', sys.stdout), ('stdin.err', sys.stderr)):
-        stream.write((tmppath/name).read_text(encoding='mac_roman').replace('\r', '\n'))
 
     tmp.cleanup()
