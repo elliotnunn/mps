@@ -1,5 +1,16 @@
 package main
 
+import (
+	"fmt"
+	"io/ioutil"
+// 	"random"
+	"regexp"
+// 	"shutil"
+// 	"struct"
+// 	"unicodedata"
+    "bits"
+)
+
 //#######################################################################
 // 68000 interpreter: minimal user-mode implementation
 //
@@ -10,140 +21,143 @@ package main
 // - define lineA(), lineF(), check_for_lurkers() somewhere outside this block
 //#######################################################################
 
-class IllegalInstruction(Exception): pass
-
-}
 // Emulator state: set to something better than this before running
-regs = 0
-pc = 0
-x = n = z = v = c = 0
-mem = bytearray()
+var pc uint32
+const regs = 0x80000
+var x, n, z, v, c bool
+var mem []byte
 
-func read(numbytes, addr) {
-    mem[addr] // canary in the coalmine
-    return int.from_bytes(mem[addr:addr+numbytes], "big")
+func read(numbytes int, addr uint32) (val uint32) {
+    for i := range numbytes {
+        val <<= 8
+        val += mem[addr+i]
+    }
 }
 
-func write(numbytes, addr, val) {
-    val &= (1 << (numbytes * 8)) - 1
-    mem[addr:addr+numbytes] = val.to_bytes(numbytes, "big")
+func write(numbytes int, addr uint32, val uint32) {
+    for i := range numbytes {
+        mem[addr+i] = byte(val)
+        val >>= 8
+    }
 }
 
-func push(size, data) {
+func push(size int, data uint32) {
     ptr := address_by_mode(39, size) // -(A7)
     write(size, ptr, data)
 }
 
-func pop(size) {
+func pop(size int) uint32 {
     ptr := address_by_mode(31, size) // (A7)+
     return read(size, ptr)
 }
 
-func get_sp() {
+func get_sp() uint32 {
     return read(4, regs + 60)
 }
 
-func set_sp(val) {
+func set_sp(val uint32) {
     write(4, regs + 60, val)
 }
 
-func signed(size, n) bool {
-    return n - ((n & (1 << (size * 8 - 1))) << 1)
+func signed(size int, n uint32) int32 {
+    shift := 32 - (8 * size)
+    return (int32(n) << shift) >> shift
 }
 
-func add_then_set_vc(a, b, size) {
-    bitsize := size * 8
-    signbit := 1 << (bitsize - 1)
-    mask := (1 << bitsize) - 1
-    a &= mask
-    b &= mask
-    result := (a + b) & mask
-    v := (a & signbit) == (b & signbit) != (result & signbit)
-    c := result < a // could use result < b just as easily
-    return result
+func add_then_set_vc(a uint32, b uint32, size int) (result uint32) {
+    result = a + b
+    signbit = 1 << ((size * 8) - 1)
+    v = (a & signbit) == (b & signbit) != (result & signbit)
+    c = result < a // could use result < b just as easily
 }
 
-func sub_then_set_vc(a, b, size): // subtract b from a
-    bitsize := size * 8
-    signbit := 1 << (bitsize - 1)
-    mask := (1 << bitsize) - 1
-    a &= mask
-    b &= mask
-    result := (a - b) & mask
-    v := (a & signbit) != (b & signbit) == (result & signbit)
-    c := a < b
-    return result
+func sub_then_set_vc(a uint32, b uint32, size int) { // subtract b from a
+    result = a - b
+    signbit = 1 << ((size * 8) - 1)
+    v = (a & signbit) == (b & signbit) != (result & signbit)
+    c = a < b
 }
 
-func set_nz(num, size) {
-    bitsize := size * 8
-    n := bool(num & (1 << (bitsize - 1)))
-    z := (num == 0)
+func set_nz(num uint32, size int) {
+//    global n, z
+    bitsize = size * 8
+    n = bool(num & (1 << (bitsize - 1)))
+    z = num == 0
 }
 
-func get_ccr() {
-    return (x << 4) | (n << 3) | (z << 2) | (v << 1) | c
+func get_ccr() (ccr uint32) {
+    for shift, value := range []bool{c, v, z, n, x} {
+        if value {
+            ccr |= (1 << shift)
+        }
+    }
 }
 
 func set_ccr(to_byte) {
-    x := bool(to_byte & 16)
-    n := bool(to_byte & 8)
-    z := bool(to_byte & 4)
-    v := bool(to_byte & 2)
-    c := bool(to_byte & 1)
+    x = to_byte & 16 != 0
+    n = to_byte & 8 != 0
+    z = to_byte & 4 != 0
+    v = to_byte & 2 != 0
+    c = to_byte & 1 != 0
 }
 
-// side effects: predecrement/postincrement, advance pc to get extension word
-func address_by_mode(mode, size): // mode given by bottom 6 bits
+func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
+    // side effects: predecrement/postincrement, advance pc to get extension word
 
-    if mode < 16: // Dn or An -- optimise common case slightly
-        return regs + (mode & 15) * 4 + 4 - size
-    } else if mode >> 3 == 2: // (An)
-        return read(4, regs + 32 + (mode & 7) * 4)
-    } else if mode >> 3 == 3: // (An)+
+    if mode < 16 { // Dn or An -- optimise common case slightly
+        ptr = regs + (mode & 15) * 4 + 4 - size
+    } else if mode >> 3 == 2 { // (An)
+        ptr = read(4, regs + 32 + (mode & 7) * 4)
+    } else if mode >> 3 == 3 { // (An)+
         regptr = regs + 32 + (mode & 7) * 4
-        newptr := ptr = read(4, regptr)
-        newptr += size
-        if mode & 7 == 7 && size == 1: newptr++
+        ptr = read(4, regptr)
+        newptr = ptr + size
+        if mode & 7 == 7 && size == 1 {
+            newptr += 1
         }
         write(4, regptr, newptr)
-    } else if mode >> 3 == 4: // -(An)
+    } else if mode >> 3 == 4 { // -(An)
         regptr = regs + 32 + (mode & 7) * 4
         ptr = read(4, regptr)
         ptr -= size
-        if mode & 7 == 7 && size == 1: ptr--
+        if mode & 7 == 7 && size == 1 {
+            ptr--
         }
         write(4, regptr, ptr)
-    } else if mode >> 3 == 5: // d16(An)
+    } else if mode >> 3 == 5 { // d16(An)
         regptr = regs + 32 + (mode & 7) * 4
         ptr = read(4, regptr) + signed(2, read(2, pc)); pc += 2
-    } else if mode >> 3 == 6: // d8(An,Xn)
+    } else if mode >> 3 == 6 { // d8(An,Xn)
         ptr = regs + 32 + (mode & 7) * 4
         ptr = read(4, ptr) // get An
-        //
+
         xreg = read(1, pc); pc++
         xofs = signed(1, read(1, pc)); pc++
         whichreg = regs + (xreg >> 4) * 4 // could be D or A
-        if xreg & 8: rofs = signed(4, read(4, whichreg))
-        } else: rofs = signed(2, read(2, whichreg + 2))
+        if xreg & 8 {
+            rofs = signed(4, read(4, whichreg))
+        } else {
+            rofs = signed(2, read(2, whichreg + 2))
         }
         ptr += xofs + rofs
-    } else if mode == 58: // d16(PC)
+    } else if mode == 58 { // d16(PC)
         ptr = pc + signed(2, read(2, pc)); pc += 2
-    } else if mode == 59: // d8(PC,Xn)
+    } else if mode == 59 { // d8(PC,Xn)
         ptr = pc
         xreg = read(1, pc); pc++
         xofs = signed(1, read(1, pc)); pc++
         whichreg = regs + (xreg >> 4) * 4 // could be D or A
-        if xreg & 8: rofs = signed(4, read(4, whichreg))
-        } else: rofs = signed(2, read(2, whichreg + 2))
+        if xreg & 8 {
+            rofs = signed(4, read(4, whichreg))
+        } else {
+            rofs = signed(2, read(2, whichreg + 2))
         }
         ptr += xofs + rofs
-    } else if mode == 56: // abs.W
+    } else if mode == 56 { // abs.W
         ptr = read(2, pc); pc += 2
-    } else if mode == 57: // abs.L
+    } else if mode == 57 { // abs.L
         ptr = read(4, pc); pc += 4
-    } else if mode == 60: // #imm
+    } else if mode == 60 { // #imm
         if size == 1 {
             ptr = pc + 1; pc += 2
         } else if size == 2 {
@@ -152,121 +166,126 @@ func address_by_mode(mode, size): // mode given by bottom 6 bits
             ptr = pc; pc += 4
         }
     } else {
-        raise IllegalInstruction(fmt.Sprintf("reserved address mode %s", bin)(mode)[2:].zfill(3))
-
+        panic("reserved addressing mode")
     }
-    return ptr
 }
 
-func test_condition(cond) bool {
-    if cond == 0: // T true
+func test_condition(int cond) bool {
+    if cond == 0 { // T true
         return true
-    } else if cond == 1: // F false
+    } else if cond == 1 { // F false
         return false
-    } else if cond == 2: // HI higher than
+    } else if cond == 2 { // HI higher than
         return !(c || z)
-    } else if cond == 3: // LS lower or same
+    } else if cond == 3 { // LS lower or same
         return c || z
-    } else if cond == 4: // CC carry clear aka HS
+    } else if cond == 4 { // CC carry clear aka HS
         return !c
-    } else if cond == 5: // CS carry set aka LS
+    } else if cond == 5 { // CS carry set aka LS
         return c
-    } else if cond == 6: // NE not equal
+    } else if cond == 6 { // NE not equal
         return !z
-    } else if cond == 7: // EQ equal
+    } else if cond == 7 { // EQ equal
         return z
-    } else if cond == 8: // VC overflow clear
+    } else if cond == 8 { // VC overflow clear
         return !v
-    } else if cond == 9: // VS overflow set
+    } else if cond == 9 { // VS overflow set
         return v
-    } else if cond == 10: // PL plus
+    } else if cond == 10 { // PL plus
         return !n
-    } else if cond == 11: // MI minus
+    } else if cond == 11 { // MI minus
         return n
-    } else if cond == 12: // GE greater or equal
+    } else if cond == 12 { // GE greater or equal
         return n == v
-    } else if cond == 13: // LT less than
+    } else if cond == 13 { // LT less than
         return !(n == v)
-    } else if cond == 14: // GT greater than
+    } else if cond == 14 { // GT greater than
         return n == v && !z
-    } else if cond == 15: // LE less or equal
+    } else if cond == 15 { // LE less or equal
         return n != v || z
     }
 }
 
-func line0(inst) {
-    if inst & 256 || inst >> 9 == 4: // btst,bchg,bclr,bset (or movep)
-        if inst & 256: // bit numbered by data register
-            if (inst >> 3) & 7 == 1: raise IllegalInstruction("movep")
+func line0(inst uint16) {
+    if inst & 256 || inst >> 9 == 4 { // btst,bchg,bclr,bset (or movep)
+        if inst & 256 { // bit numbered by data register
+            if (inst >> 3) & 7 == 1 {
+                panic("movep")
             }
-            dn := inst >> 9
-            bit = read(4, regs + dn * 4)
-        } else: // bit numbered by immediate
+            dn = inst >> 9
+            bit := read(4, regs + dn * 4)
+        } else { // bit numbered by immediate
             bit = read(2, pc); pc += 2
-
         }
-        mode := inst & 63
-        if mode >> 3 <= 1: size = 4 // applies to register
-        } else: size = 1 // applies to memory address
 
+        mode = inst & 63
+        if mode >> 3 <= 1 {
+            size = 4 // applies to register
+        } else {
+            size = 1 // applies to memory address
         }
         bit %= size * 8
-        mask := 1 << bit
+        mask = 1 << bit
 
-        ptr := address_by_mode(mode, size)
+        ptr = address_by_mode(mode, size)
         val = read(size, ptr)
-        z := !(val & mask)
+        z = !(val & mask)
 
-        if (inst >> 6) & 3 == 1: // bchg
+        if (inst >> 6) & 3 == 1 { // bchg
             val ^= mask
-        } else if (inst >> 6) & 3 == 2: // bclr
-            val &= ~mask
-        } else if (inst >> 6) & 3 == 3: // bset
+        } else if (inst >> 6) & 3 == 2 { // bclr
+            val &= ^mask
+        } else if (inst >> 6) & 3 == 3 { // bset
             val |= mask
         }
         // ^^ the btst case is already handled by setting z
 
         write(size, ptr, val)
 
-    } else: //ori,andi,subi,addi,eori -- including to SR/CCR
-        size := (1,2,4,nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("ori/andi/subi/addi/eori size=%11")
+    } else { //ori,andi,subi,addi,eori -- including to SR/CCR
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {
+            raise("ori/andi/subi/addi/eori size=%11")
         }
-        src_ptr := address_by_mode(60, size) // '#imm' mode, advances pc
-        imm := read(size, src_ptr)
+
+        src_ptr = address_by_mode(60, size) // '#imm' mode, advances pc
+        imm = read(size, src_ptr)
 
         // now, are we operating on a special mode?
-        dest_mode := inst & 63
-        if dest_mode == 60: // '#imm' actually means CCR/SR
+        dest_mode = inst & 63
+        if dest_mode == 60 { // '#imm' actually means CCR/SR
             // for addi/subi this would simply be invalid
             val = get_ccr()
         } else {
-            dest_ptr := address_by_mode(dest_mode, size)
+            dest_ptr = address_by_mode(dest_mode, size)
             val = read(size, dest_ptr)
 
         }
-        if inst >> 9 == 0: // ori
+        if inst >> 9 == 0 { // ori
             val |= imm
-            v = c = 0
+            v = false
+            c = false
             set_nz(val, size)
-        } else if inst >> 9 == 1: // andi
+        } else if inst >> 9 == 1 { // andi
             val &= imm
-            v = c = 0
+            v = false
+            c = false
             set_nz(val, size)
-        } else if inst >> 9 == 2: // subi
+        } else if inst >> 9 == 2 { // subi
             val = sub_then_set_vc(val, imm, size)
             x = c
             set_nz(val, size)
-        } else if inst >> 9 == 3: // addi
+        } else if inst >> 9 == 3 { // addi
             val = add_then_set_vc(val, imm, size)
             x = c
             set_nz(val, size)
-        } else if inst >> 9 == 5: // eori
+        } else if inst >> 9 == 5 { // eori
             val ^= imm
-            v = c = 0
+            v = false
+            c = false
             set_nz(val, size)
-        } else if inst >> 9 == 6: // cmpi: same as subi, but don't set
-            fake_val := sub_then_set_vc(val, imm, size)
+        } else if inst >> 9 == 6 { // cmpi: same as subi, but don't set
+            fake_val = sub_then_set_vc(val, imm, size)
             set_nz(fake_val, size)
 
         }
@@ -278,243 +297,248 @@ func line0(inst) {
     }
 }
 
-func line123(inst): // move, and movea which is a special-ish case
-    size = (nil, 1, 4, 2)[(inst >> 12) & 3]
-    if size == nil: raise IllegalInstruction("move size=%00")
+func line123(inst uint16) { // move, and movea which is a special-ish case
+//    global v, c
+    size = []int{0, 1, 4, 2}[(inst >> 12) & 3]
+    if size == 0 {panic("move size=%00")
     }
-    dest_mode := ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
-    src_mode := inst & 63
+    dest_mode = ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
+    src_mode = inst & 63
 
     src := address_by_mode(src_mode, size)
-    datum := signed(size, read(size, src))
+    datum = signed(size, read(size, src))
 
-    if dest_mode >> 3 == 1: // movea: sign extend to 32 bits
-        size := 4
-    } else: // non-movea: set condition codes
-        v := c = 0
+    if dest_mode >> 3 == 1 { // movea: sign extend to 32 bits
+        size = 4
+    } else { // non-movea: set condition codes
+        v = false
+        c = false
         set_nz(datum, size)
 
     }
-    dest := address_by_mode(dest_mode, size)
+    dest = address_by_mode(dest_mode, size)
     write(size, dest, datum)
 }
 
-func line4(inst): // very,crowded,line
-    if (inst >> 6) & 63 == 3: // move from sr
+func line4(inst uint16) { // very,crowded,line
+//    global pc, x, n, z, v, c
+
+    if (inst >> 6) & 63 == 3 { // move from sr
         dest = address_by_mode(inst & 63, 2) // sr is 2 bytes
         write(2, dest, get_ccr())
-    } else if (inst >> 6) & 63 in (19, 27): // move to sr/ccr
-        size = 1 if (inst >> 6) & 63 == 19 else 2 // ccr or sr?
+    } else if (inst >> 6) & 0x3f == 0x37 { // move to sr/ccr
+        if (inst >> 6) & 8 != 0 {
+            size = 1 // ccr
+        } else {
+            size = 2 // sr
+        }
         src = address_by_mode(inst & 63, size)
         set_ccr(read(size, src))
-    } else if (inst >> 8) & 15 in (0, 4, 6): // negx,neg,not
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("negx/neg/not size=%11")
+    } else if (inst >> 8) & 15 == 0 || (inst >> 8) & 15 == 4 || (inst >> 8) & 15 == 6 { // negx,neg,not
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("negx/neg/not size=%11")
         }
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
 
-        if (inst >> 8) & 15 == 0: // negx
+        if (inst >> 8) & 15 == 0 { // negx
             datum = sub_then_set_vc(0, datum+x, size)
             x = c
             set_nz(datum, size)
-        } else if (inst >> 8) & 15 == 4: // neg
+        } else if (inst >> 8) & 15 == 4 { // neg
             datum = sub_then_set_vc(0, datum, size)
             x = c
             set_nz(datum, size)
-        } else: // not
-            datum = ~datum
-            v = c = false
+        } else { // not
+            datum = ^datum
+            v = false
+            c = false
             set_nz(datum, size)
-
         }
         write(size, dest, datum)
 
-    } else if (inst >> 8) & 15 == 2: // clr
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("clr size=%11")
+    } else if (inst >> 8) & 15 == 2 { // clr
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("clr size=%11")
         }
         dest = address_by_mode(inst & 63, size)
 
-        n := false
-        z := true
+        n = false
+        z = true
         v = false
-        c := false
+        c = false
 
         write(size, dest, 0)
-
-    } else if inst & 0xFB8 == 0x880: // ext
-        size = 4 if inst & 64 else 2
+    } else if inst & 0xFB8 == 0x880 { // ext
+        if inst & 64 != 0 {
+            size = 4
+        } else {
+            size = 2
+        }
         dn = inst & 7
-        src = regs + dn * 4 + 4 - size//2
+        src = regs + dn * 4 + 4 - size/2
         dest = regs + dn * 4 + 4 - size
-        datum = signed(size//2, read(size//2, src))
+        datum = signed(size/2, read(size/2, src))
         set_nz(datum, size)
-        v = c = false
+        v = false
+        c = false
         write(size, dest, datum)
-
-    } else if inst & 0xFF8 == 0x840: // swap.w
+    } else if inst & 0xFF8 == 0x840 { // swap.w
         dn = inst & 7
         dest = regs + dn * 4
         datum = read(4, dest)
         datum = ((datum >> 16) & 0xFFFF) | ((datum & 0xFFFF) << 16)
         set_nz(datum, 4)
-        v = c = false
+        v = false
+        c = false
         write(4, dest, datum)
-
-    } else if inst & 0xFC0 == 0x840: // pea -- notice similarity to swap.w
+    } else if inst & 0xFC0 == 0x840 { // pea -- notice similarity to swap.w
         ea = address_by_mode(inst & 63, 4) // size doesn't matter here
         push(4, ea)
-
-    } else if inst & 0xF00 == 0xA00: // tst,tas
-        size, is_tas = ((1,0), (2,0), (4,0), (1,1))[(inst >> 6) & 3]
+    } else if inst & 0xF00 == 0xA00 { // tst,tas
+        size = []int{1, 2, 4, 1}[(inst >> 6) & 3]
+        is_tas = (inst >> 6) & 3 == 3
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
         set_nz(datum, size)
-        v = c = false
-        if is_tas: write(1, dest, datum | 0x80)
-
+        v = false
+        c = false
+        if is_tas {
+            write(1, dest, datum | 0x80)
         }
-    } else if inst & 0xFF8 == 0xE50: // link
+    } else if inst & 0xFF8 == 0xE50 { // link
         an = inst & 7; an_ea = regs + 32 + an * 4
-        imm := signed(2, read(2, pc)); pc += 2
+        imm = signed(2, read(2, pc)); pc += 2
 
         push(4, read(4, an_ea)) // move.l a6,-(sp)
-        sp := read(4, regs+60)
+        sp = read(4, regs+60)
         write(4, an_ea, sp) // move.l sp,a6
         write(4, regs+60, sp + imm) // add.w #imm,sp
 
-    } else if inst & 0xFF8 == 0xE58: // unlk
+    } else if inst & 0xFF8 == 0xE58 { // unlk
         an = inst & 7; an_ea = regs + 32 + an * 4
 
         write(4, regs+60, read(4, an_ea)) // move.l a6,sp
         write(4, an_ea, pop(4)) // move.l (sp)+,a6
-
-    } else if inst & 0xFFF == 0xE71: // nop
-        pass
-
-    } else if inst & 0xFFF == 0xE75: // rts
+    } else if inst & 0xFFF == 0xE71 { // nop
+    } else if inst & 0xFFF == 0xE75 { // rts
         check_for_lurkers()
         pc = pop(4)
-
-    } else if inst & 0xFFF == 0xE77: // rtr
+    } else if inst & 0xFFF == 0xE77 { // rtr
         set_ccr(pop(2))
         pc = pop(4)
-
-    } else if inst & 0xF80 == 0xE80: // jsr/jmp
-        targ := address_by_mode(inst & 63, 4) // any size
+    } else if inst & 0xF80 == 0xE80 { // jsr/jmp
+        targ = address_by_mode(inst & 63, 4) // any size
         if !inst & 0x40 {
             check_for_lurkers() // don't slow down jmp's, we do them a lot
             push(4, pc)
         }
         pc = targ
-
-    } else if inst & 0xF80 == 0x880: // movem registers,ea
-        size = 4 if inst & 64 else 2
+    } else if inst & 0xB80 == 0x880 { // movem
+        if inst & 64 != 0 {
+            size = 4
+        } else {
+            size = 2
+        }
+        dir_to_reg = inst & 0x400 != 0
         which = read(2, pc); pc += 2
-        totalsize = sum(size if (which & (1 << n)) else 0 for n := range(16))
         mode = inst & 63
-        ptr = address_by_mode(mode, totalsize)
 
-        if mode >> 3 == 4: // reverse the bits if predecrementing
-            which = sum(0x8000 >> n if (which & (1 << n)) else 0 for n := range(16))
+        is_predecrement = mode >> 3 == 4
 
+        if is_predecrement {
+            which = bits.Reverse16(which)
         }
-        for reg := range(16) {
-            if which & (1 << reg) {
-                regptr = regs + reg * 4 + 4 - size
-                write(size, ptr, read(size, regptr))
-                ptr += size
-
-            }
-        }
-    } else if inst & 0xF80 == 0xC80: // movem ea,registers
-        size = 4 if inst & 64 else 2
-        which = read(2, pc); pc += 2
-        totalsize = sum(size if (which & (1 << n)) else 0 for n := range(16))
-        mode = inst & 63
-        ptr = address_by_mode(mode, totalsize)
-
-        for reg := range(16) {
-            if which & (1 << reg) {
-                // if postincrementing, then do not load the base register
-                if !(reg >= 8 && mode >> 3 == 3 && reg & 7 == mode & 7) {
-                    regptr = regs + reg * 4
-                    write(4, regptr, signed(size, read(size, ptr)))
-                }
-                ptr += size
-
-            }
-        }
-    } else if inst & 0x1C0 == 0x1C0: // lea
+//
+//         if is_predecrement: regsave = mem[regs:regs+64]
+//         }
+//         ptr = address_by_mode(mode, len(which) * size)
+//         if is_predecrement: mem[regs:regs+64] = regsave
+//
+//         }
+//         for _, reg := range which {
+//             if dir_to_reg {
+//                 datum = signed(size, read(size, ptr)); ptr += size
+//                 write(4, regs+reg*4, datum)
+//             } else {
+//                 datum = read(size, regs + reg * 4 + 4 - size)
+//                 write(size, ptr, datum); ptr += size
+//
+//             }
+//         }
+//         if is_predecrement: address_by_mode(mode, len(which) * size) // delay the side effect
+//
+//         }
+    } else if inst & 0x1C0 == 0x1C0 { // lea
         an = (inst >> 9) & 7
         ea = address_by_mode(inst & 63, 4) // any size
         write(4, regs + 32 + an * 4, ea)
-
-    } else if inst & 0x1C0 == 0x180: // chk
+    } else if inst & 0x1C0 == 0x180 { // chk
         dn = (inst >> 9) & 7
-        testee := signed(2, read(2, regs + 4 * dn + 2))
+        testee = signed(2, read(2, regs + 4 * dn + 2))
         ea = address_by_mode(inst & 63, 2)
-        ubound := signed(2, read(2, ea))
+        ubound = signed(2, read(2, ea))
         if !0 <= testee <= ubound: raise ValueError("chk failed") // raise exception
         }
     }
 }
 
-func line5(inst): // addq,subq,scc,dbcc
-    if (inst >> 6) & 3 != 3: // addq,subq
-        size := 1 << ((inst >> 6) & 3)
+func line5(inst uint16) { // addq,subq,scc,dbcc
+//    global pc, x, n, z, v, c
+    if (inst >> 6) & 3 != 3 { // addq,subq
+        size = 1 << ((inst >> 6) & 3)
         if size == 2 && (inst >> 3) & 7 == 1: size = 4 // An.w is really An.l
 
         }
-        imm := ((inst >> 9) & 7) || 8
+        imm = ((inst >> 9) & 7) || 8
 
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
-        save_ccr := x, n, z, v, c
-        if inst & 256: // subq
-            datum = sub_then_set_vc(datum, imm, size)
-        } else: // addq
+        save_ccr = x, n, z, v, c
+        if inst & 256 { // subq
+            datum := sub_then_set_vc(datum, imm, size)
+        } else { // addq
             datum = add_then_set_vc(datum, imm, size)
         }
-        x := c
+        x = c
         set_nz(datum, size)
         if (inst >> 3) & 7 == 1: x, n, z, v, c = save_ccr // touch not ccr if dest is An
         }
         write(size, dest, datum)
 
-    } else if (inst >> 3) & 7 == 1: // dbcc
+    } else if (inst >> 3) & 7 == 1 { // dbcc
         check_for_lurkers()
 
-        disp := signed(2, read(2, pc)) - 2; pc += 2
+        disp = signed(2, read(2, pc)) - 2; pc += 2
 
         cond = (inst >> 8) & 15 // if cond satisfied then DO NOT take loop
         if test_condition(cond): return
 
         }
         // decrement the counter (dn)
-        dn := inst & 7
+        dn = inst & 7
         dest = regs + dn * 4 + 2
-        counter := (read(2, dest) - 1) & 0xFFFF
+        counter = (read(2, dest) - 1) & 0xFFFF
         write(2, dest, counter)
         if counter == 0xFFFF: return // do not take the branch
 
         }
         pc += disp
 
-    } else: // scc
+    } else { // scc
         dest = address_by_mode(inst & 63, 1)
         cond = (inst >> 8) & 15
         write(1, dest, 0xFF * test_condition(cond))
     }
 }
 
-func line6(inst): // bra,bsr,bcc
+func line6(inst uint16) { // bra,bsr,bcc
+//    global pc
 
     check_for_lurkers()
 
     disp = signed(1, inst & 255)
-    if disp == 0: // word displacement
+    if disp == 0 { // word displacement
         disp = signed(2, read(2, pc)) - 2; pc += 2
 
     }
@@ -522,43 +546,45 @@ func line6(inst): // bra,bsr,bcc
     if cond > 1 && !test_condition(cond): return // not taken
 
     }
-    if cond == 1: // is bsr
+    if cond == 1 { // is bsr
         push(4, pc)
 
     }
     pc += disp
 }
 
-func line7(inst): // moveq
-    dn := (inst >> 9) & 7
-    val := signed(1, inst & 255)
-    n := (val < 0); z = (val == 0); v = c = 0
+func line7(inst uint16) { // moveq
+//    global n, z, v, c
+    dn = (inst >> 9) & 7
+    val = signed(1, inst & 255)
+    n = (val < 0); z = (val == 0); v = c = 0
     write(4, regs + dn * 4, val)
 }
 
-func line8(inst): // divu,divs,sbcd,or
-    if inst & 0x1F0 == 0x100: // sbcd
-        raise IllegalInstruction("sbcd")
-    } else if inst & 0x0C0 == 0x0C0: // divu,divs
-        is_signed := bool(inst & 0x100)
-        ea := address_by_mode(inst & 63, 2)
-        divisor := read(2, ea)
+func line8(inst uint16) { // divu,divs,sbcd,or
+//    global n, z, v, c
+    if inst & 0x1F0 == 0x100 { // sbcd
+        panic("sbcd")
+    } else if inst & 0x0C0 == 0x0C0 { // divu,divs
+        is_signed = bool(inst & 0x100)
+        ea = address_by_mode(inst & 63, 2)
+        divisor = read(2, ea)
         if is_signed: divisor = signed(2, divisor)
         }
         if divisor == 0: 1/0 // div0 error
         }
-        dn := (inst >> 9) & 7
-        dividend := read(4, regs + dn * 4)
+        dn = (inst >> 9) & 7
+        dividend = read(4, regs + dn * 4)
         if is_signed: dividend = signed(4, dividend)
 
         }
         // remainder is 0 or has same sign as dividend
-        quotient := abs(dividend) // abs(divisor)
+        quotient = abs(dividend) // abs(divisor)
         if dividend < 0: quotient = -quotient
         }
         if divisor < 0: quotient = -quotient
         }
-        remainder := abs(dividend) % abs(divisor)
+        remainder = abs(dividend) % abs(divisor)
         if dividend < 0: remainder = -remainder
 
         }
@@ -577,56 +603,58 @@ func line8(inst): // divu,divs,sbcd,or
 
         write(4, regs + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
 
-    } else: // or
-        size := (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("or size=%11")
+    } else { // or
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("or size=%11")
         }
-        src := address_by_mode(inst & 63, size)
-        dn := (inst >> 9) & 7
-        dest := regs + dn * 4 + 4 - size
+        src = address_by_mode(inst & 63, size)
+        dn = (inst >> 9) & 7
+        dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src
 
         }
-        datum := read(size, src) | read(size, dest)
+        datum = read(size, src) | read(size, dest)
         write(size, dest, datum)
         set_nz(datum, size)
-        v = c = false
+        v = false
+        c = false
     }
 }
 
-func line9D(inst): // sub,subx,suba//add,addx,adda: very compactly encoded
+func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encoded
+//    global x, n, z, v, c
     sign = 1 if inst & 0x4000 else -1
-    if inst & 0x0C0 == 0x0C0: // suba,adda
+    if inst & 0x0C0 == 0x0C0 { // suba,adda
         size = 4 if inst & 0x100 else 2
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
         result = signed(4, read(4, regs + 32 + an * 4)) + sign * signed(size, read(size, ea))
         write(4, regs + 32 + an * 4, result)
 
-    } else if inst & 0x130 == 0x100: // subx,addx: only two addressing modes allowed
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("subx/addx size=%11")
+    } else if inst & 0x130 == 0x100 { // subx,addx: only two addressing modes allowed
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("subx/addx size=%11")
         }
-        mode := 32 if inst & 8 else 0 // either -(Ax),-(Ay) or Dx,Dy
+        mode = 32 if inst & 8 else 0 // either -(Ax),-(Ay) or Dx,Dy
         src = address_by_mode(mode | (inst & 7), size)
         dest = address_by_mode(mode | ((inst >> 9) & 7), size)
 
         if sign == 1 {
-            result = add_then_set_vc(read(size, dest), read(size, src) + x, size)
+            result := add_then_set_vc(read(size, dest), read(size, src) + x, size)
         } else {
             result = sub_then_set_vc(read(size, dest), read(size, src) + x, size)
         }
         write(size, dest, result)
         x = c
-        old_z := z; set_nz(result, size); z &= old_z
+        old_z = z; set_nz(result, size); z &= old_z
 
-    } else: // sub,add
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("sub/add size=%11")
+    } else { // sub,add
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("sub/add size=%11")
         }
         src = address_by_mode(inst & 63, size)
-        dn := (inst >> 9) & 7
+        dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
 
         if inst & 0x100: src, dest = dest, src // direction bit does a swap
@@ -642,17 +670,18 @@ func line9D(inst): // sub,subx,suba//add,addx,adda: very compactly encoded
     }
 }
 
-func lineB(inst): // cmpa,cmp,cmpm,eor
-    if inst & 0x0C0 == 0x0C0: // cmpa
+func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
+//    global x, n, z, v, c
+    if inst & 0x0C0 == 0x0C0 { // cmpa
         size = 4 if inst & 0x100 else 2 // size of ea but An is always .L
-        ea := address_by_mode(inst & 63, size)
-        an := (inst >> 9) & 7
+        ea = address_by_mode(inst & 63, size)
+        an = (inst >> 9) & 7
         result = sub_then_set_vc(signed(4, read(4, regs + 32 + an * 4)), signed(size, read(size, ea)), 4)
         set_nz(result, 4)
 
-    } else if inst & 0x100 == 0x000: // cmp
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("cmp size=%11")
+    } else if inst & 0x100 == 0x000 { // cmp
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("cmp size=%11")
         }
         dn = (inst >> 9) & 7
         dest = regs + dn * 4 + 4 - size
@@ -660,67 +689,69 @@ func lineB(inst): // cmpa,cmp,cmpm,eor
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
-    } else if inst & 0x38 == 0x08: // cmpm (Ay)+,(Ax)+
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("cmpm size=%11")
+    } else if inst & 0x38 == 0x08 { // cmpm (Ay)+,(Ax)+
+        size := (1, 2, 4, nil)[(inst >> 6) & 3]
+        if size == 0 {panic("cmpm size=%11")
         }
         src = address_by_mode(24 | (inst & 7), size) // (An)+ mode
         dest = address_by_mode(24 | ((inst >> 9) & 7), size)
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
-    } else: // eor
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("eor size=%11")
+    } else { // eor
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("eor size=%11")
         }
         dn = (inst >> 9) & 7; src = regs + 4 * dn + 4 - size
         dest = address_by_mode(inst & 63, size)
 
         result = read(size, dest) ^ read(size, src)
-        v := c = false
+        v = false
+        c = false
         set_nz(result, size)
         write(size, dest, result)
     }
 }
 
-func lineC(inst) {
-    if inst & 0xC0 == 0xC0: // mulu,muls
-        is_signed := bool(inst & 0x100)
+func lineC(inst uint16) {
+    if inst & 0xC0 == 0xC0 { // mulu,muls
+        is_signed = bool(inst & 0x100)
         src = address_by_mode(inst & 63, 2) // ea.w
         dest = regs + ((inst >> 9) & 7) * 4 // dn.l
 
-        m1 := read(2, dest+2); m2 = read(2, src)
+        m1 = read(2, dest+2); m2 = read(2, src)
         if is_signed {
             m1 = signed(2, m1); m2 = signed(2, m2)
         }
         datum = m1 * m2
         set_nz(datum, 4)
-        v = c = false
+        v = false
+        c = false
         write(4, dest, datum) // write dn.l
 
-    } else if inst & 0x1F0 == 0x100: // abcd
-        raise IllegalInstruction("abcd")
-    } else if inst & 0x1F8 in (0x140, 0x148, 0x188): // exg
+    } else if inst & 0x1F0 == 0x100 { // abcd
+        panic("abcd")
+    } else if inst & 0x1F8 in (0x140, 0x148, 0x188) { // exg
         rx = (inst >> 9) & 7
         ry = inst & 7
-        if inst & 0x1F8 == 0x148: // Ax,Ay
+        if inst & 0x1F8 == 0x148 { // Ax,Ay
             rx |= 8; ry |= 8 // bump the addressing mode from Dn to An
         }
-        if inst & 0x1F8 == 0x188: // Dx,Ay
+        if inst & 0x1F8 == 0x188 { // Dx,Ay
             ry |= 8
 
         }
         rx = address_by_mode(rx, 4)
         ry = address_by_mode(ry, 4)
 
-        vx := read(4, rx)
-        vy := read(4, ry)
-        write(4, rx, vy)
-        write(4, ry, vx)
+        x := read(4, rx)
+        y := read(4, ry)
+        write(4, rx, y)
+        write(4, ry, x)
 
-    } else: // and
-        size = (1, 2, 4, nil)[(inst >> 6) & 3]
-        if size == nil: raise IllegalInstruction("and size=%11")
+    } else { // and
+        size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
+        if size == 0 {panic("and size=%11")
         }
         dn := (inst >> 9) & 7; dest = address_by_mode(dn, size)
         src := address_by_mode(inst & 63, size)
@@ -735,14 +766,15 @@ func lineC(inst) {
     }
 }
 
-func lineE(inst) {
-    size = (1, 2, 4, nil)[(inst >> 6) & 3]
+func lineE(inst uint16) {
+//    global x, n, z, v, c
+    size = []int{1, 2, 4, 0}[(inst >> 6) & 3]
 
-    if size == nil: // single-bit shift on a memory address
-        size := 2
+    if size == nil { // single-bit shift on a memory address
+        size = 2
         kind = (inst >> 9) & 3
         dest = address_by_mode(inst & 63, size)
-        by = 1
+        by := 1
     } else {
         kind = (inst >> 3) & 3
         dest = regs + (inst & 7) * 4 + 4 - size // dn
@@ -754,16 +786,16 @@ func lineE(inst) {
 
         }
     }
-    isleft := bool(inst & 0x100)
+    isleft = bool(inst & 0x100)
 
     v = false // clear V if msb never changes
     c = false // clear C if shift count is zero
 
     result = read(size, dest)
-    mask := (1 << (size * 8)) - 1
-    msb := 1 << (size * 8 - 1)
-    numbits := size * 8
-    if kind == 0: // asl/asr
+    mask = (1 << (size * 8)) - 1
+    msb = 1 << (size * 8 - 1)
+    numbits = size * 8
+    if kind == 0 { // asl/asr
         if isleft {
             for i := range(by) {
                 newresult = (result << 1) & mask
@@ -774,13 +806,13 @@ func lineE(inst) {
             }
         } else {
             for i := range(by) {
-                newresult = result >> 1
+                newresult := result >> 1
                 x = c = bool(result & 1) // shifted-out bit
                 newresult |= result & msb // replicate sign bit
                 result = newresult
             }
         }
-    } else if kind == 1: // lsl/lsr
+    } else if kind == 1 { // lsl/lsr
         v = false
         if isleft {
             for i := range(by) {
@@ -795,7 +827,7 @@ func lineE(inst) {
                 result = newresult
             }
         }
-    } else if kind == 2: // roxl/roxr
+    } else if kind == 2 { // roxl/roxr
         v = false
         if isleft {
             for i := range(by) {
@@ -810,7 +842,7 @@ func lineE(inst) {
                 result = newresult & mask
             }
         }
-    } else if kind == 3: // rol/ror
+    } else if kind == 3 { // rol/ror
         v = false
         if isleft {
             for i := range(by) {
@@ -831,87 +863,83 @@ func lineE(inst) {
 }
 
 func run_m68k_interpreter() {
-    instruction_lines = (line0, line123, line123, line123, line4, line5, line6, line7,
-        line8, line9D, lineA, lineB, lineC, line9D, lineE, lineF)
-    mymem = mem
-
-}
-//     import pdb; pdb.set_trace()
-    for: // need a way to bust out of this loop
-        try {
-            inst = (mymem[pc] << 8) | mymem[pc+1] // the ONLY place the 68k em accesses mem directly
+    for {
+        var inst = (uint16(mymem[pc]) << 8) | mymem[pc+1]
+        pc = pc + 2
+        switch inst >> 12 {
+        case 0:
+            line0(inst)
+        case 1, 2, 3:
+            line123(inst)
+        case 4:
+            line4(inst)
+        case 5:
+            line5(inst)
+        case 6:
+            line6(inst)
+        case 7:
+            line7(inst)
+        case 8:
+            line8(inst)
+        case 9, 0xd:
+            line9D(inst)
+        case 0xa, 0xf:
+            lineAF(inst)
+        case 0xb:
+            lineB(inst)
+        case 0xc:
+            lineC(inst)
+        case 0xe:
+            lineE(inst)
         }
     }
-//             check_for_lurkers()
-//             print_state(); print()
-//             wwe = roughly_where_we_are(pc)
-//             print(wwe); print()
-            pc += 2
-            instruction_lines[inst >> 12](inst)
-        except IllegalInstruction as e {
-            e.args = (hex(inst),) + e.args
-            raise
-
-        }
-debug_segment_list = []
-func roughly_where_we_are(pc) {
-    retval = f"{pc:x}"
-
-    for seg_num, start, end in reversed(debug_segment_list) {
-        if start <= pc < end {
-            retval += f" seg{seg_num:x}+{pc-start:x}"
-
-            for i := range(pc, end, 2) {
-                if i + 4 >= len(mem): break
-                }
-                if mem[i:i+2] in (b"Nu", b"\x4e\xd0") {
-                    if 0x81 <= mem[i+2] < 0xc0 {
-                        strlen := mem[i+2] & 0x7f
-                        trystring := mem[i+3:i+3+strlen]
-                        }
-                        if len(trystring) == strlen && all(0x20 < x < 0x7f for x in trystring) {
-                            retval += f' {trystring.decode("mac_roman")}-{i+2-pc:x}'
-                        }
-                    }
-                    break
-
-                }
-            }
-        }
-    }
-    if mem[pc:pc+2] == b"\xaa\x69" {
-        retval += " callback:" + my_callbacks[-1].__name__
-
-    }
-    retval += f" {mem[pc:pc+2].hex()}"
-
-    return retval
 }
 
-func print_state() {
-    for _, i := range (regs, regs+32) {
-        fmt.Print(" ".join(mem[r:r+4].hex() for r := range(i, i+32, 4)))
-
-    }
-    sp := read(4, regs + 32 + 7 * 4)
-    fmt.Print("sp:", " ".join(mem[r:r+2].hex() for r := range(sp, sp+20, 2)),
-        "ccr:", "xX"[x]+"nN"[n]+"zZ"[z]+"vV"[v]+"cC"[c])
-
-}
-//#######################################################################
-// All imports for use outside the 68k interpreter
-//#######################################################################
-
-import (
-	"fmt"
-	"io/ioutil"
-	"random"
-	"regexp"
-	"shutil"
-	"struct"
-	"unicodedata"
-)
-from pathlib import Path
+// debug_segment_list = []
+// func roughly_where_we_are(pc) {
+//     retval = f"{pc:x}"
+//
+//     for seg_num, start, end in reversed(debug_segment_list) {
+//         if start <= pc < end {
+//             retval += f" seg{seg_num:x}+{pc-start:x}"
+//
+//             for i := range(pc, end, 2) {
+//                 if i + 4 >= len(mem): break
+//                 }
+//                 if mem[i:i+2] in (b"Nu", b"\x4e\xd0") {
+//                     if 0x81 <= mem[i+2] < 0xc0 {
+//                         strlen := mem[i+2] & 0x7f
+//                         trystring := mem[i+3:i+3+strlen]
+//                         }
+//                         if len(trystring) == strlen && all(0x20 < x < 0x7f for x in trystring) {
+//                             retval += f' {trystring.decode("mac_roman")}-{i+2-pc:x}'
+//                         }
+//                     }
+//                     break
+//
+//                 }
+//             }
+//         }
+//     }
+//     if mem[pc:pc+2] == b"\xaa\x69" {
+//         retval += " callback:" + my_callbacks[-1].__name__
+//
+//     }
+//     retval += f" {mem[pc:pc+2].hex()}"
+//
+//     return retval
+// }
+//
+// func print_state() {
+//     for _, i := range (regs, regs+32) {
+//         fmt.Print(" ".join(mem[r:r+4].hex() for r := range(i, i+32, 4)))
+//
+//     }
+//     sp := read(4, regs + 32 + 7 * 4)
+//     fmt.Print("sp:", " ".join(mem[r:r+2].hex() for r := range(sp, sp+20, 2)),
+//         "ccr:", "xX"[x]+"nN"[n]+"zZ"[z]+"vV"[v]+"cC"[c])
+//
+// }
 
 //#######################################################################
 // SANE -- blobs from Mac Plus ROM
@@ -1262,7 +1290,7 @@ func rez_string_literal(string_with_quotes) {
     def sub(m) {
         m = m.group(0)[1:]
 
-        if len(m) == 4: // hexadecimal \0xFF
+        if len(m) == 4 { // hexadecimal \0xFF
             return bytes([int(m[-2:], 16)])
         } else {
             return {
@@ -1712,14 +1740,14 @@ func readwrite_trap(trap, d0, a0, a1) {
     }
     mark := max(min(trymark, fcbEOF), 0)
 
-    if mark != trymark: // forbid mark outside file
+    if mark != trymark { // forbid mark outside file
         write(4, a0 + 46, mark) // ioPosOffset
         write(4, fcb + 16, mark) // fcbCrPs
         write(4, a0 + 40, 0) // ioActCount
         return (-40 if trymark < mark else -39) // pos/eofErr
 
     }
-    if trap & 1: // _Write
+    if trap & 1 { // _Write
         ioActCount := ioReqCount
         buf[mark:mark+ioActCount] = mem[ioBuffer:ioBuffer+ioActCount]
         write(4, fcb + 8, len(buf)) // fcbEOF
@@ -1727,13 +1755,13 @@ func readwrite_trap(trap, d0, a0, a1) {
         // special case for standard streams
         fname := read_pstring(fcb + 62)
         if fname in ("stdin.out", "stdin.err") {
-            if read(4, fcb + 58) == get_macos_dnum(tmppath): // fcbDirID
+            if read(4, fcb + 58) == get_macos_dnum(tmppath) { // fcbDirID
                 stream := (os.Stdout if strings.HasSuffix(fname, "out") else os.Stderr)
                 stream.write(mem[ioBuffer:ioBuffer+ioActCount].replace(b"\`, b`\n").decode("mac_roman"))
 
             }
         }
-    } else: // _Read
+    } else { // _Read
         ioActCount := min(ioReqCount, fcbEOF - mark)
         mem[ioBuffer:ioBuffer+ioActCount] = buf[mark:mark+ioActCount]
 
@@ -1818,7 +1846,7 @@ func delete_trap(trap, d0, a0, a1) {
 }
 @trap("os", 0xc)
 @paramblock
-func getfinfo_trap(trap, d0, a0, a1): // also implements GetCatInfo
+func getfinfo_trap(trap, d0, a0, a1) { // also implements GetCatInfo
     ioFDirIndex := signed(2, read(2, a0 + 28))
     ioNamePtr = read(4, a0 + 18)
 
@@ -1832,7 +1860,7 @@ func getfinfo_trap(trap, d0, a0, a1): // also implements GetCatInfo
 
     // weird case for _HGetFInfo
     if trap & 0xff == 0x0c && trap & 0x200 {
-        if read(2, a0 + 22) != 2: // a non-root wdRefNum overrides dirID
+        if read(2, a0 + 22) != 2 { // a non-root wdRefNum overrides dirID
             number = read(2, a0 + 22)
 
         }
@@ -1942,10 +1970,10 @@ func seteof_trap(trap, d0, a0, a1) {
 @trap("os", 0x14)
 @paramblock
 func getvol_trap(trap, d0, a0, a1) {
-    if trap & 0x200: // HGetVol
+    if trap & 0x200 { // HGetVol
         write(2, a0 + 22, 2) // ioVRefNum = 2
         write(4, a0 + 48, get_macos_dnum(dnums[0])) // ioDirID = number
-    } else: // plain GetVol
+    } else { // plain GetVol
         write(2, a0 + 22, get_macos_dnum(dnums[0])) // ioVRefNum = number
 
     }
@@ -1964,10 +1992,10 @@ func setvol_trap(trap, d0, a0, a1) {
         }
         dnums[0] = get_host_path(string=volname)
 
-    } else if trap & 0x200: // HSetVol
+    } else if trap & 0x200 { // HSetVol
         dnums[0] = dnums[read(4, a0 + 48)] // ioDirID
 
-    } else: // plain SetVol
+    } else { // plain SetVol
         dnums[0] = dnums[read(2, a0 + 22)] // ioVRefNum
 
     }
@@ -1996,9 +2024,9 @@ func setfpos_trap(trap, d0, a0, a1) {
 @paramblock
 func fsdispatch_trap(trap, d0, a0, a1) {
     d0 &= 0xffff // word-size selector
-    if d0 == 0: // FSControl
+    if d0 == 0 { // FSControl
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 1: // OpenWD
+    } else if d0 == 1 { // OpenWD
         // just return dirID as wdRefNum, because we treat them the same
         ioNamePtr := read(4, a0 + 18)
         ioWDDirID := read(4, a0 + 48)
@@ -2006,28 +2034,28 @@ func fsdispatch_trap(trap, d0, a0, a1) {
         ioVRefNum := get_macos_dnum(get_host_path(number=ioWDDirID, string=ioName))
         write(2, a0 + 22, ioVRefNum)
 
-    } else if d0 == 2: // CloseWD
+    } else if d0 == 2 { // CloseWD
         // do nothing
         pass
 
-    } else if d0 == 5: // CatMove
+    } else if d0 == 5 { // CatMove
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 6: // DirCreate
+    } else if d0 == 6 { // DirCreate
         raise NotImplementedError("fsdispatch", d0)
 
-    } else if d0 == 7: // GetWDInfo
+    } else if d0 == 7 { // GetWDInfo
         // the opposite transformation to OpenWD
         ioVRefNum := read(2, a0 + 22)
         write(4, a0 + 48, ioVRefNum) // ioWDDirID
         write(2, a0 + 32, 2) // ioWDVRefNum = 2 (our root)
         write(4, a0 + 28, 0) // ioWDProcID = who cares who created it
 
-    } else if d0 == 8: // GetFCBInfo
+    } else if d0 == 8 { // GetFCBInfo
         ioFCBIndx := read(4, a0 + 28)
 
         if ioFCBIndx == 0 {
             ioRefNum := read(2, a0 + 24)
-        } else: // fcb by indexing among the open ones
+        } else { // fcb by indexing among the open ones
             for _, ioRefNum := range everyfref {
                 if read(4, read(4, 0x34e) + ioRefNum): ioFCBIndx-- // FSFCBPtr
                 }
@@ -2050,39 +2078,39 @@ func fsdispatch_trap(trap, d0, a0, a1) {
         write(4, a0 + 54, 0) // ioFCBClpSiz, don't care
         write(4, a0 + 58, read(4, fcb + 58)) // ioFCBParID
 
-        ioNamePtr := read(4, a0 + 18)
+        ioNamePtr = read(4, a0 + 18)
         if ioNamePtr: write_pstring(ioNamePtr, read_pstring(fcb + 62))
 
         }
-    } else if d0 == 9: // GetCatInfo
+    } else if d0 == 9 { // GetCatInfo
         return getfinfo_trap(trap, d0, a0, a1)
-    } else if d0 == 10: // SetCatInfo
+    } else if d0 == 10 { // SetCatInfo
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 11: // SetVolInfo
+    } else if d0 == 11 { // SetVolInfo
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 12: // SetPMSP
+    } else if d0 == 12 { // SetPMSP
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 13: // SetupWDCB
+    } else if d0 == 13 { // SetupWDCB
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 14: // SetupDef
+    } else if d0 == 14 { // SetupDef
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 15: // ReadWDCB
+    } else if d0 == 15 { // ReadWDCB
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 16: // LockRng
+    } else if d0 == 16 { // LockRng
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 17: // UnlockRng
+    } else if d0 == 17 { // UnlockRng
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 20: // CreateFileIDRef
+    } else if d0 == 20 { // CreateFileIDRef
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 21: // DeleteFileIDRef
+    } else if d0 == 21 { // DeleteFileIDRef
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 22: // ResolveFileIDRef
+    } else if d0 == 22 { // ResolveFileIDRef
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 23: // ExchangeFiles
+    } else if d0 == 23 { // ExchangeFiles
         raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 26: // OpenDF
+    } else if d0 == 26 { // OpenDF
         return open_trap(trap, d0, a0, a1)
-    } else if d0 == 27: // MakeFSSpec
+    } else if d0 == 27 { // MakeFSSpec
         ioVRefNum = read(2, a0 + 22)
         ioDirID = read(4, a0 + 48)
         ioNamePtr = read(4, a0 + 18)
@@ -2098,7 +2126,7 @@ func fsdispatch_trap(trap, d0, a0, a1) {
         write(4, ptr + 2, get_macos_dnum(path.parent))
         write_pstring(ptr + 6, path.name)
 
-    } else: // probably Desktop Manager stuff, ignore for now
+    } else { // probably Desktop Manager stuff, ignore for now
         raise NotImplementedError("fsdispatch", d0)
     }
 }
@@ -2115,6 +2143,8 @@ func fsspec_to_pb(fsspec, pb) {
 }
 @trap("toolbox", 0x252)
 func highlevelhfsdispatch() {
+}
+//    global pc
 
     // ToolServer relies on this to call other traps, which is a problem
     selector := read(1, regs + 3) // d0.b
@@ -2126,8 +2156,8 @@ func highlevelhfsdispatch() {
         ioVRefNum = pop(2)
 
         // Get ready to return when a callback_trap_word is executed
-        return_pc := pc
-        return_sp := get_sp()
+        return_pc = pc
+        return_sp = get_sp()
 
         // Create and populate a param block (longer than it needs to be)
         push(128, 0)
@@ -2148,20 +2178,22 @@ func highlevelhfsdispatch() {
         // Return here when the special word gets called
         @oneoff_callback
         def fsmakefsspec_finish() {
+        }
+    }
+//            global pc
             pc = return_pc
             set_sp(return_sp)
 
             ioResult = read(2, pb + 16)
             write(2, get_sp(), ioResult)
 
-        }
-    } else if selector in (2, 3): // pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
-        refNumPtr := pop(4)
+    else if selector in (2, 3) { // pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
+        refNumPtr = pop(4)
         ioPermssn := pop(2) >> 8
         fsspec := pop(4)
 
         // Get ready to return when a callback_trap_word is executed
-        return_pc := pc
+        return_pc = pc
         return_sp := get_sp()
 
         // Create and populate a param block (longer than it needs to be)
@@ -2180,41 +2212,42 @@ func highlevelhfsdispatch() {
         // Return here when the special word gets called
         @oneoff_callback
         def fspopendf_finish() {
+        }
+    }
+//            global pc
             pc = return_pc
             set_sp(return_sp)
 
-            ioRefnum := read(2, pb + 24)
+            ioRefnum = read(2, pb + 24)
             write(2, refNumPtr, ioRefNum)
-            ioResult := read(2, pb + 16)
+            ioResult = read(2, pb + 16)
             write(2, get_sp(), ioResult)
 
-        }
-    } else if selector == 0x4: // pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
+    else if selector == 0x4 { // pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
         pass
-    } else if selector == 0x5: // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
+    } else if selector == 0x5 { // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
         pass
-    } else if selector == 0x6: // pascal OSErr FSpDelete(const FSSpec *spec)
+    } else if selector == 0x6 { // pascal OSErr FSpDelete(const FSSpec *spec)
         pass
-    } else if selector == 0x7: // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
+    } else if selector == 0x7 { // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
         pass
-    } else if selector == 0x8: // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
+    } else if selector == 0x8 { // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
         pass
-    } else if selector == 0x9: // pascal OSErr FSpSetFLock(const FSSpec *spec)
+    } else if selector == 0x9 { // pascal OSErr FSpSetFLock(const FSSpec *spec)
         pass
-    } else if selector == 0xa: // pascal OSErr FSpRstFLock(const FSSpec *spec)
+    } else if selector == 0xa { // pascal OSErr FSpRstFLock(const FSSpec *spec)
         pass
-    } else if selector == 0xb: // pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
+    } else if selector == 0xb { // pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
         pass
-    } else if selector == 0xc: // pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
+    } else if selector == 0xc { // pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
         pass
-    } else if selector == 0xd: // pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
+    } else if selector == 0xd { // pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
         pass
     } else {
         raise NotImplementedError(f"AA52 {hex(selector)}")
 
 
     }
-}
 // Memory Manager OS traps
 
 func sets_memerr_to_d0(func) {
@@ -2266,12 +2299,12 @@ func purgespace_trap(trap, d0, a0, a1) {
     return 0x7ffffffe, 0x7ffffffe // d0=total, a0=contig
 }
 
-func newptr(size): // fixed 16b header before all "heap" blocks
+func newptr(size) { // fixed 16b header before all "heap" blocks
     mem.extend(bytes(0x20000))
     while len(mem) % 16: mem = append(mem, 0)
     }
     mem.extend(bytes(16 + size))
-    retval := len(mem) - size
+    retval = len(mem) - size
     heap_blocks[retval] = size
     return retval
 
@@ -2454,11 +2487,11 @@ func hsetstate_trap(trap, d0, a0, a1) {
 
 // For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
 func trap_kind(trapnum, flags) {
-    if flags & 0x200: // newOS/newTool trap
+    if flags & 0x200 { // newOS/newTool trap
         if flags & 0x400: return trapnum & 0x3ff, "toolbox"
         } else: return trapnum & 0xff, "os"
         }
-    } else: // guess, using traditional trap numbering
+    } else { // guess, using traditional trap numbering
         trapnum &= 0x1ff // 64k ROM had a single 512-entry trap table
         if trapnum <= 0x4f || trapnum in (0x54, 0x57): return trapnum, "os"
         } else: return trapnum, "toolbox"
@@ -2511,6 +2544,8 @@ func openrfperm_trap() {
 }
 @trap("toolbox", 0x1a)
 func hopenresfile_trap() {
+}
+//    global pc
 
     permission := pop(2)
     ioNamePtr := pop(4)
@@ -2534,11 +2569,13 @@ func hopenresfile_trap() {
 
     @oneoff_callback
     def hopenresfile_finish() {
+    }
+//        global pc
         pc := return_pc
         set_sp(return_sp)
 
         ioRefNum := read(2, pb + 24)
-        ioResult := read(2, pb + 16)
+        ioResult = read(2, pb + 16)
 
         write(2, 0xa60, ioResult) // set ResError
         write(2, get_sp(), -1) // return "failed" refnum
@@ -2554,10 +2591,10 @@ func hopenresfile_trap() {
 
         }
         mapstart, maplen = struct.unpack_from(">LxxxxL", forkdata, 4)
-        map := forkdata[mapstart:mapstart+maplen]
+        map = forkdata[mapstart:mapstart+maplen]
 
         map[:16] = forkdata[:16] // copy of header of file
-        maphdl = newhandle(len(map)); mapptr = read(4, maphdl)
+        maphdl := newhandle(len(map)); mapptr = read(4, maphdl)
         mem[mapptr:mapptr+len(map)] = map
 
         write(4, mapptr + 16, read(4, 0xa50)) // point to TopMapHndl
@@ -2568,8 +2605,6 @@ func hopenresfile_trap() {
 
         write(2, get_sp(), ioRefNum) // return refnum
 
-    }
-}
 // def listify(func) {
 //     @wraps(func)
 //     def wrapper(*args, **kw) {
@@ -2577,7 +2612,7 @@ func hopenresfile_trap() {
 //     return wrapper
 //
 func iter_resource_maps(top_only=false, include_inactive=false) {
-    curmap := read(2, 0xa5a) // CurMap
+    curmap = read(2, 0xa5a) // CurMap
     handle = read(4, 0xa50) // TopMapHndl
 
     seen_top_map = false
@@ -2599,13 +2634,13 @@ func iter_resource_maps(top_only=false, include_inactive=false) {
 func iter_map(handle) {
     pointer = read(4, handle)
 
-    refbase := pointer + read(2, pointer + 24)
-    namebase := pointer + read(2, pointer + 26)
-    type_count := (read(2, refbase) + 1) & 0xffff
+    refbase = pointer + read(2, pointer + 24)
+    namebase = pointer + read(2, pointer + 26)
+    type_count = (read(2, refbase) + 1) & 0xffff
 
     for type_entry := range(refbase + 2, refbase + 2 + 8*type_count, 8) {
-        res_count := (read(2, type_entry + 4) + 1) & 0xffff
-        res_entry := refbase + read(2, type_entry + 6)
+        res_count = (read(2, type_entry + 4) + 1) & 0xffff
+        res_entry = refbase + read(2, type_entry + 6)
 
         for res_entry := range(res_entry, res_entry + 12*res_count, 12) {
             yield type_entry, res_entry
@@ -2672,7 +2707,7 @@ func resource_types(top_only) {
 }
 
 func resource_ids(top_only, type) {
-    ids = set()
+    ids := set()
 
     for _, map := range iter_resource_maps(top_only=top_only) {
         for type_entry, res_entry in iter_map(map) {
@@ -2686,13 +2721,13 @@ func resource_ids(top_only, type) {
 
 }
 // This is some truly awful code.
-func map_insert_resource(handle, type, id): // return type_entry, resource_entry
+func map_insert_resource(handle, type, id) { // return type_entry, resource_entry
     pointer := read(4, handle)
     map := mem[pointer:pointer+gethandlesize(handle)]
 
     refbase = read(2, pointer + 24)
     namebase = read(2, pointer + 26)
-    type_count = (read(2, refbase) + 1) & 0xffff
+    type_count := (read(2, refbase) + 1) & 0xffff
 
     type_entry_offsets := list(range(refbase + 2, refbase + 2 + 8*type_count, 8))
     for _, type_entry := range type_entry_offsets {
@@ -2841,20 +2876,22 @@ func getindresource_trap() {
 @trap("toolbox", 0xe)
 func get1indresource_trap() {
     idx := pop(2)
-    type := pop(4)
+    type = pop(4)
 
-    ids := resource_ids(top_only=true, type=type)
+    ids = resource_ids(top_only=true, type=type)
     id = ids[idx - 1] if (1 <= idx <= len(ids)) else nil
 
     getresource_common(type, id=id, top_only=false)
 }
 
 func getresource_common(type, id=nil, name=nil, top_only=false) {
+}
+//    global pc
 
     write(4, get_sp(), 0)
     write(2, 0xa60, 0) // ResErr = noErr
 
-    iterator := ((mh, te, re) for mh in iter_resource_maps(top_only=top_only) for te, re in iter_map(mh))
+    iterator = ((mh, te, re) for mh in iter_resource_maps(top_only=top_only) for te, re in iter_map(mh))
 
     for map_handle, type_entry, resource_entry in iterator {
         if read(4, type_entry) == type {
@@ -2887,11 +2924,11 @@ func getresource_common(type, id=nil, name=nil, top_only=false) {
     data_offset += read(4, resource_entry + 4) & 0xffffff // three byte field
     data_len, = struct.unpack_from(">L", filedata, data_offset)
     data_offset += 4
-    data = filedata[data_offset:data_offset+data_len]
+    data := filedata[data_offset:data_offset+data_len]
 
     // Run NewHandle, allowing ToolServer patches to run
     return_pc := pc
-    return_sp := get_sp()
+    return_sp = get_sp()
 
     push(2, callback_trap_word)
     push(2, 0xa122) // _NewHandle
@@ -2900,12 +2937,14 @@ func getresource_common(type, id=nil, name=nil, top_only=false) {
 
     @oneoff_callback
     def getresource_finish() {
+    }
+//        global pc
 
         pc := return_pc
         set_sp(return_sp)
 
         new_handle := read(4, regs + 32) // a0
-        new_pointer := read(4, new_handle)
+        new_pointer = read(4, new_handle)
         mem[new_pointer:new_pointer+len(data)] = data
 
         write(1, new_handle - 5, 0x20) // set resourceBit
@@ -2918,11 +2957,9 @@ func getresource_common(type, id=nil, name=nil, top_only=false) {
             speed_hack_segment(new_pointer, data_len)
 
         }
-    }
-}
 @trap("toolbox", 0x194)
 func curresfile_trap() {
-    curmap = read(2, 0xa5a) // CurMap global
+    curmap := read(2, 0xa5a) // CurMap global
     pop(2); push(2, curmap)
 
 }
@@ -2963,13 +3000,13 @@ func getpicture_trap() {
 }
 @trap("toolbox", 0x1a4)
 func homeresfile_trap() {
-    handle := pop(4)
+    handle = pop(4)
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
         for type_entry, res_entry in iter_map(map) {
             if read(4, res_entry + 8) == handle {
-                map_pointer := read(4, map)
-                refnum := read(2, map_pointer + 20)
+                map_pointer = read(4, map)
+                refnum = read(2, map_pointer + 20)
                 write(2, get_sp(), refnum)
                 write(2, 0xa60, 0) // ResError = noErr
                 return
@@ -3008,10 +3045,12 @@ func sizersrc_trap() {
 
 @trap("toolbox", 0x1f0)
 func loadseg_trap() {
+}
+//    global pc
 
     seg_num := pop(2)
 
-    jumptable := read(4, regs + 32 + 20) + 32 // $20(a5)
+    jumptable = read(4, regs + 32 + 20) + 32 // $20(a5)
 
     // Do the evil thing where we create a new handle
     return_pc := pc
@@ -3029,14 +3068,16 @@ func loadseg_trap() {
 
     @oneoff_callback
     def loadseg_finish() {
+    }
+//        global pc
 
-        seg_handle := pop(4)
-        seg_ptr = read(4, seg_handle)
+        seg_handle = pop(4)
+        seg_ptr := read(4, seg_handle)
 
         debug_segment_list.append((seg_num, seg_ptr, seg_ptr + heap_blocks[seg_ptr]))
 
-        first = read(2, seg_ptr) // index of first entry within jump table
-        count = read(2, seg_ptr + 2) // number of jump table entries
+        first := read(2, seg_ptr) // index of first entry within jump table
+        count := read(2, seg_ptr + 2) // number of jump table entries
 
         for i := range(count) {
             jt_entry := jumptable + first + 8 * i
@@ -3050,29 +3091,30 @@ func loadseg_trap() {
         pc := return_pc - 6 // re-execute the jump table instruction
         mem[regs:regs+64] = return_regs
 
-    }
-}
 // Package Toolbox traps
 
 @trap("toolbox", 0x1eb)
-func pack4_trap(): // FP68K
+func pack4_trap() { // FP68K
+}
+//    global pc
     push(4, pc); pc = 0xc0000
 
-}
 @trap("toolbox", 0x1ec)
-func pack5_trap(): // Elems68K
+func pack5_trap() { // Elems68K
+}
+//    global pc
     push(4, pc); pc = 0xd0000
 
-}
 @trap("toolbox", 0x1ee)
-func pack7_trap(): // DecStr68K
+func pack7_trap() { // DecStr68K
+}
+//    global pc
     push(4, pc); pc = 0xe0000
 
-}
 // QuickDraw Toolbox traps
 @trap("toolbox", 0x58)
 func bitand_trap() {
-    result := pop(4) & pop(4)
+    result = pop(4) & pop(4)
     pop(4); push(4, result)
 
 }
@@ -3096,7 +3138,7 @@ func bitor_trap() {
 }
 @trap("toolbox", 0x5c)
 func bitshift_trap() {
-    by := signed(2, pop(2))
+    by = signed(2, pop(2))
     result = pop(4)
     if by > 0: result <<= by % 32
     } else: result >>= (-by) % 32
@@ -3130,7 +3172,7 @@ func random_trap() {
 }
 @trap("toolbox", 0x6a)
 func hiword_trap() {
-    x := pop(2); pop(2); pop(2); push(2, x)
+    x = pop(2); pop(2); pop(2); push(2, x)
 
 }
 @trap("toolbox", 0x6b)
@@ -3141,7 +3183,7 @@ func loword_trap() {
 @trap("toolbox", 0x6e)
 func initgraf_trap() {
     a5 := read(4, regs + 32 + 5 * 4)
-    qd := pop(4)
+    qd = pop(4)
     write(4, a5, qd)
     write(4, qd, 0xf8f8f8f8) // illegal thePort address
 
@@ -3159,7 +3201,7 @@ func getport_trap() {
     a5 := read(4, regs + 32 + 5 * 4)
     qd := read(4, a5)
     port = read(4, qd)
-    retaddr := pop(4)
+    retaddr = pop(4)
     write(4, retaddr, port)
 
 }
@@ -3171,7 +3213,7 @@ func setrect_trap() {
 }
 @trap("toolbox", 0xa8)
 func offsetrect_trap() {
-    dv := pop(2); dh = pop(2); rectptr = pop(4)
+    dv = pop(2); dh = pop(2); rectptr = pop(4)
     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
         write(2, rectptr + ptr, read(2, rectptr + ptr) + delta)
 
@@ -3198,7 +3240,7 @@ func debugger_trap() {
 // trap is in toolbox table but actually uses registers
 func syserror_trap() {
     err := signed(2, read(2, regs + 2))
-    if err == -491: // display string on stack
+    if err == -491 { // display string on stack
         raise Exception("_SysError", err, read_pstring(pop(4)))
     }
     raise Exception("_SysError", err)
@@ -3228,7 +3270,7 @@ func sysenvirons_trap(trap, d0, a0, a1) {
 func gestalt_trap(trap, d0, a0, a1) {
     selector := d0.to_bytes(4, "big")
 
-    if trap & 0x600 == 0: // ab=00
+    if trap & 0x600 == 0 { // ab=00
         // _Gestalt
         val := gestalt(selector)
         if val == nil {
@@ -3237,15 +3279,15 @@ func gestalt_trap(trap, d0, a0, a1) {
             return 0, val
 
         }
-    } else if trap & 0x600 == 0x200: // ab=01
+    } else if trap & 0x600 == 0x200 { // ab=01
         // _NewGestalt
         raise Exception(fmt.Sprintf("NewGestalt %r", selector))
 
-    } else if trap & 0x600 == 0x400: // ab=10
+    } else if trap & 0x600 == 0x400 { // ab=10
         // _ReplaceGestalt
         raise Exception(fmt.Sprintf("ReplaceGestalt %r", selector))
 
-    } else: // ab=11
+    } else { // ab=11
         // _GetGestaltProcPtr
         raise Exception(fmt.Sprintf("GetGestaltProcPtr %r", selector))
 
@@ -3254,7 +3296,7 @@ func gestalt_trap(trap, d0, a0, a1) {
 @trap("toolbox", 0x23)
 func aliasdispatch_trap() {
     selector = read(4, regs)
-    if selector == 0: // FindFolder
+    if selector == 0 { // FindFolder
         foundDirID = pop(4); foundVRefNum = pop(4)
         createFolder = pop(2) >> 8
         folderType = pop(4).to_bytes(4, "big")
@@ -3289,12 +3331,12 @@ func cmpstring_trap(trap, d0, a0, a1) {
     l1 = d0 & 0xffff    // corresponds with a1 ptr
     both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode("mac_roman")
 
-    if trap & 0x200: // ignore diacritics
+    if trap & 0x200 { // ignore diacritics
         both = unicodedata.normalize("NFKD", both)
         both = "".join(c for c in both if !unicodedata.combining(c))
 
     }
-    if trap & 0x400: // ignore case
+    if trap & 0x400 { // ignore case
         both = strings.ToLower(both)
 
     }
@@ -3312,7 +3354,7 @@ func getosevent_trap(trap, d0, a0, a1) bool {
 // ToolServer-specific code
 func menukey_trap() bool {
     keycode := pop(2) & 0xff
-    if keycode == 12: // cmd-Q
+    if keycode == 12 { // cmd-Q
         pop(4); push(4, 0x00810005) // quit menu item, hardcoded sadly
         return
 
@@ -3374,7 +3416,7 @@ func ptrtoxhand_trap() {
 }
 @trap("toolbox", 0x1e3)
 func ptrtohand_trap() {
-    srcptr = read(4, regs + 32) // a0
+    srcptr := read(4, regs + 32) // a0
     size = read(4, regs) // d0
     dsthdl = newhandle(size)
     dstptr = read(4, dsthdl)
@@ -3482,16 +3524,17 @@ trap("toolbox", 0x1f1)(tb_pop4_trap)            // _UnloadSeg
 trap("toolbox", 0x1fa)(tb_nop_ret0l_trap)       // _UnlodeScrap
 trap("toolbox", 0x1fb)(tb_nop_ret0l_trap)       // _LodeScrap
 
-func lineAF(inst) {
+func lineAF(inst uint16) {
+}
+//    global pc
 
     check_for_lurkers()
 
-    if inst & 0x800: // Toolbox trap
+    if inst & 0x800 { // Toolbox trap
         trapnum = inst & 0x3ff
         implementation_68k = trap_address_table[0x100 + trapnum]
 
     }
-}
 //         if inst & 0xf000 == 0xf000: # for stress-testing traps
         if inst & 0xf000 == 0xf000 || implementation_68k == ftrap_table_addr + (0x800 + trapnum) * 2 {
             // Non-SetTrapAddress'd A-trap OR direct F-trap
@@ -3510,7 +3553,7 @@ func lineAF(inst) {
             }
             pc = implementation_68k
 
-        } else if inst & 0xf000 == 0xa000 || inst & 0x0f00 == 0: // OS trap
+        } else if inst & 0xf000 == 0xa000 || inst & 0x0f00 == 0 { // OS trap
         // note on the condition above!!!
         trapnum = inst & 0xff
         implementation_68k = trap_address_table[trapnum]
@@ -3551,7 +3594,7 @@ func lineAF(inst) {
             push(4, read(4, regs + 8))          // push d2
             push(4, read(4, regs + 4))          // push d1
             push(4, read(4, regs + 32 + 4))     // push a1
-            if !inst & 0x100: // only if trap word specifies
+            if !inst & 0x100 { // only if trap word specifies
                 push(4, read(4, regs + 32)) // push a0
 
             }
@@ -3560,8 +3603,8 @@ func lineAF(inst) {
 
             pc = implementation_68k
 
-        } else if inst in (0xf300, 0xf301): // OS trap return assistance code
-        if inst & 1: // was this a "save-a0" OS trap word?
+        } else if inst in (0xf300, 0xf301) { // OS trap return assistance code
+        if inst & 1 { // was this a "save-a0" OS trap word?
             write(4, regs + 32 + 0 * 4, pop(4)) // pop a0
         }
         write(4, regs + 32 + 4, pop(4))         // pop a1
@@ -3571,12 +3614,12 @@ func lineAF(inst) {
         set_nz(read(2, regs + 2), 2)        // tst.w d0
         pc = pop(4) // Return to the actual caller
 
-    } else if inst == 0xf302: // Completion routine return assistance code
+    } else if inst == 0xf302 { // Completion routine return assistance code
         write(4, regs,      pop(4)) // pop d0 (result code)
         write(4, regs + 32, pop(4)) // pop a0 (iopb pointer)
         pc = pop(4)
 
-    } else: // Special MPW call
+    } else { // Special MPW call
         mpw_ftrap(inst)
 
     }
@@ -3779,6 +3822,8 @@ pc = get_sp()
 
 @oneoff_callback
 func open_toolserver() {
+}
+//    global pc
 
     push(2, callback_trap_word)
     push(2, 0xa81a) // _HOpenResFile
@@ -3796,6 +3841,8 @@ func open_toolserver() {
 
     @oneoff_callback
     def load_code() {
+    }
+//        global pc
 
         write(2, 0xa58, read(2, 0xa5a)) // SysMap = CurMap
 
@@ -3809,14 +3856,16 @@ func open_toolserver() {
 
         @oneoff_callback
         def run_code() {
+        }
+//            global pc
 
-            handle := pop(4)
+            handle = pop(4)
             if !handle: 1/0
             }
-            pointer := read(4, handle)
+            pointer = read(4, handle)
 
-            jtsize := read(4, pointer + 8)
-            jtoffset := read(4, pointer + 12)
+            jtsize = read(4, pointer + 8)
+            jtoffset = read(4, pointer + 12)
 
             memcpy(a5world + jtoffset, pointer + 16, jtsize)
 
@@ -3824,13 +3873,10 @@ func open_toolserver() {
             push(2, 0xa9f4) // _ExitToShell
             push(4, get_sp()) // ...which is where we will return
 
-        }
-    }
-}
 try {
     run_m68k_interpreter()
 }
-except SystemExit: // happens when we reach ExitToShell
+except SystemExit { // happens when we reach ExitToShell
     pass
 }
 finally {
