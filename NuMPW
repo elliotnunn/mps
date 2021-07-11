@@ -253,7 +253,7 @@ def line0(inst):
             write(size, dest_ptr, val)
 
 def line123(inst): # move, and movea which is a special-ish case
-    global v, c
+    global pc, x, n, z, v, c
     size = (None, 1, 4, 2)[(inst >> 12) & 3]
     if size is None: raise IllegalInstruction('move size=%00')
     dest_mode = ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
@@ -463,7 +463,7 @@ def line5(inst): # addq,subq,scc,dbcc
         write(1, dest, 0xFF * test_condition(cond))
 
 def line6(inst): # bra,bsr,bcc
-    global pc
+    global pc, x, n, z, v, c
 
     check_for_lurkers()
 
@@ -480,14 +480,14 @@ def line6(inst): # bra,bsr,bcc
     pc += disp
 
 def line7(inst): # moveq
-    global n, z, v, c
+    global pc, x, n, z, v, c
     dn = (inst >> 9) & 7
     val = signed(1, inst & 255)
     n = (val < 0); z = (val == 0); v = c = 0
     write(4, regs + dn * 4, val)
 
 def line8(inst): # divu,divs,sbcd,or
-    global n, z, v, c
+    global pc, x, n, z, v, c
     if inst & 0x1F0 == 0x100: # sbcd
         raise IllegalInstruction('sbcd')
     elif inst & 0x0C0 == 0x0C0: # divu,divs
@@ -535,7 +535,7 @@ def line8(inst): # divu,divs,sbcd,or
         v = c = False
 
 def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
-    global x, n, z, v, c
+    global pc, x, n, z, v, c
     sign = 1 if inst & 0x4000 else -1
     if inst & 0x0C0 == 0x0C0: # suba,adda
         size = 4 if inst & 0x100 else 2
@@ -576,7 +576,7 @@ def line9D(inst): # sub,subx,suba//add,addx,adda: very compactly encoded
         write(size, dest, result)
 
 def lineB(inst): # cmpa,cmp,cmpm,eor
-    global x, n, z, v, c
+    global pc, x, n, z, v, c
     if inst & 0x0C0 == 0x0C0: # cmpa
         size = 4 if inst & 0x100 else 2 # size of ea but An is always .L
         ea = address_by_mode(inst & 63, size)
@@ -613,6 +613,7 @@ def lineB(inst): # cmpa,cmp,cmpm,eor
         write(size, dest, result)
 
 def lineC(inst):
+    global pc, x, n, z, v, c
     if inst & 0xC0 == 0xC0: # mulu,muls
         is_signed = bool(inst & 0x100)
         src = address_by_mode(inst & 63, 2) # ea.w
@@ -639,10 +640,10 @@ def lineC(inst):
         rx = address_by_mode(rx, 4)
         ry = address_by_mode(ry, 4)
 
-        x = read(4, rx)
-        y = read(4, ry)
-        write(4, rx, y)
-        write(4, ry, x)
+        vx = read(4, rx)
+        vy = read(4, ry)
+        write(4, rx, vy)
+        write(4, ry, vx)
 
     else: # and
         size = (1, 2, 4, None)[(inst >> 6) & 3]
@@ -658,7 +659,7 @@ def lineC(inst):
         write(size, dest, result)
 
 def lineE(inst):
-    global x, n, z, v, c
+    global pc, x, n, z, v, c
     size = (1, 2, 4, None)[(inst >> 6) & 3]
 
     if size is None: # single-bit shift on a memory address
