@@ -377,32 +377,36 @@ def line4(inst): # very,crowded,line
             push(4, pc)
         pc = targ
 
-    elif inst & 0xB80 == 0x880: # movem
+    elif inst & 0xF80 == 0x880: # movem registers,ea
         size = 4 if inst & 64 else 2
-        dir_to_reg = bool(inst & 0x400)
         which = read(2, pc); pc += 2
+        totalsize = sum(size if (which & (1 << n)) else 0 for n in range(16))
         mode = inst & 63
+        ptr = address_by_mode(mode, totalsize)
 
-        is_predecrement = mode >> 3 == 4
+        if mode >> 3 == 4: # reverse the bits if predecrementing
+            which = sum(0x8000 >> n if (which & (1 << n)) else 0 for n in range(16))
 
-        if is_predecrement: # predecrement, reverse "which"
-            which = [r for r in range(16) if which & (0x8000 >> r)]
-        else:
-            which = [r for r in range(16) if which & (1 << r)]
+        for reg in range(16):
+            if which & (1 << reg):
+                regptr = regs + reg * 4 + 4 - size
+                write(size, ptr, read(size, regptr))
+                ptr += size
 
-        if is_predecrement: regsave = mem[regs:regs+64]
-        ptr = address_by_mode(mode, len(which) * size)
-        if is_predecrement: mem[regs:regs+64] = regsave
+    elif inst & 0xF80 == 0xC80: # movem ea,registers
+        size = 4 if inst & 64 else 2
+        which = read(2, pc); pc += 2
+        totalsize = sum(size if (which & (1 << n)) else 0 for n in range(16))
+        mode = inst & 63
+        ptr = address_by_mode(mode, totalsize)
 
-        for reg in which:
-            if dir_to_reg:
-                datum = signed(size, read(size, ptr)); ptr += size
-                write(4, regs+reg*4, datum)
-            else:
-                datum = read(size, regs + reg * 4 + 4 - size)
-                write(size, ptr, datum); ptr += size
-
-        if is_predecrement: address_by_mode(mode, len(which) * size) # delay the side effect
+        for reg in range(16):
+            if which & (1 << reg):
+                # if postincrementing, then do not load the base register
+                if not (reg >= 8 and mode >> 3 == 3 and reg & 7 == mode & 7):
+                    regptr = regs + reg * 4
+                    write(4, regptr, signed(size, read(size, ptr)))
+                ptr += size
 
     elif inst & 0x1C0 == 0x1C0: # lea
         an = (inst >> 9) & 7
