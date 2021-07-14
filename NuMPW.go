@@ -434,41 +434,50 @@ func line4(inst uint16) { // very,crowded,line
             push(4, pc)
         }
         pc = targ
-    } else if inst & 0xB80 == 0x880 { // movem
-        if inst & 64 != 0 {
+    } else if inst & 0xF80 == 0x880 { // movem registers,ea
+        size := 2
+        if (inst & 64 != 0) {
             size = 4
-        } else {
-            size = 2
         }
-        dir_to_reg = inst & 0x400 != 0
-        which = read(2, pc); pc += 2
-        mode = inst & 63
 
-        is_predecrement = mode >> 3 == 4
+        which := read(2, pc); pc += 2
+        totalsize := bits.OnesCount16(which) * size
 
-        if is_predecrement {
+        mode := inst & 63
+        ptr := address_by_mode(mode, totalsize)
+
+        if mode >> 3 == 4 { // reverse the bits if predecrementing
             which = bits.Reverse16(which)
         }
-//
-//         if is_predecrement: regsave = mem[regs:regs+64]
-//         }
-//         ptr = address_by_mode(mode, len(which) * size)
-//         if is_predecrement: mem[regs:regs+64] = regsave
-//
-//         }
-//         for _, reg := range which {
-//             if dir_to_reg {
-//                 datum = signed(size, read(size, ptr)); ptr += size
-//                 write(4, regs+reg*4, datum)
-//             } else {
-//                 datum = read(size, regs + reg * 4 + 4 - size)
-//                 write(size, ptr, datum); ptr += size
-//
-//             }
-//         }
-//         if is_predecrement: address_by_mode(mode, len(which) * size) // delay the side effect
-//
-//         }
+
+        for reg := 0; reg < 16; reg++ {
+            if which & (1 << reg) != 0 {
+                regptr = regs + reg * 4 + 4 - size
+                write(size, ptr, read(size, regptr))
+                ptr += size
+            }
+        }
+    } else if inst & 0xF80 == 0xC80 { // movem ea,registers
+        size := 2
+        if (inst & 64 != 0) {
+            size = 4
+        }
+
+        which := read(2, pc); pc += 2
+        totalsize := bits.OnesCount16(which) * size
+
+        mode := inst & 63
+        ptr := address_by_mode(mode, totalsize)
+
+        for reg := 0; reg < 16; reg++ {
+            if which & (1 << reg) != 0 {
+                if !(reg >= 8 && mode >> 3 == 3 && reg & 7 == mode & 7) {
+                    regptr := regs + reg * 4 + 4 - size
+                    write(4, regptr, signed(size, read(size, ptr)))
+                }
+                ptr += size
+            }
+        }
     } else if inst & 0x1C0 == 0x1C0 { // lea
         an = (inst >> 9) & 7
         ea = address_by_mode(inst & 63, 4) // any size
