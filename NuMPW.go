@@ -1599,10 +1599,16 @@ func read_cstring(addr uint32) []byte {
 }
 
 func read_pstring(addr uint32) []byte {
+    if addr == 0 {
+        return
+    }
     return mem[addr+1:addr+1+mem[addr]]
 }
 
 func write_pstring(addr uint32, str []byte) {
+    if addr == 0 {
+        return
+    }
     mem[addr] = byte(len(str))
     copy(mem[addr+1:], str)
 }
@@ -1660,7 +1666,7 @@ func listdir(path string) (macfiles [][]byte, errno int) {
     // case and :/ logic missing from here
 }
 
-func get_macos_dnum(path string) {
+func get_macos_dnum(path string) uint16 {
     for idx, maybepath := range dnums[2:] {
         if maybepath == path {
             return idx
@@ -1698,6 +1704,8 @@ func get_vol_or_dir() (num uint16) {
 }
 
 func open_trap() {
+    paramblk_return(0) // by default
+
     fork := 'd'
     if readl(d1ptr) & 0xff == 0xa {
         fork = 'r'
@@ -1754,14 +1762,14 @@ func open_trap() {
     writeb(fcbPtr + 4, flags) // fcbMdRByt
     writel(fcbPtr + 8, len(data)) // fcbEOF
     writel(fcbPtr + 20, 0xa8000) // fcbVPtr
-    writel(fcbPtr + 58, get_macos_dnum(path.parent)) // fcbDirID
+    writel(fcbPtr + 58, uint32(get_macos_dnum(path.parent))) // fcbDirID
     write_pstring(fcbPtr + 62, strings.Replace(path.name, ":", -1)) // fcbCName
 
     writew(pb + 24, ioRefNum)
-    paramblk_return(0)
 }
 
 func close_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
 
     ioRefNum := readw(pb + 24)
@@ -1786,11 +1794,10 @@ func close_trap() {
     for i := 0; i < read2(0x3f6); i++ {
         writel(fcbPtr + i, 0)
     }
-
-    paramblk_return(0)
 }
 
 func readwrite_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
 
     ioRefNum := readw(pb + 24)
@@ -1825,7 +1832,6 @@ func readwrite_trap() {
 
     // assume that mark is inside the file
     mark := uint32(trymark)
-    paramblk_return(0)
 
     // handle mark outside file and continue
     if trymark > fcbEOF {
@@ -1839,7 +1845,7 @@ func readwrite_trap() {
     }
 
     ioActCount := ioReqCount
-    if readl(d1ptr) & 1 != 0 { // _Write
+    if readl(d1ptr) & 0xff == 3 { // _Write
         // if file is too short then lengthen the file
         for len(buf) < mark + ioActCount {
             *buf = append(*buf, 0)
@@ -1863,9 +1869,10 @@ func readwrite_trap() {
 }
 
 func getvinfo_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
-
     ioVNPtr := readl(pb + 18)
+
     if ioVNPtr != 0 {
         write_pstring(ioVNPtr, unicodeToMac(onlyvolname))
     }
@@ -1894,15 +1901,13 @@ func getvinfo_trap() {
         writel(pb + 82, 0) // ioVFilCnt
         writel(pb + 86, 0) // ioVDirCnt
         write(32, pb + 90, 0) // ioVFndrInfo
-        writel(pb + 90, get_macos_dnum(systemfolder)) // must match BootDrive
+        writel(pb + 90, uint32(get_macos_dnum(systemfolder))) // must match BootDrive
     }
-
-    paramblk_return(0)
 }
 
 func create_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
-
     ioNamePtr := readl(pb + 18)
     ioName := read_pstring(ioNamePtr)
 
@@ -1914,11 +1919,10 @@ func create_trap() {
         paramblk_return(-48); return // dupFNErr
     }
     defer fd.Close()
-
-    paramblk_return(0)
 }
 
 func delete_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
 
     ioNamePtr = readl(pb + 18)
@@ -1928,12 +1932,11 @@ func delete_trap() {
     path := get_host_path(number, ioName)
 
     os.Remove(path)
-    paramblk_return(0)
 }
 
 func getfinfo_trap() { // also implements GetCatInfo
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
-
     ioFDirIndex := int16(readw(pb + 28))
     ioNamePtr = readl(pb + 18)
 
@@ -1985,21 +1988,19 @@ func getfinfo_trap() { // also implements GetCatInfo
 
     if !is_regular_file(path) {
         writeb(pb + 30, 1 << 4) // is a directory
-        writel(pb + 48, get_macos_dnum(path)) // ioDrDirID
+        writel(pb + 48, uint32(get_macos_dnum(path))) // ioDrDirID
         writel(pb + 52, len(listdir(path))) // ioDrNmFls
     } else {
         // missing quite a bit of logic here
     }
 
     if trap & 0xff == 0x60 {
-        writel(pb + 100, get_macos_dnum(filepath.Dir(path))) // ioFlParID
+        writel(pb + 100, unt32(get_macos_dnum(filepath.Dir(path)))) // ioFlParID
     }
 
     date := get_macos_date(p)
     writel(pb + 72, date) // ioFlCrDat
     writel(pb + 76, date) // ioFlMdDat
-
-    paramblk_return(0)
 }
 
 func setfinfo_trap() {
@@ -2023,8 +2024,8 @@ func setfinfo_trap() {
 }
 
 func geteof_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
-
     ioRefNum := readw(pb + 24)
 
     fcb := fcb_from_refnum(ioRefNum)
@@ -2033,13 +2034,11 @@ func geteof_trap() {
     }
 
     writel(pb + 28, readl(fcb + 8)) // ioMisc = fcbEOF
-
-    paramblk_return(0)
 }
 
 func seteof_trap() {
+    paramblk_return(0) // by default
     pb := readl(a0ptr)
-
     ioRefNum := readw(pb + 24)
     ioMisc := readl(pb + 28)
 
@@ -2061,14 +2060,15 @@ func seteof_trap() {
     if ioMisc < readl(fcb + 16) { // can't have mark beyond eof
         writel(fcb + 16, ioMisc)
     }
-
-    paramblk_return(0)
 }
 
 func getvol_trap() {
+    paramblk_return(0) // by default
+    pb := readl(a0ptr)
+
     if trap & 0x200 != 0 { // HGetVol
         writew(pb + 22, 2) // ioVRefNum = 2
-        writel(pb + 48, get_macos_dnum(dnums[0])) // ioDirID = number
+        writel(pb + 48, uint32(get_macos_dnum(dnums[0]))) // ioDirID = number
     } else { // plain GetVol
         writew(pb + 22, get_macos_dnum(dnums[0])) // ioVRefNum = number
     }
@@ -2080,6 +2080,10 @@ func getvol_trap() {
 }
 
 func setvol_trap() {
+    paramblk_return(0) // by default
+    pb := readl(a0ptr)
+    ioRefNum := readw(pb + 24)
+
     ioVNPtr := readl(pb + 18)
     if ioVNPtr != 0 {
         volname := read_pstring(ioVNPtr)
@@ -2095,289 +2099,252 @@ func setvol_trap() {
 }
 
 func getfpos_trap() {
-    ioRefNum := readw(pb + 24)
-    fcb := readl(0x34e) + ioRefNum // FSFCBPtr
-    if ioRefNum !in everyfref || readl(fcb) == 0 {
-        return -38 // fnOpnErr
-
-    }
-    write(10, pb + 36, 0) // zero ioReqCount ioActCount ioPosMode
-    writel(pb + 46, readl(fcb + 16)) // ioPosOffset = fcbCrPs
-
+    // Act like _Read with ioReqCount=0 and ioPosMode=fsAtMark
+    paramblk_return(0) // by default
+    pb := readl(a0ptr)
+    writel(pb + 36, 0)
+    writew(pb + 44, 0) // ioPosMode
+    readwrite_trap()
 }
+
 func setfpos_trap() {
-    writel(pb + 36, 0) // Act like _Read with ioReqCount=0
-    return readwrite_trap()
-
+    // Act like _Read with ioReqCount=0
+    paramblk_return(0) // by default
+    pb := readl(a0ptr)
+    writel(pb + 36, 0) // ioReqCount
+    readwrite_trap()
 }
+
 func fsdispatch_trap() {
-    d0 &= 0xffff // word-size selector
-    if d0 == 0 { // FSControl
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 1 { // OpenWD
+    paramblk_return(0) // by default
+    pb := readl(a0ptr)
+
+    switch readw(d0ptr + 2) {
+    case 1: // OpenWD
         // just return dirID as wdRefNum, because we treat them the same
-        ioNamePtr := readl(pb + 18)
+        ioName := read_pstring(readl(pb + 18))
         ioWDDirID := readl(pb + 48)
-        ioName = read_pstring(ioNamePtr) if ioNamePtr else ""
-        ioVRefNum := get_macos_dnum(get_host_path(number=ioWDDirID, string=ioName))
+
+        ioVRefNum := get_macos_dnum(get_host_path(ioWDDirID, ioName))
         writew(pb + 22, ioVRefNum)
 
-    } else if d0 == 2 { // CloseWD
+    case 2: // CloseWD
         // do nothing
-        pass
 
-    } else if d0 == 5 { // CatMove
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 6 { // DirCreate
-        raise NotImplementedError("fsdispatch", d0)
-
-    } else if d0 == 7 { // GetWDInfo
+    case 7: // GetWDInfo
         // the opposite transformation to OpenWD
-        ioVRefNum := readw(pb + 22)
-        writel(pb + 48, ioVRefNum) // ioWDDirID
+        writel(pb + 48, uint32(readw(pb + 22))) // ioWDDirID = ioVRefNum
         writew(pb + 32, 2) // ioWDVRefNum = 2 (our root)
         writel(pb + 28, 0) // ioWDProcID = who cares who created it
 
-    } else if d0 == 8 { // GetFCBInfo
+    case 8: // GetFCBInfo
         ioFCBIndx := readl(pb + 28)
 
-        if ioFCBIndx == 0 {
-            ioRefNum := readw(pb + 24)
-        } else { // fcb by indexing among the open ones
-            for _, ioRefNum := range everyfref {
-                if readl(readl(0x34e) + ioRefNum) { // FSFCBPtr
+        ioRefNum := readw(pb + 24)
+        if ioFCBIndx != 0 { // treat as a 1-based index into open FCBs
+            for ioRefNum = 2;; ioRefNum += read2(0x3f6) {
+                fcb := fcb_from_refnum(ioRefNum)
+                if fcb == 0 {
+                    paramblk_return(-38); return // fnOpnErr
+                }
+
+                if readl(fcb) != 0 { // if open then decrement the index
                     ioFCBIndx--
                 }
-                if ioFCBIndx == 0 {
+
+                if ioFCBIndx == 0 { // we found our match!
                     break
                 }
-            } else {
-                ioRefNum := -1 // invalid, fail below
-
             }
         }
-        fcb := readl(0x34e) + ioRefNum // FSFCBPtr
 
-        if ioRefNum !in everyfref || readl(fcb) == 0 {
-            return -38 // fnOpnErr
-
+        fcb := fcb_from_refnum(ioRefNum)
+        if fcb == 0 || readl(fcb) == 0 {
+            paramblk_return(-38); return // fnOpnErr
         }
+
+        for i := 0; i < 2; i++ {
+            writeb(pb + 20 + i, readb(fcb + i))
+        }
+
         writew(pb + 24, ioRefNum)
-        memcpy(pb + 32, fcb, 20)
         writew(pb + 52, 2) // ioFCBVRefNum
         writel(pb + 54, 0) // ioFCBClpSiz, don't care
         writel(pb + 58, readl(fcb + 58)) // ioFCBParID
 
-        ioNamePtr = readl(pb + 18)
-        if ioNamePtr {
-            write_pstring(ioNamePtr, read_pstring(fcb + 62))
+        ioNamePtr := readl(pb + 18)
+        write_pstring(ioNamePtr, read_pstring(fcb + 62))
 
-        }
-    } else if d0 == 9 { // GetCatInfo
+    case 9: // GetCatInfo
         return getfinfo_trap()
-    } else if d0 == 10 { // SetCatInfo
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 11 { // SetVolInfo
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 12 { // SetPMSP
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 13 { // SetupWDCB
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 14 { // SetupDef
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 15 { // ReadWDCB
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 16 { // LockRng
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 17 { // UnlockRng
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 20 { // CreateFileIDRef
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 21 { // DeleteFileIDRef
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 22 { // ResolveFileIDRef
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 23 { // ExchangeFiles
-        raise NotImplementedError("fsdispatch", d0)
-    } else if d0 == 26 { // OpenDF
+
+    case 26: // OpenDF
         return open_trap()
-    } else if d0 == 27 { // MakeFSSpec
-        ioVRefNum = readw(pb + 22)
-        ioDirID = readl(pb + 48)
-        ioNamePtr = readl(pb + 18)
-        ptr := readl(pb + 28) // ioMisc
 
-        ioName := read_pstring(ioNamePtr) if ioNamePtr else ""
+    case 27: // MakeFSSpec
+        ioVRefNum := readw(pb + 22)
+        ioDirID := readl(pb + 48)
+        ioName := read_pstring(readl(pb + 18))
+        ioMisc := readl(pb + 28)
 
-        path := get_host_path(number=ioDirID || ioVRefNum, string=ioName)
-        if !path.parent.exists() {
-            raise FileNotFoundError
+        path := get_host_path(ioDirID, ioName)
 
+        // The parent must exist
+        if _, err := os.Stat(filepath.Dir(path)); os.IsNotExist(err) {
+            paramblk_return(-39); return // fnfErr
         }
-        writew(ptr, 2) // vRefNum = 2 always
-        writel(ptr + 2, get_macos_dnum(path.parent))
-        write_pstring(ptr + 6, path.name)
 
-    } else { // probably Desktop Manager stuff, ignore for now
-        raise NotImplementedError("fsdispatch", d0)
+        writew(ioMisc, 2) // vRefNum = 2 always
+        writel(ioMisc + 2, uint32(get_macos_dnum(filepath.Dir(path))))
+        write_pstring(ioMisc + 6, unicodeToMac(filepath.Base(path)))
+
+    default:
+        panic(str.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr + 2)))
     }
 }
 
-func read_fsspec(ptr) {
+func read_fsspec(ptr uint32) (vRefNum uint16, dirID uint32, namePtr uint32) {
     return readw(ptr), readl(ptr + 2), ptr + 6 // pointer to name string only
 }
 
-func fsspec_to_pb(fsspec, pb) {
-    writew(pb + 22, readw(fsspec)) // ioVRefNum
-    writel(pb + 48, readw(fsspec + 2)) // ioDirID
-    writel(pb + 18, fsspec + 6) // ioNamePtr
-
+func fsspec_to_pb(fsspec uint32, pb uint32) {
+    vRefNum, dirID, namePtr := read_fsspec(fsspec)
+    writew(pb + 22, vRefNum) // ioVRefNum
+    writel(pb + 48, dirID) // ioDirID
+    writel(pb + 18, namePtr) // ioNamePtr
 }
-func highlevelhfsdispatch() {
-}
-//    global pc
 
-    // ToolServer relies on this to call other traps, which is a problem
-    selector := readb(regs + 3) // d0.b
+// func highlevelhfsdispatch() {
+// }
+// //    global pc
+//
+//     // ToolServer relies on this to call other traps, which is a problem
+//     selector := readb(regs + 3) // d0.b
+//
+//     if selector == 1 { // pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpecPtr spec)
+//
+//         spec := pop(4)
+//         ioNamePtr = pop(4)
+//         ioDirID = pop(4)
+//         ioVRefNum = pop(2)
+//
+//         // Get ready to return when a callback_trap_word is executed
+//         return_pc = pc
+//         return_sp = get_sp()
+//
+//         // Create and populate a param block (longer than it needs to be)
+//         push(128, 0)
+//         pb = get_sp()
+//         writel(regs + 32, pb) // a0 = pb
+//
+//         writew(pb + 22, ioVRefNum)
+//         writel(pb + 48, ioDirID)
+//         writel(pb + 18, ioNamePtr)
+//         writel(pb + 28, spec) // ioMisc
+//
+//         // Push _Open and then another special word to the stack, and run them
+//         push(2, callback_trap_word)
+//         push(2, 0xa260)
+//         push(2, 0x701b) // _MakeFSSpec
+//         pc = get_sp()
+//
+//         // Return here when the special word gets called
+//         @oneoff_callback
+//         def fsmakefsspec_finish() {
+//         }
+//     }
+// //            global pc
+//             pc = return_pc
+//             set_sp(return_sp)
+//
+//             ioResult = readw(pb + 16)
+//             writew(get_sp(), ioResult)
+//
+//     else if selector in (2, 3) { // pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
+//         refNumPtr = pop(4)
+//         ioPermssn := pop(2) >> 8
+//         fsspec := pop(4)
+//
+//         // Get ready to return when a callback_trap_word is executed
+//         return_pc = pc
+//         return_sp := get_sp()
+//
+//         // Create and populate a param block (longer than it needs to be)
+//         push(128, 0)
+//         pb := get_sp()
+//         writel(regs + 32, pb) // a0 = pb
+//
+//         fsspec_to_pb(fsspec, pb)
+//         writeb(pb + 27, ioPermssn)
+//
+//         // Push _Open and then another special word to the stack, and run them
+//         push(2, callback_trap_word)
+//         push(2, 0xa000 if selector == 3 else 0xa00a) // _Open or _OpenRF
+//         pc = get_sp()
+//
+//         // Return here when the special word gets called
+//         @oneoff_callback
+//         def fspopendf_finish() {
+//         }
+//     }
+// //            global pc
+//             pc = return_pc
+//             set_sp(return_sp)
+//
+//             ioRefnum = readw(pb + 24)
+//             writew(refNumPtr, ioRefNum)
+//             ioResult = readw(pb + 16)
+//             writew(get_sp(), ioResult)
+//
+//     else if selector == 0x4 { // pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
+//         pass
+//     } else if selector == 0x5 { // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
+//         pass
+//     } else if selector == 0x6 { // pascal OSErr FSpDelete(const FSSpec *spec)
+//         pass
+//     } else if selector == 0x7 { // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
+//         pass
+//     } else if selector == 0x8 { // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
+//         pass
+//     } else if selector == 0x9 { // pascal OSErr FSpSetFLock(const FSSpec *spec)
+//         pass
+//     } else if selector == 0xa { // pascal OSErr FSpRstFLock(const FSSpec *spec)
+//         pass
+//     } else if selector == 0xb { // pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
+//         pass
+//     } else if selector == 0xc { // pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
+//         pass
+//     } else if selector == 0xd { // pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
+//         pass
+//     } else {
+//         raise NotImplementedError(f"AA52 {hex(selector)}")
+//
+//
+//     }
 
-    if selector == 1 { // pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpecPtr spec)
-
-        spec := pop(4)
-        ioNamePtr = pop(4)
-        ioDirID = pop(4)
-        ioVRefNum = pop(2)
-
-        // Get ready to return when a callback_trap_word is executed
-        return_pc = pc
-        return_sp = get_sp()
-
-        // Create and populate a param block (longer than it needs to be)
-        push(128, 0)
-        pb = get_sp()
-        writel(regs + 32, pb) // a0 = pb
-
-        writew(pb + 22, ioVRefNum)
-        writel(pb + 48, ioDirID)
-        writel(pb + 18, ioNamePtr)
-        writel(pb + 28, spec) // ioMisc
-
-        // Push _Open and then another special word to the stack, and run them
-        push(2, callback_trap_word)
-        push(2, 0xa260)
-        push(2, 0x701b) // _MakeFSSpec
-        pc = get_sp()
-
-        // Return here when the special word gets called
-        @oneoff_callback
-        def fsmakefsspec_finish() {
-        }
-    }
-//            global pc
-            pc = return_pc
-            set_sp(return_sp)
-
-            ioResult = readw(pb + 16)
-            writew(get_sp(), ioResult)
-
-    else if selector in (2, 3) { // pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
-        refNumPtr = pop(4)
-        ioPermssn := pop(2) >> 8
-        fsspec := pop(4)
-
-        // Get ready to return when a callback_trap_word is executed
-        return_pc = pc
-        return_sp := get_sp()
-
-        // Create and populate a param block (longer than it needs to be)
-        push(128, 0)
-        pb := get_sp()
-        writel(regs + 32, pb) // a0 = pb
-
-        fsspec_to_pb(fsspec, pb)
-        writeb(pb + 27, ioPermssn)
-
-        // Push _Open and then another special word to the stack, and run them
-        push(2, callback_trap_word)
-        push(2, 0xa000 if selector == 3 else 0xa00a) // _Open or _OpenRF
-        pc = get_sp()
-
-        // Return here when the special word gets called
-        @oneoff_callback
-        def fspopendf_finish() {
-        }
-    }
-//            global pc
-            pc = return_pc
-            set_sp(return_sp)
-
-            ioRefnum = readw(pb + 24)
-            writew(refNumPtr, ioRefNum)
-            ioResult = readw(pb + 16)
-            writew(get_sp(), ioResult)
-
-    else if selector == 0x4 { // pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
-        pass
-    } else if selector == 0x5 { // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
-        pass
-    } else if selector == 0x6 { // pascal OSErr FSpDelete(const FSSpec *spec)
-        pass
-    } else if selector == 0x7 { // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
-        pass
-    } else if selector == 0x8 { // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
-        pass
-    } else if selector == 0x9 { // pascal OSErr FSpSetFLock(const FSSpec *spec)
-        pass
-    } else if selector == 0xa { // pascal OSErr FSpRstFLock(const FSSpec *spec)
-        pass
-    } else if selector == 0xb { // pascal OSErr FSpRename(const FSSpec *spec, ConstStr255Param newName)
-        pass
-    } else if selector == 0xc { // pascal OSErr FSpCatMove(const FSSpec *source, const FSSpec *dest)
-        pass
-    } else if selector == 0xd { // pascal OSErr FSpExchangeFiles(const FSSpec *source, const FSSpec *dest)
-        pass
-    } else {
-        raise NotImplementedError(f"AA52 {hex(selector)}")
-
-
-    }
 // Memory Manager OS traps
 
-func sets_memerr_to_d0(func) {
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) {
-        d0a0 = retval = func(*args, **kwargs)
-        d0a0 = d0a0 || 0 // unfortunately duplicates code from trap dispatcher
-        if !isinstance(d0a0, tuple) {
-            d0a0 = (d0a0,)
-        }
-        writew(0x220, d0a0[0])
-        return retval
-
-    }
-    return wrapper
+func return_memerr(result int) {
+    writew(0x220, uint16(result))
+    writel(d0ptr, uint32(result))
 }
 
-func clears_memerr(func) {
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) {
-        writew(0x220, 0)
-        return func(*args, **kwargs)
-
-    }
-    return wrapper
-
-}
-heap_blocks = {} // addr: size
-master_ptrs = {}
+var block_sizes map[uint32]uint32
+var master_ptrs map[uint32]bool
 
 func getzone_trap() {
-    return 0, readl(0x2aa) // noErr, ApplZone
-
+    return_memerr(0)
+    ApplZone := readl(0x2aa)
+    writel(a0ptr, ApplZone) // ApplZone
 }
+
 func freemem_trap() {
+    return_memerr(0)
+    writel(d0ptr, 0x7ffffffe) // free
+    writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
     return 0x7ffffffe, 0 // d0=free, a0=growable (MaxMem only)
-
 }
+
 func purgespace_trap() {
     return 0x7ffffffe, 0x7ffffffe // d0=total, a0=contig
 }
@@ -2388,7 +2355,7 @@ func newptr(size) { // fixed 16b header before all "heap" blocks
     }
     mem.extend(bytes(16 + size))
     retval = len(mem) - size
-    heap_blocks[retval] = size
+    block_sizes[retval] = size
     return retval
 
 }
@@ -2398,7 +2365,7 @@ func newptr_trap() {
 
 func disposptr(ptr) {
     try {
-        delete(heap_blocks, ptr)
+        delete(block_sizes, ptr)
     }
     except {
         pass
@@ -2410,8 +2377,8 @@ func disposptr_trap() {
 }
 
 func setptrsize(ptr, size) {
-    if heap_blocks[ptr] >= size {
-        heap_blocks[ptr] = size
+    if block_sizes[ptr] >= size {
+        block_sizes[ptr] = size
         return true
     } else {
         return false // failure
@@ -2427,7 +2394,7 @@ func setptrsize_trap() {
 }
 
 func getptrsize(ptr) {
-    return heap_blocks[ptr]
+    return block_sizes[ptr]
 
 }
 func getptrsize_trap() {
@@ -2465,10 +2432,10 @@ func disposhandle_trap() {
 
 func sethandlesize(handle, size) {
     ptr := readl(handle)
-    oldsize := heap_blocks[ptr] if ptr else 0
+    oldsize := block_sizes[ptr] if ptr else 0
     if oldsize >= size {
         // can shrink the handle
-        heap_blocks[ptr] = size
+        block_sizes[ptr] = size
     } else {
         ptr2 := newptr(size)
         delete(master_ptrs, ptr)
@@ -2485,7 +2452,7 @@ func sethandlesize_trap() {
 
 func gethandlesize(handle) {
     ptr := readl(handle)
-    return heap_blocks[ptr] if ptr else 0
+    return block_sizes[ptr] if ptr else 0
 
 }
 func gethandlesize_trap() {
@@ -3109,7 +3076,7 @@ func loadseg_trap() {
         seg_handle = pop(4)
         seg_ptr := readl(seg_handle)
 
-        debug_segment_list.append((seg_num, seg_ptr, seg_ptr + heap_blocks[seg_ptr]))
+        debug_segment_list.append((seg_num, seg_ptr, seg_ptr + block_sizes[seg_ptr]))
 
         first := readw(seg_ptr) // index of first entry within jump table
         count := readw(seg_ptr + 2) // number of jump table entries
@@ -3325,7 +3292,7 @@ func aliasdispatch_trap() {
         if createFolder || path.exists() {
             oserr := 0 // noErr
             writew(foundVRefNum, 2)
-            writel(foundDirID, get_macos_dnum(path))
+            writel(foundDirID, uint32(get_macos_dnum(path)))
         } else {
             oserr := -43 // fnfErr
 
@@ -3893,164 +3860,159 @@ finally {
 const os_base = 0
 const tb_base = 0x100
 const my_traps [0x100+0x400]func() = {
-    os_base + 0x00: open_trap
-    os_base + 0x01: close_trap
-    os_base + 0x02: readwrite_trap
-    os_base + 0x03: readwrite_trap
-    os_base + 0x07: getvinfo_trap
-    os_base + 0x08: create_trap
-    os_base + 0x09: delete_trap
-    os_base + 0x0a: open_trap
-    os_base + 0x0c: getfinfo_trap
-    os_base + 0x0d: setfinfo_trap
-    os_base + 0x11: geteof_trap
-    os_base + 0x12: seteof_trap
-    os_base + 0x13: os_pb_trap
-    os_base + 0x14: getvol_trap
-    os_base + 0x15: setvol_trap
-    os_base + 0x18: getfpos_trap
-    os_base + 0x1a: getzone_trap
-    os_base + 0x1b: os_00_trap
-    os_base + 0x1c: freemem_trap
-    os_base + 0x1d: freemem_trap
-    os_base + 0x1e: newptr_trap
-    os_base + 0x1f: disposptr_trap
-    os_base + 0x20: setptrsize_trap
-    os_base + 0x21: getptrsize_trap
-    os_base + 0x22: newhandle_trap
-    os_base + 0x23: disposhandle_trap
-    os_base + 0x24: sethandlesize_trap
-    os_base + 0x25: gethandlesize_trap
-    os_base + 0x26: getzone_trap
-    os_base + 0x27: reallochandle_trap
-    os_base + 0x28: recoverhandle_trap
-    os_base + 0x29: os_0_trap
-    os_base + 0x2a: os_0_trap
-    os_base + 0x2b: emptyhandle_trap
-    os_base + 0x2c: os_00_trap
-    os_base + 0x2d: os_00_trap
-    os_base + 0x2e: blockmove_trap
-    os_base + 0x30: getosevent_trap
-    os_base + 0x31: getosevent_trap
-    os_base + 0x32: os_00_trap
-    os_base + 0x36: os_00_trap
-    os_base + 0x3c: cmpstring_trap
-    os_base + 0x40: os_00_trap
-    os_base + 0x44: setfpos_trap
-    os_base + 0x46: gettrapaddress_trap
-    os_base + 0x47: settrapaddress_trap
-    os_base + 0x48: getzone_trap
-    os_base + 0x49: os_0_trap
-    os_base + 0x4a: os_0_trap
-    os_base + 0x4b: os_0_trap
-    os_base + 0x4c: freemem_trap
-    os_base + 0x4d: os_00_trap
-    os_base + 0x55: stripaddress_trap
-    os_base + 0x60: fsdispatch_trap
-    os_base + 0x62: purgespace_trap
-    os_base + 0x63: os_00_trap
-    os_base + 0x64: os_0_trap
-    os_base + 0x69: hgetstate_trap
-    os_base + 0x6a: hsetstate_trap
-    os_base + 0x90: sysenvirons_trap
-    os_base + 0xad: gestalt_trap
-
-    tb_base + 0x00d: count1resources
-    tb_base + 0x00e: get1indresource_trap
-    tb_base + 0x00f: get1indtype_trap
-    tb_base + 0x01a: hopenresfile_trap
-    tb_base + 0x01c: count1types_trap
-    tb_base + 0x01f: get1resource_trap
-    tb_base + 0x020: get1namedresource_trap
-    tb_base + 0x023: aliasdispatch_trap
-    tb_base + 0x034: tb_pop2_trap
-    tb_base + 0x050: tb_nop_trap
-    tb_base + 0x051: tb_pop4_trap
-    tb_base + 0x052: tb_nop_trap
-    tb_base + 0x053: tb_nop_trap
-    tb_base + 0x055: tb_pop8_trap
-    tb_base + 0x056: tb_nop_trap
-    tb_base + 0x058: bitand_trap
-    tb_base + 0x059: bitxor_trap
-    tb_base + 0x05a: bitnot_trap
-    tb_base + 0x05b: bitor_trap
-    tb_base + 0x05c: bitshift_trap
-    tb_base + 0x05d: bittst_trap
-    tb_base + 0x05e: bitset_trap
-    tb_base + 0x05f: bitclr_trap
-    tb_base + 0x060: waitnextevent_trap
-    tb_base + 0x061: random_trap
-    tb_base + 0x06a: hiword_trap
-    tb_base + 0x06b: loword_trap
-    tb_base + 0x06e: initgraf_trap
-    tb_base + 0x06f: tb_pop4_trap
-    tb_base + 0x073: setport_trap
-    tb_base + 0x074: getport_trap
-    tb_base + 0x0a7: setrect_trap
-    tb_base + 0x0a8: offsetrect_trap
-    tb_base + 0x0d8: tb_nop_ret0l_trap
-    tb_base + 0x0fe: tb_nop_trap
-    tb_base + 0x112: tb_nop_trap
-    tb_base + 0x124: tb_nop_ret0l_trap
-    tb_base + 0x130: tb_nop_trap
-    tb_base + 0x137: tb_nop_trap
-    tb_base + 0x138: tb_pop2_trap
-    tb_base + 0x139: tb_pop6_trap
-    tb_base + 0x13a: tb_pop6_trap
-    tb_base + 0x13c: tb_pop4_trap
-    tb_base + 0x13e: menukey_trap
-    tb_base + 0x149: tb_pop2_ret0l_trap
-    tb_base + 0x14d: tb_pop8_trap
-    tb_base + 0x170: getnextevent_trap
-    tb_base + 0x175: tb_nop_ret0l_trap
-    tb_base + 0x179: tb_pop2_trap
-    tb_base + 0x17b: tb_nop_trap
-    tb_base + 0x17c: tb_pop10_ret0l_trap
-    tb_base + 0x194: curresfile_trap
-    tb_base + 0x197: openresfile_trap
-    tb_base + 0x198: useresfile_trap
-    tb_base + 0x199: tb_pop2_trap
-    tb_base + 0x19b: tb_pop2_trap
-    tb_base + 0x19c: countresources
-    tb_base + 0x19d: getindresource_trap
-    tb_base + 0x19e: counttypes_trap
-    tb_base + 0x19f: getindtype_trap
-    tb_base + 0x1a0: getresource_trap
-    tb_base + 0x1a1: getnamedresource_trap
-    tb_base + 0x1a3: tb_pop4_trap
-    tb_base + 0x1a4: homeresfile_trap
-    tb_base + 0x1a5: sizersrc_trap
-    tb_base + 0x1a8: getresinfo_trap
-    tb_base + 0x1af: reserror_trap
-    tb_base + 0x1b4: tb_nop_trap
-    tb_base + 0x1b8: getpattern_trap
-    tb_base + 0x1b9: getcursor_trap
-    tb_base + 0x1ba: getstring_trap
-    tb_base + 0x1bb: geticon_trap
-    tb_base + 0x1bc: getpicture_trap
-    tb_base + 0x1bd: tb_pop10_ret0l_trap
-    tb_base + 0x1c0: tb_pop2_ret0l_trap
-    tb_base + 0x1c4: openrfperm_trap
-    tb_base + 0x1c8: tb_nop_trap
-    tb_base + 0x1c9: syserror_trap
-    tb_base + 0x1cc: tb_nop_trap
-    tb_base + 0x1e1: handtohand_trap
-    tb_base + 0x1e2: ptrtoxhand_trap
-    tb_base + 0x1e3: ptrtohand_trap
-    tb_base + 0x1e4: handandhand_trap
-    tb_base + 0x1e5: tb_pop2_trap
-    tb_base + 0x1e6: tb_nop_trap
-    tb_base + 0x1eb: pack4_trap
-    tb_base + 0x1ec: pack5_trap
-    tb_base + 0x1ee: pack7_trap
-    tb_base + 0x1f0: loadseg_trap
-    tb_base + 0x1f1: tb_pop4_trap
-    tb_base + 0x1f4: exittoshell_trap
-    tb_base + 0x1fa: tb_nop_ret0l_trap
-    tb_base + 0x1fb: tb_nop_ret0l_trap
-    tb_base + 0x1ff: debugger_trap
-    tb_base + 0x252: highlevelhfsdispatch
-    tb_base + 0x269: my_callback_trap
-    tb_base + 0x26a: speed_hack_trap
-    tb_base + 0x3ff: debugstr_trap
+    os_base + 0x00: open_trap                   // _Open
+    os_base + 0x01: close_trap                  // _Close
+    os_base + 0x02: readwrite_trap              // _Read
+    os_base + 0x03: readwrite_trap              // _Write
+    os_base + 0x07: getvinfo_trap               // _GetVInfo
+    os_base + 0x08: create_trap                 // _Create
+    os_base + 0x09: delete_trap                 // _Delete
+    os_base + 0x0a: open_trap                   // _OpenRF
+    os_base + 0x0c: getfinfo_trap               // _GetFInfo
+    os_base + 0x0d: setfinfo_trap               // _SetFInfo
+    os_base + 0x11: geteof_trap                 // _GetEOF
+    os_base + 0x12: seteof_trap                 // _SetEOF
+    os_base + 0x13: os_pb_trap                  // _FlushVol
+    os_base + 0x14: getvol_trap                 // _GetVol
+    os_base + 0x15: setvol_trap                 // _SetVol
+    os_base + 0x18: getfpos_trap                // _GetFPos
+    os_base + 0x1a: getzone_trap                // _GetZone
+    os_base + 0x1b: os_00_trap                  // _SetZone
+    os_base + 0x1c: freemem_trap                // _FreeMem
+    os_base + 0x1d: freemem_trap                // _MaxMem
+    os_base + 0x1e: newptr_trap                 // _NewPtr
+    os_base + 0x1f: disposptr_trap              // _DisposPtr
+    os_base + 0x20: setptrsize_trap             // _SetPtrSize
+    os_base + 0x21: getptrsize_trap             // _GetPtrSize
+    os_base + 0x22: newhandle_trap              // _NewHandle
+    os_base + 0x23: disposhandle_trap           // _DisposHandle
+    os_base + 0x24: sethandlesize_trap          // _SetHandleSize
+    os_base + 0x25: gethandlesize_trap          // _GetHandleSize
+    os_base + 0x26: getzone_trap                // _HandleZone
+    os_base + 0x27: reallochandle_trap          // _ReallocHandle
+    os_base + 0x28: recoverhandle_trap          // _RecoverHandle
+    os_base + 0x29: os_0_trap                   // _HLock
+    os_base + 0x2a: os_0_trap                   // _HUnlock
+    os_base + 0x2b: emptyhandle_trap            // _EmptyHandle
+    os_base + 0x2c: os_00_trap                  // _InitApplZone
+    os_base + 0x2d: os_00_trap                  // _SetApplLimit
+    os_base + 0x2e: blockmove_trap              // _BlockMove
+    os_base + 0x30: getosevent_trap             // _OSEventAvail
+    os_base + 0x31: getosevent_trap             // _GetOSEvent
+    os_base + 0x32: os_00_trap                  // _FlushEvents
+    os_base + 0x36: os_00_trap                  // _MoreMasters
+    os_base + 0x3c: cmpstring_trap              // _CmpString
+    os_base + 0x40: os_00_trap                  // _ResrvMem
+    os_base + 0x44: setfpos_trap                // _SetFPos
+    os_base + 0x46: gettrapaddress_trap         // _GetTrapAddress
+    os_base + 0x47: settrapaddress_trap         // _SetTrapAddress
+    os_base + 0x48: getzone_trap                // _PtrZone
+    os_base + 0x49: os_0_trap                   // _HPurge
+    os_base + 0x4a: os_0_trap                   // _HNoPurge
+    os_base + 0x4b: os_0_trap                   // _SetGrowZone
+    os_base + 0x4c: freemem_trap                // _CompactMem
+    os_base + 0x4d: os_00_trap                  // _PurgeMem
+    os_base + 0x55: stripaddress_trap           // _StripAddress
+    os_base + 0x60: fsdispatch_trap             // _FSDispatch
+    os_base + 0x62: purgespace_trap             // _PurgeSpace
+    os_base + 0x63: os_00_trap                  // _MaxApplZone
+    os_base + 0x64: os_0_trap                   // _MoveHHi
+    os_base + 0x69: hgetstate_trap              // _HGetState
+    os_base + 0x6a: hsetstate_trap              // _HSetState
+    os_base + 0x90: sysenvirons_trap            // _SysEnvirons
+    os_base + 0xad: gestalt_trap                // _Gestalt
+    tb_base + 0x00d: count1resources            // _Count1Resources
+    tb_base + 0x00e: get1indresource_trap       // _Get1IndResource
+    tb_base + 0x00f: get1indtype_trap           // _Get1IndType
+    tb_base + 0x01a: hopenresfile_trap          // _HOpenResFile
+    tb_base + 0x01c: count1types_trap           // _Count1Types
+    tb_base + 0x01f: get1resource_trap          // _Get1Resource
+    tb_base + 0x020: get1namedresource_trap     // _Get1NamedResource
+    tb_base + 0x023: aliasdispatch_trap         // _AliasDispatch
+    tb_base + 0x034: tb_pop2_trap               // _SetFScaleDisable
+    tb_base + 0x050: tb_nop_trap                // _InitCursor
+    tb_base + 0x051: tb_pop4_trap               // _SetCursor
+    tb_base + 0x052: tb_nop_trap                // _HideCursor
+    tb_base + 0x053: tb_nop_trap                // _ShowCursor
+    tb_base + 0x055: tb_pop8_trap               // _ShieldCursor
+    tb_base + 0x056: tb_nop_trap                // _ObscureCursor
+    tb_base + 0x058: bitand_trap                // _BitAnd
+    tb_base + 0x059: bitxor_trap                // _BitXor
+    tb_base + 0x05a: bitnot_trap                // _BitNot
+    tb_base + 0x05b: bitor_trap                 // _BitOr
+    tb_base + 0x05c: bitshift_trap              // _BitShift
+    tb_base + 0x05d: bittst_trap                // _BitTst
+    tb_base + 0x05e: bitset_trap                // _BitSet
+    tb_base + 0x05f: bitclr_trap                // _BitClr
+    tb_base + 0x060: waitnextevent_trap         // _WaitNextEvent
+    tb_base + 0x061: random_trap                // _Random
+    tb_base + 0x06a: hiword_trap                // _HiWord
+    tb_base + 0x06b: loword_trap                // _LoWord
+    tb_base + 0x06e: initgraf_trap              // _InitGraf
+    tb_base + 0x06f: tb_pop4_trap               // _OpenPort
+    tb_base + 0x073: setport_trap               // _SetPort
+    tb_base + 0x074: getport_trap               // _GetPort
+    tb_base + 0x0a7: setrect_trap               // _SetRect
+    tb_base + 0x0a8: offsetrect_trap            // _OffsetRect
+    tb_base + 0x0d8: tb_nop_ret0l_trap          // _NewRgn
+    tb_base + 0x0fe: tb_nop_trap                // _InitFonts
+    tb_base + 0x112: tb_nop_trap                // _InitWindows
+    tb_base + 0x124: tb_nop_ret0l_trap          // _FrontWindow
+    tb_base + 0x130: tb_nop_trap                // _InitMenus
+    tb_base + 0x137: tb_nop_trap                // _DrawMenuBar
+    tb_base + 0x138: tb_pop2_trap               // _HiliteMenu
+    tb_base + 0x139: tb_pop6_trap               // _EnableItem
+    tb_base + 0x13a: tb_pop6_trap               // _DisableItem
+    tb_base + 0x13c: tb_pop4_trap               // _SetMenuBar
+    tb_base + 0x13e: menukey_trap               // _MenuKey
+    tb_base + 0x149: tb_pop2_ret0l_trap         // _GetMenuHandle
+    tb_base + 0x14d: tb_pop8_trap               // _AppendResMenu
+    tb_base + 0x170: getnextevent_trap          // _GetNextEvent
+    tb_base + 0x175: tb_nop_ret0l_trap          // _TickCount
+    tb_base + 0x179: tb_pop2_trap               // _CouldDialog
+    tb_base + 0x17b: tb_nop_trap                // _InitDialogs
+    tb_base + 0x17c: tb_pop10_ret0l_trap        // _GetNewDialog
+    tb_base + 0x194: curresfile_trap            // _CurResFile
+    tb_base + 0x197: openresfile_trap           // _OpenResFile
+    tb_base + 0x198: useresfile_trap            // _UseResFile
+    tb_base + 0x199: tb_pop2_trap               // _UpdateResFile
+    tb_base + 0x19b: tb_pop2_trap               // _SetResLoad
+    tb_base + 0x19c: countresources             // _CountResources
+    tb_base + 0x19d: getindresource_trap        // _GetIndResource
+    tb_base + 0x19e: counttypes_trap            // _CountTypes
+    tb_base + 0x19f: getindtype_trap            // _GetIndType
+    tb_base + 0x1a0: getresource_trap           // _GetResource
+    tb_base + 0x1a1: getnamedresource_trap      // _GetNamedResource
+    tb_base + 0x1a3: tb_pop4_trap               // _ReleaseResource
+    tb_base + 0x1a4: homeresfile_trap           // _HomeResFile
+    tb_base + 0x1a5: sizersrc_trap              // _SizeRsrc
+    tb_base + 0x1a8: getresinfo_trap            // _GetResInfo
+    tb_base + 0x1af: reserror_trap              // _ResError
+    tb_base + 0x1b4: tb_nop_trap                // _SystemTask
+    tb_base + 0x1b8: getpattern_trap            // _GetPattern
+    tb_base + 0x1b9: getcursor_trap             // _GetCursor
+    tb_base + 0x1ba: getstring_trap             // _GetString
+    tb_base + 0x1bb: geticon_trap               // _GetIcon
+    tb_base + 0x1bc: getpicture_trap            // _GetPicture
+    tb_base + 0x1bd: tb_pop10_ret0l_trap        // _GetNewWindow
+    tb_base + 0x1c0: tb_pop2_ret0l_trap         // _GetNewMBar
+    tb_base + 0x1c4: openrfperm_trap            // _OpenRFPerm
+    tb_base + 0x1c8: tb_nop_trap                // _SysBeep
+    tb_base + 0x1c9: syserror_trap              // _SysError
+    tb_base + 0x1cc: tb_nop_trap                // _TEInit
+    tb_base + 0x1e1: handtohand_trap            // _HandToHand
+    tb_base + 0x1e2: ptrtoxhand_trap            // _PtrToXHand
+    tb_base + 0x1e3: ptrtohand_trap             // _PtrToHand
+    tb_base + 0x1e4: handandhand_trap           // _HandAndHand
+    tb_base + 0x1e5: tb_pop2_trap               // _InitPack
+    tb_base + 0x1e6: tb_nop_trap                // _InitAllPacks
+    tb_base + 0x1eb: pack4_trap                 // _FP68K
+    tb_base + 0x1ec: pack5_trap                 // _Elems68K
+    tb_base + 0x1ee: pack7_trap                 // _DecStr68K
+    tb_base + 0x1f0: loadseg_trap               // _LoadSeg
+    tb_base + 0x1f1: tb_pop4_trap               // _UnloadSeg
+    tb_base + 0x1f4: exittoshell_trap           // _ExitToShell
+    tb_base + 0x1fa: tb_nop_ret0l_trap          // _UnloadScrap
+    tb_base + 0x1fb: tb_nop_ret0l_trap          // _LoadScrap
+    tb_base + 0x1ff: debugger_trap              // _Debugger
 }
