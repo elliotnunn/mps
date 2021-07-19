@@ -1748,7 +1748,7 @@ func get_vol_or_dir() (num uint16) {
     }
 }
 
-func open_trap() {
+func tOpen() {
     paramblk_return(0) // by default
 
     fork := 'd'
@@ -1813,7 +1813,7 @@ func open_trap() {
     writew(pb + 24, ioRefNum)
 }
 
-func close_trap() {
+func tClose() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -1841,7 +1841,7 @@ func close_trap() {
     }
 }
 
-func readwrite_trap() {
+func tReadWrite() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -1913,7 +1913,7 @@ func readwrite_trap() {
     writel(fcb + 16, mark + ioActCount) // fcbCrPs
 }
 
-func getvinfo_trap() {
+func tGetVInfo() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioVNPtr := readl(pb + 18)
@@ -1950,7 +1950,7 @@ func getvinfo_trap() {
     }
 }
 
-func create_trap() {
+func tCreate() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioNamePtr := readl(pb + 18)
@@ -1966,7 +1966,7 @@ func create_trap() {
     defer fd.Close()
 }
 
-func delete_trap() {
+func tDelete() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -1979,7 +1979,7 @@ func delete_trap() {
     os.Remove(path)
 }
 
-func getfinfo_trap() { // also implements GetCatInfo
+func tGetFInfo() { // also implements GetCatInfo
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioFDirIndex := int16(readw(pb + 28))
@@ -2048,7 +2048,7 @@ func getfinfo_trap() { // also implements GetCatInfo
     writel(pb + 76, date) // ioFlMdDat
 }
 
-func setfinfo_trap() {
+func tSetFInfo() {
     paramblk_return(0)
 //     ioNamePtr := readl(pb + 18)
 //     ioName := read_pstring(ioNamePtr)
@@ -2068,7 +2068,7 @@ func setfinfo_trap() {
 //     // todo: mtime
 }
 
-func geteof_trap() {
+func tGetEOF() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioRefNum := readw(pb + 24)
@@ -2081,7 +2081,7 @@ func geteof_trap() {
     writel(pb + 28, readl(fcb + 8)) // ioMisc = fcbEOF
 }
 
-func seteof_trap() {
+func tSetEOF() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioRefNum := readw(pb + 24)
@@ -2107,7 +2107,7 @@ func seteof_trap() {
     }
 }
 
-func getvol_trap() {
+func tGetVol() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -2124,7 +2124,7 @@ func getvol_trap() {
     }
 }
 
-func setvol_trap() {
+func tSetVol() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioRefNum := readw(pb + 24)
@@ -2143,24 +2143,24 @@ func setvol_trap() {
     }
 }
 
-func getfpos_trap() {
+func tGetFPos() {
     // Act like _Read with ioReqCount=0 and ioPosMode=fsAtMark
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     writel(pb + 36, 0)
     writew(pb + 44, 0) // ioPosMode
-    readwrite_trap()
+    tReadWrite()
 }
 
-func setfpos_trap() {
+func tSetFPos() {
     // Act like _Read with ioReqCount=0
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     writel(pb + 36, 0) // ioReqCount
-    readwrite_trap()
+    tReadWrite()
 }
 
-func fsdispatch_trap() {
+func tFSDispatch() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -2221,10 +2221,10 @@ func fsdispatch_trap() {
         write_pstring(ioNamePtr, read_pstring(fcb + 62))
 
     case 9: // GetCatInfo
-        return getfinfo_trap()
+        return tGetFInfo()
 
     case 26: // OpenDF
-        return open_trap()
+        return tOpen()
 
     case 27: // MakeFSSpec
         ioVRefNum := readw(pb + 22)
@@ -2381,13 +2381,13 @@ func return_memerr(result int) {
 var block_sizes map[uint32]uint32
 var master_ptrs map[uint32]bool
 
-func getzone_trap() {
+func tGetZone() {
     return_memerr_and_d0(0)
     ApplZone := readl(0x2aa)
     writel(a0ptr, ApplZone) // ApplZone
 }
 
-func freemem_trap() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
+func tFreeMem() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
     return_memerr(0)
     writel(d0ptr, 0x7ffffffe) // free
     writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
@@ -2395,7 +2395,7 @@ func freemem_trap() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
 
 // Final common pathway for making heap blocks
 // TODO: improve on this bump allocator
-func newptr_trap() {
+func tNewPtr() {
     size := readl(d0ptr)
     return_memerr_and_d0(0)
 
@@ -2414,13 +2414,13 @@ func newptr_trap() {
     writel(a0ptr, block)
 }
 
-func disposptr_trap() {
+func tDisposPtr() {
     return_memerr_and_d0(0)
     ptr := readl(a0ptr)
     disposptr(ptr)
 }
 
-func setptrsize_trap() {
+func tSetPtrSize() {
     ptr := readl(a0ptr)
     size := readl(d0ptr)
 
@@ -2432,24 +2432,24 @@ func setptrsize_trap() {
     }
 }
 
-func getptrsize_trap() {
+func tGetPtrSize() {
     return_memerr(0)
     writel(d0ptr, block_sizes[readl(a0ptr)])
 }
 
-func newhandle_trap() {
-    newptr_trap()
+func tNewHandle() {
+    tNewPtr()
 
     ptr := readl(a0ptr)
     writel(ptr - 16, ptr) // stash the master pointer in the header
     writel(a0ptr, ptr - 16)
 }
 
-func disposhandle_trap() {
-    disposptr_trap(readl(readl(a0ptr)))
+func tDisposHandle() {
+    tDisposPtr(readl(readl(a0ptr)))
 }
 
-func sethandlesize_trap() {
+func tSetHandleSize() {
     handle := readl(a0ptr)
     size := readl(d0ptr)
     return_memerr_and_d0(0)
@@ -2468,12 +2468,12 @@ func sethandlesize_trap() {
     }
 }
 
-func gethandlesize_trap() {
+func tGetHandleSize() {
     return_memerr(0)
     writel(d0ptr, block_sizes[readl(readl(a0ptr))]) // might die??
 }
 
-func reallochandle_trap() {
+func tReallocHandle() {
     handle := readl(a0ptr)
     size := readl(d0ptr)
     emptyhandle(handle)
@@ -2482,20 +2482,20 @@ func reallochandle_trap() {
     sethandlesize(handle, size)
 }
 
-func recoverhandle_trap() {
+func tRecoverHandle() {
     return_memerr(0) // preserves d0, oddly
     writel(a0ptr, master_ptrs[readl(a0)])
 }
 
-func emptyhandle_trap() {
+func tEmptyHandle() {
     handle := readl(a0ptr)
     writel(a0ptr, readl(handle))
-    disposptr_trap()
+    tDisposPtr()
     writel(handle, 0)
     return_memerr_and_d0(0)
 }
 
-func blockmove_trap() {
+func tBlockMove() {
     src := readl(a0ptr)
     dest := readl(a1ptr)
     size := readl(d0ptr)
@@ -2503,14 +2503,14 @@ func blockmove_trap() {
     return_memerr_and_d0(0)
 }
 
-func hgetstate_trap() {
+func tHGetState() {
     handle := readl(a0ptr)
     flags := readb(handle + 4)
     writel(d0ptr, uint32(flags))
     return_memerr(0)
 }
 
-func hsetstate_trap() {
+func tHSetState() {
     handle := readl(a0ptr)
     flags := readb(d0ptr + 3)
     writeb(handle + 4, flags)
@@ -2537,14 +2537,14 @@ func trap_kind(requested_trap uint16, requesting_trap uint16) (uint16, rune) {
     }
 }
 
-func gettrapaddress_trap() {
+func tGetTrapAddress() {
     trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
     if trapkind == 't' {
         trapnum += 0x100 // index into our special table
     }
     writel(a0ptr, trap_address_table[trapnum])
 }
-func settrapaddress_trap() {
+func tSetTrapAddress() {
     trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
     if trapkind == 't' {
         trapnum += 0x100 // index into our special table
@@ -2667,20 +2667,20 @@ func resToHand(map uint32, type_entry uint16, id_entry uint16) (handle uint32) {
     writel(map + id_entry + 8, handle)
 }
 
-func reserror_trap() {
+func tResError() {
     writew(readl(spptr), readw(0xa60))
 }
 
-func openresfile_trap() {
+func tOpenResFile() {
     strarg := popl()
     pushw(0) // zero vRefNum
     pushl(0) // zero dirID
     pushl(strarg)
     pushw(0) // zero permission
-    hopenresfile_trap()
+    tHOpenResFile()
 }
 
-func openrfperm_trap() {
+func tOpenRFPerm() {
     permission = popw()
     vRefNum := popw()
     fileName := popl()
@@ -2688,10 +2688,10 @@ func openrfperm_trap() {
     pushl(0) // dirID
     pushl(fileName)
     pushw(permission)
-    hopenresfile_trap()
+    tHOpenResFile()
 }
 
-func hopenresfile_trap() {
+func tHOpenResFile() {
     permission := popw()
     ioNamePtr := popl()
     ioDirID := popl()
@@ -2742,29 +2742,29 @@ func hopenresfile_trap() {
     writew(readl(spptr), ioRefNum) // return refnum
 }
 
-func counttypes_trap() {
+func tCountTypes() {
     answer := len(uniqueTypesInMaps(activeResMaps()...))
     writew(readl(spptr), uint16(answer))
 }
 
-func count1types_trap() {
+func tCount1Types() {
     answer := len(uniqueTypesInMaps(currentResMap()))
     writew(readl(spptr), uint16(answer))
 }
 
-func countresources_trap() {
+func tCountResources() {
     the_type := popl()
     answer := len(uniqueIdsInMaps(the_type, activeResMaps()...))
     writew(readl(spptr), uint16(answer))
 }
 
-func count1resources_trap() {
+func tCount1Resources() {
     the_type := popl()
     answer := len(uniqueIdsInMaps(the_type, currentResMap()))
     writew(readl(spptr), uint16(answer))
 }
 
-func getindtype_trap() {
+func tGetIndType() {
     ind = popw()
     retptr = popl()
     types = list(resource_types(false))
@@ -2775,7 +2775,7 @@ func getindtype_trap() {
     writel(retptr, type)
 
 }
-func get1indtype_trap() {
+func tGet1IndType() {
     ind := popw()
     retptr := popl()
     types := list(resource_types(true))
@@ -2814,7 +2814,7 @@ func set_resource_name(map_handle, res_entry_ptr, name) {
     }
 }
 
-func getresinfo_trap() {
+func tGetResInfo() {
     nameptr := popl()
     typeptr := popl()
     idptr := popl()
@@ -2842,31 +2842,31 @@ func getresinfo_trap() {
     writew(0xa60, -192) // ResErr = resNotFound
 }
 
-func getresource_trap() {
+func tGetResource() {
     id = popw()
     type = popl()
     getresource_common(type, id=id, top_only=false)
 
 }
-func get1resource_trap() {
+func tGet1Resource() {
     id := popw()
     type = popl()
     getresource_common(type, id=id, top_only=true)
 
 }
-func getnamedresource_trap() {
+func tGetNamedResource() {
     name := read_pstring(popl())
     type = popl()
     getresource_common(type, name=name, top_only=false)
 
 }
-func get1namedresource_trap() {
+func tGet1NamedResource() {
     name := read_pstring(popl())
     type = popl()
     getresource_common(type, name=name, top_only=true)
 
 }
-func getindresource_trap() {
+func tGetIndResource() {
     idx := popw()
     type = popl()
 
@@ -2876,7 +2876,7 @@ func getindresource_trap() {
     getresource_common(type, id=id, top_only=false)
 
 }
-func get1indresource_trap() {
+func tGet1IndResource() {
     idx := popw()
     type = popl()
 
@@ -2886,41 +2886,41 @@ func get1indresource_trap() {
     getresource_common(type, id=id, top_only=false)
 }
 
-func curresfile_trap() {
+func tCurResFile() {
     curmap := readw(0xa5a) // CurMap global
     popw(); pushw(curmap)
 
 }
-func useresfile_trap() {
+func tUseResFile() {
     curmap = writew(0xa5a, popw()) // CurMap global
 
 }
-func getpattern_trap() {
+func tGetPattern() {
     pushl(int.from_bytes(b"PAT ", "big"))
-    getresource_trap()
+    tGetResource()
 
 }
-func getcursor_trap() {
+func tGetCursor() {
     pushl(int.from_bytes(b"CURS", "big"))
-    getresource_trap()
+    tGetResource()
 
 }
-func getstring_trap() {
+func tGetString() {
     pushl(int.from_bytes(b"STR ", "big"))
-    getresource_trap()
+    tGetResource()
 
 }
-func geticon_trap() {
+func tGetIcon() {
     pushl(int.from_bytes(b"ICON", "big"))
-    getresource_trap()
+    tGetResource()
 
 }
-func getpicture_trap() {
+func tGetPicture() {
     pushl(int.from_bytes(b"PICT", "big"))
-    getresource_trap()
+    tGetResource()
 
 }
-func homeresfile_trap() {
+func tHomeResFile() {
     handle = popl()
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
@@ -2939,7 +2939,7 @@ func homeresfile_trap() {
     writew(0xa60, -192) // ResError = resNotFound
 
 }
-func sizersrc_trap() {
+func tSizeRsrc() {
     handle = popl()
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
@@ -2963,7 +2963,7 @@ func sizersrc_trap() {
 }
 // Segment Loader Toolbox traps
 
-func loadseg_trap() {
+func tLoadSeg() {
 }
 //    global pc
 
@@ -3012,43 +3012,43 @@ func loadseg_trap() {
 
 // Package Toolbox traps
 
-func pack4_trap() { // FP68K
+func tFP68K() { // FP68K
 }
 //    global pc
     pushl(pc); pc = 0xc0000
 
-func pack5_trap() { // Elems68K
+func tElems68K() { // Elems68K
 }
 //    global pc
     pushl(pc); pc = 0xd0000
 
-func pack7_trap() { // DecStr68K
+func tDecStr68K() { // DecStr68K
 }
 //    global pc
     pushl(pc); pc = 0xe0000
 
 // QuickDraw Toolbox traps
-func bitand_trap() {
+func tBitAnd() {
     result = popl() & popl()
     popl(); pushl(result)
 
 }
-func bitxor_trap() {
+func tBitXor() {
     result = popl() ^ popl()
     popl(); pushl(result)
 
 }
-func bitnot_trap() {
+func tBitNot() {
     result = ~popl()
     popl(); pushl(result)
 
 }
-func bitor_trap() {
+func tBitOr() {
     result = popl() | popl()
     popl(); pushl(result)
 
 }
-func bitshift_trap() {
+func tBitShift() {
     by = signed(2, popw())
     result = popl()
     if by > 0 {
@@ -3058,49 +3058,49 @@ func bitshift_trap() {
     popl(); pushl(result)
 
 }
-func bittst_trap() {
+func tBitTst() {
     idx = popw() + 8 * popl()
     result = mem[idx // 8] & (0x80 >> (idx % 8))
     popw(); pushw(0x100 if result else 0)
 
 }
-func bitset_trap() {
+func tBitSet() {
     idx = popw() + 8 * popl()
     mem[idx // 8] |= 0x80 >> (idx % 8)
 
 }
-func bitclr_trap() {
+func tBitClr() {
     idx = popw() + 8 * popl()
     mem[idx // 8] &= ~(0x80 >> (idx % 8))
 
 }
-func random_trap() {
+func tRandom() {
     popw(); pushw(random.randint(0x10000))
 
 }
-func hiword_trap() {
+func tHiWord() {
     x = popw(); popw(); popw(); pushw(x)
 
 }
-func loword_trap() {
+func tLoWord() {
     popw(); x = popw(); popw(); pushw(x)
 
 }
-func initgraf_trap() {
+func tInitGraf() {
     a5 := readl(a5ptr)
     qd = popl()
     writel(a5, qd)
     writel(qd, 0xf8f8f8f8) // illegal thePort address
 
 }
-func setport_trap() {
+func tSetPort() {
     a5 := readl(a5ptr)
     qd := readl(a5)
     port := popl()
     writel(qd, port)
 
 }
-func getport_trap() {
+func tGetPort() {
     a5 := readl(a5ptr)
     qd := readl(a5)
     port = readl(qd)
@@ -3108,12 +3108,12 @@ func getport_trap() {
     writel(retaddr, port)
 
 }
-func setrect_trap() {
+func tSetRect() {
     br := popl(); tl = popl(); rectptr = popl()
     writel(rectptr, tl); writel(rectptr + 4, br)
 
 }
-func offsetrect_trap() {
+func tOffsetRect() {
     dv = popw(); dh = popw(); rectptr = popl()
     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
         writew(rectptr + ptr, readw(rectptr + ptr) + delta)
@@ -3132,12 +3132,12 @@ func debugstr_trap() {
 
     }
 }
-func debugger_trap() {
+func tDebugger() {
     import pdb; pdb.set_trace()
 
 }
 // trap is in toolbox table but actually uses registers
-func syserror_trap() {
+func tSysError() {
     err := signed(2, readw(d0ptr + 2))
     if err == -491 { // display string on stack
         raise Exception("_SysError", err, read_pstring(popl()))
@@ -3156,7 +3156,7 @@ func gestalt(selector) {
 
     }
 }
-func sysenvirons_trap() {
+func tSysEnvirons() {
     write(16, a0, 0) // wipe
     writew(a0, 2) // environsVersion = 2
     writew(pb + 2, 3) // machineType = SE
@@ -3164,7 +3164,7 @@ func sysenvirons_trap() {
     writew(pb + 6, 3) // processor = 68020
 
 }
-func gestalt_trap() {
+func tGestalt() {
     selector := d0.to_bytes(4, "big")
 
     if trap & 0x600 == 0 { // ab=00
@@ -3190,7 +3190,7 @@ func gestalt_trap() {
 
     }
 }
-func aliasdispatch_trap() {
+func tAliasDispatch() {
     selector = readl(regs)
     if selector == 0 { // FindFolder
         foundDirID = popl(); foundVRefNum = popl()
@@ -3221,7 +3221,7 @@ func aliasdispatch_trap() {
 
     }
 }
-func cmpstring_trap() {
+func tCmpString() {
     l0 := d0 >> 16       // corresponds with a0 ptr
     l1 = d0 & 0xffff    // corresponds with a1 ptr
     both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode("mac_roman")
@@ -3238,13 +3238,13 @@ func cmpstring_trap() {
     return int(both[:l0] != both[l0:])
 
 }
-func getosevent_trap() bool {
+func tGetOSEvent() bool {
     write(16, a0, 0) // null event
     return -1 // null event
 
 }
 // ToolServer-specific code
-func menukey_trap() bool {
+func tMenuKey() bool {
     keycode := popw() & 0xff
     if keycode == 12 { // cmd-Q
         popl(); pushl(0x00810005) // quit menu item, hardcoded sadly
@@ -3254,7 +3254,7 @@ func menukey_trap() bool {
     popl(); pushl(0) // return nothing
 
 }
-func getnextevent_trap() {
+func tGetNextEvent() {
     eventrecord := popl(); write(16, eventrecord, 0)
     mask := popw()
 
@@ -3270,18 +3270,18 @@ func getnextevent_trap() {
     popw(); pushw(0) // return false
 
 }
-func waitnextevent_trap() {
+func tWaitNextEvent() {
     pop(8) // ignore sleep and mouseRgn args
-    getnextevent_trap()
+    tGetNextEvent()
 
 }
-func exittoshell_trap() {
+func tExitToShell() {
     raise SystemExit
 
 }
 // Munger and related traps
 
-func handtohand_trap() {
+func tHandToHand() {
     hdl := readl(a0ptr); ptr = readl(hdl)
     size := gethandlesize(hdl)
     hdl2 := newhandle(size); ptr2 = readl(hdl2)
@@ -3290,7 +3290,7 @@ func handtohand_trap() {
     writel(regs, 0) // d0 = noErr
 
 }
-func ptrtoxhand_trap() {
+func tPtrToXHand() {
     srcptr := readl(a0ptr) // a0
     dsthdl := readl(a1ptr) // a1
     size := readl(regs) // d0
@@ -3301,7 +3301,7 @@ func ptrtoxhand_trap() {
     writel(regs, 0) // d0 = noErr
 
 }
-func ptrtohand_trap() {
+func tPtrToHand() {
     srcptr := readl(a0ptr) // a0
     size = readl(regs) // d0
     dsthdl = newhandle(size)
@@ -3311,7 +3311,7 @@ func ptrtohand_trap() {
     writel(regs, 0) // d0 = noErr
 
 }
-func handandhand_trap() {
+func tHandAndHand() {
     ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
     bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
     sethandlesize(bhdl, asize + bsize)
@@ -3689,7 +3689,7 @@ except SystemExit { // happens when we reach ExitToShell
 }
 finally {
     for _, ioRefNum := range everyfref {
-        close_trap(-1, -1, -1, -1, ioRefNum=ioRefNum)
+        tClose(-1, -1, -1, -1, ioRefNum=ioRefNum)
 
     }
     tmp.cleanup()
@@ -3698,75 +3698,75 @@ finally {
 const os_base = 0
 const tb_base = 0x100
 const my_traps [0x100+0x400]func() = {
-    os_base + 0x00: open_trap                   // _Open
-    os_base + 0x01: close_trap                  // _Close
-    os_base + 0x02: readwrite_trap              // _Read
-    os_base + 0x03: readwrite_trap              // _Write
-    os_base + 0x07: getvinfo_trap               // _GetVInfo
-    os_base + 0x08: create_trap                 // _Create
-    os_base + 0x09: delete_trap                 // _Delete
-    os_base + 0x0a: open_trap                   // _OpenRF
-    os_base + 0x0c: getfinfo_trap               // _GetFInfo
-    os_base + 0x0d: setfinfo_trap               // _SetFInfo
-    os_base + 0x11: geteof_trap                 // _GetEOF
-    os_base + 0x12: seteof_trap                 // _SetEOF
+    os_base + 0x00: tOpen                       // _Open
+    os_base + 0x01: tClose                      // _Close
+    os_base + 0x02: tReadWrite                  // _Read
+    os_base + 0x03: tReadWrite                  // _Write
+    os_base + 0x07: tGetVInfo                   // _GetVInfo
+    os_base + 0x08: tCreate                     // _Create
+    os_base + 0x09: tDelete                     // _Delete
+    os_base + 0x0a: tOpen                       // _OpenRF
+    os_base + 0x0c: tGetFInfo                   // _GetFInfo
+    os_base + 0x0d: tSetFInfo                   // _SetFInfo
+    os_base + 0x11: tGetEOF                     // _GetEOF
+    os_base + 0x12: tSetEOF                     // _SetEOF
     os_base + 0x13: os_pb_trap                  // _FlushVol
-    os_base + 0x14: getvol_trap                 // _GetVol
-    os_base + 0x15: setvol_trap                 // _SetVol
-    os_base + 0x18: getfpos_trap                // _GetFPos
-    os_base + 0x1a: getzone_trap                // _GetZone
+    os_base + 0x14: tGetVol                     // _GetVol
+    os_base + 0x15: tSetVol                     // _SetVol
+    os_base + 0x18: tGetFPos                    // _GetFPos
+    os_base + 0x1a: tGetZone                    // _GetZone
     os_base + 0x1b: os_00_trap                  // _SetZone
-    os_base + 0x1c: freemem_trap                // _FreeMem
-    os_base + 0x1d: freemem_trap                // _MaxMem
-    os_base + 0x1e: newptr_trap                 // _NewPtr
-    os_base + 0x1f: disposptr_trap              // _DisposPtr
-    os_base + 0x20: setptrsize_trap             // _SetPtrSize
-    os_base + 0x21: getptrsize_trap             // _GetPtrSize
-    os_base + 0x22: newhandle_trap              // _NewHandle
-    os_base + 0x23: disposhandle_trap           // _DisposHandle
-    os_base + 0x24: sethandlesize_trap          // _SetHandleSize
-    os_base + 0x25: gethandlesize_trap          // _GetHandleSize
-    os_base + 0x26: getzone_trap                // _HandleZone
-    os_base + 0x27: reallochandle_trap          // _ReallocHandle
-    os_base + 0x28: recoverhandle_trap          // _RecoverHandle
+    os_base + 0x1c: tFreeMem                    // _FreeMem
+    os_base + 0x1d: tFreeMem                    // _MaxMem
+    os_base + 0x1e: tNewPtr                     // _NewPtr
+    os_base + 0x1f: tDisposPtr                  // _DisposPtr
+    os_base + 0x20: tSetPtrSize                 // _SetPtrSize
+    os_base + 0x21: tGetPtrSize                 // _GetPtrSize
+    os_base + 0x22: tNewHandle                  // _NewHandle
+    os_base + 0x23: tDisposHandle               // _DisposHandle
+    os_base + 0x24: tSetHandleSize              // _SetHandleSize
+    os_base + 0x25: tGetHandleSize              // _GetHandleSize
+    os_base + 0x26: tGetZone                    // _HandleZone
+    os_base + 0x27: tReallocHandle              // _ReallocHandle
+    os_base + 0x28: tRecoverHandle              // _RecoverHandle
     os_base + 0x29: os_0_trap                   // _HLock
     os_base + 0x2a: os_0_trap                   // _HUnlock
-    os_base + 0x2b: emptyhandle_trap            // _EmptyHandle
+    os_base + 0x2b: tEmptyHandle                // _EmptyHandle
     os_base + 0x2c: os_00_trap                  // _InitApplZone
     os_base + 0x2d: os_00_trap                  // _SetApplLimit
-    os_base + 0x2e: blockmove_trap              // _BlockMove
-    os_base + 0x30: getosevent_trap             // _OSEventAvail
-    os_base + 0x31: getosevent_trap             // _GetOSEvent
+    os_base + 0x2e: tBlockMove                  // _BlockMove
+    os_base + 0x30: tGetOSEvent                 // _OSEventAvail
+    os_base + 0x31: tGetOSEvent                 // _GetOSEvent
     os_base + 0x32: os_00_trap                  // _FlushEvents
     os_base + 0x36: os_00_trap                  // _MoreMasters
-    os_base + 0x3c: cmpstring_trap              // _CmpString
+    os_base + 0x3c: tCmpString                  // _CmpString
     os_base + 0x40: os_00_trap                  // _ResrvMem
-    os_base + 0x44: setfpos_trap                // _SetFPos
-    os_base + 0x46: gettrapaddress_trap         // _GetTrapAddress
-    os_base + 0x47: settrapaddress_trap         // _SetTrapAddress
-    os_base + 0x48: getzone_trap                // _PtrZone
+    os_base + 0x44: tSetFPos                    // _SetFPos
+    os_base + 0x46: tGetTrapAddress             // _GetTrapAddress
+    os_base + 0x47: tSetTrapAddress             // _SetTrapAddress
+    os_base + 0x48: tGetZone                    // _PtrZone
     os_base + 0x49: os_0_trap                   // _HPurge
     os_base + 0x4a: os_0_trap                   // _HNoPurge
     os_base + 0x4b: os_0_trap                   // _SetGrowZone
-    os_base + 0x4c: freemem_trap                // _CompactMem
+    os_base + 0x4c: tFreeMem                    // _CompactMem
     os_base + 0x4d: os_00_trap                  // _PurgeMem
     os_base + 0x55: os_nop_trap                 // _StripAddress
-    os_base + 0x60: fsdispatch_trap             // _FSDispatch
-    os_base + 0x62: freemem_trap                // _PurgeSpace
+    os_base + 0x60: tFSDispatch                 // _FSDispatch
+    os_base + 0x62: tFreeMem                    // _PurgeSpace
     os_base + 0x63: os_00_trap                  // _MaxApplZone
     os_base + 0x64: os_0_trap                   // _MoveHHi
-    os_base + 0x69: hgetstate_trap              // _HGetState
-    os_base + 0x6a: hsetstate_trap              // _HSetState
-    os_base + 0x90: sysenvirons_trap            // _SysEnvirons
-    os_base + 0xad: gestalt_trap                // _Gestalt
-    tb_base + 0x00d: count1resources_trap       // _Count1Resources
-    tb_base + 0x00e: get1indresource_trap       // _Get1IndResource
-    tb_base + 0x00f: get1indtype_trap           // _Get1IndType
-    tb_base + 0x01a: hopenresfile_trap          // _HOpenResFile
-    tb_base + 0x01c: count1types_trap           // _Count1Types
-    tb_base + 0x01f: get1resource_trap          // _Get1Resource
-    tb_base + 0x020: get1namedresource_trap     // _Get1NamedResource
-    tb_base + 0x023: aliasdispatch_trap         // _AliasDispatch
+    os_base + 0x69: tHGetState                  // _HGetState
+    os_base + 0x6a: tHSetState                  // _HSetState
+    os_base + 0x90: tSysEnvirons                // _SysEnvirons
+    os_base + 0xad: tGestalt                    // _Gestalt
+    tb_base + 0x00d: tCount1Resources           // _Count1Resources
+    tb_base + 0x00e: tGet1IndResource           // _Get1IndResource
+    tb_base + 0x00f: tGet1IndType               // _Get1IndType
+    tb_base + 0x01a: tHOpenResFile              // _HOpenResFile
+    tb_base + 0x01c: tCount1Types               // _Count1Types
+    tb_base + 0x01f: tGet1Resource              // _Get1Resource
+    tb_base + 0x020: tGet1NamedResource         // _Get1NamedResource
+    tb_base + 0x023: tAliasDispatch             // _AliasDispatch
     tb_base + 0x034: tb_pop2_trap               // _SetFScaleDisable
     tb_base + 0x050: tb_nop_trap                // _InitCursor
     tb_base + 0x051: tb_pop4_trap               // _SetCursor
@@ -3774,24 +3774,24 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x053: tb_nop_trap                // _ShowCursor
     tb_base + 0x055: tb_pop8_trap               // _ShieldCursor
     tb_base + 0x056: tb_nop_trap                // _ObscureCursor
-    tb_base + 0x058: bitand_trap                // _BitAnd
-    tb_base + 0x059: bitxor_trap                // _BitXor
-    tb_base + 0x05a: bitnot_trap                // _BitNot
-    tb_base + 0x05b: bitor_trap                 // _BitOr
-    tb_base + 0x05c: bitshift_trap              // _BitShift
-    tb_base + 0x05d: bittst_trap                // _BitTst
-    tb_base + 0x05e: bitset_trap                // _BitSet
-    tb_base + 0x05f: bitclr_trap                // _BitClr
-    tb_base + 0x060: waitnextevent_trap         // _WaitNextEvent
-    tb_base + 0x061: random_trap                // _Random
-    tb_base + 0x06a: hiword_trap                // _HiWord
-    tb_base + 0x06b: loword_trap                // _LoWord
-    tb_base + 0x06e: initgraf_trap              // _InitGraf
+    tb_base + 0x058: tBitAnd                    // _BitAnd
+    tb_base + 0x059: tBitXor                    // _BitXor
+    tb_base + 0x05a: tBitNot                    // _BitNot
+    tb_base + 0x05b: tBitOr                     // _BitOr
+    tb_base + 0x05c: tBitShift                  // _BitShift
+    tb_base + 0x05d: tBitTst                    // _BitTst
+    tb_base + 0x05e: tBitSet                    // _BitSet
+    tb_base + 0x05f: tBitClr                    // _BitClr
+    tb_base + 0x060: tWaitNextEvent             // _WaitNextEvent
+    tb_base + 0x061: tRandom                    // _Random
+    tb_base + 0x06a: tHiWord                    // _HiWord
+    tb_base + 0x06b: tLoWord                    // _LoWord
+    tb_base + 0x06e: tInitGraf                  // _InitGraf
     tb_base + 0x06f: tb_pop4_trap               // _OpenPort
-    tb_base + 0x073: setport_trap               // _SetPort
-    tb_base + 0x074: getport_trap               // _GetPort
-    tb_base + 0x0a7: setrect_trap               // _SetRect
-    tb_base + 0x0a8: offsetrect_trap            // _OffsetRect
+    tb_base + 0x073: tSetPort                   // _SetPort
+    tb_base + 0x074: tGetPort                   // _GetPort
+    tb_base + 0x0a7: tSetRect                   // _SetRect
+    tb_base + 0x0a8: tOffsetRect                // _OffsetRect
     tb_base + 0x0d8: tb_nop_ret0l_trap          // _NewRgn
     tb_base + 0x0fe: tb_nop_trap                // _InitFonts
     tb_base + 0x112: tb_nop_trap                // _InitWindows
@@ -3802,55 +3802,55 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x139: tb_pop6_trap               // _EnableItem
     tb_base + 0x13a: tb_pop6_trap               // _DisableItem
     tb_base + 0x13c: tb_pop4_trap               // _SetMenuBar
-    tb_base + 0x13e: menukey_trap               // _MenuKey
+    tb_base + 0x13e: tMenuKey                   // _MenuKey
     tb_base + 0x149: tb_pop2_ret0l_trap         // _GetMenuHandle
     tb_base + 0x14d: tb_pop8_trap               // _AppendResMenu
-    tb_base + 0x170: getnextevent_trap          // _GetNextEvent
+    tb_base + 0x170: tGetNextEvent              // _GetNextEvent
     tb_base + 0x175: tb_nop_ret0l_trap          // _TickCount
     tb_base + 0x179: tb_pop2_trap               // _CouldDialog
     tb_base + 0x17b: tb_nop_trap                // _InitDialogs
     tb_base + 0x17c: tb_pop10_ret0l_trap        // _GetNewDialog
-    tb_base + 0x194: curresfile_trap            // _CurResFile
-    tb_base + 0x197: openresfile_trap           // _OpenResFile
-    tb_base + 0x198: useresfile_trap            // _UseResFile
+    tb_base + 0x194: tCurResFile                // _CurResFile
+    tb_base + 0x197: tOpenResFile               // _OpenResFile
+    tb_base + 0x198: tUseResFile                // _UseResFile
     tb_base + 0x199: tb_pop2_trap               // _UpdateResFile
     tb_base + 0x19b: tb_pop2_trap               // _SetResLoad
-    tb_base + 0x19c: countresources_trap        // _CountResources
-    tb_base + 0x19d: getindresource_trap        // _GetIndResource
-    tb_base + 0x19e: counttypes_trap            // _CountTypes
-    tb_base + 0x19f: getindtype_trap            // _GetIndType
-    tb_base + 0x1a0: getresource_trap           // _GetResource
-    tb_base + 0x1a1: getnamedresource_trap      // _GetNamedResource
+    tb_base + 0x19c: tCountResources            // _CountResources
+    tb_base + 0x19d: tGetIndResource            // _GetIndResource
+    tb_base + 0x19e: tCountTypes                // _CountTypes
+    tb_base + 0x19f: tGetIndType                // _GetIndType
+    tb_base + 0x1a0: tGetResource               // _GetResource
+    tb_base + 0x1a1: tGetNamedResource          // _GetNamedResource
     tb_base + 0x1a3: tb_pop4_trap               // _ReleaseResource
-    tb_base + 0x1a4: homeresfile_trap           // _HomeResFile
-    tb_base + 0x1a5: sizersrc_trap              // _SizeRsrc
-    tb_base + 0x1a8: getresinfo_trap            // _GetResInfo
-    tb_base + 0x1af: reserror_trap              // _ResError
+    tb_base + 0x1a4: tHomeResFile               // _HomeResFile
+    tb_base + 0x1a5: tSizeRsrc                  // _SizeRsrc
+    tb_base + 0x1a8: tGetResInfo                // _GetResInfo
+    tb_base + 0x1af: tResError                  // _ResError
     tb_base + 0x1b4: tb_nop_trap                // _SystemTask
-    tb_base + 0x1b8: getpattern_trap            // _GetPattern
-    tb_base + 0x1b9: getcursor_trap             // _GetCursor
-    tb_base + 0x1ba: getstring_trap             // _GetString
-    tb_base + 0x1bb: geticon_trap               // _GetIcon
-    tb_base + 0x1bc: getpicture_trap            // _GetPicture
+    tb_base + 0x1b8: tGetPattern                // _GetPattern
+    tb_base + 0x1b9: tGetCursor                 // _GetCursor
+    tb_base + 0x1ba: tGetString                 // _GetString
+    tb_base + 0x1bb: tGetIcon                   // _GetIcon
+    tb_base + 0x1bc: tGetPicture                // _GetPicture
     tb_base + 0x1bd: tb_pop10_ret0l_trap        // _GetNewWindow
     tb_base + 0x1c0: tb_pop2_ret0l_trap         // _GetNewMBar
-    tb_base + 0x1c4: openrfperm_trap            // _OpenRFPerm
+    tb_base + 0x1c4: tOpenRFPerm                // _OpenRFPerm
     tb_base + 0x1c8: tb_nop_trap                // _SysBeep
-    tb_base + 0x1c9: syserror_trap              // _SysError
+    tb_base + 0x1c9: tSysError                  // _SysError
     tb_base + 0x1cc: tb_nop_trap                // _TEInit
-    tb_base + 0x1e1: handtohand_trap            // _HandToHand
-    tb_base + 0x1e2: ptrtoxhand_trap            // _PtrToXHand
-    tb_base + 0x1e3: ptrtohand_trap             // _PtrToHand
-    tb_base + 0x1e4: handandhand_trap           // _HandAndHand
+    tb_base + 0x1e1: tHandToHand                // _HandToHand
+    tb_base + 0x1e2: tPtrToXHand                // _PtrToXHand
+    tb_base + 0x1e3: tPtrToHand                 // _PtrToHand
+    tb_base + 0x1e4: tHandAndHand               // _HandAndHand
     tb_base + 0x1e5: tb_pop2_trap               // _InitPack
     tb_base + 0x1e6: tb_nop_trap                // _InitAllPacks
-    tb_base + 0x1eb: pack4_trap                 // _FP68K
-    tb_base + 0x1ec: pack5_trap                 // _Elems68K
-    tb_base + 0x1ee: pack7_trap                 // _DecStr68K
-    tb_base + 0x1f0: loadseg_trap               // _LoadSeg
+    tb_base + 0x1eb: tFP68K                     // _FP68K
+    tb_base + 0x1ec: tElems68K                  // _Elems68K
+    tb_base + 0x1ee: tDecStr68K                 // _DecStr68K
+    tb_base + 0x1f0: tLoadSeg                   // _LoadSeg
     tb_base + 0x1f1: tb_pop4_trap               // _UnloadSeg
-    tb_base + 0x1f4: exittoshell_trap           // _ExitToShell
+    tb_base + 0x1f4: tExitToShell               // _ExitToShell
     tb_base + 0x1fa: tb_nop_ret0l_trap          // _UnlodeScrap
     tb_base + 0x1fb: tb_nop_ret0l_trap          // _LodeScrap
-    tb_base + 0x1ff: debugger_trap              // _Debugger
+    tb_base + 0x1ff: tDebugger                  // _Debugger
 }
