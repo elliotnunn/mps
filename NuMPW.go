@@ -35,7 +35,7 @@ const (
     d5ptr = regs + 20
     d6ptr = regs + 24
     d7ptr = regs + 28
-    a0ptr = regs + 32
+    a0ptr = a0ptr
     a1ptr = regs + 36
     a2ptr = regs + 40
     a3ptr = regs + 44
@@ -93,17 +93,54 @@ func push(size int, data uint32) {
     write(size, ptr, data)
 }
 
+func pushl(val uint32) {
+    ptr := readl(spptr) - 4
+    writel(spptr, ptr)
+    writel(ptr, val)
+}
+
+func pushw(val uint16) {
+    ptr := readl(spptr) - 2
+    writel(spptr, ptr)
+    writew(ptr, val)
+}
+
+func pushb(val uint8) {
+    ptr := readl(spptr) - 2
+    writel(spptr, ptr)
+    writeb(ptr + 1, 0)
+    writeb(ptr, val)
+}
+
 func pop(size int) uint32 {
     ptr := address_by_mode(31, size) // (A7)+
     return read(size, ptr)
 }
 
-func get_sp() uint32 {
-    return readl(regs + 60)
+func popl() {
+    ptr := readl(spptr)
+    writel(spptr, ptr + 4)
+    return readl(ptr)
 }
 
-func set_sp(val uint32) {
-    writel(regs + 60, val)
+func popw() {
+    ptr := readl(spptr)
+    writel(spptr, ptr + 2)
+    return readw(ptr)
+}
+
+func popb() {
+    ptr := readl(spptr)
+    writel(spptr, ptr + 2)
+    return readb(ptr)
+}
+
+func readl(spptr) uint32 {
+    return readl(spptr)
+}
+
+func writel(spptr, val uint32) {
+    writel(spptr, val)
 }
 
 func signed(size int, n uint32) int32 {
@@ -161,9 +198,9 @@ func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
     if mode < 16 { // Dn or An -- optimise common case slightly
         ptr = regs + (mode & 15) * 4 + 4 - size
     } else if mode >> 3 == 2 { // (An)
-        ptr = readl(regs + 32 + (mode & 7) * 4)
+        ptr = readl(a0ptr + (mode & 7) * 4)
     } else if mode >> 3 == 3 { // (An)+
-        regptr = regs + 32 + (mode & 7) * 4
+        regptr = a0ptr + (mode & 7) * 4
         ptr = readl(regptr)
         newptr = ptr + size
         if mode & 7 == 7 && size == 1 {
@@ -171,7 +208,7 @@ func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
         }
         writel(regptr, newptr)
     } else if mode >> 3 == 4 { // -(An)
-        regptr = regs + 32 + (mode & 7) * 4
+        regptr = a0ptr + (mode & 7) * 4
         ptr = readl(regptr)
         ptr -= size
         if mode & 7 == 7 && size == 1 {
@@ -179,10 +216,10 @@ func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
         }
         writel(regptr, ptr)
     } else if mode >> 3 == 5 { // d16(An)
-        regptr = regs + 32 + (mode & 7) * 4
+        regptr = a0ptr + (mode & 7) * 4
         ptr = readl(regptr) + signed(2, readw(pc)); pc += 2
     } else if mode >> 3 == 6 { // d8(An,Xn)
-        ptr = regs + 32 + (mode & 7) * 4
+        ptr = a0ptr + (mode & 7) * 4
         ptr = readl(ptr) // get An
 
         xreg = readb(pc); pc++
@@ -267,7 +304,7 @@ func line0(inst uint16) {
                 panic("movep")
             }
             dn = inst >> 9
-            bit := readl(regs + dn * 4)
+            bit := readl(d0ptr + dn * 4)
         } else { // bit numbered by immediate
             bit = readw(pc); pc += 2
         }
@@ -427,8 +464,8 @@ func line4(inst uint16) { // very,crowded,line
             size = 2
         }
         dn = inst & 7
-        src = regs + dn * 4 + 4 - size/2
-        dest = regs + dn * 4 + 4 - size
+        src = d0ptr + dn * 4 + 4 - size/2
+        dest = d0ptr + dn * 4 + 4 - size
         datum = signed(size/2, read(size/2, src))
         set_nz(datum, size)
         v = false
@@ -436,7 +473,7 @@ func line4(inst uint16) { // very,crowded,line
         write(size, dest, datum)
     } else if inst & 0xFF8 == 0x840 { // swap.w
         dn = inst & 7
-        dest = regs + dn * 4
+        dest = d0ptr + dn * 4
         datum = readl(dest)
         datum = ((datum >> 16) & 0xFFFF) | ((datum & 0xFFFF) << 16)
         set_nz(datum, 4)
@@ -445,7 +482,7 @@ func line4(inst uint16) { // very,crowded,line
         writel(dest, datum)
     } else if inst & 0xFC0 == 0x840 { // pea -- notice similarity to swap.w
         ea = address_by_mode(inst & 63, 4) // size doesn't matter here
-        push(4, ea)
+        pushl(ea)
     } else if inst & 0xF00 == 0xA00 { // tst,tas
         size = []int{1, 2, 4, 1}[(inst >> 6) & 3]
         is_tas = (inst >> 6) & 3 == 3
@@ -458,31 +495,31 @@ func line4(inst uint16) { // very,crowded,line
             writeb(dest, datum | 0x80)
         }
     } else if inst & 0xFF8 == 0xE50 { // link
-        an = inst & 7; an_ea = regs + 32 + an * 4
+        an = inst & 7; an_ea = a0ptr + an * 4
         imm = signed(2, readw(pc)); pc += 2
 
-        push(4, readl(an_ea)) // move.l a6,-(sp)
+        pushl(readl(an_ea)) // move.l a6,-(sp)
         sp = readl(regs+60)
         writel(an_ea, sp) // move.l sp,a6
         writel(regs+60, sp + imm) // add.w #imm,sp
 
     } else if inst & 0xFF8 == 0xE58 { // unlk
-        an = inst & 7; an_ea = regs + 32 + an * 4
+        an = inst & 7; an_ea = a0ptr + an * 4
 
         writel(regs+60, readl(an_ea)) // move.l a6,sp
-        writel(an_ea, pop(4)) // move.l (sp)+,a6
+        writel(an_ea, popl()) // move.l (sp)+,a6
     } else if inst & 0xFFF == 0xE71 { // nop
     } else if inst & 0xFFF == 0xE75 { // rts
         check_for_lurkers()
-        pc = pop(4)
+        pc = popl()
     } else if inst & 0xFFF == 0xE77 { // rtr
-        set_ccr(pop(2))
-        pc = pop(4)
+        set_ccr(popw())
+        pc = popl()
     } else if inst & 0xF80 == 0xE80 { // jsr/jmp
         targ = address_by_mode(inst & 63, 4) // any size
         if !inst & 0x40 {
             check_for_lurkers() // don't slow down jmp's, we do them a lot
-            push(4, pc)
+            pushl(pc)
         }
         pc = targ
     } else if inst & 0xF80 == 0x880 { // movem registers,ea
@@ -532,10 +569,10 @@ func line4(inst uint16) { // very,crowded,line
     } else if inst & 0x1C0 == 0x1C0 { // lea
         an := (inst >> 9) & 7
         ea := address_by_mode(inst & 63, 4) // any size
-        writel(regs + 32 + an * 4, ea)
+        writel(a0ptr + an * 4, ea)
     } else if inst & 0x1C0 == 0x180 { // chk
         dn := (inst >> 9) & 7
-        testee := signed(2, readw(regs + 4 * dn + 2))
+        testee := signed(2, readw(d0ptr + 4 * dn + 2))
         ea := address_by_mode(inst & 63, 2)
         ubound := signed(2, readw(ea))
         if !(0 <= testee <= ubound) {
@@ -578,7 +615,7 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
         }
         // decrement the counter (dn)
         dn = inst & 7
-        dest = regs + dn * 4 + 2
+        dest = d0ptr + dn * 4 + 2
         counter = (readw(dest) - 1) & 0xFFFF
         writew(dest, counter)
         if counter == 0xFFFF { // do not take the branch
@@ -610,7 +647,7 @@ func line6(inst uint16) { // bra,bsr,bcc
 
     }
     if cond == 1 { // is bsr
-        push(4, pc)
+        pushl(pc)
 
     }
     pc += disp
@@ -634,7 +671,7 @@ func line7(inst uint16) { // moveq
     v = false
     c = false
 
-    writel(regs + dn * 4, val)
+    writel(d0ptr + dn * 4, val)
 }
 
 func line8(inst uint16) { // divu,divs,sbcd,or
@@ -652,7 +689,7 @@ func line8(inst uint16) { // divu,divs,sbcd,or
             1/0
         }
         dn = (inst >> 9) & 7
-        dividend = readl(regs + dn * 4)
+        dividend = readl(d0ptr + dn * 4)
         if is_signed {
             dividend = signed(4, dividend)
 
@@ -683,7 +720,7 @@ func line8(inst uint16) { // divu,divs,sbcd,or
         v = false
         set_nz(quotient, 2)
 
-        writel(regs + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
+        writel(d0ptr + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
 
     } else { // or
         size := readsize((inst >> 6) & 3)
@@ -691,7 +728,7 @@ func line8(inst uint16) { // divu,divs,sbcd,or
         }
         src = address_by_mode(inst & 63, size)
         dn = (inst >> 9) & 7
-        dest = regs + dn * 4 + 4 - size
+        dest = d0ptr + dn * 4 + 4 - size
 
         if inst & 0x100 {
             src, dest = dest, src
@@ -720,8 +757,8 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
 
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = signed(4, readl(regs + 32 + an * 4)) + sign * signed(size, read(size, ea))
-        writel(regs + 32 + an * 4, result)
+        result = signed(4, readl(a0ptr + an * 4)) + sign * signed(size, read(size, ea))
+        writel(a0ptr + an * 4, result)
 
     } else if inst & 0x130 == 0x100 { // subx,addx: only two addressing modes allowed
         size := readsize((inst >> 6) & 3)
@@ -750,7 +787,7 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
         }
         src = address_by_mode(inst & 63, size)
         dn = (inst >> 9) & 7
-        dest = regs + dn * 4 + 4 - size
+        dest = d0ptr + dn * 4 + 4 - size
 
         if inst & 0x100 { // direction bit does a swap
             src, dest = dest, src
@@ -777,14 +814,14 @@ func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
 
         ea := address_by_mode(inst & 63, size)
         an := (inst >> 9) & 7
-        result := sub_then_set_vc(signed(4, readl(regs + 32 + an * 4)), signed(size, read(size, ea)), 4)
+        result := sub_then_set_vc(signed(4, readl(a0ptr + an * 4)), signed(size, read(size, ea)), 4)
         set_nz(result, 4)
     } else if inst & 0x100 == 0x000 { // cmp
         size := readsize((inst >> 6) & 3)
         if size == 0 {panic("cmp size=%11")
         }
         dn = (inst >> 9) & 7
-        dest = regs + dn * 4 + 4 - size
+        dest = d0ptr + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
@@ -800,7 +837,7 @@ func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
         size := readsize((inst >> 6) & 3)
         if size == 0 {panic("eor size=%11")
         }
-        dn = (inst >> 9) & 7; src = regs + 4 * dn + 4 - size
+        dn = (inst >> 9) & 7; src = d0ptr + 4 * dn + 4 - size
         dest = address_by_mode(inst & 63, size)
 
         result = read(size, dest) ^ read(size, src)
@@ -815,7 +852,7 @@ func lineC(inst uint16) {
     if inst & 0xC0 == 0xC0 { // mulu,muls
         is_signed = bool(inst & 0x100)
         src = address_by_mode(inst & 63, 2) // ea.w
-        dest = regs + ((inst >> 9) & 7) * 4 // dn.l
+        dest = d0ptr + ((inst >> 9) & 7) * 4 // dn.l
 
         m1 = readw(dest+2); m2 = readw(src)
         if is_signed {
@@ -877,9 +914,9 @@ func lineE(inst uint16) {
         by := 1
     } else {
         kind = (inst >> 3) & 3
-        dest = regs + (inst & 7) * 4 + 4 - size // dn
+        dest = d0ptr + (inst & 7) * 4 + 4 - size // dn
         if inst & 0x20 {
-            by = readb(regs + ((inst >> 9) & 7) * 4 + 3) % 64
+            by = readb(d0ptr + ((inst >> 9) & 7) * 4 + 3) % 64
         } else {
             by = (inst >> 9) & 7
             by = ((inst >> 9) & 7) || 8
@@ -969,10 +1006,16 @@ func lineE(inst uint16) {
     write(size, dest, result)
 }
 
-func run_m68k_interpreter() {
-    for {
-        var inst = (uint16(mymem[pc]) << 8) | mymem[pc+1]
-        pc = pc + 2
+func call_m68k(addr uint32) {
+    const magic_return = 0
+
+    save_pc := pc
+    pushl(magic_return) // the function we call will pop this value
+    pc = addr
+
+    for pc != magic_return {
+        inst := readw(pc)
+        pc += 2
         switch inst >> 12 {
         case 0:
             line0(inst)
@@ -1000,6 +1043,8 @@ func run_m68k_interpreter() {
             lineE(inst)
         }
     }
+
+    pc = save_pc
 }
 
 // debug_segment_list = []
@@ -1042,7 +1087,7 @@ func run_m68k_interpreter() {
 //         fmt.Print(" ".join(mem[r:r+4].hex() for r := range(i, i+32, 4)))
 //
 //     }
-//     sp := readl(regs + 32 + 7 * 4)
+//     sp := readl(a7ptr)
 //     fmt.Print("sp:", " ".join(mem[r:r+2].hex() for r := range(sp, sp+20, 2)),
 //         "ccr:", "xX"[x]+"nN"[n]+"zZ"[z]+"vV"[v]+"cC"[c])
 //
@@ -2219,23 +2264,23 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 // //    global pc
 //
 //     // ToolServer relies on this to call other traps, which is a problem
-//     selector := readb(regs + 3) // d0.b
+//     selector := readb(d0ptr + 3) // d0.b
 //
 //     if selector == 1 { // pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpecPtr spec)
 //
-//         spec := pop(4)
-//         ioNamePtr = pop(4)
-//         ioDirID = pop(4)
-//         ioVRefNum = pop(2)
+//         spec := popl()
+//         ioNamePtr = popl()
+//         ioDirID = popl()
+//         ioVRefNum = popw()
 //
 //         // Get ready to return when a callback_trap_word is executed
 //         return_pc = pc
-//         return_sp = get_sp()
+//         return_sp = readl(spptr)
 //
 //         // Create and populate a param block (longer than it needs to be)
 //         push(128, 0)
-//         pb = get_sp()
-//         writel(regs + 32, pb) // a0 = pb
+//         pb = readl(spptr)
+//         writel(a0ptr, pb) // a0 = pb
 //
 //         writew(pb + 22, ioVRefNum)
 //         writel(pb + 48, ioDirID)
@@ -2243,10 +2288,10 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 //         writel(pb + 28, spec) // ioMisc
 //
 //         // Push _Open and then another special word to the stack, and run them
-//         push(2, callback_trap_word)
-//         push(2, 0xa260)
-//         push(2, 0x701b) // _MakeFSSpec
-//         pc = get_sp()
+//         pushw(callback_trap_word)
+//         pushw(0xa260)
+//         pushw(0x701b) // _MakeFSSpec
+//         pc = readl(spptr)
 //
 //         // Return here when the special word gets called
 //         @oneoff_callback
@@ -2255,32 +2300,32 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 //     }
 // //            global pc
 //             pc = return_pc
-//             set_sp(return_sp)
+//             writel(spptr, return_sp)
 //
 //             ioResult = readw(pb + 16)
-//             writew(get_sp(), ioResult)
+//             writew(readl(spptr), ioResult)
 //
 //     else if selector in (2, 3) { // pascal OSErr FSpOpenDF(const FSSpec *spec, char permission, short *refNum)
-//         refNumPtr = pop(4)
-//         ioPermssn := pop(2) >> 8
-//         fsspec := pop(4)
+//         refNumPtr = popl()
+//         ioPermssn := popw() >> 8
+//         fsspec := popl()
 //
 //         // Get ready to return when a callback_trap_word is executed
 //         return_pc = pc
-//         return_sp := get_sp()
+//         return_sp := readl(spptr)
 //
 //         // Create and populate a param block (longer than it needs to be)
 //         push(128, 0)
-//         pb := get_sp()
-//         writel(regs + 32, pb) // a0 = pb
+//         pb := readl(spptr)
+//         writel(a0ptr, pb) // a0 = pb
 //
 //         fsspec_to_pb(fsspec, pb)
 //         writeb(pb + 27, ioPermssn)
 //
 //         // Push _Open and then another special word to the stack, and run them
-//         push(2, callback_trap_word)
-//         push(2, 0xa000 if selector == 3 else 0xa00a) // _Open or _OpenRF
-//         pc = get_sp()
+//         pushw(callback_trap_word)
+//         pushw(0xa000 if selector == 3 else 0xa00a) // _Open or _OpenRF
+//         pc = readl(spptr)
 //
 //         // Return here when the special word gets called
 //         @oneoff_callback
@@ -2289,12 +2334,12 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 //     }
 // //            global pc
 //             pc = return_pc
-//             set_sp(return_sp)
+//             writel(spptr, return_sp)
 //
 //             ioRefnum = readw(pb + 24)
 //             writew(refNumPtr, ioRefNum)
 //             ioResult = readw(pb + 16)
-//             writew(get_sp(), ioResult)
+//             writew(readl(spptr), ioResult)
 //
 //     else if selector == 0x4 { // pascal OSErr FSpCreate(const FSSpec  *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
 //         pass
@@ -2324,115 +2369,93 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 
 // Memory Manager OS traps
 
-func return_memerr(result int) {
+func return_memerr_and_d0(result int) {
     writew(0x220, uint16(result))
     writel(d0ptr, uint32(result))
+}
+
+func return_memerr(result int) {
+    writew(0x220, uint16(result))
 }
 
 var block_sizes map[uint32]uint32
 var master_ptrs map[uint32]bool
 
 func getzone_trap() {
-    return_memerr(0)
+    return_memerr_and_d0(0)
     ApplZone := readl(0x2aa)
     writel(a0ptr, ApplZone) // ApplZone
 }
 
-func freemem_trap() {
+func freemem_trap() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
     return_memerr(0)
     writel(d0ptr, 0x7ffffffe) // free
     writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
-    return 0x7ffffffe, 0 // d0=free, a0=growable (MaxMem only)
 }
 
-func purgespace_trap() {
-    return 0x7ffffffe, 0x7ffffffe // d0=total, a0=contig
-}
-
-func newptr(size) { // fixed 16b header before all "heap" blocks
-    mem.extend(bytes(0x20000))
-    while len(mem) % 16: mem = append(mem, 0)
-    }
-    mem.extend(bytes(16 + size))
-    retval = len(mem) - size
-    block_sizes[retval] = size
-    return retval
-
-}
+// Final common pathway for making heap blocks
+// TODO: improve on this bump allocator
 func newptr_trap() {
-    return 0, newptr(d0) // noErr, ptr
+    size := readl(d0ptr)
+    return_memerr_and_d0(0)
+
+    for i := 0; i < 16; i++ {
+        mem = append(mem, 0)
+    }
+    for len(mem) % 0x1000 != 0 {
+        mem = append(mem, 0)
+    }
+    block := uint32(len(mem))
+    for len(mem) < block + size {
+        mem = append(mem, 0)
+    }
+    block_sizes[block] = size
+
+    writel(a0ptr, block)
 }
 
-func disposptr(ptr) {
-    try {
-        delete(block_sizes, ptr)
-    }
-    except {
-        pass
-
-    }
-}
 func disposptr_trap() {
-    disposptr(a0)
+    return_memerr_and_d0(0)
+    ptr := readl(a0ptr)
+    disposptr(ptr)
 }
 
-func setptrsize(ptr, size) {
+func setptrsize_trap() {
+    ptr := readl(a0ptr)
+    size := readl(d0ptr)
+
     if block_sizes[ptr] >= size {
         block_sizes[ptr] = size
-        return true
+        return_memerr_and_d0(0)
     } else {
-        return false // failure
-
-    }
-}
-func setptrsize_trap() {
-    if setptrsize(a0, d0) {
-        return 0 // noErr
-    } else {
-        return -108 // memFullErr
+        return_memerr_and_d0(-108) // memFullErr
     }
 }
 
-func getptrsize(ptr) {
-    return block_sizes[ptr]
-
-}
 func getptrsize_trap() {
-    return getptrsize(ptr)
+    return_memerr(0)
+    writel(d0ptr, block_sizes[readl(a0ptr)])
 }
 
-func newhandle(size) {
-    ptr := newptr(size)
-    writel(ptr - 4, ptr)
-    writel(ptr - 8, 0xFA7B175) // FatBits
-    master_ptrs[ptr] = ptr - 4
-    return ptr - 4 // a handle points to its owning pointer
-
-}
 func newhandle_trap() {
-    return 0, newhandle(d0) // noErr, handle
+    newptr_trap()
+
+    ptr := readl(a0ptr)
+    writel(ptr - 16, ptr) // stash the master pointer in the header
+    writel(a0ptr, ptr - 16)
 }
 
-func disposhandle(handle) {
-    try {
-        ptr := readl(handle)
-        if !ptr {
-            return
-        }
-        disposptr(ptr)
-    }
-    except {
-        pass
-
-    }
-}
 func disposhandle_trap() {
-    disposhandle(a0)
+    disposptr_trap(readl(readl(a0ptr)))
 }
 
-func sethandlesize(handle, size) {
+func sethandlesize_trap() {
+    handle := readl(a0ptr)
+    size := readl(d0ptr)
+    return_memerr_and_d0(0)
+
     ptr := readl(handle)
-    oldsize := block_sizes[ptr] if ptr else 0
+    oldsize := block_sizes[ptr]
     if oldsize >= size {
         // can shrink the handle
         block_sizes[ptr] = size
@@ -2440,256 +2463,310 @@ func sethandlesize(handle, size) {
         ptr2 := newptr(size)
         delete(master_ptrs, ptr)
         master_ptrs[ptr2] = handle
-        memcpy(ptr2, ptr, oldsize)
-        disposptr(ptr)
+        copy(mem[ptr2:ptr2+size], mem[ptr:ptr+size])
         writel(handle, ptr2)
-
     }
 }
-func sethandlesize_trap() {
-    sethandlesize(a0, d0)
-}
 
-func gethandlesize(handle) {
-    ptr := readl(handle)
-    return block_sizes[ptr] if ptr else 0
-
-}
 func gethandlesize_trap() {
-    return gethandlesize(a0)
+    return_memerr(0)
+    writel(d0ptr, block_sizes[readl(readl(a0ptr))]) // might die??
 }
 
-func reallochandle(handle, size) {
-    emptyhandle(handle)
-    sethandlesize(handle, size)
-
-}
 func reallochandle_trap() {
-    reallochandle(a0, d0)
+    handle := readl(a0ptr)
+    size := readl(d0ptr)
+    emptyhandle(handle)
+    writel(a0ptr, handle)
+    writel(d0ptr, size)
+    sethandlesize(handle, size)
 }
 
-func recoverhandle(ptr) {
-    return master_ptrs[ptr]
-
-}
 func recoverhandle_trap() {
-    return d0, recoverhandle(a0) // preserve d0, return a0
+    return_memerr(0) // preserves d0, oddly
+    writel(a0ptr, master_ptrs[readl(a0)])
 }
 
-func emptyhandle(handle) {
-    ptr := readl(handle)
-    delete(master_ptrs, ptr)
-    disposptr(ptr)
-    writel(handle, 0)
-
-}
 func emptyhandle_trap() {
-    emptyhandle(a0)
-
+    handle := readl(a0ptr)
+    writel(a0ptr, readl(handle))
+    disposptr_trap()
+    writel(handle, 0)
+    return_memerr_and_d0(0)
 }
+
 func blockmove_trap() {
-    memcpy(a1, a0, d0)
-
+    src := readl(a0ptr)
+    dest := readl(a1ptr)
+    size := readl(d0ptr)
+    copy(mem[dest:dest+size], mem[src:src+size])
+    return_memerr_and_d0(0)
 }
-func stripaddress_trap() {
-    if len(mem) <= 0x1000000 {
-        d0 &= 0xffffff
-    }
-    return d0
 
-}
 func hgetstate_trap() {
-    return readb(a0 - 5)
-
+    handle := readl(a0ptr)
+    flags := readb(handle + 4)
+    writel(d0ptr, uint32(flags))
+    return_memerr(0)
 }
+
 func hsetstate_trap() {
-    writeb(a0 - 5, d0)
-
+    handle := readl(a0ptr)
+    flags := readb(d0ptr + 3)
+    writeb(handle + 4, flags)
+    return_memerr(0)
 }
+
 // Trap Manager OS traps
 
 // For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
-func trap_kind(trapnum, flags) {
-    if flags & 0x200 { // newOS/newTool trap
-        if flags & 0x400 {
-            return trapnum & 0x3ff, "toolbox"
-        } else: return trapnum & 0xff, "os"
+func trap_kind(requested_trap uint16, requesting_trap uint16) (uint16, rune) {
+    if requesting_trap & 0x200 != 0 { // newOS/newTool trap
+        if requesting_trap & 0x400 {
+            return requested_trap & 0x3ff, 't'
+        } else {
+            return requested_trap & 0xff, 'o'
         }
     } else { // guess, using traditional trap numbering
-        trapnum &= 0x1ff // 64k ROM had a single 512-entry trap table
-        if trapnum <= 0x4f || trapnum in (0x54, 0x57) {
-            return trapnum, "os"
-        } else: return trapnum, "toolbox"
-
+        requested_trap &= 0x1ff // 64k ROM had a single 512-entry trap table
+        if requested_trap <= 0x4f || requested_trap == 0x54 || requested_trap == 0x57 {
+            return requested_trap, 'o'
+        } else {
+            return requested_trap, 't'
         }
     }
 }
-func gettrapaddress_trap() {
-    trapnum, trapkind = trap_kind(d0, trap)
-    index := trapnum + (0x100 if trapkind == "toolbox" else 0)
-    return d0, trap_address_table[index] // d0 undefined
 
+func gettrapaddress_trap() {
+    trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
+    if trapkind == 't' {
+        trapnum += 0x100 // index into our special table
+    }
+    writel(a0ptr, trap_address_table[trapnum])
 }
 func settrapaddress_trap() {
-    trapnum, trapkind = trap_kind(d0, trap)
-    index := trapnum + (0x100 if trapkind == "toolbox" else 0)
-    trap_address_table[index] = a0 // this never worked!
-    // registers on exit undefined
-
+    trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
+    if trapkind == 't' {
+        trapnum += 0x100 // index into our special table
+    }
+    trap_address_table[trapnum] = readl(a0ptr)
 }
+
 // Resource Manager Toolbox traps
 
+// All map handles from TopMapHndl
+func allResMaps() (list []uint32) {
+    for handle := readl(0xa50); handle != 0; handle = readl(readl(handle) + 16) {
+        list = append(list, handle)
+    }
+}
+
+// All map handles from CurMap
+func activeResMaps() (list []uint32) {
+    all_maps = allResMaps()
+    CurMap := readw(0xa5a)
+    for i, maphdl := range all_maps {
+        if readw(readl(maphdl) + 20) == CurMap {
+            return all_maps[i:]
+        }
+    }
+}
+
+// CurMap only
+func currentResMap() uint32 {
+    active_maps := activeResMaps()
+    if len(active_maps) > 0 {
+        return active_maps[0]
+    }
+}
+
+// {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
+func resMapEntries(map uint32) (retval [][]uint16) {
+    map := readl(map) // handle to pointer
+
+    refbase := readw(map + 24)
+    namebase := readw(map + 26)
+    num_types := readw(map + refbase) + 1
+
+    for t := 0; t < num_types; t++ {
+        this_type_entry := refbase + 2 + 8 * t
+        num_ids := readw(map + this_type_entry + 4) + 1
+        retval := append(retval, []uint32{this_type_entry})
+        first_of_this_type := readw(map + this_type_entry + 6)
+
+        for i := 0; i < num_ids; i++ {
+            this_id_entry := refbase + first_of_this_type + 12 * i
+            retval[-1] = append(retval[-1], this_id_entry)
+        }
+    }
+}
+
+func uniqueTypesInMaps(maps []uint32...) (types []uint32) {
+    var already map[uint32]bool
+
+    for _, handle := range maps {
+        ptr := readl(handle)
+        for _, entries := resMapEntries(handle) {
+            type_entry := entries[0] // ignore the type entries
+            the_type := readl(ptr + type_entry)
+            if !already[the_type] {
+                already[the_type] = true
+                types = append(types, the_type)
+            }
+        }
+    }
+}
+
+func uniqueIdsInMaps(the_type uint32, maps []uint32...) (ids []uint16) {
+    var already map[uint16]bool
+
+    for _, handle := range maps {
+        ptr := readl(handle)
+        for _, entries := resMapEntries(handle) {
+            type_entry := entries[0] // ignore the type entries
+            if the_type == readl(ptr + type_entry) {
+                for _, id_entry := range entries[1:] {
+                    the_id := readw(id_entry)
+                    if !already[the_id] {
+                        already[the_id] = true
+                        ids = append(ids, the_id)
+                    }
+                }
+            }
+        }
+    }
+}
+
+func resToHand(map uint32, type_entry uint16, id_entry uint16) (handle uint32) {
+    map := readl(map) // handle to pointer
+
+    // Perhaps it is already in memory?
+    handle = readl(map + id + 8)
+    if handle != 0 {
+        return
+    }
+
+    // No such luck. Load it from the file.
+    refnum := readw(map + 20)
+    filedata := filebuffers[refnum]
+
+    data_ofs := binary.BigEndian.Uint32(filedata) + (readl(map + id_entry + 4) & 0xffffff) + 4
+    data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
+    data := filedata[data_ofs:][:data_len]
+
+    // _NewHandle
+    writel(d0ptr, len(data))
+    call_m68k(executable_atrap(0xa122))
+    handle = readl(a0ptr)
+
+    // Populate
+    copy(mem[readl(handle):], data)
+    writeb(handle + 4, 0x20) // set resourceBit
+
+    // Save handle in map
+    writel(map + id_entry + 8, handle)
+}
+
 func reserror_trap() {
-    writew(get_sp(), readw(0xa60))
-
+    writew(readl(spptr), readw(0xa60))
 }
+
 func openresfile_trap() {
-    strarg := pop(4)
-    push(6, 0) // zero vRefNum and dirID
-    push(4, strarg)
-    push(2, 0) // zero permission
+    strarg := popl()
+    pushw(0) // zero vRefNum
+    pushl(0) // zero dirID
+    pushl(strarg)
+    pushw(0) // zero permission
     hopenresfile_trap()
-
 }
+
 func openrfperm_trap() {
-    permission = pop(2)
-    vRefNum := pop(2)
-    fileName := pop(4)
-    push(2, vRefNum)
-    push(4, 0) // dirID
-    push(4, fileName)
-    push(2, permission)
+    permission = popw()
+    vRefNum := popw()
+    fileName := popl()
+    pushw(vRefNum)
+    pushl(0) // dirID
+    pushl(fileName)
+    pushw(permission)
     hopenresfile_trap()
-
 }
+
 func hopenresfile_trap() {
-}
-//    global pc
+    permission := popw()
+    ioNamePtr := popl()
+    ioDirID := popl()
+    ioVRefNum := popw()
+    writew(readl(spptr), -1) // return "failed" refnum
 
-    permission := pop(2)
-    ioNamePtr := pop(4)
-    ioDirID := pop(4)
-    ioVRefNum := pop(2)
-
-    return_pc := pc
-    return_sp := get_sp()
-
-    // a0 -> _OpenRF param block on stack
+    // Call _HOpenRF with a parameter block
     push(128, 0)
-    pb = get_sp(); writel(regs + 32, pb) // a0 = pb
+    pb := readl(spptr); writel(a0ptr, pb) // a0 = pb
     writew(pb + 22, ioVRefNum)
     writel(pb + 48, ioDirID)
     writel(pb + 18, ioNamePtr)
+    call_m68k(executable_atrap(0xa20a)) // _HOpenRF
+    pop(128)
 
-    // Run this stuff
-    push(2, callback_trap_word)
-    push(2, 0xa20a) // _HOpenRF
-    pc := get_sp()
-
-    @oneoff_callback
-    def hopenresfile_finish() {
+    ioResult = readw(pb + 16)
+    writew(0xa60, ioResult) // set ResError
+    if ioResult != 0 {
+        return
     }
-//        global pc
-        pc := return_pc
-        set_sp(return_sp)
 
-        ioRefNum := readw(pb + 24)
-        ioResult = readw(pb + 16)
-
-        writew(0xa60, ioResult) // set ResError
-        writew(get_sp(), -1) // return "failed" refnum
-
-        if ioResult != 0 {
-            return
-
-        }
-        forkdata := filebuffers[ioRefNum] // don't use trap calls to read data
-        }
-        if len(forkdata) < 256 {
-            writew(0xa60, -39) // ResErr = eofErr
-            return
-
-        }
-        mapstart, maplen = struct.unpack_from(">LxxxxL", forkdata, 4)
-        map = forkdata[mapstart:mapstart+maplen]
-
-        map[:16] = forkdata[:16] // copy of header of file
-        maphdl := newhandle(len(map)); mapptr = readl(maphdl)
-        mem[mapptr:mapptr+len(map)] = map
-
-        writel(mapptr + 16, readl(0xa50)) // point to TopMapHndl
-        writew(mapptr + 20, ioRefNum)
-
-        writel(0xa50, maphdl) // this is now TopMapHndl
-        writew(0xa5a, ioRefNum) // also CurMap
-
-        writew(get_sp(), ioRefNum) // return refnum
-
-// def listify(func) {
-//     @wraps(func)
-//     def wrapper(*args, **kw) {
-//         return list(func(*args, **kw))
-//     return wrapper
-//
-func iter_resource_maps(top_only=false, include_inactive=false) {
-    curmap = readw(0xa5a) // CurMap
-    handle = readl(0xa50) // TopMapHndl
-
-    seen_top_map = false
-
-    while handle != 0 {
-        pointer = readl(handle)
-
-        if include_inactive || seen_top_map || curmap == readw(pointer + 20) {
-            yield handle
-            seen_top_map = true
-            if top_only {
-                break
-
-            }
-        }
-        handle = readl(pointer + 16)
+    ioRefNum := readw(pb + 24)
+    forkdata := filebuffers[ioRefNum] // access buffer directly, not _Read trap
+    if len(forkdata) < 256 {
+        writew(0xa60, -39) // ResErr = eofErr
+        return
     }
+
+    // The "resource map" sits at the end of the fork
+    mapstart := binary.BigEndian.Uint32(forkdata[4:])
+    maplen := binary.BigEndian.Uint32(forkdata[12:])
+
+    // Create a handle to hold it
+    writel(d0ptr, maplen)
+    call_m68k(executable_atrap(0xa20a)) // _NewHandle for map
+    maphdl := readl(a0ptr); mapptr := readl(maphdl)
+
+    // The in-memory map's first 16b mirror the on-disk fork's first 16b
+    copy(mem[maphdl:], forkdata[mapstart:][:maplen])
+    copy(mem[maphdl:], forkdata[:16])
+    writew(mapptr + 20, ioRefNum) // and there is a spot for the filenum too
+
+    // Point TopMapHndl to us (start of the linked list)
+    writel(mapptr + 16, readl(0xa50))
+    writel(0xa50, maphdl)
+    writew(0xa5a, ioRefNum) // CurMap = filenum so we are the first searched
+
+    writew(readl(spptr), ioRefNum) // return refnum
 }
 
-func iter_map(handle) {
-    pointer = readl(handle)
-
-    refbase = pointer + readw(pointer + 24)
-    namebase = pointer + readw(pointer + 26)
-    type_count = (readw(refbase) + 1) & 0xffff
-
-    for type_entry := range(refbase + 2, refbase + 2 + 8*type_count, 8) {
-        res_count = (readw(type_entry + 4) + 1) & 0xffff
-        res_entry = refbase + readw(type_entry + 6)
-
-        for res_entry := range(res_entry, res_entry + 12*res_count, 12) {
-            yield type_entry, res_entry
-
-        }
-    }
-}
 func counttypes_trap() {
-    writew(get_sp(), len(resource_types(top_only=false)))
-
+    answer := len(uniqueTypesInMaps(activeResMaps()...))
+    writew(readl(spptr), uint16(answer))
 }
+
 func count1types_trap() {
-    writew(get_sp(), len(resource_types(top_only=true)))
-
+    answer := len(uniqueTypesInMaps(currentResMap()))
+    writew(readl(spptr), uint16(answer))
 }
-func countresources() {
-    type = pop(4)
-    writew(get_sp(), len(resource_ids(top_only=false, type=type)))
 
+func countresources_trap() {
+    the_type := popl()
+    answer := len(uniqueIdsInMaps(the_type, activeResMaps()...))
+    writew(readl(spptr), uint16(answer))
 }
-func count1resources() {
-    type = pop(4)
-    writew(get_sp(), len(resource_ids(top_only=true, type=type)))
 
+func count1resources_trap() {
+    the_type := popl()
+    answer := len(uniqueIdsInMaps(the_type, currentResMap()))
+    writew(readl(spptr), uint16(answer))
 }
+
 func getindtype_trap() {
-    ind = pop(2)
-    retptr = pop(4)
+    ind = popw()
+    retptr = popl()
     types = list(resource_types(false))
     try: type = types[(ind - 1) & 0xffff]
     }
@@ -2699,102 +2776,14 @@ func getindtype_trap() {
 
 }
 func get1indtype_trap() {
-    ind := pop(2)
-    retptr := pop(4)
+    ind := popw()
+    retptr := popl()
     types := list(resource_types(true))
     try: type = types[(ind - 1) & 0xffff]
     }
     except IndexError: type = 0
     }
     writel(retptr, type)
-}
-
-func resource_types(top_only) {
-    types := set()
-
-    for _, map := range iter_resource_maps(top_only=top_only) {
-        for type_entry, res_entry in iter_map(map) {
-            types.add(readl(type_entry))
-
-        }
-    }
-    return list(types)
-}
-
-func resource_ids(top_only, type) {
-    ids := set()
-
-    for _, map := range iter_resource_maps(top_only=top_only) {
-        for type_entry, res_entry in iter_map(map) {
-            if readl(type_entry) == type {
-                ids.add(readw(res_entry))
-
-            }
-        }
-    }
-    return list(ids)
-
-}
-// This is some truly awful code.
-func map_insert_resource(handle, type, id) { // return type_entry, resource_entry
-    pointer := readl(handle)
-    map := mem[pointer:pointer+gethandlesize(handle)]
-
-    refbase = readw(pointer + 24)
-    namebase = readw(pointer + 26)
-    type_count := (readw(refbase) + 1) & 0xffff
-
-    type_entry_offsets := list(range(refbase + 2, refbase + 2 + 8*type_count, 8))
-    for _, type_entry := range type_entry_offsets {
-        numresources, res_entry = struct.unpack_from(">HH", map, type_entry + 4)
-        res_entry := refbase + res_entry + 12*((numresources+1) & 0xffff)
-        if map[type_entry:type_entry+4] == type {
-            break
-
-        }
-    } else {
-        // Insert a new type entry
-        type_entry := refbase + 2 + 8*type_count
-        type_count++
-        new_type_entry := struct.pack(">4s H H", type, 0xffff, res_entry)
-        mem[type_entry:type_entry+8] = new_type_entry
-
-        // Fixup header fields
-        namebase += 8; struct.pack_into(">H", map, 26, namebase)
-        struct.pack_into(">H", map, refbase, type_count - 1)
-
-        // Fixup the offsets in the preceding type entries
-        for _, other_type_entry := range type_entry_offsets {
-            res_entry, = struct.unpack_from(">H", map, other_type_entry + 6)
-            struct.pack_into(">H", map, other_type_entry + 6, res_entry + 8)
-
-        }
-    }
-    // Now type_entry is accurate, so insert a res_entry
-    numresources, res_entry = struct.unpack_from(">HH", map, type_entry + 4)
-    res_entry := refbase + res_entry + 12*((numresources+1) & 0xffff)
-    new_res_entry := b"\0\0\xff\xff\0\0\0\0\0\0\0\0"
-    map[res_entry:new_res_entry+12] = new_res_entry
-
-    // Increment numresources
-    numresources++
-    struct.pack_into(">H", map, type_entry + 4, numresources & 0xffff)
-
-    // Again, fixup offsets
-    namebase += 12; struct.pack_into(">H", map, 26, namebase)
-
-    for _, other_type_entry := range type_entry_offsets {
-        other_res_entry, = struct.unpack_from(">H", map, other_type_entry + 6)
-        if other_res_entry >= res_entry - refbase {
-            struct.pack_into(">H", map, other_type_entry + 6, other_res_entry + 12)
-
-        }
-    }
-    sethandlesize(handle, len(map))
-    pointer := readl(handle)
-    mem[pointer:pointer+len(map)] = map
-
-    return pointer + type_entry, pointer + res_entry
 }
 
 func get_resource_name(map_handle, res_entry_ptr) {
@@ -2824,11 +2813,12 @@ func set_resource_name(map_handle, res_entry_ptr, name) {
 
     }
 }
+
 func getresinfo_trap() {
-    nameptr := pop(4)
-    typeptr := pop(4)
-    idptr := pop(4)
-    handle := pop(4)
+    nameptr := popl()
+    typeptr := popl()
+    idptr := popl()
+    handle := popl()
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
         for type_entry, res_entry in iter_map(map) {
@@ -2850,35 +2840,35 @@ func getresinfo_trap() {
         }
     }
     writew(0xa60, -192) // ResErr = resNotFound
-
 }
+
 func getresource_trap() {
-    id = pop(2)
-    type = pop(4)
+    id = popw()
+    type = popl()
     getresource_common(type, id=id, top_only=false)
 
 }
 func get1resource_trap() {
-    id := pop(2)
-    type = pop(4)
+    id := popw()
+    type = popl()
     getresource_common(type, id=id, top_only=true)
 
 }
 func getnamedresource_trap() {
-    name := read_pstring(pop(4))
-    type = pop(4)
+    name := read_pstring(popl())
+    type = popl()
     getresource_common(type, name=name, top_only=false)
 
 }
 func get1namedresource_trap() {
-    name := read_pstring(pop(4))
-    type = pop(4)
+    name := read_pstring(popl())
+    type = popl()
     getresource_common(type, name=name, top_only=true)
 
 }
 func getindresource_trap() {
-    idx := pop(2)
-    type = pop(4)
+    idx := popw()
+    type = popl()
 
     ids = resource_ids(top_only=false, type=type)
     id = ids[idx - 1] if (1 <= idx <= len(ids)) else nil
@@ -2887,8 +2877,8 @@ func getindresource_trap() {
 
 }
 func get1indresource_trap() {
-    idx := pop(2)
-    type = pop(4)
+    idx := popw()
+    type = popl()
 
     ids = resource_ids(top_only=true, type=type)
     id = ids[idx - 1] if (1 <= idx <= len(ids)) else nil
@@ -2896,134 +2886,61 @@ func get1indresource_trap() {
     getresource_common(type, id=id, top_only=false)
 }
 
-func getresource_common(type, id=nil, name=nil, top_only=false) {
-}
-//    global pc
-
-    writel(get_sp(), 0)
-    writew(0xa60, 0) // ResErr = noErr
-
-    iterator = ((mh, te, re) for mh in iter_resource_maps(top_only=top_only) for te, re in iter_map(mh))
-
-    for map_handle, type_entry, resource_entry in iterator {
-        if readl(type_entry) == type {
-            if id != nil && id == readw(resource_entry) {
-                break
-            }
-            if name != nil && name == get_resource_name(map_handle, resource_entry) {
-                break
-
-            }
-        }
-    } else {
-        // We failed...
-        writew(0xa60, -192) // ResErr = resNotFound
-        return 0
-
-    }
-    // Perhaps it is already in memory?
-    handle := readl(resource_entry + 8)
-    if handle {
-        writel(get_sp(), handle)
-        return
-
-    }
-    // No such luck. Load it from the file.
-    map_pointer := readl(map_handle)
-    refnum := readw(map_pointer + 20)
-    filedata := filebuffers[refnum]
-    data_offset, = struct.unpack_from(">L", filedata)
-    data_offset += readl(resource_entry + 4) & 0xffffff // three byte field
-    data_len, = struct.unpack_from(">L", filedata, data_offset)
-    data_offset += 4
-    data := filedata[data_offset:data_offset+data_len]
-
-    // Run NewHandle, allowing ToolServer patches to run
-    return_pc := pc
-    return_sp = get_sp()
-
-    push(2, callback_trap_word)
-    push(2, 0xa122) // _NewHandle
-    writel(regs, data_len)
-    pc = get_sp()
-
-    @oneoff_callback
-    def getresource_finish() {
-    }
-//        global pc
-
-        pc := return_pc
-        set_sp(return_sp)
-
-        new_handle := readl(regs + 32) // a0
-        new_pointer = readl(new_handle)
-        mem[new_pointer:new_pointer+len(data)] = data
-
-        writeb(new_handle - 5, 0x20) // set resourceBit
-        writel(resource_entry + 8, new_handle)
-
-        writel(get_sp(), new_handle)
-
-        // hook to patch CODE for speed hacks, might need better checks
-        if type == 0x434f4445 {
-            speed_hack_segment(new_pointer, data_len)
-
-        }
 func curresfile_trap() {
     curmap := readw(0xa5a) // CurMap global
-    pop(2); push(2, curmap)
+    popw(); pushw(curmap)
 
 }
 func useresfile_trap() {
-    curmap = writew(0xa5a, pop(2)) // CurMap global
+    curmap = writew(0xa5a, popw()) // CurMap global
 
 }
 func getpattern_trap() {
-    push(4, int.from_bytes(b"PAT ", "big"))
+    pushl(int.from_bytes(b"PAT ", "big"))
     getresource_trap()
 
 }
 func getcursor_trap() {
-    push(4, int.from_bytes(b"CURS", "big"))
+    pushl(int.from_bytes(b"CURS", "big"))
     getresource_trap()
 
 }
 func getstring_trap() {
-    push(4, int.from_bytes(b"STR ", "big"))
+    pushl(int.from_bytes(b"STR ", "big"))
     getresource_trap()
 
 }
 func geticon_trap() {
-    push(4, int.from_bytes(b"ICON", "big"))
+    pushl(int.from_bytes(b"ICON", "big"))
     getresource_trap()
 
 }
 func getpicture_trap() {
-    push(4, int.from_bytes(b"PICT", "big"))
+    pushl(int.from_bytes(b"PICT", "big"))
     getresource_trap()
 
 }
 func homeresfile_trap() {
-    handle = pop(4)
+    handle = popl()
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
         for type_entry, res_entry in iter_map(map) {
             if readl(res_entry + 8) == handle {
                 map_pointer = readl(map)
                 refnum = readw(map_pointer + 20)
-                writew(get_sp(), refnum)
+                writew(readl(spptr), refnum)
                 writew(0xa60, 0) // ResError = noErr
                 return
 
             }
         }
     }
-    writew(get_sp(), -1)
+    writew(readl(spptr), -1)
     writew(0xa60, -192) // ResError = resNotFound
 
 }
 func sizersrc_trap() {
-    handle = pop(4)
+    handle = popl()
 
     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
         for type_entry, res_entry in iter_map(map) {
@@ -3033,14 +2950,14 @@ func sizersrc_trap() {
                 offset := readl(map_pointer) + (readl(res_entry + 4) & 0xffffff)
                 size := int.from_bytes(filebuffers[refnum][offset:offset+4], "big")
 
-                writel(get_sp(), size)
+                writel(readl(spptr), size)
                 writew(0xa60, 0) // ResError = noErr
                 return
 
             }
         }
     }
-    writew(get_sp(), -1)
+    writew(readl(spptr), -1)
     writew(0xa60, -192) // ResError = resNotFound
 
 }
@@ -3050,30 +2967,30 @@ func loadseg_trap() {
 }
 //    global pc
 
-    seg_num := pop(2)
+    seg_num := popw()
 
-    jumptable = readl(regs + 32 + 20) + 32 // $20(a5)
+    jumptable = readl(a5ptr) + 32 // $20(a5)
 
     // Do the evil thing where we create a new handle
     return_pc := pc
     return_regs := mem[regs:regs+64]
 
     // Code to run
-    push(2, callback_trap_word)
-    push(2, 0xa9a0) // _GetResource
-    pc = get_sp()
+    pushw(callback_trap_word)
+    pushw(0xa9a0) // _GetResource
+    pc = readl(spptr)
 
     // Arguments to GetResource
-    push(4, 0) // room for handle
-    push(4, int.from_bytes(b"CODE", "big"))
-    push(2, seg_num)
+    pushl(0) // room for handle
+    pushl(int.from_bytes(b"CODE", "big"))
+    pushw(seg_num)
 
     @oneoff_callback
     def loadseg_finish() {
     }
 //        global pc
 
-        seg_handle = pop(4)
+        seg_handle = popl()
         seg_ptr := readl(seg_handle)
 
         debug_segment_list.append((seg_num, seg_ptr, seg_ptr + block_sizes[seg_ptr]))
@@ -3098,106 +3015,106 @@ func loadseg_trap() {
 func pack4_trap() { // FP68K
 }
 //    global pc
-    push(4, pc); pc = 0xc0000
+    pushl(pc); pc = 0xc0000
 
 func pack5_trap() { // Elems68K
 }
 //    global pc
-    push(4, pc); pc = 0xd0000
+    pushl(pc); pc = 0xd0000
 
 func pack7_trap() { // DecStr68K
 }
 //    global pc
-    push(4, pc); pc = 0xe0000
+    pushl(pc); pc = 0xe0000
 
 // QuickDraw Toolbox traps
 func bitand_trap() {
-    result = pop(4) & pop(4)
-    pop(4); push(4, result)
+    result = popl() & popl()
+    popl(); pushl(result)
 
 }
 func bitxor_trap() {
-    result = pop(4) ^ pop(4)
-    pop(4); push(4, result)
+    result = popl() ^ popl()
+    popl(); pushl(result)
 
 }
 func bitnot_trap() {
-    result = ~pop(4)
-    pop(4); push(4, result)
+    result = ~popl()
+    popl(); pushl(result)
 
 }
 func bitor_trap() {
-    result = pop(4) | pop(4)
-    pop(4); push(4, result)
+    result = popl() | popl()
+    popl(); pushl(result)
 
 }
 func bitshift_trap() {
-    by = signed(2, pop(2))
-    result = pop(4)
+    by = signed(2, popw())
+    result = popl()
     if by > 0 {
         result <<= by % 32
     } else: result >>= (-by) % 32
     }
-    pop(4); push(4, result)
+    popl(); pushl(result)
 
 }
 func bittst_trap() {
-    idx = pop(2) + 8 * pop(4)
+    idx = popw() + 8 * popl()
     result = mem[idx // 8] & (0x80 >> (idx % 8))
-    pop(2); push(2, 0x100 if result else 0)
+    popw(); pushw(0x100 if result else 0)
 
 }
 func bitset_trap() {
-    idx = pop(2) + 8 * pop(4)
+    idx = popw() + 8 * popl()
     mem[idx // 8] |= 0x80 >> (idx % 8)
 
 }
 func bitclr_trap() {
-    idx = pop(2) + 8 * pop(4)
+    idx = popw() + 8 * popl()
     mem[idx // 8] &= ~(0x80 >> (idx % 8))
 
 }
 func random_trap() {
-    pop(2); push(2, random.randint(0x10000))
+    popw(); pushw(random.randint(0x10000))
 
 }
 func hiword_trap() {
-    x = pop(2); pop(2); pop(2); push(2, x)
+    x = popw(); popw(); popw(); pushw(x)
 
 }
 func loword_trap() {
-    pop(2); x = pop(2); pop(2); push(2, x)
+    popw(); x = popw(); popw(); pushw(x)
 
 }
 func initgraf_trap() {
-    a5 := readl(regs + 32 + 5 * 4)
-    qd = pop(4)
+    a5 := readl(a5ptr)
+    qd = popl()
     writel(a5, qd)
     writel(qd, 0xf8f8f8f8) // illegal thePort address
 
 }
 func setport_trap() {
-    a5 := readl(regs + 32 + 5 * 4)
+    a5 := readl(a5ptr)
     qd := readl(a5)
-    port := pop(4)
+    port := popl()
     writel(qd, port)
 
 }
 func getport_trap() {
-    a5 := readl(regs + 32 + 5 * 4)
+    a5 := readl(a5ptr)
     qd := readl(a5)
     port = readl(qd)
-    retaddr = pop(4)
+    retaddr = popl()
     writel(retaddr, port)
 
 }
 func setrect_trap() {
-    br := pop(4); tl = pop(4); rectptr = pop(4)
+    br := popl(); tl = popl(); rectptr = popl()
     writel(rectptr, tl); writel(rectptr + 4, br)
 
 }
 func offsetrect_trap() {
-    dv = pop(2); dh = pop(2); rectptr = pop(4)
+    dv = popw(); dh = popw(); rectptr = popl()
     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
         writew(rectptr + ptr, readw(rectptr + ptr) + delta)
 
@@ -3208,7 +3125,7 @@ func offsetrect_trap() {
 // Misc traps
 
 func debugstr_trap() {
-    string := read_pstring(pop(4))
+    string := read_pstring(popl())
     fmt.Print("_DebugStr", string, flush=true, file=os.Stderr)
     if strings.HasPrefix(string, "python:") {
         eval(string[7:])
@@ -3221,9 +3138,9 @@ func debugger_trap() {
 }
 // trap is in toolbox table but actually uses registers
 func syserror_trap() {
-    err := signed(2, readw(regs + 2))
+    err := signed(2, readw(d0ptr + 2))
     if err == -491 { // display string on stack
-        raise Exception("_SysError", err, read_pstring(pop(4)))
+        raise Exception("_SysError", err, read_pstring(popl()))
     }
     raise Exception("_SysError", err)
 }
@@ -3276,10 +3193,10 @@ func gestalt_trap() {
 func aliasdispatch_trap() {
     selector = readl(regs)
     if selector == 0 { // FindFolder
-        foundDirID = pop(4); foundVRefNum = pop(4)
-        createFolder = pop(2) >> 8
-        folderType = pop(4).to_bytes(4, "big")
-        vRefNum := pop(2) // ignore volume number
+        foundDirID = popl(); foundVRefNum = popl()
+        createFolder = popw() >> 8
+        folderType = popl().to_bytes(4, "big")
+        vRefNum := popw() // ignore volume number
 
         known := {b"pref": "Preferences"}
         filename := known.get(folderType, folderType.decode("ascii", "ignore"))
@@ -3297,7 +3214,7 @@ func aliasdispatch_trap() {
             oserr := -43 // fnfErr
 
         }
-        pop(2); push(2, oserr)
+        popw(); pushw(oserr)
 
     } else {
         raise NotImplementedError(f"_AliasDispatch {selector}")
@@ -3328,29 +3245,29 @@ func getosevent_trap() bool {
 }
 // ToolServer-specific code
 func menukey_trap() bool {
-    keycode := pop(2) & 0xff
+    keycode := popw() & 0xff
     if keycode == 12 { // cmd-Q
-        pop(4); push(4, 0x00810005) // quit menu item, hardcoded sadly
+        popl(); pushl(0x00810005) // quit menu item, hardcoded sadly
         return
 
     }
-    pop(4); push(4, 0) // return nothing
+    popl(); pushl(0) // return nothing
 
 }
 func getnextevent_trap() {
-    eventrecord := pop(4); write(16, eventrecord, 0)
-    mask := pop(2)
+    eventrecord := popl(); write(16, eventrecord, 0)
+    mask := popw()
 
     // ToolServer-specific code: if accepting high-level events then do cmd-Q
     if mask & 0x400 {
         writew(eventrecord, 3) // keyDown
         writel(eventrecord + 2, 12) // Q
         writew(eventrecord + 14, 0x100) // command
-        pop(2); push(2, -1) // return true
+        popw(); pushw(-1) // return true
         return
 
     }
-    pop(2); push(2, 0) // return false
+    popw(); pushw(0) // return false
 
 }
 func waitnextevent_trap() {
@@ -3365,42 +3282,42 @@ func exittoshell_trap() {
 // Munger and related traps
 
 func handtohand_trap() {
-    hdl := readl(regs + 32); ptr = readl(hdl)
+    hdl := readl(a0ptr); ptr = readl(hdl)
     size := gethandlesize(hdl)
     hdl2 := newhandle(size); ptr2 = readl(hdl2)
     memcpy(ptr2, ptr, size)
-    writel(regs + 32, hdl2) // a0 = result
+    writel(a0ptr, hdl2) // a0 = result
     writel(regs, 0) // d0 = noErr
 
 }
 func ptrtoxhand_trap() {
-    srcptr := readl(regs + 32) // a0
-    dsthdl := readl(regs + 32 + 4) // a1
+    srcptr := readl(a0ptr) // a0
+    dsthdl := readl(a1ptr) // a1
     size := readl(regs) // d0
     sethandlesize(dsthdl, size)
     dstptr := readl(dsthdl)
     memcpy(dstptr, srcptr, size)
-    writel(regs + 32, dsthdl) // a0
+    writel(a0ptr, dsthdl) // a0
     writel(regs, 0) // d0 = noErr
 
 }
 func ptrtohand_trap() {
-    srcptr := readl(regs + 32) // a0
+    srcptr := readl(a0ptr) // a0
     size = readl(regs) // d0
     dsthdl = newhandle(size)
     dstptr = readl(dsthdl)
     memcpy(dstptr, srcptr, size)
-    writel(regs + 32, dsthdl) // a0
+    writel(a0ptr, dsthdl) // a0
     writel(regs, 0) // d0 = noErr
 
 }
 func handandhand_trap() {
-    ahdl := readl(regs + 32); asize = gethandlesize(ahdl) // a0
-    bhdl := readl(regs + 32 + 4); bsize = gethandlesize(bhdl) // a1
+    ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
+    bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
     sethandlesize(bhdl, asize + bsize)
     aptr := readl(ahdl); bptr = readl(bhdl)
     memcpy(bptr, aptr, size)
-    writel(regs + 32, bhdl) // a0 = dest handle
+    writel(a0ptr, bhdl) // a0 = dest handle
     writel(regs, 0) // d0 = noErr
 
 }
@@ -3412,27 +3329,11 @@ func os_00_trap(): return 0, 0 // clear d0 and a0
 func os_pb_trap(): return 0
 
 }
-trap("os", 0x13)(os_pb_trap)                    // _FlushVol
-trap("os", 0x1b)(sets_memerr_to_d0(os_00_trap)) // _SetZone
-trap("os", 0x29)(sets_memerr_to_d0(os_0_trap))  // _HLock -- preserve a0!
-trap("os", 0x2a)(sets_memerr_to_d0(os_0_trap))  // _HUnlock
-trap("os", 0x2c)(sets_memerr_to_d0(os_00_trap)) // _InitApplZone
-trap("os", 0x2d)(sets_memerr_to_d0(os_00_trap)) // _SetApplLimit
-trap("os", 0x32)(os_00_trap)                    // _FlushEvents
-trap("os", 0x36)(sets_memerr_to_d0(os_00_trap)) // _MoreMasters
-trap("os", 0x40)(sets_memerr_to_d0(os_00_trap)) // _ResrvMem
-trap("os", 0x49)(sets_memerr_to_d0(os_0_trap))  // _HPurge
-trap("os", 0x4a)(sets_memerr_to_d0(os_0_trap))  // _HNoPurge
-trap("os", 0x4b)(sets_memerr_to_d0(os_0_trap))  // _SetGrowZone
-trap("os", 0x4d)(sets_memerr_to_d0(os_00_trap)) // _PurgeMem
-trap("os", 0x63)(sets_memerr_to_d0(os_00_trap)) // _MaxApplZone
-trap("os", 0x64)(sets_memerr_to_d0(os_0_trap))  // _MoveHHi
-
 func tb_nop_trap(): pass
 }
-func tb_pop2_trap(): pop(2)
+func tb_pop2_trap(): popw()
 }
-func tb_pop4_trap(): pop(4)
+func tb_pop4_trap(): popl()
 }
 func tb_pop6_trap(): pop(6)
 }
@@ -3440,56 +3341,19 @@ func tb_pop8_trap(): pop(8)
 }
 func tb_pop10_trap(): pop(10)
 }
-func tb_nop_ret0l_trap(): pop(0+4); push(4, 0)
+func tb_nop_ret0l_trap(): pop(0+4); pushl(0)
 }
-func tb_pop2_ret0l_trap(): pop(2+4); push(4, 0)
+func tb_pop2_ret0l_trap(): pop(2+4); pushl(0)
 }
-func tb_pop4_ret0l_trap(): pop(4+4); push(4, 0)
+func tb_pop4_ret0l_trap(): pop(4+4); pushl(0)
 }
-func tb_pop6_ret0l_trap(): pop(6+4); push(4, 0)
+func tb_pop6_ret0l_trap(): pop(6+4); pushl(0)
 }
-func tb_pop8_ret0l_trap(): pop(8+4); push(4, 0)
+func tb_pop8_ret0l_trap(): pop(8+4); pushl(0)
 }
-func tb_pop10_ret0l_trap(): pop(10+4); push(4, 0)
+func tb_pop10_ret0l_trap(): pop(10+4); pushl(0)
 
 }
-trap("toolbox", 0x034)(tb_pop2_trap)            // _SetFScaleDisable
-trap("toolbox", 0x050)(tb_nop_trap)             // _InitCursor
-trap("toolbox", 0x051)(tb_pop4_trap)            // _SetCursor
-trap("toolbox", 0x052)(tb_nop_trap)             // _HideCursor
-trap("toolbox", 0x053)(tb_nop_trap)             // _ShowCursor
-trap("toolbox", 0x055)(tb_pop8_trap)            // _ShieldCursor
-trap("toolbox", 0x056)(tb_nop_trap)             // _ObscureCursor
-trap("toolbox", 0x06f)(tb_pop4_trap)            // _OpenPort
-trap("toolbox", 0x0d8)(tb_nop_ret0l_trap)       // _NewRgn
-trap("toolbox", 0x0fe)(tb_nop_trap)             // _InitFonts
-trap("toolbox", 0x112)(tb_nop_trap)             // _InitWindows
-trap("toolbox", 0x124)(tb_nop_ret0l_trap)       // _FrontWindow
-trap("toolbox", 0x130)(tb_nop_trap)             // _InitMenus
-trap("toolbox", 0x137)(tb_nop_trap)             // _DrawMenuBar
-trap("toolbox", 0x138)(tb_pop2_trap)            // _HiliteMenu
-trap("toolbox", 0x139)(tb_pop6_trap)            // _EnableItem
-trap("toolbox", 0x13a)(tb_pop6_trap)            // _DisableItem
-trap("toolbox", 0x13c)(tb_pop4_trap)            // _SetMenuBar
-trap("toolbox", 0x149)(tb_pop2_ret0l_trap)      // _GetMenuHandle
-trap("toolbox", 0x14d)(tb_pop8_trap)            // _AppendResMenu
-trap("toolbox", 0x175)(tb_nop_ret0l_trap)       // _TickCount
-trap("toolbox", 0x179)(tb_pop2_trap)            // _CouldDialog
-trap("toolbox", 0x17b)(tb_nop_trap)             // _InitDialogs
-trap("toolbox", 0x17c)(tb_pop10_ret0l_trap)     // _GetNewDialog
-trap("toolbox", 0x199)(tb_pop2_trap)            // _UpdateResFile
-trap("toolbox", 0x19b)(tb_pop2_trap)            // _SetResLoad
-trap("toolbox", 0x1a3)(tb_pop4_trap)            // _ReleaseResource
-trap("toolbox", 0x1b4)(tb_nop_trap)             // _SystemTask
-trap("toolbox", 0x1bd)(tb_pop10_ret0l_trap)     // _GetNewWindow
-trap("toolbox", 0x1c0)(tb_pop2_ret0l_trap)      // _GetNewMBar
-trap("toolbox", 0x1c8)(tb_nop_trap)             // _SysBeep
-trap("toolbox", 0x1cc)(tb_nop_trap)             // _TEInit
-trap("toolbox", 0x1e5)(tb_pop2_trap)            // _InitPack
-trap("toolbox", 0x1e6)(tb_nop_trap)             // _InitAllPacks
-trap("toolbox", 0x1f1)(tb_pop4_trap)            // _UnloadSeg
-trap("toolbox", 0x1fa)(tb_nop_ret0l_trap)       // _UnlodeScrap
-trap("toolbox", 0x1fb)(tb_nop_ret0l_trap)       // _LodeScrap
 
 func lineAF(inst uint16) {
 }
@@ -3506,7 +3370,7 @@ func lineAF(inst uint16) {
         if inst & 0xf000 == 0xf000 || implementation_68k == ftrap_table_addr + (0x800 + trapnum) * 2 {
             // Non-SetTrapAddress'd A-trap OR direct F-trap
             if inst & 0x400 || inst & 0xf000 == 0xf000 { // autoPop
-                pc = pop(4)
+                pc = popl()
 
             }
             implementation_python = trap_function_table[0x100 + trapnum]
@@ -3518,7 +3382,7 @@ func lineAF(inst uint16) {
         } else {
             // SetTrapAddress'd A-trap: dispatch to custom 68k routine
             if !inst & 0x400 { // autoPop
-                push(4, pc)
+                pushl(pc)
             }
             pc = implementation_68k
 
@@ -3532,121 +3396,69 @@ func lineAF(inst uint16) {
         if inst & 0xf000 == 0xf000 || implementation_68k == ftrap_table_addr + trapnum * 2 {
             // Non-SetTrapAddress'd A-trap OR direct F-trap
             if inst & 0xf000 == 0xf000 { // return address
-                pc = pop(4)
+                pc = popl()
 
             }
             implementation_python := trap_function_table[trapnum]
-            trapword := readw(regs + 6) if inst & 0x1000 else inst // d1.w
+            trapword := readw(d1ptr + 2) if inst & 0x1000 else inst // d1.w
             d0a0 = implementation_python(trapword,
-                readl(regs), readl(regs + 32), readl(regs + 36)) // d0,a0,a1
+                readl(d0ptr), readl(a0ptr), readl(a1ptr)) // d0,a0,a1
 
             // returned None or d0 or (d0, a0)
             d0a0 = d0a0 || 0 // return d0 = 0 by default
             if !isinstance(d0a0, tuple) {
                 d0a0 = (d0a0,)
             }
-            for value, address in zip(d0a0, (regs, regs + 32)) {
+            for value, address in zip(d0a0, (regs, a0ptr)) {
                 writel(address, value)
 
             }
-            set_nz(readw(regs + 2), 2) // tst.w d0
+            set_nz(readw(d0ptr + 2), 2) // tst.w d0
 
         } else if implementation_68k == ftrap_table_addr + 0x89f * 2 {
             raise NotImplementedError(hex(inst))
 
         } else {
             // SetTrapAddress'd A-trap: dispatch to custom 68k routine
-            writew(regs + 1 * 4 + 2, inst)    // d1.w = trap word
+            writew(d1ptr + 2, inst)    // d1.w = trap word
 
-            push(4, pc)                         // Push return address
+            pushl(pc)                         // Push return address
 
             // Push the registers that the Trap Dispatcher saves around OS traps
-            push(4, readl(regs + 32 + 8))     // push a2
-            push(4, readl(regs + 8))          // push d2
-            push(4, readl(regs + 4))          // push d1
-            push(4, readl(regs + 32 + 4))     // push a1
+            pushl(readl(a2ptr))     // push a2
+            pushl(readl(d2ptr))          // push d2
+            pushl(readl(d1ptr))          // push d1
+            pushl(readl(a1ptr))     // push a1
             if !inst & 0x100 { // only if trap word specifies
-                push(4, readl(regs + 32)) // push a0
+                pushl(readl(a0ptr)) // push a0
 
             }
             // Push f300 or f301, depending on how many registers need restoring
-            push(4, ftrap_table_addr + (0x300 if inst & 0x100 else 0x301) * 2) // f300
+            pushl(ftrap_table_addr + (0x300 if inst & 0x100 else 0x301) * 2) // f300
 
             pc = implementation_68k
 
         } else if inst in (0xf300, 0xf301) { // OS trap return assistance code
         if inst & 1 { // was this a "save-a0" OS trap word?
-            writel(regs + 32 + 0 * 4, pop(4)) // pop a0
+            writel(a0ptr, popl()) // pop a0
         }
-        writel(regs + 32 + 4, pop(4))         // pop a1
-        writel(regs + 4, pop(4))              // pop d1
-        writel(regs + 8, pop(4))              // pop d2
-        writel(regs + 32 + 8, pop(4))         // pop a2
-        set_nz(readw(regs + 2), 2)        // tst.w d0
-        pc = pop(4) // Return to the actual caller
+        writel(a1ptr, popl())         // pop a1
+        writel(d1ptr, popl())              // pop d1
+        writel(d2ptr, popl())              // pop d2
+        writel(a2ptr, popl())         // pop a2
+        set_nz(readw(d0ptr + 2), 2)        // tst.w d0
+        pc = popl() // Return to the actual caller
 
     } else if inst == 0xf302 { // Completion routine return assistance code
-        writel(regs,      pop(4)) // pop d0 (result code)
-        writel(regs + 32, pop(4)) // pop a0 (iopb pointer)
-        pc = pop(4)
+        writel(regs,      popl()) // pop d0 (result code)
+        writel(a0ptr, popl()) // pop a0 (iopb pointer)
+        pc = popl()
 
     } else { // Special MPW call
         mpw_ftrap(inst)
 
     }
-lineA = lineF = lineAF // cheating cleverly
 
-//#######################################################################
-// Speed hacks
-//#######################################################################
-
-speed_hack_list = []
-
-func speed_hack_trap() {
-    n = readl(regs) // d0
-    speed_hack_list[n][1]()
-}
-
-func speed_hack_segment(ptr, length) {
-    for i, (code, func) in enumerate(speed_hack_list) {
-        loc = mem.find(code, ptr, ptr + length)
-        if loc != -1 {
-            writew(loc, 0x7000 | i)
-            writew(loc + 2, 0xae6a) // autoPop bit
-        }
-    }
-}
-
-func speed_hack(code) {
-    def decorator(func) {
-        speed_hack_list.append((code, func))
-        return func
-    }
-    return decorator
-
-}
-    b"\x20\x2f\x00\x04"   // move.l     $0004(a7),d0
-    b"\x67\x1c"           // beq.s      *+$001e
-    b"\x20\x40"           // movea.l    d0,a0
-    b"\x22\x40"           // movea.l    d0,a1
-    b"\x34\x3c\x00\xff"   // move.w     #$00ff,d2
-    b"\x12\x10"           // move.b     (a0),d1
-    b"\x10\xc0"           // move.b     d0,(a0)+
-    b"\x10\x01"           // move.b     d1,d0
-    b"\x57\xca\xff\xf8"   // dbeq       d2,*-$0006
-    b"\x22\x08"           // move.l     a0,d1
-    b"\x20\x09"           // move.l     a1,d0
-    b"\x92\x80"           // sub.l      d0,d1
-    b"\x53\x01"           // subq.b     #1,d1
-    b"\x12\x81"           // move.b     d1,(a1)
-    b"\x4e\x75")          // rts
-func c2pstring_hack() {
-    ptr = readl(get_sp())
-    len = min(mem.index(0, ptr) - ptr, 255)
-    mem[ptr+1:ptr+len+1] = mem[ptr:ptr+len]
-    mem[ptr] = len
-
-}
 //#######################################################################
 // Initialise an MPW environment
 //#######################################################################
@@ -3681,6 +3493,16 @@ func c2pstring_hack() {
 //                100000
 //                 heap
 
+const (
+    kStackBase = 0x40000 // extends down, note that registers are here too!
+    kA5Ptr = 0x80000 // 0x8000 below and 0x8000 above
+    kATrapTable = 0xa0000 // 0x10000 above
+    kFCBTable = 0xe0000 // 0x8000 above
+    kFTrapTable = 0xf0000 // 0x10000 above
+    kHeap = 0x100000 // extends up
+)
+
+
 func check_for_lurkers() {
     // we might do more involved things here, like check for heap corruption
     if __debug__ {
@@ -3692,6 +3514,22 @@ func check_for_lurkers() {
 
     }
 }
+
+// Get an address to jump to
+func executable_atrap(trap uint16) {
+    addr := kATrapTable + (trap & 0xfff) * 16
+
+    writew(addr, trap) // consider using autoPop instead?
+    writew(addr + 2, 0x4e75) // RTS
+}
+
+// Get an address to jump to
+func executable_ftrap(trap uint16) {
+    addr := kFTrapTable + (trap & 0xfff) * 16
+
+    writew(addr, trap)
+}
+
 // A memory, and some memory-mapped registers
 mem[:] = bytes(0x100000) // plenty of room for globals
 regs = 0x40000
@@ -3704,7 +3542,7 @@ mem[0xc0000:0xc0000+len(pack4)] = pack4
 mem[0xd0000:0xd0000+len(pack5)] = pack5
 mem[0xe0000:0xe0000+len(pack7)] = pack7
 
-writel(regs + 8 * 4 + 7 * 4, 0x40000) // stack growing down from registers
+writel(spptr, 0x40000) // stack growing down from registers
 
 // Fake heap-zone
 writel(0x118, len(mem)) // TheZone
@@ -3749,7 +3587,7 @@ write_pstring(vcb + 44, onlyvolname) // vcbVName
 
 // Make an a5 world
 a5world = 0x80000
-writel(regs + 8 * 4 + 5 * 4, a5world); writel(0x904, a5world)
+writel(a5ptr, a5world); writel(0x904, a5world)
 
 // Disable the status window in preferences
 prefs = systemfolder/"Preferences"/"MPW"/"ToolServer Prefs"
@@ -3787,26 +3625,26 @@ writel(a5world + 16, hdl) // segment loader puts it here too
 
 // Do some prep that requires loading code
 
-push(2, callback_trap_word)
-pc = get_sp()
+pushw(callback_trap_word)
+pc = readl(spptr)
 
 func open_toolserver() {
 }
 //    global pc
 
-    push(2, callback_trap_word)
-    push(2, 0xa81a) // _HOpenResFile
-    pc = get_sp()
+    pushw(callback_trap_word)
+    pushw(0xa81a) // _HOpenResFile
+    pc = readl(spptr)
 
     toolserver := Path(os.Args[1]).resolve()
-    push(32, 0); filenameptr = get_sp()
+    push(32, 0); filenameptr = readl(spptr)
     write_pstring(filenameptr, strings.Replace(toolserver.name, ":", -1))
 
-    push(2, 0) // space for return, we don't use it
-    push(2, 2) // vRefNum
-    push(4, get_macos_dnum(toolserver.parent)) // dirID
-    push(4, filenameptr)
-    push(2, 0) // permission
+    pushw(0) // space for return, we don't use it
+    pushw(2) // vRefNum
+    pushl(get_macos_dnum(toolserver.parent)) // dirID
+    pushl(filenameptr)
+    pushw(0) // permission
 
     @oneoff_callback
     def load_code() {
@@ -3815,20 +3653,20 @@ func open_toolserver() {
 
         writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
-        push(2, callback_trap_word)
-        push(2, 0xa9a0) // _GetResource
-        pc = get_sp()
+        pushw(callback_trap_word)
+        pushw(0xa9a0) // _GetResource
+        pc = readl(spptr)
 
-        push(4, 0) // space for returned CODE 0 handle
-        push(4, int.from_bytes(b"CODE", "big"))
-        push(2, 0)
+        pushl(0) // space for returned CODE 0 handle
+        pushl(int.from_bytes(b"CODE", "big"))
+        pushw(0)
 
         @oneoff_callback
         def run_code() {
         }
 //            global pc
 
-            handle = pop(4)
+            handle = popl()
             if !handle {
                 1/0
             }
@@ -3840,8 +3678,8 @@ func open_toolserver() {
             memcpy(a5world + jtoffset, pointer + 16, jtsize)
 
             pc = a5world + jtoffset + 2
-            push(2, 0xa9f4) // _ExitToShell
-            push(4, get_sp()) // ...which is where we will return
+            pushw(0xa9f4) // _ExitToShell
+            pushl(readl(spptr)) // ...which is where we will return
 
 try {
     run_m68k_interpreter()
@@ -3912,16 +3750,16 @@ const my_traps [0x100+0x400]func() = {
     os_base + 0x4b: os_0_trap                   // _SetGrowZone
     os_base + 0x4c: freemem_trap                // _CompactMem
     os_base + 0x4d: os_00_trap                  // _PurgeMem
-    os_base + 0x55: stripaddress_trap           // _StripAddress
+    os_base + 0x55: os_nop_trap                 // _StripAddress
     os_base + 0x60: fsdispatch_trap             // _FSDispatch
-    os_base + 0x62: purgespace_trap             // _PurgeSpace
+    os_base + 0x62: freemem_trap                // _PurgeSpace
     os_base + 0x63: os_00_trap                  // _MaxApplZone
     os_base + 0x64: os_0_trap                   // _MoveHHi
     os_base + 0x69: hgetstate_trap              // _HGetState
     os_base + 0x6a: hsetstate_trap              // _HSetState
     os_base + 0x90: sysenvirons_trap            // _SysEnvirons
     os_base + 0xad: gestalt_trap                // _Gestalt
-    tb_base + 0x00d: count1resources            // _Count1Resources
+    tb_base + 0x00d: count1resources_trap       // _Count1Resources
     tb_base + 0x00e: get1indresource_trap       // _Get1IndResource
     tb_base + 0x00f: get1indtype_trap           // _Get1IndType
     tb_base + 0x01a: hopenresfile_trap          // _HOpenResFile
@@ -3977,7 +3815,7 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x198: useresfile_trap            // _UseResFile
     tb_base + 0x199: tb_pop2_trap               // _UpdateResFile
     tb_base + 0x19b: tb_pop2_trap               // _SetResLoad
-    tb_base + 0x19c: countresources             // _CountResources
+    tb_base + 0x19c: countresources_trap        // _CountResources
     tb_base + 0x19d: getindresource_trap        // _GetIndResource
     tb_base + 0x19e: counttypes_trap            // _CountTypes
     tb_base + 0x19f: getindtype_trap            // _GetIndType
@@ -4012,7 +3850,7 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x1f0: loadseg_trap               // _LoadSeg
     tb_base + 0x1f1: tb_pop4_trap               // _UnloadSeg
     tb_base + 0x1f4: exittoshell_trap           // _ExitToShell
-    tb_base + 0x1fa: tb_nop_ret0l_trap          // _UnloadScrap
-    tb_base + 0x1fb: tb_nop_ret0l_trap          // _LoadScrap
+    tb_base + 0x1fa: tb_nop_ret0l_trap          // _UnlodeScrap
+    tb_base + 0x1fb: tb_nop_ret0l_trap          // _LodeScrap
     tb_base + 0x1ff: debugger_trap              // _Debugger
 }
