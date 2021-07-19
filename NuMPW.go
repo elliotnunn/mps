@@ -3321,44 +3321,77 @@ func tHandAndHand() {
     writel(regs, 0) // d0 = noErr
 
 }
+
 // Trivial do-nothing traps
-func os_0_trap(): return 0 // clear d0, leave a0
-}
-func os_00_trap(): return 0, 0 // clear d0 and a0
-}
-func os_pb_trap(): return 0
 
+func tNop() {
 }
-func tb_nop_trap(): pass
-}
-func tb_pop2_trap(): popw()
-}
-func tb_pop4_trap(): popl()
-}
-func tb_pop6_trap(): pop(6)
-}
-func tb_pop8_trap(): pop(8)
-}
-func tb_pop10_trap(): pop(10)
-}
-func tb_nop_ret0l_trap(): pop(0+4); pushl(0)
-}
-func tb_pop2_ret0l_trap(): pop(2+4); pushl(0)
-}
-func tb_pop4_ret0l_trap(): pop(4+4); pushl(0)
-}
-func tb_pop6_ret0l_trap(): pop(6+4); pushl(0)
-}
-func tb_pop8_ret0l_trap(): pop(8+4); pushl(0)
-}
-func tb_pop10_ret0l_trap(): pop(10+4); pushl(0)
 
+func tClrD0() {
+    writel(d0ptr, 0)
 }
+
+func tClrD0A0() {
+    writel(d0ptr, 0)
+    writel(a0ptr, 0)
+}
+
+func tPop2() {
+    writel(spptr, readl(spptr) + 2)
+}
+
+func tPop4() {
+    writel(spptr, readl(spptr) + 4)
+}
+
+func tPop6() {
+    writel(spptr, readl(spptr) + 6)
+}
+
+func tPop8() {
+    writel(spptr, readl(spptr) + 8)
+}
+
+func tPop10() {
+    writel(spptr, readl(spptr) + 10)
+}
+
+func tRetZero() {
+    writel(readl(spptr), 0)
+}
+
+func tPop2RetZero() {
+    sp := readl(spptr) + 2
+    writel(spptr, sp)
+    writel(sp, 0)
+}
+
+func tPop4RetZero() {
+    sp := readl(spptr) + 4
+    writel(spptr, sp)
+    writel(sp, 0)
+}
+
+func tPop6RetZero() {
+    sp := readl(spptr) + 6
+    writel(spptr, sp)
+    writel(sp, 0)
+}
+
+func tPop8RetZero() {
+    sp := readl(spptr) + 8
+    writel(spptr, sp)
+    writel(sp, 0)
+}
+
+func tPop10RetZero() {
+    sp := readl(spptr) + 10
+    writel(spptr, sp)
+    writel(sp, 0)
+}
+
 
 func lineAF(inst uint16) {
-}
-//    global pc
-
     check_for_lurkers()
 
     if inst & 0x800 { // Toolbox trap
@@ -3715,7 +3748,7 @@ const my_traps [0x100+0x400]func() = {
     os_base + 0x15: tSetVol                     // _SetVol
     os_base + 0x18: tGetFPos                    // _GetFPos
     os_base + 0x1a: tGetZone                    // _GetZone
-    os_base + 0x1b: os_00_trap                  // _SetZone
+    os_base + 0x1b: tClrD0A0                    // _SetZone
     os_base + 0x1c: tFreeMem                    // _FreeMem
     os_base + 0x1d: tFreeMem                    // _MaxMem
     os_base + 0x1e: tNewPtr                     // _NewPtr
@@ -3729,32 +3762,32 @@ const my_traps [0x100+0x400]func() = {
     os_base + 0x26: tGetZone                    // _HandleZone
     os_base + 0x27: tReallocHandle              // _ReallocHandle
     os_base + 0x28: tRecoverHandle              // _RecoverHandle
-    os_base + 0x29: os_0_trap                   // _HLock
-    os_base + 0x2a: os_0_trap                   // _HUnlock
+    os_base + 0x29: tClrD0                      // _HLock
+    os_base + 0x2a: tClrD0                      // _HUnlock
     os_base + 0x2b: tEmptyHandle                // _EmptyHandle
-    os_base + 0x2c: os_00_trap                  // _InitApplZone
-    os_base + 0x2d: os_00_trap                  // _SetApplLimit
+    os_base + 0x2c: tClrD0A0                    // _InitApplZone
+    os_base + 0x2d: tClrD0A0                    // _SetApplLimit
     os_base + 0x2e: tBlockMove                  // _BlockMove
     os_base + 0x30: tGetOSEvent                 // _OSEventAvail
     os_base + 0x31: tGetOSEvent                 // _GetOSEvent
-    os_base + 0x32: os_00_trap                  // _FlushEvents
-    os_base + 0x36: os_00_trap                  // _MoreMasters
+    os_base + 0x32: tClrD0A0                    // _FlushEvents
+    os_base + 0x36: tClrD0A0                    // _MoreMasters
     os_base + 0x3c: tCmpString                  // _CmpString
-    os_base + 0x40: os_00_trap                  // _ResrvMem
+    os_base + 0x40: tClrD0A0                    // _ResrvMem
     os_base + 0x44: tSetFPos                    // _SetFPos
     os_base + 0x46: tGetTrapAddress             // _GetTrapAddress
     os_base + 0x47: tSetTrapAddress             // _SetTrapAddress
     os_base + 0x48: tGetZone                    // _PtrZone
-    os_base + 0x49: os_0_trap                   // _HPurge
-    os_base + 0x4a: os_0_trap                   // _HNoPurge
-    os_base + 0x4b: os_0_trap                   // _SetGrowZone
+    os_base + 0x49: tClrD0                      // _HPurge
+    os_base + 0x4a: tClrD0                      // _HNoPurge
+    os_base + 0x4b: tClrD0                      // _SetGrowZone
     os_base + 0x4c: tFreeMem                    // _CompactMem
-    os_base + 0x4d: os_00_trap                  // _PurgeMem
-    os_base + 0x55: os_nop_trap                 // _StripAddress
+    os_base + 0x4d: tClrD0A0                    // _PurgeMem
+    os_base + 0x55: tNop                        // _StripAddress
     os_base + 0x60: tFSDispatch                 // _FSDispatch
     os_base + 0x62: tFreeMem                    // _PurgeSpace
-    os_base + 0x63: os_00_trap                  // _MaxApplZone
-    os_base + 0x64: os_0_trap                   // _MoveHHi
+    os_base + 0x63: tClrD0A0                    // _MaxApplZone
+    os_base + 0x64: tClrD0                      // _MoveHHi
     os_base + 0x69: tHGetState                  // _HGetState
     os_base + 0x6a: tHSetState                  // _HSetState
     os_base + 0x90: tSysEnvirons                // _SysEnvirons
@@ -3767,13 +3800,13 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x01f: tGet1Resource              // _Get1Resource
     tb_base + 0x020: tGet1NamedResource         // _Get1NamedResource
     tb_base + 0x023: tAliasDispatch             // _AliasDispatch
-    tb_base + 0x034: tb_pop2_trap               // _SetFScaleDisable
-    tb_base + 0x050: tb_nop_trap                // _InitCursor
-    tb_base + 0x051: tb_pop4_trap               // _SetCursor
-    tb_base + 0x052: tb_nop_trap                // _HideCursor
-    tb_base + 0x053: tb_nop_trap                // _ShowCursor
-    tb_base + 0x055: tb_pop8_trap               // _ShieldCursor
-    tb_base + 0x056: tb_nop_trap                // _ObscureCursor
+    tb_base + 0x034: tPop2                      // _SetFScaleDisable
+    tb_base + 0x050: tNop                       // _InitCursor
+    tb_base + 0x051: tPop4                      // _SetCursor
+    tb_base + 0x052: tNop                       // _HideCursor
+    tb_base + 0x053: tNop                       // _ShowCursor
+    tb_base + 0x055: tPop8                      // _ShieldCursor
+    tb_base + 0x056: tNop                       // _ObscureCursor
     tb_base + 0x058: tBitAnd                    // _BitAnd
     tb_base + 0x059: tBitXor                    // _BitXor
     tb_base + 0x05a: tBitNot                    // _BitNot
@@ -3787,70 +3820,70 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x06a: tHiWord                    // _HiWord
     tb_base + 0x06b: tLoWord                    // _LoWord
     tb_base + 0x06e: tInitGraf                  // _InitGraf
-    tb_base + 0x06f: tb_pop4_trap               // _OpenPort
+    tb_base + 0x06f: tPop4                      // _OpenPort
     tb_base + 0x073: tSetPort                   // _SetPort
     tb_base + 0x074: tGetPort                   // _GetPort
     tb_base + 0x0a7: tSetRect                   // _SetRect
     tb_base + 0x0a8: tOffsetRect                // _OffsetRect
-    tb_base + 0x0d8: tb_nop_ret0l_trap          // _NewRgn
-    tb_base + 0x0fe: tb_nop_trap                // _InitFonts
-    tb_base + 0x112: tb_nop_trap                // _InitWindows
-    tb_base + 0x124: tb_nop_ret0l_trap          // _FrontWindow
-    tb_base + 0x130: tb_nop_trap                // _InitMenus
-    tb_base + 0x137: tb_nop_trap                // _DrawMenuBar
-    tb_base + 0x138: tb_pop2_trap               // _HiliteMenu
-    tb_base + 0x139: tb_pop6_trap               // _EnableItem
-    tb_base + 0x13a: tb_pop6_trap               // _DisableItem
-    tb_base + 0x13c: tb_pop4_trap               // _SetMenuBar
+    tb_base + 0x0d8: tRetZero                   // _NewRgn
+    tb_base + 0x0fe: tNop                       // _InitFonts
+    tb_base + 0x112: tNop                       // _InitWindows
+    tb_base + 0x124: tRetZero                   // _FrontWindow
+    tb_base + 0x130: tNop                       // _InitMenus
+    tb_base + 0x137: tNop                       // _DrawMenuBar
+    tb_base + 0x138: tPop2                      // _HiliteMenu
+    tb_base + 0x139: tPop6                      // _EnableItem
+    tb_base + 0x13a: tPop6                      // _DisableItem
+    tb_base + 0x13c: tPop4                      // _SetMenuBar
     tb_base + 0x13e: tMenuKey                   // _MenuKey
-    tb_base + 0x149: tb_pop2_ret0l_trap         // _GetMenuHandle
-    tb_base + 0x14d: tb_pop8_trap               // _AppendResMenu
+    tb_base + 0x149: tPop2RetZero               // _GetMenuHandle
+    tb_base + 0x14d: tPop8                      // _AppendResMenu
     tb_base + 0x170: tGetNextEvent              // _GetNextEvent
-    tb_base + 0x175: tb_nop_ret0l_trap          // _TickCount
-    tb_base + 0x179: tb_pop2_trap               // _CouldDialog
-    tb_base + 0x17b: tb_nop_trap                // _InitDialogs
-    tb_base + 0x17c: tb_pop10_ret0l_trap        // _GetNewDialog
+    tb_base + 0x175: tRetZero                   // _TickCount
+    tb_base + 0x179: tPop2                      // _CouldDialog
+    tb_base + 0x17b: tNop                       // _InitDialogs
+    tb_base + 0x17c: tPop10RetZero              // _GetNewDialog
     tb_base + 0x194: tCurResFile                // _CurResFile
     tb_base + 0x197: tOpenResFile               // _OpenResFile
     tb_base + 0x198: tUseResFile                // _UseResFile
-    tb_base + 0x199: tb_pop2_trap               // _UpdateResFile
-    tb_base + 0x19b: tb_pop2_trap               // _SetResLoad
+    tb_base + 0x199: tPop2                      // _UpdateResFile
+    tb_base + 0x19b: tPop2                      // _SetResLoad
     tb_base + 0x19c: tCountResources            // _CountResources
     tb_base + 0x19d: tGetIndResource            // _GetIndResource
     tb_base + 0x19e: tCountTypes                // _CountTypes
     tb_base + 0x19f: tGetIndType                // _GetIndType
     tb_base + 0x1a0: tGetResource               // _GetResource
     tb_base + 0x1a1: tGetNamedResource          // _GetNamedResource
-    tb_base + 0x1a3: tb_pop4_trap               // _ReleaseResource
+    tb_base + 0x1a3: tPop4                      // _ReleaseResource
     tb_base + 0x1a4: tHomeResFile               // _HomeResFile
     tb_base + 0x1a5: tSizeRsrc                  // _SizeRsrc
     tb_base + 0x1a8: tGetResInfo                // _GetResInfo
     tb_base + 0x1af: tResError                  // _ResError
-    tb_base + 0x1b4: tb_nop_trap                // _SystemTask
+    tb_base + 0x1b4: tNop                       // _SystemTask
     tb_base + 0x1b8: tGetPattern                // _GetPattern
     tb_base + 0x1b9: tGetCursor                 // _GetCursor
     tb_base + 0x1ba: tGetString                 // _GetString
     tb_base + 0x1bb: tGetIcon                   // _GetIcon
     tb_base + 0x1bc: tGetPicture                // _GetPicture
-    tb_base + 0x1bd: tb_pop10_ret0l_trap        // _GetNewWindow
-    tb_base + 0x1c0: tb_pop2_ret0l_trap         // _GetNewMBar
+    tb_base + 0x1bd: tPop10RetZero              // _GetNewWindow
+    tb_base + 0x1c0: tPop2RetZero               // _GetNewMBar
     tb_base + 0x1c4: tOpenRFPerm                // _OpenRFPerm
-    tb_base + 0x1c8: tb_nop_trap                // _SysBeep
+    tb_base + 0x1c8: tNop                       // _SysBeep
     tb_base + 0x1c9: tSysError                  // _SysError
-    tb_base + 0x1cc: tb_nop_trap                // _TEInit
+    tb_base + 0x1cc: tNop                       // _TEInit
     tb_base + 0x1e1: tHandToHand                // _HandToHand
     tb_base + 0x1e2: tPtrToXHand                // _PtrToXHand
     tb_base + 0x1e3: tPtrToHand                 // _PtrToHand
     tb_base + 0x1e4: tHandAndHand               // _HandAndHand
-    tb_base + 0x1e5: tb_pop2_trap               // _InitPack
-    tb_base + 0x1e6: tb_nop_trap                // _InitAllPacks
+    tb_base + 0x1e5: tPop2                      // _InitPack
+    tb_base + 0x1e6: tNop                       // _InitAllPacks
     tb_base + 0x1eb: tFP68K                     // _FP68K
     tb_base + 0x1ec: tElems68K                  // _Elems68K
     tb_base + 0x1ee: tDecStr68K                 // _DecStr68K
     tb_base + 0x1f0: tLoadSeg                   // _LoadSeg
-    tb_base + 0x1f1: tb_pop4_trap               // _UnloadSeg
+    tb_base + 0x1f1: tPop4                      // _UnloadSeg
     tb_base + 0x1f4: tExitToShell               // _ExitToShell
-    tb_base + 0x1fa: tb_nop_ret0l_trap          // _UnlodeScrap
-    tb_base + 0x1fb: tb_nop_ret0l_trap          // _LodeScrap
+    tb_base + 0x1fa: tRetZero                   // _UnlodeScrap
+    tb_base + 0x1fb: tRetZero                   // _LodeScrap
     tb_base + 0x1ff: tDebugger                  // _Debugger
 }
