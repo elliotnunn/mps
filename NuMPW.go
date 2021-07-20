@@ -2629,38 +2629,96 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
     }
 }
 
-func resToHand(resMap uint32, type_entry uint16, id_entry uint16) (handle uint32) {
+// Use the resource map to find the data
+func resData(resMap uint32, type_entry, id_entry uint16) []byte {
     resMap := readl(resMap) // handle to pointer
 
-    // Perhaps it is already in memory?
-    handle = readl(resMap + id + 8)
-    if handle != 0 {
-        return
-    }
-
-    // No such luck. Load it from the file.
     refnum := readw(resMap + 20)
     filedata := filebuffers[refnum]
 
     data_ofs := binary.BigEndian.Uint32(filedata) + (readl(resMap + id_entry + 4) & 0xffffff) + 4
     data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
-    data := filedata[data_ofs:][:data_len]
+    return filedata[data_ofs:][:data_len]
+}
 
-    // _NewHandle
-    writel(d0ptr, len(data))
-    call_m68k(executable_atrap(0xa122))
-    handle = readl(a0ptr)
+func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handle uint32) {
+    resMap := readl(resMap) // handle to pointer
 
-    // Populate
-    copy(mem[readl(handle):], data)
-    writeb(handle + 4, 0x20) // set resourceBit
+    // Is a memory block already recorded?
+    handle = readl(resMap + id + 8)
 
-    // Save handle in map
+    if loadPlease == false and handle == 0 {
+        // Create empty handle
+        call_m68k(executable_trap(0xa166)) // _NewEmptyHandle
+        handle = readl(a0ptr)
+    } else if loadPlease == true and handle == 0 {
+        // Create full handle
+        data := resData(resMap, typeEntry, idEntry)
+
+        writel(d0ptr, len(data))
+        call_m68k(executable_atrap(0xa122)) // _NewHandle
+        handle = readl(a0ptr)
+
+        copy(mem[readl(handle):], data)
+    } else if loadPlease == true and handle != 0 and readl(handle) == 0 {
+        // Fill empty handle
+        data := resData(resMap, typeEntry, idEntry)
+
+        writel(d0ptr, len(data))
+        writel(a0ptr, handle)
+        call_m68k(executable_atrap(0xa027)) // _ReallocHandle
+
+        copy(mem[readl(handle):], data)
+    }
+
+    // Record memory block in map
     writel(resMap + id_entry + 8, handle)
 }
 
+func get_resource_name(map_handle, res_entry_ptr) {
+    map_ptr := readl(map_handle)
+    name_list_ptr := map_ptr + readw(map_ptr + 26)
+
+    name_offset = readw(res_entry_ptr + 2)
+    if name_offset == 0xffff {
+        return nil
+    } else {
+        return read_pstring(name_list_ptr + name_offset)
+    }
+}
+
+func set_resource_name(map_handle, res_entry_ptr, name) {
+    if name == nil {
+        writew(res_entry_ptr + 2, 0xffff)
+
+    } else {
+        name_list_offset := readw(readl(map_handle) + 26) // from start of map
+        name_offset = gethandlesize(map_handle) // from start of map
+        writew(res_entry_ptr + 2, name_offset - name_list_offset)
+
+        // after set_handle_size, all pointers into the map are invalid
+        set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
+        write_pstring(readl(map_handle) + name_offset, name)
+
+    }
+}
+
+func setResError(err int) {
+    writew(0xa60, int16(err))
+}
+
 func tResError() {
-    writew(readl(spptr), readw(0xa60))
+    ResError := readw(0xa60)
+    writew(readl(spptr), ResError)
+}
+
+func tCurResFile() {
+    CurMap := readw(0xa5a)
+    writew(readl(spptr), CurMap)
+}
+
+func tUseResFile() {
+    writew(0xa5a, popw()) // CurMap
 }
 
 func tOpenResFile() {
@@ -2761,34 +2819,6 @@ func tGetIndType() {
     writel(theTypePtr, theType)
 }
 
-func get_resource_name(map_handle, res_entry_ptr) {
-    map_ptr := readl(map_handle)
-    name_list_ptr := map_ptr + readw(map_ptr + 26)
-
-    name_offset = readw(res_entry_ptr + 2)
-    if name_offset == 0xffff {
-        return nil
-    } else {
-        return read_pstring(name_list_ptr + name_offset)
-    }
-}
-
-func set_resource_name(map_handle, res_entry_ptr, name) {
-    if name == nil {
-        writew(res_entry_ptr + 2, 0xffff)
-
-    } else {
-        name_list_offset := readw(readl(map_handle) + 26) // from start of map
-        name_offset = gethandlesize(map_handle) // from start of map
-        writew(res_entry_ptr + 2, name_offset - name_list_offset)
-
-        // after set_handle_size, all pointers into the map are invalid
-        set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
-        write_pstring(readl(map_handle) + name_offset, name)
-
-    }
-}
-
 func tGetResInfo() {
     nameptr := popl()
     typeptr := popl()
@@ -2818,64 +2848,124 @@ func tGetResInfo() {
 }
 
 func tGetResource() {
-    id = popw()
-    type = popl()
-    getresource_common(type, id=id, top_only=false)
+    only1Please := gLastTrap & 0x3ff == 0x1f
+    loadPlease := readb(0xa5e) != 0
+    rid = popw()
+    rtype = popl()
 
+    var handle uint32
+    for _, resMap := range currentResMaps(only1Please) {
+        entries := resMapEntries(resMap)
+        typeEntry := entries[0]
+        for _, idEntry := range entries[1:] {
+            if rtype == readl(typeEntry) && rid == readl(idEntry) {
+                handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                goto found
+            }
+        }
+    }
+    found:
+
+    writel(readl(spptr), handle)
+    if handle == 0 {
+        setResError(-192) // resNotFound
+    } else {
+        setResError(0)
+    }
 }
 
 func tGetNamedResource() {
-    name := read_pstring(popl())
-    type = popl()
-    getresource_common(type, name=name, top_only=false)
+    only1Please := gLastTrap & 0x3ff == 0x20
+    loadPlease := readb(0xa5e) != 0
+    rname := readPString(popl())
+    rtype = popl()
 
+    var handle uint32
+    for _, resMap := range currentResMaps(only1Please) {
+        entries := resMapEntries(resMap)
+        typeEntry := entries[0]
+        for _, idEntry := range entries[1:] {
+            if rtype == readl(typeEntry) && rname == getResName(resMap, idEntry) {
+                handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                goto found
+            }
+        }
+    }
+    found:
+
+    writel(readl(spptr), handle)
+    if handle == 0 {
+        setResError(-192) // resNotFound
+    } else {
+        setResError(0)
+    }
 }
 
 func tGetIndResource() {
-    idx := popw()
-    type = popl()
+    only1Please := gLastTrap & 0x3ff == 0xe
+    loadPlease := readb(0xa5e) != 0
+    rindex = popw()
+    rtype = popl()
 
-    ids = resource_ids(top_only=false, type=type)
-    id = ids[idx - 1] if (1 <= idx <= len(ids)) else nil
+    var handle uint32
+    for _, resMap := range currentResMaps(only1Please) {
+        entries := resMapEntries(resMap)
+        typeEntry := entries[0]
+        for _, idEntry := range entries[1:] {
+            if rtype == readl(typeEntry) {
+                rindex--
+                if rindex == 0 {
+                    handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                    goto found
+                }
+            }
+        }
+    }
+    found:
 
-    getresource_common(type, id=id, top_only=false)
-
+    writel(readl(spptr), handle)
+    if handle == 0 {
+        setResError(-192) // resNotFound
+    } else {
+        setResError(0)
+    }
 }
 
-func tCurResFile() {
-    curmap := readw(0xa5a) // CurMap global
-    popw(); pushw(curmap)
-
-}
-func tUseResFile() {
-    curmap = writew(0xa5a, popw()) // CurMap global
-
-}
 func tGetPattern() {
-    pushl(int.from_bytes(b"PAT ", "big"))
+    id := popw()
+    pushl(0x50415420) // PAT
+    pushw(id)
     tGetResource()
-
 }
+
 func tGetCursor() {
-    pushl(int.from_bytes(b"CURS", "big"))
+    id := popw()
+    pushl(0x43555253) // CURS
+    pushw(id)
     tGetResource()
-
 }
+
 func tGetString() {
-    pushl(int.from_bytes(b"STR ", "big"))
+    id := popw()
+    pushl(0x53545220) // STR
+    pushw(id)
     tGetResource()
-
 }
+
 func tGetIcon() {
-    pushl(int.from_bytes(b"ICON", "big"))
+    id := popw()
+    pushl(0x49434f4e) // ICON
+    pushw(id)
     tGetResource()
-
 }
+
 func tGetPicture() {
-    pushl(int.from_bytes(b"PICT", "big"))
+    id := popw()
+    pushl(0x50494354) // PICT
+    pushw(id)
     tGetResource()
-
 }
+
 func tHomeResFile() {
     handle = popl()
 
