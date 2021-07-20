@@ -2562,7 +2562,7 @@ func allResMaps() (list []uint32) {
 }
 
 // All map handles from CurMap
-func activeResMaps() (list []uint32) {
+func currentResMaps(stopAt1 bool) (list []uint32) {
     all_maps = allResMaps()
     CurMap := readw(0xa5a)
     for i, maphdl := range all_maps {
@@ -2572,27 +2572,19 @@ func activeResMaps() (list []uint32) {
     }
 }
 
-// CurMap only
-func currentResMap() uint32 {
-    active_maps := activeResMaps()
-    if len(active_maps) > 0 {
-        return active_maps[0]
-    }
-}
-
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
-func resMapEntries(map uint32) (retval [][]uint16) {
-    map := readl(map) // handle to pointer
+func resMapEntries(resMap uint32) (retval [][]uint16) {
+    resMap := readl(resMap) // handle to pointer
 
-    refbase := readw(map + 24)
-    namebase := readw(map + 26)
-    num_types := readw(map + refbase) + 1
+    refbase := readw(resMap + 24)
+    namebase := readw(resMap + 26)
+    num_types := readw(resMap + refbase) + 1
 
     for t := 0; t < num_types; t++ {
         this_type_entry := refbase + 2 + 8 * t
-        num_ids := readw(map + this_type_entry + 4) + 1
+        num_ids := readw(resMap + this_type_entry + 4) + 1
         retval := append(retval, []uint32{this_type_entry})
-        first_of_this_type := readw(map + this_type_entry + 6)
+        first_of_this_type := readw(resMap + this_type_entry + 6)
 
         for i := 0; i < num_ids; i++ {
             this_id_entry := refbase + first_of_this_type + 12 * i
@@ -2601,12 +2593,12 @@ func resMapEntries(map uint32) (retval [][]uint16) {
     }
 }
 
-func uniqueTypesInMaps(maps []uint32...) (types []uint32) {
+func uniqueTypesInMaps(maps []uint32) (types []uint32) {
     var already map[uint32]bool
 
     for _, handle := range maps {
         ptr := readl(handle)
-        for _, entries := resMapEntries(handle) {
+        for _, entries := range resMapEntries(handle) {
             type_entry := entries[0] // ignore the type entries
             the_type := readl(ptr + type_entry)
             if !already[the_type] {
@@ -2617,12 +2609,12 @@ func uniqueTypesInMaps(maps []uint32...) (types []uint32) {
     }
 }
 
-func uniqueIdsInMaps(the_type uint32, maps []uint32...) (ids []uint16) {
+func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
     var already map[uint16]bool
 
     for _, handle := range maps {
         ptr := readl(handle)
-        for _, entries := resMapEntries(handle) {
+        for _, entries := range resMapEntries(handle) {
             type_entry := entries[0] // ignore the type entries
             if the_type == readl(ptr + type_entry) {
                 for _, id_entry := range entries[1:] {
@@ -2637,20 +2629,20 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32...) (ids []uint16) {
     }
 }
 
-func resToHand(map uint32, type_entry uint16, id_entry uint16) (handle uint32) {
-    map := readl(map) // handle to pointer
+func resToHand(resMap uint32, type_entry uint16, id_entry uint16) (handle uint32) {
+    resMap := readl(resMap) // handle to pointer
 
     // Perhaps it is already in memory?
-    handle = readl(map + id + 8)
+    handle = readl(resMap + id + 8)
     if handle != 0 {
         return
     }
 
     // No such luck. Load it from the file.
-    refnum := readw(map + 20)
+    refnum := readw(resMap + 20)
     filedata := filebuffers[refnum]
 
-    data_ofs := binary.BigEndian.Uint32(filedata) + (readl(map + id_entry + 4) & 0xffffff) + 4
+    data_ofs := binary.BigEndian.Uint32(filedata) + (readl(resMap + id_entry + 4) & 0xffffff) + 4
     data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
     data := filedata[data_ofs:][:data_len]
 
@@ -2664,7 +2656,7 @@ func resToHand(map uint32, type_entry uint16, id_entry uint16) (handle uint32) {
     writeb(handle + 4, 0x20) // set resourceBit
 
     // Save handle in map
-    writel(map + id_entry + 8, handle)
+    writel(resMap + id_entry + 8, handle)
 }
 
 func tResError() {
@@ -2743,47 +2735,30 @@ func tHOpenResFile() {
 }
 
 func tCountTypes() {
-    answer := len(uniqueTypesInMaps(activeResMaps()...))
-    writew(readl(spptr), uint16(answer))
-}
-
-func tCount1Types() {
-    answer := len(uniqueTypesInMaps(currentResMap()))
+    only1Please := gLastTrap & 0x3ff == 0x1c
+    answer := len(uniqueTypesInMaps(currentResMaps(only1Please)))
     writew(readl(spptr), uint16(answer))
 }
 
 func tCountResources() {
+    only1Please := gLastTrap & 0x3ff == 0xd
     the_type := popl()
-    answer := len(uniqueIdsInMaps(the_type, activeResMaps()...))
-    writew(readl(spptr), uint16(answer))
-}
-
-func tCount1Resources() {
-    the_type := popl()
-    answer := len(uniqueIdsInMaps(the_type, currentResMap()))
+    answer := len(uniqueIdsInMaps(the_type, currentResMaps(only1Please)))
     writew(readl(spptr), uint16(answer))
 }
 
 func tGetIndType() {
-    ind = popw()
-    retptr = popl()
-    types = list(resource_types(false))
-    try: type = types[(ind - 1) & 0xffff]
-    }
-    except IndexError: type = 0
-    }
-    writel(retptr, type)
+    only1Please := gLastTrap & 0x3ff == 0xf
+    index := popw() - 1
+    theTypePtr := popl()
 
-}
-func tGet1IndType() {
-    ind := popw()
-    retptr := popl()
-    types := list(resource_types(true))
-    try: type = types[(ind - 1) & 0xffff]
+    theType := 0
+    typeList := uniqueTypesInMaps(currentResMaps(only1Please))
+    if index < len(typeList) {
+        theType = typeList[index]
     }
-    except IndexError: type = 0
-    }
-    writel(retptr, type)
+
+    writel(theTypePtr, theType)
 }
 
 func get_resource_name(map_handle, res_entry_ptr) {
@@ -2848,24 +2823,14 @@ func tGetResource() {
     getresource_common(type, id=id, top_only=false)
 
 }
-func tGet1Resource() {
-    id := popw()
-    type = popl()
-    getresource_common(type, id=id, top_only=true)
 
-}
 func tGetNamedResource() {
     name := read_pstring(popl())
     type = popl()
     getresource_common(type, name=name, top_only=false)
 
 }
-func tGet1NamedResource() {
-    name := read_pstring(popl())
-    type = popl()
-    getresource_common(type, name=name, top_only=true)
 
-}
 func tGetIndResource() {
     idx := popw()
     type = popl()
@@ -2875,15 +2840,6 @@ func tGetIndResource() {
 
     getresource_common(type, id=id, top_only=false)
 
-}
-func tGet1IndResource() {
-    idx := popw()
-    type = popl()
-
-    ids = resource_ids(top_only=true, type=type)
-    id = ids[idx - 1] if (1 <= idx <= len(ids)) else nil
-
-    getresource_common(type, id=id, top_only=false)
 }
 
 func tCurResFile() {
@@ -3390,8 +3346,9 @@ func tPop10RetZero() {
     writel(sp, 0)
 }
 
-
+var gLastTrap uint16
 func lineAF(inst uint16) {
+    gLastTrap := inst
     check_for_lurkers()
 
     if inst & 0x800 { // Toolbox trap
@@ -3792,13 +3749,13 @@ const my_traps [0x100+0x400]func() = {
     os_base + 0x6a: tHSetState                  // _HSetState
     os_base + 0x90: tSysEnvirons                // _SysEnvirons
     os_base + 0xad: tGestalt                    // _Gestalt
-    tb_base + 0x00d: tCount1Resources           // _Count1Resources
-    tb_base + 0x00e: tGet1IndResource           // _Get1IndResource
-    tb_base + 0x00f: tGet1IndType               // _Get1IndType
+    tb_base + 0x00d: tCountResources            // _Count1Resources
+    tb_base + 0x00e: tGetIndResource            // _Get1IndResource
+    tb_base + 0x00f: tGetIndType                // _Get1IndType
     tb_base + 0x01a: tHOpenResFile              // _HOpenResFile
-    tb_base + 0x01c: tCount1Types               // _Count1Types
-    tb_base + 0x01f: tGet1Resource              // _Get1Resource
-    tb_base + 0x020: tGet1NamedResource         // _Get1NamedResource
+    tb_base + 0x01c: tCountTypes                // _Count1Types
+    tb_base + 0x01f: tGetResource               // _Get1Resource
+    tb_base + 0x020: tGetNamedResource          // _Get1NamedResource
     tb_base + 0x023: tAliasDispatch             // _AliasDispatch
     tb_base + 0x034: tPop2                      // _SetFScaleDisable
     tb_base + 0x050: tNop                       // _InitCursor
