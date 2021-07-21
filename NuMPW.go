@@ -135,12 +135,14 @@ func popb() {
     return readb(ptr)
 }
 
-func readl(spptr) uint32 {
-    return readl(spptr)
+func readRegs() (reglist [16]uint32) {
+    copy(reglist[:], mem[regs:])
 }
 
-func writel(spptr, val uint32) {
-    writel(spptr, val)
+func writeRegs() (reglist [16]uint32, which ...[]uint32) {
+    for _, which := range which {
+        copy(mem[which:][:4], reglist[which-regs:])
+    }
 }
 
 func signed(size int, n uint32) int32 {
@@ -1033,14 +1035,16 @@ func call_m68k(addr uint32) {
             line8(inst)
         case 9, 0xd:
             line9D(inst)
-        case 0xa, 0xf:
-            lineAF(inst)
+        case 0xa:
+            lineA(inst)
         case 0xb:
             lineB(inst)
         case 0xc:
             lineC(inst)
         case 0xe:
             lineE(inst)
+        case 0xf:
+            lineF(inst)
         }
     }
 
@@ -2645,13 +2649,13 @@ func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handl
     resMap := readl(resMap) // handle to pointer
 
     // Is a memory block already recorded?
-    handle = readl(resMap + id + 8)
+    handle = readl(resMap + idEntry + 8)
 
-    if loadPlease == false and handle == 0 {
+    if loadPlease == false && handle == 0 {
         // Create empty handle
         call_m68k(executable_trap(0xa166)) // _NewEmptyHandle
         handle = readl(a0ptr)
-    } else if loadPlease == true and handle == 0 {
+    } else if loadPlease == true && handle == 0 {
         // Create full handle
         data := resData(resMap, typeEntry, idEntry)
 
@@ -2660,7 +2664,7 @@ func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handl
         handle = readl(a0ptr)
 
         copy(mem[readl(handle):], data)
-    } else if loadPlease == true and handle != 0 and readl(handle) == 0 {
+    } else if loadPlease == true && handle != 0 && readl(handle) == 0 {
         // Fill empty handle
         data := resData(resMap, typeEntry, idEntry)
 
@@ -2672,36 +2676,37 @@ func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handl
     }
 
     // Record memory block in map
-    writel(resMap + id_entry + 8, handle)
+    writel(resMap + idEntry + 8, handle)
 }
 
-func get_resource_name(map_handle, res_entry_ptr) {
-    map_ptr := readl(map_handle)
-    name_list_ptr := map_ptr + readw(map_ptr + 26)
+func getResName(resMap uint32, idEntry uint16) (hasName bool, theName []byte) {
+    resMap := readl(resMap) // handle to pointer
 
-    name_offset = readw(res_entry_ptr + 2)
-    if name_offset == 0xffff {
-        return nil
+    nameList := readw(resMap + 26)
+    nameOffset := readw(resMap + idEntry + 2)
+
+    if nameOffset == 0xffff {
+        return false, ""
     } else {
-        return read_pstring(name_list_ptr + name_offset)
+        return true, read_pstring(resMap + nameList + nameOffset)
     }
 }
 
-func set_resource_name(map_handle, res_entry_ptr, name) {
-    if name == nil {
-        writew(res_entry_ptr + 2, 0xffff)
-
-    } else {
-        name_list_offset := readw(readl(map_handle) + 26) // from start of map
-        name_offset = gethandlesize(map_handle) // from start of map
-        writew(res_entry_ptr + 2, name_offset - name_list_offset)
-
-        // after set_handle_size, all pointers into the map are invalid
-        set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
-        write_pstring(readl(map_handle) + name_offset, name)
-
-    }
-}
+// func set_resource_name(map_handle, res_entry_ptr, name) {
+//     if name == nil {
+//         writew(res_entry_ptr + 2, 0xffff)
+//
+//     } else {
+//         name_list_offset := readw(readl(map_handle) + 26) // from start of map
+//         name_offset = gethandlesize(map_handle) // from start of map
+//         writew(res_entry_ptr + 2, name_offset - name_list_offset)
+//
+//         // after set_handle_size, all pointers into the map are invalid
+//         set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
+//         write_pstring(readl(map_handle) + name_offset, name)
+//
+//     }
+// }
 
 func setResError(err int) {
     writew(0xa60, int16(err))
@@ -2793,20 +2798,20 @@ func tHOpenResFile() {
 }
 
 func tCountTypes() {
-    only1Please := gLastTrap & 0x3ff == 0x1c
+    only1Please := gCurToolTrapNum & 0x3ff == 0x1c
     answer := len(uniqueTypesInMaps(currentResMaps(only1Please)))
     writew(readl(spptr), uint16(answer))
 }
 
 func tCountResources() {
-    only1Please := gLastTrap & 0x3ff == 0xd
+    only1Please := gCurToolTrapNum & 0x3ff == 0xd
     the_type := popl()
     answer := len(uniqueIdsInMaps(the_type, currentResMaps(only1Please)))
     writew(readl(spptr), uint16(answer))
 }
 
 func tGetIndType() {
-    only1Please := gLastTrap & 0x3ff == 0xf
+    only1Please := gCurToolTrapNum & 0x3ff == 0xf
     index := popw() - 1
     theTypePtr := popl()
 
@@ -2819,36 +2824,36 @@ func tGetIndType() {
     writel(theTypePtr, theType)
 }
 
-func tGetResInfo() {
-    nameptr := popl()
-    typeptr := popl()
-    idptr := popl()
-    handle := popl()
-
-    for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
-        for type_entry, res_entry in iter_map(map) {
-            if readl(res_entry + 8) == handle {
-                if nameptr {
-                    write_pstring(nameptr, get_resource_name(map, res_entry) || "")
-                }
-                if typeptr {
-                    writel(typeptr, readl(type_entry))
-                }
-                if idptr {
-                    writew(idptr, readw(res_entry))
-
-                }
-                writew(0xa60, 0) // ResErr = noErr
-                return
-
-            }
-        }
-    }
-    writew(0xa60, -192) // ResErr = resNotFound
-}
+// func tGetResInfo() {
+//     nameptr := popl()
+//     typeptr := popl()
+//     idptr := popl()
+//     handle := popl()
+//
+//     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
+//         for type_entry, res_entry in iter_map(map) {
+//             if readl(res_entry + 8) == handle {
+//                 if nameptr {
+//                     write_pstring(nameptr, get_resource_name(map, res_entry) || "")
+//                 }
+//                 if typeptr {
+//                     writel(typeptr, readl(type_entry))
+//                 }
+//                 if idptr {
+//                     writew(idptr, readw(res_entry))
+//
+//                 }
+//                 writew(0xa60, 0) // ResErr = noErr
+//                 return
+//
+//             }
+//         }
+//     }
+//     writew(0xa60, -192) // ResErr = resNotFound
+// }
 
 func tGetResource() {
-    only1Please := gLastTrap & 0x3ff == 0x1f
+    only1Please := gCurToolTrapNum & 0x3ff == 0x1f
     loadPlease := readb(0xa5e) != 0
     rid = popw()
     rtype = popl()
@@ -2875,7 +2880,7 @@ func tGetResource() {
 }
 
 func tGetNamedResource() {
-    only1Please := gLastTrap & 0x3ff == 0x20
+    only1Please := gCurToolTrapNum & 0x3ff == 0x20
     loadPlease := readb(0xa5e) != 0
     rname := readPString(popl())
     rtype = popl()
@@ -2885,7 +2890,7 @@ func tGetNamedResource() {
         entries := resMapEntries(resMap)
         typeEntry := entries[0]
         for _, idEntry := range entries[1:] {
-            if rtype == readl(typeEntry) && rname == getResName(resMap, idEntry) {
+            if rtype == readl(typeEntry) && rname == getResName(resMap, idEntry) { // this wont work, fix later
                 handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
                 goto found
             }
@@ -2902,7 +2907,7 @@ func tGetNamedResource() {
 }
 
 func tGetIndResource() {
-    only1Please := gLastTrap & 0x3ff == 0xe
+    only1Please := gCurToolTrapNum & 0x3ff == 0xe
     loadPlease := readb(0xa5e) != 0
     rindex = popw()
     rtype = popl()
@@ -2969,337 +2974,300 @@ func tGetPicture() {
 func tHomeResFile() {
     handle = popl()
 
-    for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
-        for type_entry, res_entry in iter_map(map) {
-            if readl(res_entry + 8) == handle {
-                map_pointer = readl(map)
-                refnum = readw(map_pointer + 20)
-                writew(readl(spptr), refnum)
-                writew(0xa60, 0) // ResError = noErr
-                return
+    setResError(-192) // resNotFound
+    writew(readl(spptr), 0xffff) // return this meaning "bad"
 
+    for _, resMap := range currentResMaps(only1Please) {
+        entries := resMapEntries(resMap)
+        typeEntry := entries[0]
+        for _, idEntry := range entries[1:] {
+            if handle == readl(resMap + idEntry + 4) {
+                setResError(0)
+                writew(readl(spptr), readw(resMap + 20))
+                return
             }
         }
     }
-    writew(readl(spptr), -1)
-    writew(0xa60, -192) // ResError = resNotFound
-
 }
+
 func tSizeRsrc() {
     handle = popl()
 
-    for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
-        for type_entry, res_entry in iter_map(map) {
-            if readl(res_entry + 8) == handle {
-                map_pointer := readl(map)
-                refnum := readw(map_pointer + 20)
-                offset := readl(map_pointer) + (readl(res_entry + 4) & 0xffffff)
-                size := int.from_bytes(filebuffers[refnum][offset:offset+4], "big")
+    setResError(-192) // resNotFound
+    writel(readl(spptr), 0) // return this meaning "bad"
 
-                writel(readl(spptr), size)
-                writew(0xa60, 0) // ResError = noErr
+    for _, resMap := range currentResMaps(only1Please) {
+        entries := resMapEntries(resMap)
+        typeEntry := entries[0]
+        for _, idEntry := range entries[1:] {
+            if handle == readl(resMap + idEntry + 4) {
+                setResError(0)
+                writew(readl(spptr), uint32(len(resData(resMap, typeEntry, idEntry))))
                 return
-
             }
         }
     }
-    writew(readl(spptr), -1)
-    writew(0xa60, -192) // ResError = resNotFound
-
 }
 // Segment Loader Toolbox traps
 
 func tLoadSeg() {
-}
-//    global pc
+    save := readRegs()
 
-    seg_num := popw()
+    segNum := popw()
+    pushl(0)
+    pushl(0x434f4445) // CODE
+    pushw(segNum)
+    call_m68k(executable_atrap(0xa9a9)) // _GetResource
+    segPtr := readl(popl())
 
-    jumptable = readl(a5ptr) + 32 // $20(a5)
+    first := readw(segPtr) // index of first entry within jump table
+    count := readw(segPtr + 2) // number of jump table entries
 
-    // Do the evil thing where we create a new handle
-    return_pc := pc
-    return_regs := mem[regs:regs+64]
+    for i := first; i < first + count; i++ {
+        jtEntry := readl(a5ptr) + 32 + 8*i
 
-    // Code to run
-    pushw(callback_trap_word)
-    pushw(0xa9a0) // _GetResource
-    pc = readl(spptr)
-
-    // Arguments to GetResource
-    pushl(0) // room for handle
-    pushl(int.from_bytes(b"CODE", "big"))
-    pushw(seg_num)
-
-    @oneoff_callback
-    def loadseg_finish() {
+        offsetInSegment := readw(jtEntry)
+        writew(jtEntry, segNum)
+        writew(jtEntry + 2, 0x4ef9) // jmp
+        writel(jtEntry + 4, segPtr + 4 + offsetInSegment)
     }
-//        global pc
 
-        seg_handle = popl()
-        seg_ptr := readl(seg_handle)
+    pc -= 6
 
-        debug_segment_list.append((seg_num, seg_ptr, seg_ptr + block_sizes[seg_ptr]))
-
-        first := readw(seg_ptr) // index of first entry within jump table
-        count := readw(seg_ptr + 2) // number of jump table entries
-
-        for i := range(count) {
-            jt_entry := jumptable + first + 8 * i
-            code_offset := readw(jt_entry)
-
-            writew(jt_entry, seg_num)
-            writew(jt_entry + 2, 0x4ef9) // jmp
-            writel(jt_entry + 4, seg_ptr + 4 + code_offset)
-
-        }
-        pc := return_pc - 6 // re-execute the jump table instruction
-        mem[regs:regs+64] = return_regs
+    writeRegs(save, a0ptr, a1ptr, d0ptr, d1ptr, d2ptr) // ??? really need to do this?
+}
 
 // Package Toolbox traps
-
-func tFP68K() { // FP68K
-}
-//    global pc
-    pushl(pc); pc = 0xc0000
-
-func tElems68K() { // Elems68K
-}
-//    global pc
-    pushl(pc); pc = 0xd0000
-
-func tDecStr68K() { // DecStr68K
-}
-//    global pc
-    pushl(pc); pc = 0xe0000
 
 // QuickDraw Toolbox traps
 func tBitAnd() {
     result = popl() & popl()
-    popl(); pushl(result)
-
+    writel(readl(spptr), result)
 }
 func tBitXor() {
     result = popl() ^ popl()
-    popl(); pushl(result)
-
+    writel(readl(spptr), result)
 }
+
 func tBitNot() {
-    result = ~popl()
-    popl(); pushl(result)
-
+    result = ^popl()
+    writel(readl(spptr), result)
 }
+
 func tBitOr() {
     result = popl() | popl()
-    popl(); pushl(result)
-
+    writel(readl(spptr), result)
 }
+
 func tBitShift() {
     by = signed(2, popw())
     result = popl()
     if by > 0 {
         result <<= by % 32
-    } else: result >>= (-by) % 32
+    } else {
+        result >>= (-by) % 32
     }
-    popl(); pushl(result)
-
+    writel(readl(spptr), result)
 }
+
 func tBitTst() {
-    idx = popw() + 8 * popl()
-    result = mem[idx // 8] & (0x80 >> (idx % 8))
-    popw(); pushw(0x100 if result else 0)
+    bitNum := popl()
+    bytePtr := popl()
+    bytePtr += bitNum / 8
+    bitNum %= 8
+    result := readb(bytePtr) & (0x80 >> bitNum) != 0
 
+    if result {
+        writew(readl(spptr), 0x0100) // bool true
+    } else {
+        writew(readl(spptr), 0)
+    }
 }
+
 func tBitSet() {
-    idx = popw() + 8 * popl()
-    mem[idx // 8] |= 0x80 >> (idx % 8)
-
+    bitNum := popl()
+    bytePtr := popl()
+    bytePtr += bitNum / 8
+    bitNum %= 8
+    writeb(bytePtr, readb(bytePtr) | (0x80 >> bitNum))
 }
+
 func tBitClr() {
-    idx = popw() + 8 * popl()
-    mem[idx // 8] &= ~(0x80 >> (idx % 8))
-
+    bitNum := popl()
+    bytePtr := popl()
+    bytePtr += bitNum / 8
+    bitNum %= 8
+    writeb(bytePtr, readb(bytePtr) & ^(0x80 >> bitNum))
 }
-func tRandom() {
-    popw(); pushw(random.randint(0x10000))
 
-}
+// func tRandom() {
+//     writew(readl(spptr), random.randint(0x10000))
+// }
+
 func tHiWord() {
-    x = popw(); popw(); popw(); pushw(x)
-
+    x = popw(); popw(); writew(readl(spptr), x)
 }
+
 func tLoWord() {
-    popw(); x = popw(); popw(); pushw(x)
-
+    popw(); x = popw(); writew(readl(spptr), x)
 }
+
 func tInitGraf() {
     a5 := readl(a5ptr)
     qd = popl()
     writel(a5, qd)
     writel(qd, 0xf8f8f8f8) // illegal thePort address
-
 }
+
 func tSetPort() {
     a5 := readl(a5ptr)
     qd := readl(a5)
     port := popl()
     writel(qd, port)
-
 }
+
 func tGetPort() {
     a5 := readl(a5ptr)
     qd := readl(a5)
     port = readl(qd)
     retaddr = popl()
     writel(retaddr, port)
-
 }
-func tSetRect() {
-    br := popl(); tl = popl(); rectptr = popl()
-    writel(rectptr, tl); writel(rectptr + 4, br)
 
-}
-func tOffsetRect() {
-    dv = popw(); dh = popw(); rectptr = popl()
-    for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
-        writew(rectptr + ptr, readw(rectptr + ptr) + delta)
-
-    }
-}
+// func tSetRect() {
+//     br := popl(); tl = popl(); rectptr = popl()
+//     writel(rectptr, tl); writel(rectptr + 4, br)
+// }
+//
+// func tOffsetRect() {
+//     dv = popw(); dh = popw(); rectptr = popl()
+//     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
+//         writew(rectptr + ptr, readw(rectptr + ptr) + delta)
+//
+//     }
+// }
 // OS and Toolbox Event Manager traps
 
 // Misc traps
 
-func debugstr_trap() {
+func tDebugStr() {
     string := read_pstring(popl())
-    fmt.Print("_DebugStr", string, flush=true, file=os.Stderr)
-    if strings.HasPrefix(string, "python:") {
-        eval(string[7:])
-
-    }
+    fmt.Print(macToUnicode(string))
 }
-func tDebugger() {
-    import pdb; pdb.set_trace()
 
-}
 // trap is in toolbox table but actually uses registers
 func tSysError() {
-    err := signed(2, readw(d0ptr + 2))
+    err := int16(readw(d0ptr + 2))
+    panicstr := fmt.Sprintf("_SysError %d", err)
     if err == -491 { // display string on stack
-        raise Exception("_SysError", err, read_pstring(popl()))
+        panicstr += macToUnicode(read_pstring(popl()))
     }
-    raise Exception("_SysError", err)
+    panic(panicstr)
 }
 
 
-func gestalt(selector) {
-    if selector == b"sysv" {
-        return 0x09228000 // highest possible
-    } else if selector == b"fs  " {
-        return 2 // FSSpec calls, not much else
-    } else if selector == b"fold" {
-        return 1 // Folder Manager present
-
-    }
-}
 func tSysEnvirons() {
-    write(16, a0, 0) // wipe
-    writew(a0, 2) // environsVersion = 2
-    writew(pb + 2, 3) // machineType = SE
-    writew(pb + 4, 0x0700) // systemVersion = seven
-    writew(pb + 6, 3) // processor = 68020
-
+    block := readl(a0ptr)
+    write(16, block, 0) // wipe
+    writew(block) // environsVersion = 2
+    writew(block + 2, 3) // machineType = SE
+    writew(block + 4, 0x0700) // systemVersion = seven
+    writew(block + 6, 3) // processor = 68020
 }
+
 func tGestalt() {
     selector := d0.to_bytes(4, "big")
 
     if trap & 0x600 == 0 { // ab=00
-        // _Gestalt
-        val := gestalt(selector)
-        if val == nil {
-            return -5551, 0 // d0, a0
-        } else {
-            return 0, val
-
+        var uint32 reply
+        var int16 err
+        switch mem[d0:d0+4] {
+        case "sysv":
+            reply = 0x09228000 // highest possible
+        case "fs  ":
+            reply = 2 // FSSpec calls, not much else
+        case "fold":
+            reply = 1 // Folder Manager present
+        default:
+            err = -5551 // gestaltUndefSelectorErr
         }
+
+        writel(a0ptr, reply)
+        writew(d0ptr, uint32(uint16(err)))
+
     } else if trap & 0x600 == 0x200 { // ab=01
-        // _NewGestalt
-        raise Exception(fmt.Sprintf("NewGestalt %r", selector))
+        panic("NewGestalt unimplemented")
 
     } else if trap & 0x600 == 0x400 { // ab=10
-        // _ReplaceGestalt
-        raise Exception(fmt.Sprintf("ReplaceGestalt %r", selector))
+        panic("ReplaceGestalt unimplemented")
 
     } else { // ab=11
-        // _GetGestaltProcPtr
-        raise Exception(fmt.Sprintf("GetGestaltProcPtr %r", selector))
-
+        panic("GetGestaltProcPtr unimplemented")
     }
 }
-func tAliasDispatch() {
-    selector = readl(regs)
-    if selector == 0 { // FindFolder
-        foundDirID = popl(); foundVRefNum = popl()
-        createFolder = popw() >> 8
-        folderType = popl().to_bytes(4, "big")
-        vRefNum := popw() // ignore volume number
 
-        known := {b"pref": "Preferences"}
-        filename := known.get(folderType, folderType.decode("ascii", "ignore"))
-        path := systemfolder/filename
+// func tAliasDispatch() {
+//     selector = readl(regs)
+//     if selector == 0 { // FindFolder
+//         foundDirID = popl(); foundVRefNum = popl()
+//         createFolder = popw() >> 8
+//         folderType = popl().to_bytes(4, "big")
+//         vRefNum := popw() // ignore volume number
+//
+//         known := {b"pref": "Preferences"}
+//         filename := known.get(folderType, folderType.decode("ascii", "ignore"))
+//         path := systemfolder/filename
+//
+//         if createFolder {
+//             path.mkdir(exist_ok=true)
+//
+//         }
+//         if createFolder || path.exists() {
+//             oserr := 0 // noErr
+//             writew(foundVRefNum, 2)
+//             writel(foundDirID, uint32(get_macos_dnum(path)))
+//         } else {
+//             oserr := -43 // fnfErr
+//
+//         }
+//         writew(readl(spptr), oserr)
+//
+//     } else {
+//         raise NotImplementedError(f"_AliasDispatch {selector}")
+//
+//     }
+// }
 
-        if createFolder {
-            path.mkdir(exist_ok=true)
-
-        }
-        if createFolder || path.exists() {
-            oserr := 0 // noErr
-            writew(foundVRefNum, 2)
-            writel(foundDirID, uint32(get_macos_dnum(path)))
-        } else {
-            oserr := -43 // fnfErr
-
-        }
-        popw(); pushw(oserr)
-
-    } else {
-        raise NotImplementedError(f"_AliasDispatch {selector}")
-
-    }
-}
 func tCmpString() {
-    l0 := d0 >> 16       // corresponds with a0 ptr
-    l1 = d0 & 0xffff    // corresponds with a1 ptr
-    both = (mem[a0:a0+l0] + mem[a1:a1+l1]).decode("mac_roman")
+    aptr := readl(a0ptr)
+    bptr := readl(a1ptr)
+    alen := readw(d0ptr)
+    blen := readw(d0ptr + 2)
+    diacSens := readw(d1ptr) & 0x200 == 0 // ,MARKS
+    caseSens := readw(d1ptr) & 0x400 != 0 // ,CASE
 
-    if trap & 0x200 { // ignore diacritics
-        both = unicodedata.normalize("NFKD", both)
-        both = "".join(c for c in both if !unicodedata.combining(c))
-
+    if relString(mem[aptr:][:alen], mem[bptr:][:blen], caseSens, diacSens) == 0 {
+        writel(d0ptr, 0)
+    } else {
+        writel(d0ptr, 1)
     }
-    if trap & 0x400 { // ignore case
-        both = strings.ToLower(both)
-
-    }
-    return int(both[:l0] != both[l0:])
-
 }
-func tGetOSEvent() bool {
+
+func tGetOSEvent() {
     write(16, a0, 0) // null event
-    return -1 // null event
-
+    writel(d0ptr, 0xffffffff)
 }
+
 // ToolServer-specific code
-func tMenuKey() bool {
+func tMenuKey() {
     keycode := popw() & 0xff
     if keycode == 12 { // cmd-Q
-        popl(); pushl(0x00810005) // quit menu item, hardcoded sadly
+        writel(readl(spptr), 0x00810005) // quit menu item, hardcoded sadly
         return
-
     }
-    popl(); pushl(0) // return nothing
-
+    writel(readl(spptr), 0) // return nothing
 }
+
 func tGetNextEvent() {
     eventrecord := popl(); write(16, eventrecord, 0)
     mask := popw()
@@ -3309,22 +3277,23 @@ func tGetNextEvent() {
         writew(eventrecord, 3) // keyDown
         writel(eventrecord + 2, 12) // Q
         writew(eventrecord + 14, 0x100) // command
-        popw(); pushw(-1) // return true
+        writew(readl(spptr), -1) // return true
         return
 
     }
-    popw(); pushw(0) // return false
-
+    writew(readl(spptr), 0) // return false
 }
+
 func tWaitNextEvent() {
     pop(8) // ignore sleep and mouseRgn args
     tGetNextEvent()
-
 }
+
 func tExitToShell() {
-    raise SystemExit
+    panic("ExitToShell")
 
 }
+
 // Munger and related traps
 
 func tHandToHand() {
@@ -3334,8 +3303,8 @@ func tHandToHand() {
     memcpy(ptr2, ptr, size)
     writel(a0ptr, hdl2) // a0 = result
     writel(regs, 0) // d0 = noErr
-
 }
+
 func tPtrToXHand() {
     srcptr := readl(a0ptr) // a0
     dsthdl := readl(a1ptr) // a1
@@ -3345,8 +3314,8 @@ func tPtrToXHand() {
     memcpy(dstptr, srcptr, size)
     writel(a0ptr, dsthdl) // a0
     writel(regs, 0) // d0 = noErr
-
 }
+
 func tPtrToHand() {
     srcptr := readl(a0ptr) // a0
     size = readl(regs) // d0
@@ -3355,8 +3324,8 @@ func tPtrToHand() {
     memcpy(dstptr, srcptr, size)
     writel(a0ptr, dsthdl) // a0
     writel(regs, 0) // d0 = noErr
-
 }
+
 func tHandAndHand() {
     ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
     bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
@@ -3436,9 +3405,11 @@ func tPop10RetZero() {
     writel(sp, 0)
 }
 
-var gLastTrap uint16
+
+
+var gCurToolTrapNum uint16
 func lineAF(inst uint16) {
-    gLastTrap := inst
+    gCurToolTrapNum := inst
     check_for_lurkers()
 
     if inst & 0x800 { // Toolbox trap
@@ -3932,5 +3903,5 @@ const my_traps [0x100+0x400]func() = {
     tb_base + 0x1f4: tExitToShell               // _ExitToShell
     tb_base + 0x1fa: tRetZero                   // _UnlodeScrap
     tb_base + 0x1fb: tRetZero                   // _LodeScrap
-    tb_base + 0x1ff: tDebugger                  // _Debugger
+    tb_base + 0x3ff: tDebugStr                  // _DebugStr
 }
