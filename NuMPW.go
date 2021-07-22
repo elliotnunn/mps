@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"regexp"
     "math/bits"
     "regexp"
     "os"
@@ -139,7 +138,7 @@ func readRegs() (reglist [16]uint32) {
     copy(reglist[:], mem[regs:])
 }
 
-func writeRegs() (reglist [16]uint32, which ...[]uint32) {
+func writeRegs(reglist [16]uint32, which ...[]uint32) {
     for _, which := range which {
         copy(mem[which:][:4], reglist[which-regs:])
     }
@@ -1524,8 +1523,8 @@ func rez(path) (fork []byte, err error) {
 
         var res resource
 
-        res.type_ := binary.BigEndian.Uint32(rez_string_literal(type_str))
-        res.id, err := strconv.ParseInt(id_str, 10, 16)
+        res.type_ = binary.BigEndian.Uint32(rez_string_literal(type_str))
+        res.id, err = strconv.ParseInt(id_str, 10, 16)
         if err != nil { // might fail with out-of-range number
             return nil, errors.New("out-of-range ID in res file")
         }
@@ -1561,7 +1560,7 @@ func rez(path) (fork []byte, err error) {
         type_ids[type_] = append(type_ids[type_], res)
     }
 
-    fork := make([]byte, 256) // append resource data as we go
+    fork = make([]byte, 256) // append resource data as we go
 
     type_list := make([]byte, 2 + 8 * len(types)) // alloc type list, append ref list
     name_list := make([]byte, 0)
@@ -1707,12 +1706,11 @@ func listdir(path string) (macfiles [][]byte, errno int) {
         errno = -39 // fnfErr
     }
 
-    var macfiles [][]byte
     for name := range files {
         macfiles = append(macfiles, unicodeToMac(name))
     }
 
-    // case and :/ logic missing from here
+    // case, sort and :/ logic missing from here
 }
 
 func get_macos_dnum(path string) uint16 {
@@ -1950,7 +1948,7 @@ func tGetVInfo() {
         writel(pb + 82, 0) // ioVFilCnt
         writel(pb + 86, 0) // ioVDirCnt
         write(32, pb + 90, 0) // ioVFndrInfo
-        writel(pb + 90, uint32(get_macos_dnum(systemfolder))) // must match BootDrive
+        writel(pb + 90, uint32(get_macos_dnum(systemFolder))) // must match BootDrive
     }
 }
 
@@ -2578,7 +2576,7 @@ func currentResMaps(stopAt1 bool) (list []uint32) {
 
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
 func resMapEntries(resMap uint32) (retval [][]uint16) {
-    resMap := readl(resMap) // handle to pointer
+    resMap = readl(resMap) // handle to pointer
 
     refbase := readw(resMap + 24)
     namebase := readw(resMap + 26)
@@ -2635,7 +2633,7 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
 
 // Use the resource map to find the data
 func resData(resMap uint32, type_entry, id_entry uint16) []byte {
-    resMap := readl(resMap) // handle to pointer
+    resMap = readl(resMap) // handle to pointer
 
     refnum := readw(resMap + 20)
     filedata := filebuffers[refnum]
@@ -2646,7 +2644,7 @@ func resData(resMap uint32, type_entry, id_entry uint16) []byte {
 }
 
 func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handle uint32) {
-    resMap := readl(resMap) // handle to pointer
+    resMap = readl(resMap) // handle to pointer
 
     // Is a memory block already recorded?
     handle = readl(resMap + idEntry + 8)
@@ -2680,7 +2678,7 @@ func resToHand(resMap uint32, typeEntry, idEntry uint16, loadPlease bool) (handl
 }
 
 func getResName(resMap uint32, idEntry uint16) (hasName bool, theName []byte) {
-    resMap := readl(resMap) // handle to pointer
+    resMap = readl(resMap) // handle to pointer
 
     nameList := readw(resMap + 26)
     nameOffset := readw(resMap + idEntry + 2)
@@ -3216,7 +3214,7 @@ func tGestalt() {
 //
 //         known := {b"pref": "Preferences"}
 //         filename := known.get(folderType, folderType.decode("ascii", "ignore"))
-//         path := systemfolder/filename
+//         path := systemFolder/filename
 //
 //         if createFolder {
 //             path.mkdir(exist_ok=true)
@@ -3405,150 +3403,62 @@ func tPop10RetZero() {
     writel(sp, 0)
 }
 
+var gCurToolTrapNum int
 
-
-var gCurToolTrapNum uint16
-func lineAF(inst uint16) {
-    gCurToolTrapNum := inst
-    check_for_lurkers()
-
-    if inst & 0x800 { // Toolbox trap
-        trapnum = inst & 0x3ff
-        implementation_68k = trap_address_table[0x100 + trapnum]
-
-    }
-//         if inst & 0xf000 == 0xf000: # for stress-testing traps
-        if inst & 0xf000 == 0xf000 || implementation_68k == ftrap_table_addr + (0x800 + trapnum) * 2 {
-            // Non-SetTrapAddress'd A-trap OR direct F-trap
-            if inst & 0x400 || inst & 0xf000 == 0xf000 { // autoPop
-                pc = popl()
-
-            }
-            implementation_python = trap_function_table[0x100 + trapnum]
-            implementation_python()
-
-        } else if implementation_68k == ftrap_table_addr + 0x89f * 2 {
-            raise NotImplementedError(hex(inst))
-
-        } else {
-            // SetTrapAddress'd A-trap: dispatch to custom 68k routine
-            if !inst & 0x400 { // autoPop
-                pushl(pc)
-            }
-            pc = implementation_68k
-
-        } else if inst & 0xf000 == 0xa000 || inst & 0x0f00 == 0 { // OS trap
-        // note on the condition above!!!
-        trapnum = inst & 0xff
-        implementation_68k = trap_address_table[trapnum]
-
-    }
-//         if inst & 0xf000 == 0xf000: # for stress-testing traps
-        if inst & 0xf000 == 0xf000 || implementation_68k == ftrap_table_addr + trapnum * 2 {
-            // Non-SetTrapAddress'd A-trap OR direct F-trap
-            if inst & 0xf000 == 0xf000 { // return address
-                pc = popl()
-
-            }
-            implementation_python := trap_function_table[trapnum]
-            trapword := readw(d1ptr + 2) if inst & 0x1000 else inst // d1.w
-            d0a0 = implementation_python(trapword,
-                readl(d0ptr), readl(a0ptr), readl(a1ptr)) // d0,a0,a1
-
-            // returned None or d0 or (d0, a0)
-            d0a0 = d0a0 || 0 // return d0 = 0 by default
-            if !isinstance(d0a0, tuple) {
-                d0a0 = (d0a0,)
-            }
-            for value, address in zip(d0a0, (regs, a0ptr)) {
-                writel(address, value)
-
-            }
-            set_nz(readw(d0ptr + 2), 2) // tst.w d0
-
-        } else if implementation_68k == ftrap_table_addr + 0x89f * 2 {
-            raise NotImplementedError(hex(inst))
-
-        } else {
-            // SetTrapAddress'd A-trap: dispatch to custom 68k routine
-            writew(d1ptr + 2, inst)    // d1.w = trap word
-
-            pushl(pc)                         // Push return address
-
-            // Push the registers that the Trap Dispatcher saves around OS traps
-            pushl(readl(a2ptr))     // push a2
-            pushl(readl(d2ptr))          // push d2
-            pushl(readl(d1ptr))          // push d1
-            pushl(readl(a1ptr))     // push a1
-            if !inst & 0x100 { // only if trap word specifies
-                pushl(readl(a0ptr)) // push a0
-
-            }
-            // Push f300 or f301, depending on how many registers need restoring
-            pushl(ftrap_table_addr + (0x300 if inst & 0x100 else 0x301) * 2) // f300
-
-            pc = implementation_68k
-
-        } else if inst in (0xf300, 0xf301) { // OS trap return assistance code
-        if inst & 1 { // was this a "save-a0" OS trap word?
-            writel(a0ptr, popl()) // pop a0
+func lineA(inst uint16) {
+    if inst & 0x800 != 0 { // Toolbox trap
+        // Push a return address unless autoPop is used
+        if inst & 0x400 == 0 {
+            pushl(pc)
         }
-        writel(a1ptr, popl())         // pop a1
-        writel(d1ptr, popl())              // pop d1
-        writel(d2ptr, popl())              // pop d2
-        writel(a2ptr, popl())         // pop a2
-        set_nz(readw(d0ptr + 2), 2)        // tst.w d0
-        pc = popl() // Return to the actual caller
 
-    } else if inst == 0xf302 { // Completion routine return assistance code
-        writel(regs,      popl()) // pop d0 (result code)
-        writel(a0ptr, popl()) // pop a0 (iopb pointer)
-        pc = popl()
+        pc = readl(kOSTable + ((inst & 0xff) * 4))
+    } else { // OS trap
+        writew(d1ptr + 2, inst)
 
-    } else { // Special MPW call
-        mpw_ftrap(inst)
+        pushl(readl(a2ptr))
+        pushl(readl(d2ptr))
+        pushl(readl(d1ptr))
+        pushl(readl(a1ptr))
+        if inst & 0x100 == 0 {
+            pushl(readl(a0ptr))
+        }
 
+        call_m68k(readl(kToolTable + ((inst & 0x3ff) * 4)))
+
+        if inst & 0x100 == 0 {
+            writel(a0ptr, popl())
+        }
+
+        writel(a1ptr, popl())
+        writel(d1ptr, popl())
+        writel(d2ptr, popl())
+        writel(a2ptr, popl())
     }
+}
 
-//#######################################################################
-// Initialise an MPW environment
-//#######################################################################
+func lineF(inst uint16) {
+    check_for_lurkers()
+    if inst & 0x800 != 0 { // Go implementation of Toolbox trap
+        my_traps[os_table + (inst & 0xff)]()
+    } else { // Go implementation of OS trap
+        my_traps[tb_table + (inst & 0x3ff)]()
+    }
+    pc = popl()
+}
 
-// Memory map, mixes in parts belonging to emulator, toolbox and mpw
-//                 00000
-//             lowmem globals
-//             .............
-//                 stack
-//                 40000
-//               registers
-//             .............
-//         below-a5 tool globals
-//                 80000
-//         above-a5 tool globals
-//             .............
-//                 a0000
-//               FCB table
-//             .............
-//                 b0000
-//           huge f-trap table
-//             .............
-//                 c0000
-//            PACK 4 (_FP68K)
-//             .............
-//                 d0000
-//          PACK 5 (_Elems68K)
-//             .............
-//                 e0000
-//          PACK 7 (_DecStr68K)
-//             .............
-//                100000
-//                 heap
+// Set up the Toolbox and launch ToolServer
 
 const (
+    kOSTable = 0x400
+    kToolTable = 0x800 // up to 0x1800
     kStackBase = 0x40000 // extends down, note that registers are here too!
-    kA5Ptr = 0x80000 // 0x8000 below and 0x8000 above
+    kA5World = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
+    kFakeHeapHeader = 0x90000 // very short
     kATrapTable = 0xa0000 // 0x10000 above
-    kFCBTable = 0xe0000 // 0x8000 above
+    kFCBTable = 0xb0000 // 0x8000 above
+    kDQE = 0xb9000 // 0x4 below and 0x10 above
+    kVCB = 0xba000 // ????
     kFTrapTable = 0xf0000 // 0x10000 above
     kHeap = 0x100000 // extends up
 )
@@ -3556,123 +3466,108 @@ const (
 
 func check_for_lurkers() {
     // we might do more involved things here, like check for heap corruption
-    if __debug__ {
-        if any(mem[:64]) {
-            raise Exception(f"low-memory corruption {mem[:64].hex()}")
-        }
-    } else {
-        mem[:64] = bytes(64)
-
-    }
+    mem[:64] = bytes(64)
 }
 
 // Get an address to jump to
-func executable_atrap(trap uint16) {
-    addr := kATrapTable + (trap & 0xfff) * 16
+func executable_atrap(trap uint16) (addr uint32) {
+    addr = kATrapTable + (trap & 0xfff) * 16
 
     writew(addr, trap) // consider using autoPop instead?
     writew(addr + 2, 0x4e75) // RTS
 }
 
 // Get an address to jump to
-func executable_ftrap(trap uint16) {
-    addr := kFTrapTable + (trap & 0xfff) * 16
+func executable_ftrap(trap uint16) (addr uint32) {
+    addr = kFTrapTable + (trap & 0xfff) * 16
 
     writew(addr, trap)
 }
 
-// A memory, and some memory-mapped registers
-mem[:] = bytes(0x100000) // plenty of room for globals
-regs = 0x40000
+var systemFolder string
 
-// "Poison" low memory to discourage reads
-for i := range(0x40, 0x10000, 2): mem[i:i+2] = b"\x68\xf1"
+func main() {
+    mem = make([]byte, kHeap)
 
-}
-mem[0xc0000:0xc0000+len(pack4)] = pack4
-mem[0xd0000:0xd0000+len(pack5)] = pack5
-mem[0xe0000:0xe0000+len(pack7)] = pack7
-
-writel(spptr, 0x40000) // stack growing down from registers
-
-// Fake heap-zone
-writel(0x118, len(mem)) // TheZone
-writel(0x2a6, len(mem)) // SysZone
-writel(0x2aa, len(mem)) // ApplZone
-mem.extend(struct.pack(">L 16x H 30x", 0xffffffe, 32)) // bkLim, mAllocCnt
-
-// Big table of every permutation of f-trap at b0000
-for i := range(0x1000) {
-    struct.pack_into(">H", mem, ftrap_table_addr + i * 2, 0xf000 + i)
-
-}
-// Some misc globals
-writel(0x31a, 0x00ffffff)
-writel(0xa02, 0x00010001)
-writel(0xa06, 0xffffffff)
-writel(0x130, 0) // ApplLimit
-writel(0x908, 0x70000000) // CurStackBase
-write_pstring(0x910, "ToolServer")
-writel(0xa50, 0) // TopMapHndl
-writel(0xa1c, newhandle(6)) // empty MenuList
-writew(0x210, get_macos_dnum(systemfolder)) // BootDrive
-writel(0x316, 0) // we don't implement the 'MPGM' interface
-writel(0x8e0, ftrap_table_addr + 0x89f * 2) // JSwapFont = unimplemented
-writel(0x2f4, 0) // CaretTime = 0 ticks
-writel(0x9d6, 0) // WindowList = empty
-writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
-
-// DrvQHdr and one Drive Queue Element
-dqe = 0xa9000
-// don't bother actually populating the dqe (note it has 4 bytes BELOW)
-writel(0x308+2, dqe) // DrvQHdr.QHead
-writel(0x308+6, dqe) // DrvQHdr.QTail
-
-// FCB block and a single VCB
-writel(0x34e, 0xa0000) // FCBSPtr
-writew(0x3f6, 94) // FSFCBLen
-writew(readl(0x34e), 2 + 94 * 348) // size of FCB table
-vcb = 0xa8000 // VCB needed for the ubiquitous GetVRefNum glue
-writew(vcb + 78, 2) // vcbVRefNum
-write_pstring(vcb + 44, onlyvolname) // vcbVName
-
-// Make an a5 world
-a5world = 0x80000
-writel(a5ptr, a5world); writel(0x904, a5world)
-
-// Disable the status window in preferences
-prefs = systemfolder/"Preferences"/"MPW"/"ToolServer Prefs"
-prefs.parent.mkdir(parents=true)
-prefs.write_bytes(b"\0" * 9)
-
-// Create scripts in the temporary directory
-files_to_run = [
-    ("stdin", " ".join(os.Args[2:]).encode("mac_roman")),
-]
-
-params = bytearray(b"\0\0\0\0") // message 0=open 1=print; cnt = 0
-for name, text in files_to_run {
-    (tmppath/name).write_bytes(text)
-    (tmppath/(name+".idump")).write_bytes(b"TEXTMPS ")
-    params[3]++
-
-    params += get_macos_dnum(tmppath).to_bytes(2, "big") // vRefNum
-    params += b"TEXT" // file type
-    params += b"\0\0" // file version and pad byte
-    name = name.encode("mac_roman")
-    params += bytes([len(name)]) + name
-    if len(params) & 1 {
-        params += b"\0"
-
+    // Poison low memory
+    for i := 0x40; i < kStackBase; i += 2 {
+        writeb(i, 0x68f1)
     }
-}
-hdl = newhandle(len(params)); ptr = readl(hdl)
-mem[ptr:ptr+len(params)] = params
-writel(0xaec, hdl) // AppParmHandle global
-writel(a5world + 16, hdl) // segment loader puts it here too
 
-(tmppath/"stdin.out").touch()
-(tmppath/"stdin.err").touch()
+    // Starting point for stack
+    writel(spptr, kStackBase)
+    writel(0x908, kStackBase) // CurStackBase
+
+    // A5 world
+    writel(a5ptr, kA5World)
+
+    // Single fake heap zone, enough to pass validation
+    writel(0x118, kFakeHeapHeader) // TheZone
+    writel(0x2a6, kFakeHeapHeader) // SysZone
+    writel(0x2aa, kFakeHeapHeader) // ApplZone
+    writel(kFakeHeapHeader, 0xffffffe) // bkLim
+    writel(0x130, 0) // ApplLimit
+
+    // 1 Drive Queue Element
+    writew(0x308, 0) // DrvQHdr.QFlags
+    writel(0x308+2, kDQE) // DrvQHdr.QHead
+    writel(0x308+6, kDQE) // DrvQHdr.QTail
+    for (i := -4; i += 2; i < 16) {
+        writew(kDQE + i, 0)
+    }
+
+    // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
+    for (i := 0; i += 2; i < 178) {
+        writew(kVCB + i, 0)
+    }
+    writew(kVCB + 78, 2) // vcbVRefNum
+    write_pstring(kVCB + 44, onlyvolname) // vcbVName
+
+    // File Control Block table
+    writel(0x34e, kFCBTable) // FCBSPtr
+    writew(0x3f6, 94) // FSFCBLen
+    writew(kFCBTable, 2 + 94 * 348) // size of FCB table
+
+    // Misc globals
+    writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
+    writel(0x2f4, 0) // CaretTime = 0 ticks
+    writel(0x316, 0) // we don't implement the 'MPGM' interface
+    writel(0x31a, 0x00ffffff) // Lo3Bytes
+    writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
+    write_pstring(0x910, "ToolServer")
+    writel(0x9d6, 0) // WindowList empty
+    writel(0xa02, 0x00010001) // OneOne
+    writel(0xa06, 0xffffffff) // MinusOne
+    writel(0xa1c, newhandle(6)) // MenuList empty
+    writel(0xa50, 0) // TopMapHndl
+
+    systemFolder, err := ioutil.TempDir("", "NuMPW")
+    if err != nil {
+        panic("Failed to create temp directory")
+    }
+
+    // Disable the status window in preferences
+    os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"))
+    os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9))
+
+    // Open a script as if from Finder
+    writel(d0ptr, 128)
+    call_m68k(executable_atrap(0xa122))
+    appParms := readl(a0ptr)
+    writel(0xaec, appParms)
+    appParms = readl(appParms) // handle to pointer
+    writew(appParms + 2, 1) // one file
+    writew(appParms + 4, get_macos_dnum(systemFolder))
+    writel(appParms + 6, 0x54455854) // TEXT
+    writePstring(appParms + 12, "Script")
+
+    os.WriteFile(filepath.Join(systemfolder, "Script"), "set")
+    os.WriteFile(filepath.Join(systemfolder, "Script.idump"), "TEXTMPS ")
+    os.Create(filepath.Join(systemfolder, "Script.out"))
+    os.Create(filepath.Join(systemfolder, "Script.err"))
+}
+
+
 
 // Do some prep that requires loading code
 
