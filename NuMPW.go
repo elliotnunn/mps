@@ -34,7 +34,7 @@ const (
     d5ptr = regs + 20
     d6ptr = regs + 24
     d7ptr = regs + 28
-    a0ptr = a0ptr
+    a0ptr = regs + 32
     a1ptr = regs + 36
     a2ptr = regs + 40
     a3ptr = regs + 44
@@ -3403,7 +3403,165 @@ func tPop10RetZero() {
     writel(sp, 0)
 }
 
-var gCurToolTrapNum int
+const os_base = 0
+const tb_base = 0x100
+const my_traps = []func(){
+    os_base + 0x00: tOpen,                      // _Open
+    os_base + 0x01: tClose,                     // _Close
+    os_base + 0x02: tReadWrite,                 // _Read
+    os_base + 0x03: tReadWrite,                 // _Write
+    os_base + 0x07: tGetVInfo,                  // _GetVInfo
+    os_base + 0x08: tCreate,                    // _Create
+    os_base + 0x09: tDelete,                    // _Delete
+    os_base + 0x0a: tOpen,                      // _OpenRF
+    os_base + 0x0c: tGetFInfo,                  // _GetFInfo
+    os_base + 0x0d: tSetFInfo,                  // _SetFInfo
+    os_base + 0x11: tGetEOF,                    // _GetEOF
+    os_base + 0x12: tSetEOF,                    // _SetEOF
+    os_base + 0x13: os_pb_trap,                 // _FlushVol
+    os_base + 0x14: tGetVol,                    // _GetVol
+    os_base + 0x15: tSetVol,                    // _SetVol
+    os_base + 0x18: tGetFPos,                   // _GetFPos
+    os_base + 0x1a: tGetZone,                   // _GetZone
+    os_base + 0x1b: tClrD0A0,                   // _SetZone
+    os_base + 0x1c: tFreeMem,                   // _FreeMem
+    os_base + 0x1d: tFreeMem,                   // _MaxMem
+    os_base + 0x1e: tNewPtr,                    // _NewPtr
+    os_base + 0x1f: tDisposPtr,                 // _DisposPtr
+    os_base + 0x20: tSetPtrSize,                // _SetPtrSize
+    os_base + 0x21: tGetPtrSize,                // _GetPtrSize
+    os_base + 0x22: tNewHandle,                 // _NewHandle
+    os_base + 0x23: tDisposHandle,              // _DisposHandle
+    os_base + 0x24: tSetHandleSize,             // _SetHandleSize
+    os_base + 0x25: tGetHandleSize,             // _GetHandleSize
+    os_base + 0x26: tGetZone,                   // _HandleZone
+    os_base + 0x27: tReallocHandle,             // _ReallocHandle
+    os_base + 0x28: tRecoverHandle,             // _RecoverHandle
+    os_base + 0x29: tClrD0,                     // _HLock
+    os_base + 0x2a: tClrD0,                     // _HUnlock
+    os_base + 0x2b: tEmptyHandle,               // _EmptyHandle
+    os_base + 0x2c: tClrD0A0,                   // _InitApplZone
+    os_base + 0x2d: tClrD0A0,                   // _SetApplLimit
+    os_base + 0x2e: tBlockMove,                 // _BlockMove
+    os_base + 0x30: tGetOSEvent,                // _OSEventAvail
+    os_base + 0x31: tGetOSEvent,                // _GetOSEvent
+    os_base + 0x32: tClrD0A0,                   // _FlushEvents
+    os_base + 0x36: tClrD0A0,                   // _MoreMasters
+    os_base + 0x3c: tCmpString,                 // _CmpString
+    os_base + 0x40: tClrD0A0,                   // _ResrvMem
+    os_base + 0x44: tSetFPos,                   // _SetFPos
+    os_base + 0x46: tGetTrapAddress,            // _GetTrapAddress
+    os_base + 0x47: tSetTrapAddress,            // _SetTrapAddress
+    os_base + 0x48: tGetZone,                   // _PtrZone
+    os_base + 0x49: tClrD0,                     // _HPurge
+    os_base + 0x4a: tClrD0,                     // _HNoPurge
+    os_base + 0x4b: tClrD0,                     // _SetGrowZone
+    os_base + 0x4c: tFreeMem,                   // _CompactMem
+    os_base + 0x4d: tClrD0A0,                   // _PurgeMem
+    os_base + 0x55: tNop,                       // _StripAddress
+    os_base + 0x60: tFSDispatch,                // _FSDispatch
+    os_base + 0x62: tFreeMem,                   // _PurgeSpace
+    os_base + 0x63: tClrD0A0,                   // _MaxApplZone
+    os_base + 0x64: tClrD0,                     // _MoveHHi
+    os_base + 0x69: tHGetState,                 // _HGetState
+    os_base + 0x6a: tHSetState,                 // _HSetState
+    os_base + 0x90: tSysEnvirons,               // _SysEnvirons
+    os_base + 0xad: tGestalt,                   // _Gestalt
+    tb_base + 0x00d: tCountResources,           // _Count1Resources
+    tb_base + 0x00e: tGetIndResource,           // _Get1IndResource
+    tb_base + 0x00f: tGetIndType,               // _Get1IndType
+    tb_base + 0x01a: tHOpenResFile,             // _HOpenResFile
+    tb_base + 0x01c: tCountTypes,               // _Count1Types
+    tb_base + 0x01f: tGetResource,              // _Get1Resource
+    tb_base + 0x020: tGetNamedResource,         // _Get1NamedResource
+    tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
+    tb_base + 0x034: tPop2,                     // _SetFScaleDisable
+    tb_base + 0x050: tNop,                      // _InitCursor
+    tb_base + 0x051: tPop4,                     // _SetCursor
+    tb_base + 0x052: tNop,                      // _HideCursor
+    tb_base + 0x053: tNop,                      // _ShowCursor
+    tb_base + 0x055: tPop8,                     // _ShieldCursor
+    tb_base + 0x056: tNop,                      // _ObscureCursor
+    tb_base + 0x058: tBitAnd,                   // _BitAnd
+    tb_base + 0x059: tBitXor,                   // _BitXor
+    tb_base + 0x05a: tBitNot,                   // _BitNot
+    tb_base + 0x05b: tBitOr,                    // _BitOr
+    tb_base + 0x05c: tBitShift,                 // _BitShift
+    tb_base + 0x05d: tBitTst,                   // _BitTst
+    tb_base + 0x05e: tBitSet,                   // _BitSet
+    tb_base + 0x05f: tBitClr,                   // _BitClr
+    tb_base + 0x060: tWaitNextEvent,            // _WaitNextEvent
+    tb_base + 0x061: tRandom,                   // _Random
+    tb_base + 0x06a: tHiWord,                   // _HiWord
+    tb_base + 0x06b: tLoWord,                   // _LoWord
+    tb_base + 0x06e: tInitGraf,                 // _InitGraf
+    tb_base + 0x06f: tPop4,                     // _OpenPort
+    tb_base + 0x073: tSetPort,                  // _SetPort
+    tb_base + 0x074: tGetPort,                  // _GetPort
+    tb_base + 0x0a7: tSetRect,                  // _SetRect
+    tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
+    tb_base + 0x0d8: tRetZero,                  // _NewRgn
+    tb_base + 0x0fe: tNop,                      // _InitFonts
+    tb_base + 0x112: tNop,                      // _InitWindows
+    tb_base + 0x124: tRetZero,                  // _FrontWindow
+    tb_base + 0x130: tNop,                      // _InitMenus
+    tb_base + 0x137: tNop,                      // _DrawMenuBar
+    tb_base + 0x138: tPop2,                     // _HiliteMenu
+    tb_base + 0x139: tPop6,                     // _EnableItem
+    tb_base + 0x13a: tPop6,                     // _DisableItem
+    tb_base + 0x13c: tPop4,                     // _SetMenuBar
+    tb_base + 0x13e: tMenuKey,                  // _MenuKey
+    tb_base + 0x149: tPop2RetZero,              // _GetMenuHandle
+    tb_base + 0x14d: tPop8,                     // _AppendResMenu
+    tb_base + 0x170: tGetNextEvent,             // _GetNextEvent
+    tb_base + 0x175: tRetZero,                  // _TickCount
+    tb_base + 0x179: tPop2,                     // _CouldDialog
+    tb_base + 0x17b: tNop,                      // _InitDialogs
+    tb_base + 0x17c: tPop10RetZero,             // _GetNewDialog
+    tb_base + 0x194: tCurResFile,               // _CurResFile
+    tb_base + 0x197: tOpenResFile,              // _OpenResFile
+    tb_base + 0x198: tUseResFile,               // _UseResFile
+    tb_base + 0x199: tPop2,                     // _UpdateResFile
+    tb_base + 0x19b: tPop2,                     // _SetResLoad
+    tb_base + 0x19c: tCountResources,           // _CountResources
+    tb_base + 0x19d: tGetIndResource,           // _GetIndResource
+    tb_base + 0x19e: tCountTypes,               // _CountTypes
+    tb_base + 0x19f: tGetIndType,               // _GetIndType
+    tb_base + 0x1a0: tGetResource,              // _GetResource
+    tb_base + 0x1a1: tGetNamedResource,         // _GetNamedResource
+    tb_base + 0x1a3: tPop4,                     // _ReleaseResource
+    tb_base + 0x1a4: tHomeResFile,              // _HomeResFile
+    tb_base + 0x1a5: tSizeRsrc,                 // _SizeRsrc
+    tb_base + 0x1a8: tGetResInfo,               // _GetResInfo
+    tb_base + 0x1af: tResError,                 // _ResError
+    tb_base + 0x1b4: tNop,                      // _SystemTask
+    tb_base + 0x1b8: tGetPattern,               // _GetPattern
+    tb_base + 0x1b9: tGetCursor,                // _GetCursor
+    tb_base + 0x1ba: tGetString,                // _GetString
+    tb_base + 0x1bb: tGetIcon,                  // _GetIcon
+    tb_base + 0x1bc: tGetPicture,               // _GetPicture
+    tb_base + 0x1bd: tPop10RetZero,             // _GetNewWindow
+    tb_base + 0x1c0: tPop2RetZero,              // _GetNewMBar
+    tb_base + 0x1c4: tOpenRFPerm,               // _OpenRFPerm
+    tb_base + 0x1c8: tNop,                      // _SysBeep
+    tb_base + 0x1c9: tSysError,                 // _SysError
+    tb_base + 0x1cc: tNop,                      // _TEInit
+    tb_base + 0x1e1: tHandToHand,               // _HandToHand
+    tb_base + 0x1e2: tPtrToXHand,               // _PtrToXHand
+    tb_base + 0x1e3: tPtrToHand,                // _PtrToHand
+    tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
+    tb_base + 0x1e5: tPop2,                     // _InitPack
+    tb_base + 0x1e6: tNop,                      // _InitAllPacks
+    tb_base + 0x1eb: tFP68K,                    // _FP68K
+    tb_base + 0x1ec: tElems68K,                 // _Elems68K
+    tb_base + 0x1ee: tDecStr68K,                // _DecStr68K
+    tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg
+    tb_base + 0x1f1: tPop4,                     // _UnloadSeg
+    tb_base + 0x1f4: tExitToShell,              // _ExitToShell
+    tb_base + 0x1fa: tRetZero,                  // _UnlodeScrap
+    tb_base + 0x1fb: tRetZero,                  // _LodeScrap
+    tb_base + 0x3ff: tDebugStr,                 // _DebugStr
+}
 
 func lineA(inst uint16) {
     if inst & 0x800 != 0 { // Toolbox trap
@@ -3437,12 +3595,15 @@ func lineA(inst uint16) {
     }
 }
 
+var gCurToolTrapNum int
+
 func lineF(inst uint16) {
     check_for_lurkers()
     if inst & 0x800 != 0 { // Go implementation of Toolbox trap
-        my_traps[os_table + (inst & 0xff)]()
-    } else { // Go implementation of OS trap
+        gCurToolTrapNum = int(inst & 0x3ff)
         my_traps[tb_table + (inst & 0x3ff)]()
+    } else { // Go implementation of OS trap
+        my_traps[os_table + (inst & 0xff)]()
     }
     pc = popl()
 }
@@ -3512,12 +3673,12 @@ func main() {
     writew(0x308, 0) // DrvQHdr.QFlags
     writel(0x308+2, kDQE) // DrvQHdr.QHead
     writel(0x308+6, kDQE) // DrvQHdr.QTail
-    for (i := -4; i += 2; i < 16) {
+    for i := -4; i < 16; i += 2 {
         writew(kDQE + i, 0)
     }
 
     // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
-    for (i := 0; i += 2; i < 178) {
+    for i := 0; i < 178; i += 2 {
         writew(kVCB + i, 0)
     }
     writew(kVCB + 78, 2) // vcbVRefNum
@@ -3568,7 +3729,7 @@ func main() {
 }
 
 
-
+//go:generate echo hello >hello
 // Do some prep that requires loading code
 
 pushw(callback_trap_word)
@@ -3626,177 +3787,3 @@ func open_toolserver() {
             pc = a5world + jtoffset + 2
             pushw(0xa9f4) // _ExitToShell
             pushl(readl(spptr)) // ...which is where we will return
-
-try {
-    run_m68k_interpreter()
-}
-except SystemExit { // happens when we reach ExitToShell
-    pass
-}
-finally {
-    for _, ioRefNum := range everyfref {
-        tClose(-1, -1, -1, -1, ioRefNum=ioRefNum)
-
-    }
-    tmp.cleanup()
-}
-
-const os_base = 0
-const tb_base = 0x100
-const my_traps [0x100+0x400]func() = {
-    os_base + 0x00: tOpen                       // _Open
-    os_base + 0x01: tClose                      // _Close
-    os_base + 0x02: tReadWrite                  // _Read
-    os_base + 0x03: tReadWrite                  // _Write
-    os_base + 0x07: tGetVInfo                   // _GetVInfo
-    os_base + 0x08: tCreate                     // _Create
-    os_base + 0x09: tDelete                     // _Delete
-    os_base + 0x0a: tOpen                       // _OpenRF
-    os_base + 0x0c: tGetFInfo                   // _GetFInfo
-    os_base + 0x0d: tSetFInfo                   // _SetFInfo
-    os_base + 0x11: tGetEOF                     // _GetEOF
-    os_base + 0x12: tSetEOF                     // _SetEOF
-    os_base + 0x13: os_pb_trap                  // _FlushVol
-    os_base + 0x14: tGetVol                     // _GetVol
-    os_base + 0x15: tSetVol                     // _SetVol
-    os_base + 0x18: tGetFPos                    // _GetFPos
-    os_base + 0x1a: tGetZone                    // _GetZone
-    os_base + 0x1b: tClrD0A0                    // _SetZone
-    os_base + 0x1c: tFreeMem                    // _FreeMem
-    os_base + 0x1d: tFreeMem                    // _MaxMem
-    os_base + 0x1e: tNewPtr                     // _NewPtr
-    os_base + 0x1f: tDisposPtr                  // _DisposPtr
-    os_base + 0x20: tSetPtrSize                 // _SetPtrSize
-    os_base + 0x21: tGetPtrSize                 // _GetPtrSize
-    os_base + 0x22: tNewHandle                  // _NewHandle
-    os_base + 0x23: tDisposHandle               // _DisposHandle
-    os_base + 0x24: tSetHandleSize              // _SetHandleSize
-    os_base + 0x25: tGetHandleSize              // _GetHandleSize
-    os_base + 0x26: tGetZone                    // _HandleZone
-    os_base + 0x27: tReallocHandle              // _ReallocHandle
-    os_base + 0x28: tRecoverHandle              // _RecoverHandle
-    os_base + 0x29: tClrD0                      // _HLock
-    os_base + 0x2a: tClrD0                      // _HUnlock
-    os_base + 0x2b: tEmptyHandle                // _EmptyHandle
-    os_base + 0x2c: tClrD0A0                    // _InitApplZone
-    os_base + 0x2d: tClrD0A0                    // _SetApplLimit
-    os_base + 0x2e: tBlockMove                  // _BlockMove
-    os_base + 0x30: tGetOSEvent                 // _OSEventAvail
-    os_base + 0x31: tGetOSEvent                 // _GetOSEvent
-    os_base + 0x32: tClrD0A0                    // _FlushEvents
-    os_base + 0x36: tClrD0A0                    // _MoreMasters
-    os_base + 0x3c: tCmpString                  // _CmpString
-    os_base + 0x40: tClrD0A0                    // _ResrvMem
-    os_base + 0x44: tSetFPos                    // _SetFPos
-    os_base + 0x46: tGetTrapAddress             // _GetTrapAddress
-    os_base + 0x47: tSetTrapAddress             // _SetTrapAddress
-    os_base + 0x48: tGetZone                    // _PtrZone
-    os_base + 0x49: tClrD0                      // _HPurge
-    os_base + 0x4a: tClrD0                      // _HNoPurge
-    os_base + 0x4b: tClrD0                      // _SetGrowZone
-    os_base + 0x4c: tFreeMem                    // _CompactMem
-    os_base + 0x4d: tClrD0A0                    // _PurgeMem
-    os_base + 0x55: tNop                        // _StripAddress
-    os_base + 0x60: tFSDispatch                 // _FSDispatch
-    os_base + 0x62: tFreeMem                    // _PurgeSpace
-    os_base + 0x63: tClrD0A0                    // _MaxApplZone
-    os_base + 0x64: tClrD0                      // _MoveHHi
-    os_base + 0x69: tHGetState                  // _HGetState
-    os_base + 0x6a: tHSetState                  // _HSetState
-    os_base + 0x90: tSysEnvirons                // _SysEnvirons
-    os_base + 0xad: tGestalt                    // _Gestalt
-    tb_base + 0x00d: tCountResources            // _Count1Resources
-    tb_base + 0x00e: tGetIndResource            // _Get1IndResource
-    tb_base + 0x00f: tGetIndType                // _Get1IndType
-    tb_base + 0x01a: tHOpenResFile              // _HOpenResFile
-    tb_base + 0x01c: tCountTypes                // _Count1Types
-    tb_base + 0x01f: tGetResource               // _Get1Resource
-    tb_base + 0x020: tGetNamedResource          // _Get1NamedResource
-    tb_base + 0x023: tAliasDispatch             // _AliasDispatch
-    tb_base + 0x034: tPop2                      // _SetFScaleDisable
-    tb_base + 0x050: tNop                       // _InitCursor
-    tb_base + 0x051: tPop4                      // _SetCursor
-    tb_base + 0x052: tNop                       // _HideCursor
-    tb_base + 0x053: tNop                       // _ShowCursor
-    tb_base + 0x055: tPop8                      // _ShieldCursor
-    tb_base + 0x056: tNop                       // _ObscureCursor
-    tb_base + 0x058: tBitAnd                    // _BitAnd
-    tb_base + 0x059: tBitXor                    // _BitXor
-    tb_base + 0x05a: tBitNot                    // _BitNot
-    tb_base + 0x05b: tBitOr                     // _BitOr
-    tb_base + 0x05c: tBitShift                  // _BitShift
-    tb_base + 0x05d: tBitTst                    // _BitTst
-    tb_base + 0x05e: tBitSet                    // _BitSet
-    tb_base + 0x05f: tBitClr                    // _BitClr
-    tb_base + 0x060: tWaitNextEvent             // _WaitNextEvent
-    tb_base + 0x061: tRandom                    // _Random
-    tb_base + 0x06a: tHiWord                    // _HiWord
-    tb_base + 0x06b: tLoWord                    // _LoWord
-    tb_base + 0x06e: tInitGraf                  // _InitGraf
-    tb_base + 0x06f: tPop4                      // _OpenPort
-    tb_base + 0x073: tSetPort                   // _SetPort
-    tb_base + 0x074: tGetPort                   // _GetPort
-    tb_base + 0x0a7: tSetRect                   // _SetRect
-    tb_base + 0x0a8: tOffsetRect                // _OffsetRect
-    tb_base + 0x0d8: tRetZero                   // _NewRgn
-    tb_base + 0x0fe: tNop                       // _InitFonts
-    tb_base + 0x112: tNop                       // _InitWindows
-    tb_base + 0x124: tRetZero                   // _FrontWindow
-    tb_base + 0x130: tNop                       // _InitMenus
-    tb_base + 0x137: tNop                       // _DrawMenuBar
-    tb_base + 0x138: tPop2                      // _HiliteMenu
-    tb_base + 0x139: tPop6                      // _EnableItem
-    tb_base + 0x13a: tPop6                      // _DisableItem
-    tb_base + 0x13c: tPop4                      // _SetMenuBar
-    tb_base + 0x13e: tMenuKey                   // _MenuKey
-    tb_base + 0x149: tPop2RetZero               // _GetMenuHandle
-    tb_base + 0x14d: tPop8                      // _AppendResMenu
-    tb_base + 0x170: tGetNextEvent              // _GetNextEvent
-    tb_base + 0x175: tRetZero                   // _TickCount
-    tb_base + 0x179: tPop2                      // _CouldDialog
-    tb_base + 0x17b: tNop                       // _InitDialogs
-    tb_base + 0x17c: tPop10RetZero              // _GetNewDialog
-    tb_base + 0x194: tCurResFile                // _CurResFile
-    tb_base + 0x197: tOpenResFile               // _OpenResFile
-    tb_base + 0x198: tUseResFile                // _UseResFile
-    tb_base + 0x199: tPop2                      // _UpdateResFile
-    tb_base + 0x19b: tPop2                      // _SetResLoad
-    tb_base + 0x19c: tCountResources            // _CountResources
-    tb_base + 0x19d: tGetIndResource            // _GetIndResource
-    tb_base + 0x19e: tCountTypes                // _CountTypes
-    tb_base + 0x19f: tGetIndType                // _GetIndType
-    tb_base + 0x1a0: tGetResource               // _GetResource
-    tb_base + 0x1a1: tGetNamedResource          // _GetNamedResource
-    tb_base + 0x1a3: tPop4                      // _ReleaseResource
-    tb_base + 0x1a4: tHomeResFile               // _HomeResFile
-    tb_base + 0x1a5: tSizeRsrc                  // _SizeRsrc
-    tb_base + 0x1a8: tGetResInfo                // _GetResInfo
-    tb_base + 0x1af: tResError                  // _ResError
-    tb_base + 0x1b4: tNop                       // _SystemTask
-    tb_base + 0x1b8: tGetPattern                // _GetPattern
-    tb_base + 0x1b9: tGetCursor                 // _GetCursor
-    tb_base + 0x1ba: tGetString                 // _GetString
-    tb_base + 0x1bb: tGetIcon                   // _GetIcon
-    tb_base + 0x1bc: tGetPicture                // _GetPicture
-    tb_base + 0x1bd: tPop10RetZero              // _GetNewWindow
-    tb_base + 0x1c0: tPop2RetZero               // _GetNewMBar
-    tb_base + 0x1c4: tOpenRFPerm                // _OpenRFPerm
-    tb_base + 0x1c8: tNop                       // _SysBeep
-    tb_base + 0x1c9: tSysError                  // _SysError
-    tb_base + 0x1cc: tNop                       // _TEInit
-    tb_base + 0x1e1: tHandToHand                // _HandToHand
-    tb_base + 0x1e2: tPtrToXHand                // _PtrToXHand
-    tb_base + 0x1e3: tPtrToHand                 // _PtrToHand
-    tb_base + 0x1e4: tHandAndHand               // _HandAndHand
-    tb_base + 0x1e5: tPop2                      // _InitPack
-    tb_base + 0x1e6: tNop                       // _InitAllPacks
-    tb_base + 0x1eb: tFP68K                     // _FP68K
-    tb_base + 0x1ec: tElems68K                  // _Elems68K
-    tb_base + 0x1ee: tDecStr68K                 // _DecStr68K
-    tb_base + 0x1f0: tLoadSeg                   // _LoadSeg
-    tb_base + 0x1f1: tPop4                      // _UnloadSeg
-    tb_base + 0x1f4: tExitToShell               // _ExitToShell
-    tb_base + 0x1fa: tRetZero                   // _UnlodeScrap
-    tb_base + 0x1fb: tRetZero                   // _LodeScrap
-    tb_base + 0x3ff: tDebugStr                  // _DebugStr
-}
