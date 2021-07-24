@@ -135,6 +135,14 @@ func popb() uint8 {
     return readb(ptr)
 }
 
+func regAddr(reg uint16) uint32 {
+    return regs + uint32(reg & 0xf) * 4
+}
+
+func aregAddr(reg uint16) uint32 {
+    return regs + uint32(reg & 0xf) * 4
+}
+
 func readRegs() (reglist [16]uint32) {
     for i := 0; i < 16; i++ {
         reglist[i] = readl(regs + uint32(4 * i))
@@ -235,11 +243,11 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
     // side effects: predecrement/postincrement, advance pc to get extension word
 
     if mode < 16 { // Dn or An -- optimise common case slightly
-        ptr = regs + uint32((mode & 15) * 4) + 4 - size
+        ptr = regAddr(mode & 0xf) + 4 - size
     } else if mode >> 3 == 2 { // (An)
-        ptr = readl(a0ptr + uint32((mode & 7) * 4))
+        ptr = readl(aregAddr(mode & 7))
     } else if mode >> 3 == 3 { // (An)+
-        regptr := a0ptr + uint32((mode & 7) * 4)
+        regptr := aregAddr(mode & 7)
         ptr = readl(regptr)
         newptr := ptr + size
         if mode & 7 == 7 && size == 1 {
@@ -247,7 +255,7 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
         }
         writel(regptr, newptr)
     } else if mode >> 3 == 4 { // -(An)
-        regptr := a0ptr + uint32((mode & 7) * 4)
+        regptr := aregAddr(mode & 7)
         ptr = readl(regptr)
         ptr -= size
         if mode & 7 == 7 && size == 1 {
@@ -255,13 +263,13 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
         }
         writel(regptr, ptr)
     } else if mode >> 3 == 5 { // d16(An)
-        regptr := a0ptr + uint32((mode & 7) * 4)
+        regptr := aregAddr(mode & 7)
         ptr = readl(regptr) + uint32(int16(readw(pc))); pc += 2
     } else if mode >> 3 == 6 { // d8(An,Xn)
         xword := readw(pc); pc += 2
-        ptr = readl(a0ptr + 4 * (uint32(mode) & 7)) // contents of An
+        ptr = readl(aregAddr(mode & 7)) // contents of An
         ptr += uint32(int8(xword)) // add constant displacement
-        xn := readl(regs + 4 * (uint32(xword) >> 12 & 15))
+        xn := readl(regAddr(xword >> 12 & 15))
         if xword & 0x100 == 0 { // xn is word valued, so sign extend it
             xn = uint32(int16(xn))
         }
@@ -272,7 +280,7 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
         xword := readw(pc); pc += 2
         ptr = pc
         ptr += uint32(int8(xword)) // add constant displacement
-        xn := readl(regs + 4 * (uint32(xword) >> 12 & 15))
+        xn := readl(regAddr(xword >> 12 & 15))
         if xword & 0x100 == 0 { // xn is word valued, so sign extend it
             xn = uint32(int16(xn))
         }
@@ -341,7 +349,7 @@ func line0(inst uint16) {
                 panic("movep")
             }
             dn := inst >> 9
-            bit = readl(d0ptr + 4 * uint32(dn))
+            bit = readl(regAddr(dn))
         } else { // bit numbered by immediate
             bit = uint32(readw(pc)); pc += 2
         }
@@ -463,7 +471,11 @@ func line4(inst uint16) { // very,crowded,line
         datum := read(size, dest)
 
         if inst >> 8 & 15 == 0 { // negx
-            datum = sub_then_set_vc(0, datum+x, size)
+            xdatum := datum
+            if x {
+                xdatum += 1
+            }
+            datum = sub_then_set_vc(0, xdatum, size)
             x = c
             set_nz(datum, size)
         } else if inst >> 8 & 15 == 4 { // neg
@@ -480,9 +492,7 @@ func line4(inst uint16) { // very,crowded,line
 
     } else if inst >> 8 & 15 == 2 { // clr
         size := readsize(inst >> 6 & 3)
-        if size == 0 {panic("clr size=%11")
-        }
-        dest = address_by_mode(inst & 63, size)
+        dest := address_by_mode(inst & 63, size)
 
         n = false
         z = true
@@ -491,56 +501,55 @@ func line4(inst uint16) { // very,crowded,line
 
         write(size, dest, 0)
     } else if inst & 0xFB8 == 0x880 { // ext
-        if inst & 64 != 0 {
-            size = 4
-        } else {
-            size = 2
+        dn := uint32(inst & 7)
+        if inst & 64 != 0 { // ext.l
+            val := uint32(int16(readw(regAddr(dn) + 2)))
+            set_nz(val, 4)
+            v = false
+            c = false
+            writel(regAddr(dn), val)
+        } else { // ext.w
+            val := uint16(int8(readb(regAddr(dn) + 3)))
+            set_nz(uint32(val), 2)
+            v = false
+            c = false
+            writew(regAddr(dn) + 2, val)
         }
-        dn = inst & 7
-        src = d0ptr + dn * 4 + 4 - size/2
-        dest = d0ptr + dn * 4 + 4 - size
-        datum = signextend(size/2, read(size/2, src))
-        set_nz(datum, size)
-        v = false
-        c = false
-        write(size, dest, datum)
     } else if inst & 0xFF8 == 0x840 { // swap.w
-        dn = inst & 7
-        dest = d0ptr + dn * 4
-        datum = readl(dest)
-        datum = ((datum >> 16) & 0xFFFF) | ((datum & 0xFFFF) << 16)
+        dest := regAddr(inst & 7)
+        datum := readl(dest)
+        datum = (datum >> 16 & 0xffff) | (datum << 16 & 0xffff0000)
         set_nz(datum, 4)
         v = false
         c = false
         writel(dest, datum)
     } else if inst & 0xFC0 == 0x840 { // pea -- notice similarity to swap.w
-        ea = address_by_mode(inst & 63, 4) // size doesn't matter here
+        ea := address_by_mode(inst & 63, 4) // size doesn't matter here
         pushl(ea)
     } else if inst & 0xF00 == 0xA00 { // tst,tas
-        size = []int{1, 2, 4, 1}[inst >> 6 & 3]
-        is_tas = inst >> 6 & 3 == 3
-        dest = address_by_mode(inst & 63, size)
-        datum = read(size, dest)
+        size := []uint32{1, 2, 4, 1}[inst >> 6 & 3]
+        dest := address_by_mode(inst & 63, size)
+        datum := read(size, dest)
         set_nz(datum, size)
         v = false
         c = false
-        if is_tas {
-            writeb(dest, datum | 0x80)
+        if inst >> 6 & 3 == 3 { // tas
+            writeb(dest, uint8(datum) | 0x80)
         }
     } else if inst & 0xFF8 == 0xE50 { // link
-        an = inst & 7; an_ea = a0ptr + an * 4
-        imm = uint32(int16(readw(pc))); pc += 2
+        ea := aregAddr(inst & 7)
+        imm := uint32(int16(readw(pc))); pc += 2
 
-        pushl(readl(an_ea)) // move.l a6,-(sp)
-        sp = readl(regs+60)
-        writel(an_ea, sp) // move.l sp,a6
-        writel(regs+60, sp + imm) // add.w #imm,sp
+        pushl(readl(ea)) // move.l a6,-(sp)
+        sp := readl(spptr)
+        writel(ea, sp) // move.l sp,a6
+        writel(spptr, sp + imm) // add.w #imm,sp
 
     } else if inst & 0xFF8 == 0xE58 { // unlk
-        an = inst & 7; an_ea = a0ptr + an * 4
+        ea := aregAddr(inst & 7)
 
-        writel(regs+60, readl(an_ea)) // move.l a6,sp
-        writel(an_ea, popl()) // move.l (sp)+,a6
+        writel(spptr, readl(ea)) // move.l a6,sp
+        writel(ea, popl()) // move.l (sp)+,a6
     } else if inst & 0xFFF == 0xE71 { // nop
     } else if inst & 0xFFF == 0xE75 { // rts
         check_for_lurkers()
@@ -549,20 +558,20 @@ func line4(inst uint16) { // very,crowded,line
         set_ccr(popw())
         pc = popl()
     } else if inst & 0xF80 == 0xE80 { // jsr/jmp
-        targ = address_by_mode(inst & 63, 4) // any size
-        if !inst & 0x40 {
+        targ := address_by_mode(inst & 63, 4) // any size
+        if inst & 0x40 == 0 {
             check_for_lurkers() // don't slow down jmp's, we do them a lot
             pushl(pc)
         }
         pc = targ
     } else if inst & 0xF80 == 0x880 { // movem registers,ea
-        size := 2
-        if (inst & 64 != 0) {
+        size := uint32(2)
+        if inst & 64 != 0 {
             size = 4
         }
 
         which := readw(pc); pc += 2
-        totalsize := bits.OnesCount16(which) * size
+        totalsize := uint32(bits.OnesCount16(which)) * size
 
         mode := inst & 63
         ptr := address_by_mode(mode, totalsize)
@@ -571,29 +580,29 @@ func line4(inst uint16) { // very,crowded,line
             which = bits.Reverse16(which)
         }
 
-        for reg := 0; reg < 16; reg++ {
+        for reg := uint16(0); reg < 16; reg++ {
             if which & (1 << reg) != 0 {
-                regptr = regs + reg * 4 + 4 - size
+                regptr := regAddr(reg)
                 write(size, ptr, read(size, regptr))
                 ptr += size
             }
         }
     } else if inst & 0xF80 == 0xC80 { // movem ea,registers
-        size := 2
+        size := uint32(2)
         if (inst & 64 != 0) {
             size = 4
         }
 
         which := readw(pc); pc += 2
-        totalsize := bits.OnesCount16(which) * size
+        totalsize := uint32(bits.OnesCount16(which)) * size
 
         mode := inst & 63
         ptr := address_by_mode(mode, totalsize)
 
-        for reg := 0; reg < 16; reg++ {
+        for reg := uint32(0); reg < 16; reg++ {
             if which & (1 << reg) != 0 {
-                if !(reg >= 8 && mode >> 3 == 3 && reg & 7 == mode & 7) {
-                    regptr := regs + reg * 4 + 4 - size
+                if !(reg >= 8 && mode >> 3 == 3 && uint16(reg) & 7 == mode & 7) {
+                    regptr := regAddr(reg) + 4 - size
                     writel(regptr, signextend(size, read(size, ptr)))
                 }
                 ptr += size
@@ -602,10 +611,10 @@ func line4(inst uint16) { // very,crowded,line
     } else if inst & 0x1C0 == 0x1C0 { // lea
         an := inst >> 9 & 7
         ea := address_by_mode(inst & 63, 4) // any size
-        writel(a0ptr + an * 4, ea)
+        writel(aregAddr(an), ea)
     } else if inst & 0x1C0 == 0x180 { // chk
         dn := inst >> 9 & 7
-        testee := readw(d0ptr + 4 * dn + 2)
+        testee := readw(regAddr(dn) + 2)
         ea := address_by_mode(inst & 63, 2)
         ubound := readw(ea)
         if testee > ubound {
@@ -648,7 +657,7 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
         }
         // decrement the counter (dn)
         dn = inst & 7
-        dest = d0ptr + dn * 4 + 2
+        dest = regAddr(dn) + 2
         counter = (readw(dest) - 1) & 0xFFFF
         writew(dest, counter)
         if counter == 0xFFFF { // do not take the branch
@@ -704,7 +713,7 @@ func line7(inst uint16) { // moveq
     v = false
     c = false
 
-    writel(d0ptr + dn * 4, val)
+    writel(regAddr(dn), val)
 }
 
 func line8(inst uint16) { // divu,divs,sbcd,or
