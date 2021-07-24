@@ -2019,64 +2019,33 @@ func main() {
     writel(appParms + 6, 0x54455854) // TEXT
     writePstring(appParms + 12, "Script")
 
-    os.WriteFile(filepath.Join(systemfolder, "Script"), "set")
+    os.WriteFile(filepath.Join(systemfolder, "Script"), "set") // this is where our command goes!
     os.WriteFile(filepath.Join(systemfolder, "Script.idump"), "TEXTMPS ")
     os.Create(filepath.Join(systemfolder, "Script.out"))
     os.Create(filepath.Join(systemfolder, "Script.err"))
+
+    push(32, 0)
+    fileNamePtr := readl(spptr)
+    pushw(0) // refnum return
+    pushw(2) // vol id
+    pushl(uint32(get_macos_dnum(filepath.Join(systemFolder), "MPW")))
+    write_pstring(fileNamePtr, "ToolServer")
+    pushl(fileNamePtr) // pointer to the file string
+    call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
+
+    writew(0xa58, readw(0xa5a)) // SysMap = CurMap
+
+    pushl(0) // handle return
+    pushl(0x434f4445) // CODE
+    pushw(0) // ID 0
+    call_m68k(executable_atrap(0xa9a0)) // _GetResource
+    code0 := pop(4)
+    code0 = readl(pop(4)) // handle to pointer
+
+    jtsize := readl(code0 + 8)
+    jtoffset := readl(code0 + 12)
+
+    copy(mem[a5world + jtoffset:][:jtsize], mem[pointer + 16:][:jtsize])
+
+    call_m68k(a5world + jtoffset + 2)
 }
-
-pushw(callback_trap_word)
-pc = readl(spptr)
-
-func open_toolserver() {
-}
-//    global pc
-
-    pushw(callback_trap_word)
-    pushw(0xa81a) // _HOpenResFile
-    pc = readl(spptr)
-
-    toolserver := Path(os.Args[1]).resolve()
-    push(32, 0); filenameptr = readl(spptr)
-    write_pstring(filenameptr, strings.Replace(toolserver.name, ":", -1))
-
-    pushw(0) // space for return, we don't use it
-    pushw(2) // vRefNum
-    pushl(get_macos_dnum(toolserver.parent)) // dirID
-    pushl(filenameptr)
-    pushw(0) // permission
-
-    @oneoff_callback
-    def load_code() {
-    }
-//        global pc
-
-        writew(0xa58, readw(0xa5a)) // SysMap = CurMap
-
-        pushw(callback_trap_word)
-        pushw(0xa9a0) // _GetResource
-        pc = readl(spptr)
-
-        pushl(0) // space for returned CODE 0 handle
-        pushl(int.from_bytes(b"CODE", "big"))
-        pushw(0)
-
-        @oneoff_callback
-        def run_code() {
-        }
-//            global pc
-
-            handle = popl()
-            if !handle {
-                1/0
-            }
-            pointer = readl(handle)
-
-            jtsize = readl(pointer + 8)
-            jtoffset = readl(pointer + 12)
-
-            memcpy(a5world + jtoffset, pointer + 16, jtsize)
-
-            pc = a5world + jtoffset + 2
-            pushw(0xa9f4) // _ExitToShell
-            pushl(readl(spptr)) // ...which is where we will return
