@@ -337,7 +337,7 @@ func line0(inst uint16) {
     if inst & 256 != 0 || inst >> 9 == 4 { // btst,bchg,bclr,bset (or movep)
         var bit uint32
         if inst & 256 != 0 { // bit numbered by data register
-            if (inst >> 3) & 7 == 1 {
+            if inst >> 3 & 7 == 1 {
                 panic("movep")
             }
             dn := inst >> 9
@@ -360,11 +360,11 @@ func line0(inst uint16) {
         val := read(size, ptr)
         z = val & mask == 0
 
-        if (inst >> 6) & 3 == 1 { // bchg
+        if inst >> 6 & 3 == 1 { // bchg
             val ^= mask
-        } else if (inst >> 6) & 3 == 2 { // bclr
+        } else if inst >> 6 & 3 == 2 { // bclr
             val &= ^mask
-        } else if (inst >> 6) & 3 == 3 { // bset
+        } else if inst >> 6 & 3 == 3 { // bset
             val |= mask
         }
         // ^^ the btst case is already handled by setting z
@@ -372,7 +372,7 @@ func line0(inst uint16) {
         write(size, ptr, val)
 
     } else { //ori,andi,subi,addi,eori -- including to SR/CCR
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
 
         src_ptr := address_by_mode(60, size) // '#imm' mode, advances pc
         imm := read(size, src_ptr)
@@ -426,7 +426,7 @@ func line0(inst uint16) {
 
 func line123(inst uint16) { // move, and movea which is a special-ish case
     size := readsizeForMove(inst >> 12 & 3)
-    dest_mode := ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
+    dest_mode := (inst >> 3 & 0x38) | (inst >> 9 & 7)
     src_mode := inst & 63
 
     src := address_by_mode(src_mode, size)
@@ -445,28 +445,28 @@ func line123(inst uint16) { // move, and movea which is a special-ish case
 }
 
 func line4(inst uint16) { // very,crowded,line
-    if (inst >> 6) & 63 == 3 { // move from sr
+    if inst >> 6 & 63 == 3 { // move from sr
         dest := address_by_mode(inst & 63, 2) // sr is 2 bytes
         writew(dest, get_ccr())
-    } else if (inst >> 6) & 0x3f == 0x37 { // move to sr/ccr
+    } else if inst >> 6 & 0x3f == 0x37 { // move to sr/ccr
         var size uint32
-        if (inst >> 6) & 8 != 0 {
+        if inst >> 6 & 8 != 0 {
             size = 1 // ccr
         } else {
             size = 2 // sr
         }
         src := address_by_mode(inst & 63, size)
         set_ccr(uint16(read(size, src)))
-    } else if (inst >> 8) & 15 == 0 || (inst >> 8) & 15 == 4 || (inst >> 8) & 15 == 6 { // negx,neg,not
-        size := readsize((inst >> 6) & 3)
+    } else if inst >> 8 & 15 == 0 || inst >> 8 & 15 == 4 || inst >> 8 & 15 == 6 { // negx,neg,not
+        size := readsize(inst >> 6 & 3)
         dest := address_by_mode(inst & 63, size)
         datum := read(size, dest)
 
-        if (inst >> 8) & 15 == 0 { // negx
+        if inst >> 8 & 15 == 0 { // negx
             datum = sub_then_set_vc(0, datum+x, size)
             x = c
             set_nz(datum, size)
-        } else if (inst >> 8) & 15 == 4 { // neg
+        } else if inst >> 8 & 15 == 4 { // neg
             datum = sub_then_set_vc(0, datum, size)
             x = c
             set_nz(datum, size)
@@ -478,8 +478,8 @@ func line4(inst uint16) { // very,crowded,line
         }
         write(size, dest, datum)
 
-    } else if (inst >> 8) & 15 == 2 { // clr
-        size := readsize((inst >> 6) & 3)
+    } else if inst >> 8 & 15 == 2 { // clr
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("clr size=%11")
         }
         dest = address_by_mode(inst & 63, size)
@@ -517,8 +517,8 @@ func line4(inst uint16) { // very,crowded,line
         ea = address_by_mode(inst & 63, 4) // size doesn't matter here
         pushl(ea)
     } else if inst & 0xF00 == 0xA00 { // tst,tas
-        size = []int{1, 2, 4, 1}[(inst >> 6) & 3]
-        is_tas = (inst >> 6) & 3 == 3
+        size = []int{1, 2, 4, 1}[inst >> 6 & 3]
+        is_tas = inst >> 6 & 3 == 3
         dest = address_by_mode(inst & 63, size)
         datum = read(size, dest)
         set_nz(datum, size)
@@ -600,11 +600,11 @@ func line4(inst uint16) { // very,crowded,line
             }
         }
     } else if inst & 0x1C0 == 0x1C0 { // lea
-        an := (inst >> 9) & 7
+        an := inst >> 9 & 7
         ea := address_by_mode(inst & 63, 4) // any size
         writel(a0ptr + an * 4, ea)
     } else if inst & 0x1C0 == 0x180 { // chk
-        dn := (inst >> 9) & 7
+        dn := inst >> 9 & 7
         testee := readw(d0ptr + 4 * dn + 2)
         ea := address_by_mode(inst & 63, 2)
         ubound := readw(ea)
@@ -615,12 +615,12 @@ func line4(inst uint16) { // very,crowded,line
 }
 
 func line5(inst uint16) { // addq,subq,scc,dbcc
-    if (inst >> 6) & 3 != 3 { // addq,subq
-        size := 1 << ((inst >> 6) & 3)
-        if size == 2 && (inst >> 3) & 7 == 1 {
+    if inst >> 6 & 3 != 3 { // addq,subq
+        size := 1 << (inst >> 6 & 3)
+        if size == 2 && inst >> 3 & 7 == 1 {
             size = 4 // An.w is really An.l
         }
-        imm := ((inst >> 9) & 7) || 8
+        imm := (inst >> 9 & 7) || 8
 
         dest := address_by_mode(inst & 63, size)
         datum := read(size, dest)
@@ -632,17 +632,17 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
         }
         x = c
         set_nz(datum, size)
-        if (inst >> 3) & 7 == 1 {
+        if inst >> 3 & 7 == 1 {
             x, n, z, v, c = save_ccr // touch not ccr if dest is An
         }
         write(size, dest, datum)
 
-    } else if (inst >> 3) & 7 == 1 { // dbcc
+    } else if inst >> 3 & 7 == 1 { // dbcc
         check_for_lurkers()
 
         disp = uint32(int16(readw(pc))) - 2; pc += 2
 
-        cond = (inst >> 8) & 15 // if cond satisfied then DO NOT take loop
+        cond = inst >> 8 & 15 // if cond satisfied then DO NOT take loop
         if test_condition(cond) {
             return
         }
@@ -659,7 +659,7 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
 
     } else { // scc
         dest = address_by_mode(inst & 63, 1)
-        cond = (inst >> 8) & 15
+        cond = inst >> 8 & 15
         writeb(dest, 0xFF * test_condition(cond))
     }
 }
@@ -674,7 +674,7 @@ func line6(inst uint16) { // bra,bsr,bcc
         disp = uint32(int16(readw(pc))) - 2; pc += 2
 
     }
-    cond = (inst >> 8) & 15
+    cond = inst >> 8 & 15
     if cond > 1 && !test_condition(cond) { // not taken
         return
 
@@ -688,7 +688,7 @@ func line6(inst uint16) { // bra,bsr,bcc
 
 func line7(inst uint16) { // moveq
 //    global n, z, v, c
-    dn := (inst >> 9) & 7
+    dn := inst >> 9 & 7
     val := int32(int8(inst & 255))
 
     n = false
@@ -715,7 +715,7 @@ func line8(inst uint16) { // divu,divs,sbcd,or
         is_signed = bool(inst & 0x100)
         ea = address_by_mode(inst & 63, 2)
         divisor := readw(ea)
-        dn = (inst >> 9) & 7
+        dn = inst >> 9 & 7
         dividend = readl(d0ptr + dn * 4)
 
         var quotient uint32 // keep upper bits for setting the v bit
@@ -741,11 +741,11 @@ func line8(inst uint16) { // divu,divs,sbcd,or
         writel(d0ptr + dn * 4, (uint32(remainder) << 16) | (quotient & 0xFFFF))
 
     } else { // or
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("or size=%11")
         }
         src = address_by_mode(inst & 63, size)
-        dn = (inst >> 9) & 7
+        dn = inst >> 9 & 7
         dest = d0ptr + dn * 4 + 4 - size
 
         if inst & 0x100 {
@@ -774,12 +774,12 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
         }
 
         ea = address_by_mode(inst & 63, size)
-        an = (inst >> 9) & 7
+        an = inst >> 9 & 7
         result = signextend(4, readl(a0ptr + an * 4)) + sign * signed(size, read(size, ea))
         writel(a0ptr + an * 4, result)
 
     } else if inst & 0x130 == 0x100 { // subx,addx: only two addressing modes allowed
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
 
         var mode int
         if inst & 8 != 0 {
@@ -789,7 +789,7 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
         }
 
         src := address_by_mode(mode | (inst & 7), size)
-        dest := address_by_mode(mode | ((inst >> 9) & 7), size)
+        dest := address_by_mode(mode | (inst >> 9 & 7), size)
 
         if sign == 1 {
             result := add_then_set_vc(read(size, dest), read(size, src) + x, size)
@@ -800,11 +800,11 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
         x = c
         old_z := z; set_nz(result, size); z &= old_z
     } else { // sub,add
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("sub/add size=%11")
         }
         src = address_by_mode(inst & 63, size)
-        dn = (inst >> 9) & 7
+        dn = inst >> 9 & 7
         dest = d0ptr + dn * 4 + 4 - size
 
         if inst & 0x100 { // direction bit does a swap
@@ -831,31 +831,31 @@ func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
         }
 
         ea := address_by_mode(inst & 63, size)
-        an := (inst >> 9) & 7
+        an := inst >> 9 & 7
         result := sub_then_set_vc(signed(4, readl(a0ptr + an * 4)), signed(size, read(size, ea)), 4)
         set_nz(result, 4)
     } else if inst & 0x100 == 0x000 { // cmp
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("cmp size=%11")
         }
-        dn = (inst >> 9) & 7
+        dn = inst >> 9 & 7
         dest = d0ptr + dn * 4 + 4 - size
         src = address_by_mode(inst & 63, size)
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
     } else if inst & 0x38 == 0x08 { // cmpm (Ay)+,(Ax)+
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         src = address_by_mode(24 | (inst & 7), size) // (An)+ mode
-        dest = address_by_mode(24 | ((inst >> 9) & 7), size)
+        dest = address_by_mode(24 | (inst >> 9 & 7), size)
         result = sub_then_set_vc(read(size, dest), read(size, src), size)
         set_nz(result, size)
 
     } else { // eor
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("eor size=%11")
         }
-        dn = (inst >> 9) & 7; src = d0ptr + 4 * dn + 4 - size
+        dn = inst >> 9 & 7; src = d0ptr + 4 * dn + 4 - size
         dest = address_by_mode(inst & 63, size)
 
         result = read(size, dest) ^ read(size, src)
@@ -870,7 +870,7 @@ func lineC(inst uint16) {
     if inst & 0xC0 == 0xC0 { // mulu,muls
         is_signed = bool(inst & 0x100)
         src = address_by_mode(inst & 63, 2) // ea.w
-        dest = d0ptr + ((inst >> 9) & 7) * 4 // dn.l
+        dest = d0ptr + (inst >> 9 & 7) * 4 // dn.l
 
         m1 = readw(dest+2); m2 = readw(src)
         if is_signed {
@@ -885,7 +885,7 @@ func lineC(inst uint16) {
     } else if inst & 0x1F0 == 0x100 { // abcd
         panic("abcd")
     } else if inst & 0x1F8 == 0x140 || inst & 0x1F8 == 0x148 || inst & 0x1F8 == 0x188 { // exg
-        rx = (inst >> 9) & 7
+        rx = inst >> 9 & 7
         ry = inst & 7
         if inst & 0x1F8 == 0x148 { // Ax,Ay
             rx |= 8; ry |= 8 // bump the addressing mode from Dn to An
@@ -903,10 +903,10 @@ func lineC(inst uint16) {
         writel(ry, x)
 
     } else { // and
-        size := readsize((inst >> 6) & 3)
+        size := readsize(inst >> 6 & 3)
         if size == 0 {panic("and size=%11")
         }
-        dn := (inst >> 9) & 7; dest = address_by_mode(dn, size)
+        dn := inst >> 9 & 7; dest = address_by_mode(dn, size)
         src := address_by_mode(inst & 63, size)
 
         if inst & 0x100 { // direction bit
@@ -923,21 +923,21 @@ func lineC(inst uint16) {
 
 func lineE(inst uint16) {
 //    global x, n, z, v, c
-    size := readsize((inst >> 6) & 3)
+    size := readsize(inst >> 6 & 3)
 
     if size == nil { // single-bit shift on a memory address
         size = 2
-        kind = (inst >> 9) & 3
+        kind = inst >> 9 & 3
         dest = address_by_mode(inst & 63, size)
         by := 1
     } else {
-        kind = (inst >> 3) & 3
+        kind = inst >> 3 & 3
         dest = d0ptr + (inst & 7) * 4 + 4 - size // dn
         if inst & 0x20 {
-            by = readb(d0ptr + ((inst >> 9) & 7) * 4 + 3) % 64
+            by = readb(d0ptr + (inst >> 9 & 7) * 4 + 3) % 64
         } else {
-            by = (inst >> 9) & 7
-            by = ((inst >> 9) & 7) || 8
+            by = inst >> 9 & 7
+            by = (inst >> 9 & 7) || 8
 
         }
     }
