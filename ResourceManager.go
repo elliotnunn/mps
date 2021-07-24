@@ -132,7 +132,7 @@ func getResName(resMap uint32, idEntry uint16) (hasName bool, theName []byte) {
     if nameOffset == 0xffff {
         return false, ""
     } else {
-        return true, read_pstring(resMap + nameList + nameOffset)
+        return true, readPstring(resMap + nameList + nameOffset)
     }
 }
 

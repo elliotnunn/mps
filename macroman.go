@@ -4,7 +4,10 @@ import (
     "bytes"
 )
 
-const macToUnicodeTable = [...]rune{
+// Different because believed to be macRoman formatted!
+type macstring struct {contents string}
+
+var macToUnicodeTable = [...]rune{
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
     0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
     0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
@@ -39,7 +42,7 @@ const macToUnicodeTable = [...]rune{
     0x00af, 0x02d8, 0x02d9, 0x02da, 0x00b8, 0x02dd, 0x02db, 0x02c7,
 }
 
-const macSortTab = [...]byte{
+var macSortTab = [...]byte{
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -74,25 +77,26 @@ const macSortTab = [...]byte{
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 }
 
-func macToUnicode(mac []byte) string {
+func macToUnicode(mac macstring) string {
     var buf bytes.Buffer
-    for macbyte := range mac {
-        buf.WriteRune(macToUnicodeTable[macbyte])
+    for i := 0; i < len(mac.contents); i++ {
+        buf.WriteRune(macToUnicodeTable[mac.contents[i]])
     }
     return buf.String()
 }
 
 // Slightly overcooked code that turnes (de)composed UTF-8 and gives Mac Roman
-func unicodeToMac(unicode string) (mac []byte, err error) {
+func unicodeToMac(str string) (retval macstring, ok bool) {
+    var macstr []byte
+
     defer func() {
         if recover() != nil {
-            mac = nil
-            err = true
+            ok = false
         }
     }()
 
-    for codepoint := range unicode {
-        macbyte byte
+    for _, codepoint := range str {
+        var macbyte byte
         switch {
         case codepoint < 0x80:
             macbyte = byte(codepoint)
@@ -353,155 +357,155 @@ func unicodeToMac(unicode string) (mac []byte, err error) {
         case codepoint == 0x2c7: // CARON
             macbyte = 0xff
         case codepoint == 0x300: // COMBINING GRAVE ACCENT
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0xcb
+                macstr[len(macstr) - 1] = 0xcb
             case 'E':
-                mac[-1] = 0xe9
+                macstr[len(macstr) - 1] = 0xe9
             case 'I':
-                mac[-1] = 0xed
+                macstr[len(macstr) - 1] = 0xed
             case 'O':
-                mac[-1] = 0xf1
+                macstr[len(macstr) - 1] = 0xf1
             case 'U':
-                mac[-1] = 0xf4
+                macstr[len(macstr) - 1] = 0xf4
             case 'a':
-                mac[-1] = 0x88
+                macstr[len(macstr) - 1] = 0x88
             case 'e':
-                mac[-1] = 0x8f
+                macstr[len(macstr) - 1] = 0x8f
             case 'i':
-                mac[-1] = 0x93
+                macstr[len(macstr) - 1] = 0x93
             case 'o':
-                mac[-1] = 0x98
+                macstr[len(macstr) - 1] = 0x98
             case 'u':
-                mac[-1] = 0x9d
+                macstr[len(macstr) - 1] = 0x9d
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x301: // COMBINING ACUTE ACCENT
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0xe7
+                macstr[len(macstr) - 1] = 0xe7
             case 'E':
-                mac[-1] = 0x83
+                macstr[len(macstr) - 1] = 0x83
             case 'I':
-                mac[-1] = 0xea
+                macstr[len(macstr) - 1] = 0xea
             case 'O':
-                mac[-1] = 0xee
+                macstr[len(macstr) - 1] = 0xee
             case 'U':
-                mac[-1] = 0xf2
+                macstr[len(macstr) - 1] = 0xf2
             case 'a':
-                mac[-1] = 0x87
+                macstr[len(macstr) - 1] = 0x87
             case 'e':
-                mac[-1] = 0x8e
+                macstr[len(macstr) - 1] = 0x8e
             case 'i':
-                mac[-1] = 0x92
+                macstr[len(macstr) - 1] = 0x92
             case 'o':
-                mac[-1] = 0x97
+                macstr[len(macstr) - 1] = 0x97
             case 'u':
-                mac[-1] = 0x9c
+                macstr[len(macstr) - 1] = 0x9c
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x302: // COMBINING CIRCUMFLEX ACCENT
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0xe5
+                macstr[len(macstr) - 1] = 0xe5
             case 'E':
-                mac[-1] = 0xe6
+                macstr[len(macstr) - 1] = 0xe6
             case 'I':
-                mac[-1] = 0xeb
+                macstr[len(macstr) - 1] = 0xeb
             case 'O':
-                mac[-1] = 0xef
+                macstr[len(macstr) - 1] = 0xef
             case 'U':
-                mac[-1] = 0xf3
+                macstr[len(macstr) - 1] = 0xf3
             case 'a':
-                mac[-1] = 0x89
+                macstr[len(macstr) - 1] = 0x89
             case 'e':
-                mac[-1] = 0x90
+                macstr[len(macstr) - 1] = 0x90
             case 'i':
-                mac[-1] = 0x94
+                macstr[len(macstr) - 1] = 0x94
             case 'o':
-                mac[-1] = 0x99
+                macstr[len(macstr) - 1] = 0x99
             case 'u':
-                mac[-1] = 0x9e
+                macstr[len(macstr) - 1] = 0x9e
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x303: // COMBINING TILDE
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0xcc
+                macstr[len(macstr) - 1] = 0xcc
             case 'N':
-                mac[-1] = 0x84
+                macstr[len(macstr) - 1] = 0x84
             case 'O':
-                mac[-1] = 0xcd
+                macstr[len(macstr) - 1] = 0xcd
             case 'a':
-                mac[-1] = 0x8b
+                macstr[len(macstr) - 1] = 0x8b
             case 'n':
-                mac[-1] = 0x96
+                macstr[len(macstr) - 1] = 0x96
             case 'o':
-                mac[-1] = 0x9b
+                macstr[len(macstr) - 1] = 0x9b
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x308: // COMBINING DIAERESIS
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0x80
+                macstr[len(macstr) - 1] = 0x80
             case 'E':
-                mac[-1] = 0xe8
+                macstr[len(macstr) - 1] = 0xe8
             case 'I':
-                mac[-1] = 0xec
+                macstr[len(macstr) - 1] = 0xec
             case 'O':
-                mac[-1] = 0x85
+                macstr[len(macstr) - 1] = 0x85
             case 'U':
-                mac[-1] = 0x86
+                macstr[len(macstr) - 1] = 0x86
             case 'Y':
-                mac[-1] = 0xd9
+                macstr[len(macstr) - 1] = 0xd9
             case 'a':
-                mac[-1] = 0x8a
+                macstr[len(macstr) - 1] = 0x8a
             case 'e':
-                mac[-1] = 0x91
+                macstr[len(macstr) - 1] = 0x91
             case 'i':
-                mac[-1] = 0x95
+                macstr[len(macstr) - 1] = 0x95
             case 'o':
-                mac[-1] = 0x9a
+                macstr[len(macstr) - 1] = 0x9a
             case 'u':
-                mac[-1] = 0x9f
+                macstr[len(macstr) - 1] = 0x9f
             case 'y':
-                mac[-1] = 0xd8
+                macstr[len(macstr) - 1] = 0xd8
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x30a: // COMBINING RING ABOVE
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'A':
-                mac[-1] = 0x81
+                macstr[len(macstr) - 1] = 0x81
             case 'a':
-                mac[-1] = 0x8c
+                macstr[len(macstr) - 1] = 0x8c
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x327: // COMBINING CEDILLA
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case 'C':
-                mac[-1] = 0x82
+                macstr[len(macstr) - 1] = 0x82
             case 'c':
-                mac[-1] = 0x8d
+                macstr[len(macstr) - 1] = 0x8d
             default:
                 panic("unicode")
             }
             continue
         case codepoint == 0x338: // COMBINING LONG SOLIDUS OVERLAY
-            switch mac[-1] {
+            switch macstr[len(macstr) - 1] {
             case '=':
-                mac[-1] = 0xad
+                macstr[len(macstr) - 1] = 0xad
             default:
                 panic("unicode")
             }
@@ -509,19 +513,22 @@ func unicodeToMac(unicode string) (mac []byte, err error) {
         default:
             panic("unicode")
         }
-        mac = append(mac, macbyte)
+        macstr = append(macstr, macbyte)
     }
+
+    return macstring{string(macstr)}, true
 }
 
-func translateByTable(in []byte, table [256]byte) (out []byte) {
-    out = make([]byte, len(in))
-    for i := range in {
-        out[i] = table[in[i]]
+func translateByTable(in macstring, table *[256]byte) macstring {
+    out := make([]byte, len(in.contents))
+    for i := 0; i < len(in.contents); i++ {
+        out[i] = table[in.contents[i]]
     }
+    return macstring{string(out)}
 }
 
-func macStripDiacritics(in []byte) []byte {
-    return translateByTable(in, [...]byte{
+func macStripDiacritics(in macstring) macstring {
+    return translateByTable(in, &[...]byte{
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -556,8 +563,8 @@ func macStripDiacritics(in []byte) []byte {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,})
 }
 
-func macUpper(in []byte) []byte {
-    return translateByTable(in, [...]byte{
+func macUpper(in macstring) macstring {
+    return translateByTable(in, &[...]byte{
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -593,7 +600,7 @@ func macUpper(in []byte) []byte {
 }
 
 // works like _RelString trap
-func relString(a, b []byte, caseSens, diacSens bool) uint32 {
+func relString(a, b macstring, caseSens, diacSens bool) uint32 {
     if !diacSens {
         a = macStripDiacritics(a)
         b = macStripDiacritics(b)
@@ -603,14 +610,14 @@ func relString(a, b []byte, caseSens, diacSens bool) uint32 {
         b = macUpper(b)
     }
 
-    n := len(a)
-    if len(b) < n {
-        n = len(b)
+    n := len(a.contents)
+    if len(b.contents) < n {
+        n = len(b.contents)
     }
 
     for i := 0; i < n; i++ {
-        an := macSortTab[a[i]]
-        bn := macSortTab[b[i]]
+        an := macSortTab[a.contents[i]]
+        bn := macSortTab[b.contents[i]]
 
         if an > bn {
             return 1
@@ -619,9 +626,9 @@ func relString(a, b []byte, caseSens, diacSens bool) uint32 {
         }
     }
 
-    if len(a) > len(b) {
+    if len(a.contents) > len(b.contents) {
         return 1
-    } else if len(a) < len(b) {
+    } else if len(a.contents) < len(b.contents) {
         return 0xffffffff
     } else {
         return 0

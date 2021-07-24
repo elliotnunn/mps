@@ -3,6 +3,10 @@ package main
 import (
     "path/filepath"
     "embed"
+    "strings"
+    "os"
+    "io/fs"
+    "sort"
 )
 
 //go:embed MPW35
@@ -11,10 +15,32 @@ var embedMPW embed.FS
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
 var dnums []string
 
+// gets populated by main func
+var systemFolder string
+
 // the contents of every open fork, indexed by refnum
 var filebuffers map[uint16][]byte
 
-const onlyvolname = []byte("@")
+// MacOS's idea of the system root
+var onlyvolname = "_"
+
+type myFS interface {
+    fs.FS
+    fs.ReadDirFS
+    fs.ReadFileFS
+}
+
+// Could apply to either filesystem
+func open(path string) (fs.File, error) {
+    prefix := string(systemFolder) + "/MPW/"
+    if strings.HasPrefix(path, prefix) {
+        file, err := embedMPW.Open(path[len(prefix):])
+        return file, err
+    } else {
+        file, err := os.Open(path)
+        return file, err
+    }
+}
 
 // return 0 if invalid
 func fcbFromRefnum(refnum uint16) uint32 {
@@ -25,65 +51,100 @@ func fcbFromRefnum(refnum uint16) uint32 {
         return 0
     }
 
-    return FCBSPtr + refnum
+    return FCBSPtr + uint32(refnum)
 }
 
-func get_host_path(number uint16, name []byte) (path string, errno int) {
+func get_host_path(number uint16, macname macstring) (string, int) {
+    name := macToUnicode(macname)
+
     // If string is abolute then ignore the number, use the special root ID
-    if bytes.Contains(name, []byte(":")) && !bytes.HasPrefix(name, []byte(":")) {
+    if strings.Contains(name, ":") && !strings.HasPrefix(name, ":") {
         number = 2
-        root_and_name := bytes.SplitN(name, []byte(":"))
+        root_and_name := strings.SplitN(name, ":", 2)
         name = root_and_name[1]
 
         if root_and_name[0] != onlyvolname {
-            errno = -43 // fnfErr
-            return
+            return "", -43 // fnfErr
         }
     }
 
-    if number > len(dnums) {
-        errno = -32 // fnfErr
-        return
+    if int(number) > len(dnums) {
+        return "", -32 // fnfErr
     }
-    path = dnums[number]
+    path := dnums[number]
 
-    components := bytes.Split(name, []byte(":"))
+    components := strings.Split(name, ":")
 
     // remove stray empty components, because they behave like '..'
     if len(components) > 0 && len(components[0]) == 0 {
         components = components[1:]
     }
-    if len(components) > 0 && len(components[-1]) == 0 {
-        components = components[:-1]
+    if len(components) > 0 && len(components[len(components) - 1]) == 0 {
+        components = components[:len(components) - 1]
     }
 
-    for component := range components {
+    for _, component := range components {
         unicomponent := macToUnicode(component)
         if len(unicomponent) > 0 {
-            path = filepath.Join(accum, unicomponent)
+            path = filepath.Join(path, unicomponent)
         } else {
-            path = filepath.Parent(accum)
+            path = filepath.Dir(path)
         }
     }
+
+    return path, 0 // noErr
 }
 
-func listdir(path string) (macfiles [][]byte, errno int) {
-    files, err := ioutil.ReadDir(path)
+func listdir(path string) ([]macstring, int) {
+    file, err := open(path)
     if err != nil {
-        errno = -39 // fnfErr
+        return nil, -43 // fileNotFoundError
+    }
+    defer file.Close()
+
+    dir, ok := file.(fs.ReadDirFile)
+    if !ok {
+        panic("Failed to cast and get a method! Sad!")
     }
 
-    for name := range files {
-        macfiles = append(macfiles, unicodeToMac(name))
+    dirents, err := dir.ReadDir(0)
+    if err != nil {
+        panic("ReadDirNames")
     }
 
-    // case, sort and :/ logic missing from here
+//     macfiles := make([]macstring, 0, len(dirents))
+    var macfiles []macstring
+    for _, d := range dirents {
+        if macname, ok := unicodeToMac(d.Name()); ok {
+            macfiles = append(macfiles, macstring(macname))
+        }
+    }
+
+    // HFS sorts files by RelString order
+    sort.Slice(macfiles, func (i, j int) {return relString(macfiles[i], macfiles[j], false, true) > 1})
+
+    // Filter out ambiguous or too-long names
+    macfiles2 := macfiles
+    macfiles = make([]macstring, 0, len(macfiles))
+    already := make(map[macstring]int)
+    for _, mf := range macfiles2 {
+        already[macUpper(mf)]++
+    }
+    for _, mf := range macfiles2 {
+        if already[macUpper(mf)] == 1 && len(mf) < 32 {
+            macfiles = append(macfiles, mf)
+        }
+    }
+
+    // what do do about colons in filenames?
+
+    return macfiles, 0
 }
 
 func get_macos_dnum(path string) uint16 {
     for idx, maybepath := range dnums[2:] {
         if maybepath == path {
-            return idx
+            return idx + 2
         }
     }
     dnums = append(dnums, path)
@@ -95,7 +156,7 @@ func get_macos_date(path string) uint32 {
     // logic missing from here
 }
 
-func is_regular_file(path) bool {
+func is_regular_file(path string) bool {
     stat, err := os.Stat(path)
     return err == nil && stat.Mode().IsRegular()
 }
@@ -139,7 +200,7 @@ func tOpen() {
     pb := read4(a0ptr)
 
     ioNamePtr := readl(pb + 18)
-    ioName := read_pstring(ioNamePtr)
+    ioName := readPstring(ioNamePtr)
     ioPermssn := readb(pb + 27)
 
     number := get_vol_or_dir()
@@ -204,7 +265,7 @@ func tClose() {
     }
 
     number := readl(fcb + 58)
-    string := read_pstring(fcb + 62)
+    string := readPstring(fcb + 62)
     path := get_host_path(number, string)
 
     // Write out
@@ -334,7 +395,7 @@ func tCreate() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioNamePtr := readl(pb + 18)
-    ioName := read_pstring(ioNamePtr)
+    ioName := readPstring(ioNamePtr)
 
     number := get_vol_or_dir()
     path := get_host_path(number, ioName)
@@ -351,7 +412,7 @@ func tDelete() {
     pb := readl(a0ptr)
 
     ioNamePtr = readl(pb + 18)
-    ioName := read_pstring(ioNamePtr)
+    ioName := readPstring(ioNamePtr)
 
     number := get_vol_or_dir()
     path := get_host_path(number, ioName)
@@ -393,7 +454,7 @@ func tGetFInfo() { // also implements GetCatInfo
 
         fname = listing[ioFDirIndex - 1]
     } else {
-        fname = read_pstring(ioNamePtr)
+        fname = readPstring(ioNamePtr)
     }
 
     // clear our block of return values, which is longer for GetCatInfo
@@ -431,7 +492,7 @@ func tGetFInfo() { // also implements GetCatInfo
 func tSetFInfo() {
     paramblk_return(0)
 //     ioNamePtr := readl(pb + 18)
-//     ioName := read_pstring(ioNamePtr)
+//     ioName := readPstring(ioNamePtr)
 //
 //     // idiom to get dirID for hierarchical call, but fall back on ioVRefNum
 //     number := (readl(pb + 48) if trap & 0x200 else 0) || readw(pb + 22)
@@ -511,8 +572,8 @@ func tSetVol() {
 
     ioVNPtr := readl(pb + 18)
     if ioVNPtr != 0 {
-        volname := read_pstring(ioVNPtr)
-        if !string.Contains(volname, ":") { // this is an absolute path
+        volname := readPstring(ioVNPtr)
+        if !strings.Contains(volname, ":") { // this is an absolute path
             volname += ":"
         }
         dnums[0] = get_host_path(2, volname)
@@ -547,7 +608,7 @@ func tFSDispatch() {
     switch readw(d0ptr + 2) {
     case 1: // OpenWD
         // just return dirID as wdRefNum, because we treat them the same
-        ioName := read_pstring(readl(pb + 18))
+        ioName := readPstring(readl(pb + 18))
         ioWDDirID := readl(pb + 48)
 
         ioVRefNum := get_macos_dnum(get_host_path(ioWDDirID, ioName))
@@ -598,7 +659,7 @@ func tFSDispatch() {
         writel(pb + 58, readl(fcb + 58)) // ioFCBParID
 
         ioNamePtr := readl(pb + 18)
-        write_pstring(ioNamePtr, read_pstring(fcb + 62))
+        write_pstring(ioNamePtr, readPstring(fcb + 62))
 
     case 9: // GetCatInfo
         return tGetFInfo()
@@ -609,7 +670,7 @@ func tFSDispatch() {
     case 27: // MakeFSSpec
         ioVRefNum := readw(pb + 22)
         ioDirID := readl(pb + 48)
-        ioName := read_pstring(readl(pb + 18))
+        ioName := readPstring(readl(pb + 18))
         ioMisc := readl(pb + 28)
 
         path := get_host_path(ioDirID, ioName)

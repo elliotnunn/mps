@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
     "math/bits"
-    "regexp"
     "os"
-    "embed"
 )
 
 //#######################################################################
@@ -45,11 +43,12 @@ const (
     spptr = regs + 60
 )
 
-func read(numbytes int, addr uint32) (val uint32) {
-    for i := range numbytes {
+func read(numbytes uint32, addr uint32) (val uint32) {
+    for i := uint32(0); i < numbytes; i++ {
         val <<= 8
-        val += mem[addr+i]
+        val += uint32(mem[addr+i])
     }
+    return
 }
 
 func readl(addr uint32) (val uint32) {
@@ -64,11 +63,12 @@ func readb(addr uint32) (val uint8) {
     return uint8(mem[addr])
 }
 
-func write(numbytes int, addr uint32, val uint32) {
-    for i := range numbytes {
+func write(numbytes uint32, addr uint32, val uint32) {
+    for i := uint32(0); i < numbytes; i++ {
         mem[addr+i] = byte(val)
         val >>= 8
     }
+    return
 }
 
 func writel(addr uint32, val uint32) {
@@ -88,7 +88,7 @@ func writeb(addr uint32, val uint8) {
     mem[addr+1] = byte(val)
 }
 
-func push(size int, data uint32) {
+func push(size uint32, data uint32) {
     ptr := address_by_mode(39, size) // -(A7)
     write(size, ptr, data)
 }
@@ -112,52 +112,44 @@ func pushb(val uint8) {
     writeb(ptr, val)
 }
 
-func pop(size int) uint32 {
+func pop(size uint32) uint32 {
     ptr := address_by_mode(31, size) // (A7)+
     return read(size, ptr)
 }
 
-func popl() {
+func popl() uint32 {
     ptr := readl(spptr)
     writel(spptr, ptr + 4)
     return readl(ptr)
 }
 
-func popw() {
+func popw() uint16 {
     ptr := readl(spptr)
     writel(spptr, ptr + 2)
     return readw(ptr)
 }
 
-func popb() {
+func popb() uint8 {
     ptr := readl(spptr)
     writel(spptr, ptr + 2)
     return readb(ptr)
 }
 
 func readRegs() (reglist [16]uint32) {
-    copy(reglist[:], mem[regs:])
+    for i := 0; i < 16; i++ {
+        reglist[i] = readl(regs + uint32(4 * i))
+    }
+    return
 }
 
-func writeRegs(reglist [16]uint32, which ...[]uint32) {
-    for _, which := range which {
-        copy(mem[which:][:4], reglist[which-regs:])
+func writeRegs(reglist [16]uint32, which ...int) {
+    for _, i := range which {
+        writel(regs + uint32(4 * i), reglist[i])
     }
 }
 
-func read_cstring(addr uint32) []byte {
-    for i := addr; i < len(mem); i++ {
-        if mem[i] == 0 {
-            return mem[addr:i]
-        }
-    }
-}
-
-func read_pstring(addr uint32) []byte {
-    if addr == 0 {
-        return
-    }
-    return mem[addr+1:addr+1+mem[addr]]
+func readPstring(addr uint32) macstring {
+    return macstring{string(mem[addr + 1:][:mem[addr]])}
 }
 
 func write_pstring(addr uint32, str []byte) {
@@ -169,72 +161,93 @@ func write_pstring(addr uint32, str []byte) {
 }
 
 
-func signed(size int, n uint32) int32 {
+func signextend(size uint32, n uint32) uint32 {
     shift := 32 - (8 * size)
-    return (int32(n) << shift) >> shift
+    return uint32(int32(n << shift) >> shift)
 }
 
-func add_then_set_vc(a uint32, b uint32, size int) (result uint32) {
+func add_then_set_vc(a uint32, b uint32, size uint32) (result uint32) {
     result = a + b
-    signbit = 1 << ((size * 8) - 1)
-    v = (a & signbit) == (b & signbit) != (result & signbit)
+    var signbit uint32 = 1 << ((size * 8) - 1)
+    v = ((a & signbit) == (b & signbit)) && ((a & signbit) != (result & signbit))
     c = result < a // could use result < b just as easily
+    return
 }
 
-func sub_then_set_vc(a uint32, b uint32, size int) { // subtract b from a
+func sub_then_set_vc(a uint32, b uint32, size uint32) (result uint32) { // subtract b from a
     result = a - b
-    signbit = 1 << ((size * 8) - 1)
-    v = (a & signbit) == (b & signbit) != (result & signbit)
+    var signbit uint32 = 1 << ((size * 8) - 1)
+    v = ((a & signbit) == (b & signbit)) && ((a & signbit) != (result & signbit))
     c = a < b
+    return
 }
 
-func set_nz(num uint32, size int) {
-//    global n, z
-    bitsize = size * 8
-    n = bool(num & (1 << (bitsize - 1)))
+func set_nz(num uint32, size uint32) {
+    bitsize := size * 8
+    n = num & (1 << (bitsize - 1)) != 1
     z = num == 0
 }
 
-func get_ccr() (ccr uint32) {
+func get_ccr() (ccr uint16) {
     for shift, value := range []bool{c, v, z, n, x} {
         if value {
-            ccr |= (1 << shift)
+            ccr |= 1 << shift
         }
     }
+    return
 }
 
-func set_ccr(to_byte uint32) {
-    x = to_byte & 16 != 0
-    n = to_byte & 8 != 0
-    z = to_byte & 4 != 0
-    v = to_byte & 2 != 0
-    c = to_byte & 1 != 0
+func set_ccr(ccr uint16) {
+    x = ccr & 16 != 0
+    n = ccr & 8 != 0
+    z = ccr & 4 != 0
+    v = ccr & 2 != 0
+    c = ccr & 1 != 0
 }
 
-func readsize(encoded int) {
-    retval := 1 << encoded
-    if retval == 8 {
-        panic("illegal size")
+func readsize(encoded uint16) uint32 {
+    switch encoded & 3 {
+    case 0:
+        return 1
+    case 1:
+        return 2
+    case 2:
+        return 4
+    default:
+        panic("illegal size field 0b11")
     }
 }
 
-func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
+func readsizeForMove(encoded uint16) uint32 {
+    switch encoded & 3 {
+    case 1:
+        return 1
+    case 2:
+        return 4
+    case 3:
+        return 2
+    default:
+        panic("illegal size field 0b00")
+    }
+}
+
+func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by bottom 6 bits
     // side effects: predecrement/postincrement, advance pc to get extension word
 
     if mode < 16 { // Dn or An -- optimise common case slightly
-        ptr = regs + (mode & 15) * 4 + 4 - size
+        ptr = regs + uint32((mode & 15) * 4) + 4 - size
     } else if mode >> 3 == 2 { // (An)
-        ptr = readl(a0ptr + (mode & 7) * 4)
+        ptr = readl(a0ptr + uint32((mode & 7) * 4))
     } else if mode >> 3 == 3 { // (An)+
-        regptr = a0ptr + (mode & 7) * 4
+        regptr := a0ptr + uint32((mode & 7) * 4)
         ptr = readl(regptr)
-        newptr = ptr + size
+        newptr := ptr + size
         if mode & 7 == 7 && size == 1 {
             newptr += 1
         }
         writel(regptr, newptr)
     } else if mode >> 3 == 4 { // -(An)
-        regptr = a0ptr + (mode & 7) * 4
+        regptr := a0ptr + uint32((mode & 7) * 4)
         ptr = readl(regptr)
         ptr -= size
         if mode & 7 == 7 && size == 1 {
@@ -242,36 +255,30 @@ func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
         }
         writel(regptr, ptr)
     } else if mode >> 3 == 5 { // d16(An)
-        regptr = a0ptr + (mode & 7) * 4
-        ptr = readl(regptr) + signed(2, readw(pc)); pc += 2
+        regptr := a0ptr + uint32((mode & 7) * 4)
+        ptr = readl(regptr) + uint32(int16(readw(pc))); pc += 2
     } else if mode >> 3 == 6 { // d8(An,Xn)
-        ptr = a0ptr + (mode & 7) * 4
-        ptr = readl(ptr) // get An
-
-        xreg = readb(pc); pc++
-        xofs = signed(1, readb(pc)); pc++
-        whichreg = regs + (xreg >> 4) * 4 // could be D or A
-        if xreg & 8 {
-            rofs = signed(4, readl(whichreg))
-        } else {
-            rofs = signed(2, readw(whichreg + 2))
+        xword := readw(pc); pc += 2
+        ptr = readl(a0ptr + 4 * (uint32(mode) & 7)) // contents of An
+        ptr += uint32(int8(xword)) // add constant displacement
+        xn := readl(regs + 4 * (uint32(xword) >> 12 & 15))
+        if xword & 0x100 == 0 { // xn is word valued, so sign extend it
+            xn = uint32(int16(xn))
         }
-        ptr += xofs + rofs
+        ptr += xn
     } else if mode == 58 { // d16(PC)
-        ptr = pc + signed(2, readw(pc)); pc += 2
+        ptr = pc + uint32(int16(readw(pc))); pc += 2
     } else if mode == 59 { // d8(PC,Xn)
+        xword := readw(pc); pc += 2
         ptr = pc
-        xreg = readb(pc); pc++
-        xofs = signed(1, readb(pc)); pc++
-        whichreg = regs + (xreg >> 4) * 4 // could be D or A
-        if xreg & 8 {
-            rofs = signed(4, readl(whichreg))
-        } else {
-            rofs = signed(2, readw(whichreg + 2))
+        ptr += uint32(int8(xword)) // add constant displacement
+        xn := readl(regs + 4 * (uint32(xword) >> 12 & 15))
+        if xword & 0x100 == 0 { // xn is word valued, so sign extend it
+            xn = uint32(int16(xn))
         }
-        ptr += xofs + rofs
+        ptr += xn
     } else if mode == 56 { // abs.W
-        ptr = readw(pc); pc += 2
+        ptr = uint32(readw(pc)); pc += 2
     } else if mode == 57 { // abs.L
         ptr = readl(pc); pc += 4
     } else if mode == 60 { // #imm
@@ -285,68 +292,73 @@ func address_by_mode(mode, size) (ptr uint32) { // mode given by bottom 6 bits
     } else {
         panic("reserved addressing mode")
     }
+    return
 }
 
-func test_condition(int cond) bool {
-    if cond == 0 { // T true
+func test_condition(cond uint16) bool {
+    switch cond {
+    case 0: // T true
         return true
-    } else if cond == 1 { // F false
+    case 1: // F false
         return false
-    } else if cond == 2 { // HI higher than
+    case 2: // HI higher than
         return !(c || z)
-    } else if cond == 3 { // LS lower or same
+    case 3: // LS lower or same
         return c || z
-    } else if cond == 4 { // CC carry clear aka HS
+    case 4: // CC carry clear aka HS
         return !c
-    } else if cond == 5 { // CS carry set aka LS
+    case 5: // CS carry set aka LS
         return c
-    } else if cond == 6 { // NE not equal
+    case 6: // NE not equal
         return !z
-    } else if cond == 7 { // EQ equal
+    case 7: // EQ equal
         return z
-    } else if cond == 8 { // VC overflow clear
+    case 8: // VC overflow clear
         return !v
-    } else if cond == 9 { // VS overflow set
+    case 9: // VS overflow set
         return v
-    } else if cond == 10 { // PL plus
+    case 10: // PL plus
         return !n
-    } else if cond == 11 { // MI minus
+    case 11: // MI minus
         return n
-    } else if cond == 12 { // GE greater or equal
+    case 12: // GE greater or equal
         return n == v
-    } else if cond == 13 { // LT less than
+    case 13: // LT less than
         return !(n == v)
-    } else if cond == 14 { // GT greater than
+    case 14: // GT greater than
         return n == v && !z
-    } else if cond == 15 { // LE less or equal
+    case 15: // LE less or equal
         return n != v || z
     }
+    panic("Unknown condition code")
 }
 
 func line0(inst uint16) {
-    if inst & 256 || inst >> 9 == 4 { // btst,bchg,bclr,bset (or movep)
-        if inst & 256 { // bit numbered by data register
+    if inst & 256 != 0 || inst >> 9 == 4 { // btst,bchg,bclr,bset (or movep)
+        var bit uint32
+        if inst & 256 != 0 { // bit numbered by data register
             if (inst >> 3) & 7 == 1 {
                 panic("movep")
             }
-            dn = inst >> 9
-            bit := readl(d0ptr + dn * 4)
+            dn := inst >> 9
+            bit = readl(d0ptr + 4 * uint32(dn))
         } else { // bit numbered by immediate
-            bit = readw(pc); pc += 2
+            bit = uint32(readw(pc)); pc += 2
         }
 
-        mode = inst & 63
+        mode := inst & 63
+        var size uint32
         if mode >> 3 <= 1 {
             size = 4 // applies to register
         } else {
             size = 1 // applies to memory address
         }
         bit %= size * 8
-        mask = 1 << bit
+        mask := uint32(1) << bit
 
-        ptr = address_by_mode(mode, size)
-        val = read(size, ptr)
-        z = !(val & mask)
+        ptr := address_by_mode(mode, size)
+        val := read(size, ptr)
+        z = val & mask == 0
 
         if (inst >> 6) & 3 == 1 { // bchg
             val ^= mask
@@ -366,15 +378,16 @@ func line0(inst uint16) {
         imm := read(size, src_ptr)
 
         // now, are we operating on a special mode?
-        dest_mode = inst & 63
+        dest_mode := inst & 63
+        var val, dest_ptr uint32
         if dest_mode == 60 { // '#imm' actually means CCR/SR
             // for addi/subi this would simply be invalid
-            val = get_ccr()
+            val = uint32(get_ccr())
         } else {
             dest_ptr = address_by_mode(dest_mode, size)
             val = read(size, dest_ptr)
-
         }
+
         if inst >> 9 == 0 { // ori
             val |= imm
             v = false
@@ -399,12 +412,12 @@ func line0(inst uint16) {
             c = false
             set_nz(val, size)
         } else if inst >> 9 == 6 { // cmpi: same as subi, but don't set
-            fake_val = sub_then_set_vc(val, imm, size)
+            fake_val := sub_then_set_vc(val, imm, size)
             set_nz(fake_val, size)
-
         }
+
         if dest_mode == 60 {
-            set_ccr(val)
+            set_ccr(uint16(val))
         } else {
             write(size, dest_ptr, val)
         }
@@ -412,15 +425,12 @@ func line0(inst uint16) {
 }
 
 func line123(inst uint16) { // move, and movea which is a special-ish case
-//    global v, c
-    size = []int{0, 1, 4, 2}[(inst >> 12) & 3]
-    if size == 0 {panic("move size=%00")
-    }
-    dest_mode = ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
-    src_mode = inst & 63
+    size := readsizeForMove(inst >> 12 & 3)
+    dest_mode := ((inst >> 3) & 0x38) | ((inst >> 9) & 7)
+    src_mode := inst & 63
 
     src := address_by_mode(src_mode, size)
-    datum = signed(size, read(size, src))
+    datum := signextend(size, read(size, src))
 
     if dest_mode >> 3 == 1 { // movea: sign extend to 32 bits
         size = 4
@@ -428,32 +438,29 @@ func line123(inst uint16) { // move, and movea which is a special-ish case
         v = false
         c = false
         set_nz(datum, size)
-
     }
-    dest = address_by_mode(dest_mode, size)
+
+    dest := address_by_mode(dest_mode, size)
     write(size, dest, datum)
 }
 
 func line4(inst uint16) { // very,crowded,line
-//    global pc, x, n, z, v, c
-
     if (inst >> 6) & 63 == 3 { // move from sr
-        dest = address_by_mode(inst & 63, 2) // sr is 2 bytes
+        dest := address_by_mode(inst & 63, 2) // sr is 2 bytes
         writew(dest, get_ccr())
     } else if (inst >> 6) & 0x3f == 0x37 { // move to sr/ccr
+        var size uint32
         if (inst >> 6) & 8 != 0 {
             size = 1 // ccr
         } else {
             size = 2 // sr
         }
-        src = address_by_mode(inst & 63, size)
-        set_ccr(read(size, src))
+        src := address_by_mode(inst & 63, size)
+        set_ccr(uint16(read(size, src)))
     } else if (inst >> 8) & 15 == 0 || (inst >> 8) & 15 == 4 || (inst >> 8) & 15 == 6 { // negx,neg,not
         size := readsize((inst >> 6) & 3)
-        if size == 0 {panic("negx/neg/not size=%11")
-        }
-        dest = address_by_mode(inst & 63, size)
-        datum = read(size, dest)
+        dest := address_by_mode(inst & 63, size)
+        datum := read(size, dest)
 
         if (inst >> 8) & 15 == 0 { // negx
             datum = sub_then_set_vc(0, datum+x, size)
@@ -492,7 +499,7 @@ func line4(inst uint16) { // very,crowded,line
         dn = inst & 7
         src = d0ptr + dn * 4 + 4 - size/2
         dest = d0ptr + dn * 4 + 4 - size
-        datum = signed(size/2, read(size/2, src))
+        datum = signextend(size/2, read(size/2, src))
         set_nz(datum, size)
         v = false
         c = false
@@ -522,7 +529,7 @@ func line4(inst uint16) { // very,crowded,line
         }
     } else if inst & 0xFF8 == 0xE50 { // link
         an = inst & 7; an_ea = a0ptr + an * 4
-        imm = signed(2, readw(pc)); pc += 2
+        imm = uint32(int16(readw(pc))); pc += 2
 
         pushl(readl(an_ea)) // move.l a6,-(sp)
         sp = readl(regs+60)
@@ -587,7 +594,7 @@ func line4(inst uint16) { // very,crowded,line
             if which & (1 << reg) != 0 {
                 if !(reg >= 8 && mode >> 3 == 3 && reg & 7 == mode & 7) {
                     regptr := regs + reg * 4 + 4 - size
-                    writel(regptr, signed(size, read(size, ptr)))
+                    writel(regptr, signextend(size, read(size, ptr)))
                 }
                 ptr += size
             }
@@ -598,10 +605,10 @@ func line4(inst uint16) { // very,crowded,line
         writel(a0ptr + an * 4, ea)
     } else if inst & 0x1C0 == 0x180 { // chk
         dn := (inst >> 9) & 7
-        testee := signed(2, readw(d0ptr + 4 * dn + 2))
+        testee := readw(d0ptr + 4 * dn + 2)
         ea := address_by_mode(inst & 63, 2)
-        ubound := signed(2, readw(ea))
-        if !(0 <= testee <= ubound) {
+        ubound := readw(ea)
+        if testee > ubound {
             panic("chk failed")
         }
     }
@@ -633,7 +640,7 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
     } else if (inst >> 3) & 7 == 1 { // dbcc
         check_for_lurkers()
 
-        disp = signed(2, readw(pc)) - 2; pc += 2
+        disp = uint32(int16(readw(pc))) - 2; pc += 2
 
         cond = (inst >> 8) & 15 // if cond satisfied then DO NOT take loop
         if test_condition(cond) {
@@ -662,9 +669,9 @@ func line6(inst uint16) { // bra,bsr,bcc
 
     check_for_lurkers()
 
-    disp = signed(1, inst & 255)
+    disp = uint32(int8(inst & 255))
     if disp == 0 { // word displacement
-        disp = signed(2, readw(pc)) - 2; pc += 2
+        disp = uint32(int16(readw(pc))) - 2; pc += 2
 
     }
     cond = (inst >> 8) & 15
@@ -707,46 +714,31 @@ func line8(inst uint16) { // divu,divs,sbcd,or
     } else if inst & 0x0C0 == 0x0C0 { // divu,divs
         is_signed = bool(inst & 0x100)
         ea = address_by_mode(inst & 63, 2)
-        divisor = readw(ea)
-        if is_signed {
-            divisor = signed(2, divisor)
-        }
-        if divisor == 0 { // div0 error
-            1/0
-        }
+        divisor := readw(ea)
         dn = (inst >> 9) & 7
         dividend = readl(d0ptr + dn * 4)
-        if is_signed {
-            dividend = signed(4, dividend)
 
+        var quotient uint32 // keep upper bits for setting the v bit
+        var remainder uint16
+        if inst & 0x100 != 0 { // signed
+            sdivisor := int32(int16(divisor))
+            sdividend := int32(dividend)
+            squotient := dividend / divisor
+            sremainder := dividend % divisor
+            quotient := uint32(squotient)
+            remainder := uint16(sremainder)
+        } else { // unsigned
+            quotient = dividend / divisor
+            remainder = dividend % divisor
         }
-        // remainder is 0 or has same sign as dividend
-        quotient = abs(dividend) // abs(divisor)
-        if dividend < 0 {
-            quotient = -quotient
-        }
-        if divisor < 0 {
-            quotient = -quotient
-        }
-        remainder = abs(dividend) % abs(divisor)
-        if dividend < 0 {
-            remainder = -remainder
 
-        }
-        if signed && !(-0x8000 <= quotient < 0x7FFF) {
+        if quotient >> 16 != 0 {
             v = true
-            return
-
         }
-        if !signed && quotient > 0xFFFF {
-            v = true
-            return
 
-        }
         v = false
         set_nz(quotient, 2)
-
-        writel(d0ptr + dn * 4, ((remainder & 0xFFFF) << 16) | (quotient & 0xFFFF))
+        writel(d0ptr + dn * 4, (uint32(remainder) << 16) | (quotient & 0xFFFF))
 
     } else { // or
         size := readsize((inst >> 6) & 3)
@@ -783,7 +775,7 @@ func line9D(inst uint16) { // sub,subx,suba//add,addx,adda: very compactly encod
 
         ea = address_by_mode(inst & 63, size)
         an = (inst >> 9) & 7
-        result = signed(4, readl(a0ptr + an * 4)) + sign * signed(size, read(size, ea))
+        result = signextend(4, readl(a0ptr + an * 4)) + sign * signed(size, read(size, ea))
         writel(a0ptr + an * 4, result)
 
     } else if inst & 0x130 == 0x100 { // subx,addx: only two addressing modes allowed
@@ -1128,7 +1120,7 @@ func rez_string_literal(string_with_quotes string) {
     return retval
 }
 
-func rez(path) (fork []byte, err error) {
+func rez(path string) (fork []byte, err error) {
     pattern := regex.MustCompile(
         `data\s*('(?:[^'\\]|\\.){4}')\s*` +
         `\(\s*` +
@@ -1446,7 +1438,7 @@ func tGetPort() {
 // Misc traps
 
 func tDebugStr() {
-    string := read_pstring(popl())
+    string := readPstring(popl())
     fmt.Print(macToUnicode(string))
 }
 
@@ -1455,7 +1447,7 @@ func tSysError() {
     err := int16(readw(d0ptr + 2))
     panicstr := fmt.Sprintf("_SysError %d", err)
     if err == -491 { // display string on stack
-        panicstr += macToUnicode(read_pstring(popl()))
+        panicstr += macToUnicode(readPstring(popl()))
     }
     panic(panicstr)
 }
@@ -1702,7 +1694,7 @@ func tPop10RetZero() {
 
 const os_base = 0
 const tb_base = 0x100
-const my_traps = []func(){
+var my_traps = [...]func(){
     os_base + 0x00: tOpen,                      // _Open
     os_base + 0x01: tClose,                     // _Close
     os_base + 0x02: tReadWrite,                 // _Read
@@ -1715,7 +1707,7 @@ const my_traps = []func(){
     os_base + 0x0d: tSetFInfo,                  // _SetFInfo
     os_base + 0x11: tGetEOF,                    // _GetEOF
     os_base + 0x12: tSetEOF,                    // _SetEOF
-    os_base + 0x13: os_pb_trap,                 // _FlushVol
+//     os_base + 0x13: os_pb_trap,                 // _FlushVol
     os_base + 0x14: tGetVol,                    // _GetVol
     os_base + 0x15: tSetVol,                    // _SetVol
     os_base + 0x18: tGetFPos,                   // _GetFPos
@@ -1771,7 +1763,7 @@ const my_traps = []func(){
     tb_base + 0x01c: tCountTypes,               // _Count1Types
     tb_base + 0x01f: tGetResource,              // _Get1Resource
     tb_base + 0x020: tGetNamedResource,         // _Get1NamedResource
-    tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
+//     tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
     tb_base + 0x034: tPop2,                     // _SetFScaleDisable
     tb_base + 0x050: tNop,                      // _InitCursor
     tb_base + 0x051: tPop4,                     // _SetCursor
@@ -1788,15 +1780,15 @@ const my_traps = []func(){
     tb_base + 0x05e: tBitSet,                   // _BitSet
     tb_base + 0x05f: tBitClr,                   // _BitClr
     tb_base + 0x060: tWaitNextEvent,            // _WaitNextEvent
-    tb_base + 0x061: tRandom,                   // _Random
+//     tb_base + 0x061: tRandom,                   // _Random
     tb_base + 0x06a: tHiWord,                   // _HiWord
     tb_base + 0x06b: tLoWord,                   // _LoWord
     tb_base + 0x06e: tInitGraf,                 // _InitGraf
     tb_base + 0x06f: tPop4,                     // _OpenPort
     tb_base + 0x073: tSetPort,                  // _SetPort
     tb_base + 0x074: tGetPort,                  // _GetPort
-    tb_base + 0x0a7: tSetRect,                  // _SetRect
-    tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
+//     tb_base + 0x0a7: tSetRect,                  // _SetRect
+//     tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
     tb_base + 0x0d8: tRetZero,                  // _NewRgn
     tb_base + 0x0fe: tNop,                      // _InitFonts
     tb_base + 0x112: tNop,                      // _InitWindows
@@ -1829,7 +1821,7 @@ const my_traps = []func(){
     tb_base + 0x1a3: tPop4,                     // _ReleaseResource
     tb_base + 0x1a4: tHomeResFile,              // _HomeResFile
     tb_base + 0x1a5: tSizeRsrc,                 // _SizeRsrc
-    tb_base + 0x1a8: tGetResInfo,               // _GetResInfo
+//     tb_base + 0x1a8: tGetResInfo,               // _GetResInfo
     tb_base + 0x1af: tResError,                 // _ResError
     tb_base + 0x1b4: tNop,                      // _SystemTask
     tb_base + 0x1b8: tGetPattern,               // _GetPattern
@@ -1849,9 +1841,9 @@ const my_traps = []func(){
     tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
     tb_base + 0x1e5: tPop2,                     // _InitPack
     tb_base + 0x1e6: tNop,                      // _InitAllPacks
-    tb_base + 0x1eb: tFP68K,                    // _FP68K
-    tb_base + 0x1ec: tElems68K,                 // _Elems68K
-    tb_base + 0x1ee: tDecStr68K,                // _DecStr68K
+//     tb_base + 0x1eb: tFP68K,                    // _FP68K
+//     tb_base + 0x1ec: tElems68K,                 // _Elems68K
+//     tb_base + 0x1ee: tDecStr68K,                // _DecStr68K
     tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg
     tb_base + 0x1f1: tPop4,                     // _UnloadSeg
     tb_base + 0x1f4: tExitToShell,              // _ExitToShell
@@ -1942,9 +1934,18 @@ func executable_ftrap(trap uint16) (addr uint32) {
     writew(addr, trap)
 }
 
-var systemFolder string
-
 func main() {
+    systemFolder, err := ioutil.TempDir("", "NuMPW")
+    if err != nil {
+        panic("Failed to create temp directory")
+    }
+
+    dnums = []string{
+        filepath.Join(systemFolder, "MPW"),
+        "",
+        "/",
+    }
+
     mem = make([]byte, kHeap)
 
     // Poison low memory
@@ -1998,11 +1999,6 @@ func main() {
     writel(0xa06, 0xffffffff) // MinusOne
     writel(0xa1c, newhandle(6)) // MenuList empty
     writel(0xa50, 0) // TopMapHndl
-
-    systemFolder, err := ioutil.TempDir("", "NuMPW")
-    if err != nil {
-        panic("Failed to create temp directory")
-    }
 
     // Disable the status window in preferences
     os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"))
