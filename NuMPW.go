@@ -82,8 +82,7 @@ func writew(addr uint32, val uint16) {
 }
 
 func writeb(addr uint32, val uint8) {
-    mem[addr] = byte(val >> 8)
-    mem[addr+1] = byte(val)
+    mem[addr] = byte(val)
 }
 
 func push(size uint32, data uint32) {
