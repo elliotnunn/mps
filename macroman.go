@@ -5,7 +5,7 @@ import (
 )
 
 // Different because believed to be macRoman formatted!
-type macstring struct {contents string}
+type macstring string
 
 var macToUnicodeTable = [...]rune{
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
@@ -79,8 +79,8 @@ var macSortTab = [...]byte{
 
 func macToUnicode(mac macstring) string {
     var buf bytes.Buffer
-    for i := 0; i < len(mac.contents); i++ {
-        buf.WriteRune(macToUnicodeTable[mac.contents[i]])
+    for i := 0; i < len(mac); i++ {
+        buf.WriteRune(macToUnicodeTable[mac[i]])
     }
     return buf.String()
 }
@@ -516,15 +516,15 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
         macstr = append(macstr, macbyte)
     }
 
-    return macstring{string(macstr)}, true
+    return macstring(macstr), true
 }
 
 func translateByTable(in macstring, table *[256]byte) macstring {
-    out := make([]byte, len(in.contents))
-    for i := 0; i < len(in.contents); i++ {
-        out[i] = table[in.contents[i]]
+    out := make([]byte, len(in))
+    for i := 0; i < len(in); i++ {
+        out[i] = table[in[i]]
     }
-    return macstring{string(out)}
+    return macstring(out)
 }
 
 func macStripDiacritics(in macstring) macstring {
@@ -610,14 +610,14 @@ func relString(a, b macstring, caseSens, diacSens bool) uint32 {
         b = macUpper(b)
     }
 
-    n := len(a.contents)
-    if len(b.contents) < n {
-        n = len(b.contents)
+    n := len(a)
+    if len(b) < n {
+        n = len(b)
     }
 
     for i := 0; i < n; i++ {
-        an := macSortTab[a.contents[i]]
-        bn := macSortTab[b.contents[i]]
+        an := macSortTab[a[i]]
+        bn := macSortTab[b[i]]
 
         if an > bn {
             return 1
@@ -626,9 +626,9 @@ func relString(a, b macstring, caseSens, diacSens bool) uint32 {
         }
     }
 
-    if len(a.contents) > len(b.contents) {
+    if len(a) > len(b) {
         return 1
-    } else if len(a.contents) < len(b.contents) {
+    } else if len(a) < len(b) {
         return 0xffffffff
     } else {
         return 0

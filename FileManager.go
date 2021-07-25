@@ -22,7 +22,7 @@ var systemFolder string
 var filebuffers map[uint16][]byte
 
 // MacOS's idea of the system root
-var onlyvolname = "_"
+const onlyvolname macstring = "_"
 
 type myFS interface {
     fs.FS

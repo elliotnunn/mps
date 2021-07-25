@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
     "math/bits"
-    "os"
 )
 
 //#######################################################################
@@ -157,15 +155,18 @@ func writeRegs(reglist [16]uint32, which ...int) {
 }
 
 func readPstring(addr uint32) macstring {
-    return macstring{string(mem[addr + 1:][:mem[addr]])}
+    return macstring(mem[addr + 1:][:mem[addr]])
 }
 
-func write_pstring(addr uint32, str []byte) {
+func writePstring(addr uint32, str macstring) {
     if addr == 0 {
         return
     }
+    if len(str) > 255 {
+        panic("too-long pascal string")
+    }
     mem[addr] = byte(len(str))
-    copy(mem[addr+1:], str)
+    copy(mem[addr+1:], str[:])
 }
 
 
@@ -1373,7 +1374,7 @@ func tCmpString() {
     diacSens := readw(d1ptr) & 0x200 == 0 // ,MARKS
     caseSens := readw(d1ptr) & 0x400 != 0 // ,CASE
 
-    if relString(mem[aptr:][:alen], mem[bptr:][:blen], caseSens, diacSens) == 0 {
+    if relString(macstring(mem[aptr:][:alen]), macstring(mem[bptr:][:blen]), caseSens, diacSens) == 0 {
         writel(d0ptr, 0)
     } else {
         writel(d0ptr, 1)
@@ -1381,7 +1382,7 @@ func tCmpString() {
 }
 
 func tGetOSEvent() {
-    write(16, a0, 0) // null event
+    write(16, readl(a0ptr), 0) // null event
     writel(d0ptr, 0xffffffff)
 }
 
@@ -1400,11 +1401,11 @@ func tGetNextEvent() {
     mask := popw()
 
     // ToolServer-specific code: if accepting high-level events then do cmd-Q
-    if mask & 0x400 {
+    if mask & 0x400 != 0 {
         writew(eventrecord, 3) // keyDown
         writel(eventrecord + 2, 12) // Q
         writew(eventrecord + 14, 0x100) // command
-        writew(readl(spptr), -1) // return true
+        writew(readl(spptr), 0xffff) // return true
         return
 
     }
@@ -1423,46 +1424,46 @@ func tExitToShell() {
 
 // Munger and related traps
 
-func tHandToHand() {
-    hdl := readl(a0ptr); ptr = readl(hdl)
-    size := gethandlesize(hdl)
-    hdl2 := newhandle(size); ptr2 = readl(hdl2)
-    memcpy(ptr2, ptr, size)
-    writel(a0ptr, hdl2) // a0 = result
-    writel(regs, 0) // d0 = noErr
-}
-
-func tPtrToXHand() {
-    srcptr := readl(a0ptr) // a0
-    dsthdl := readl(a1ptr) // a1
-    size := readl(regs) // d0
-    sethandlesize(dsthdl, size)
-    dstptr := readl(dsthdl)
-    memcpy(dstptr, srcptr, size)
-    writel(a0ptr, dsthdl) // a0
-    writel(regs, 0) // d0 = noErr
-}
-
-func tPtrToHand() {
-    srcptr := readl(a0ptr) // a0
-    size = readl(regs) // d0
-    dsthdl = newhandle(size)
-    dstptr = readl(dsthdl)
-    memcpy(dstptr, srcptr, size)
-    writel(a0ptr, dsthdl) // a0
-    writel(regs, 0) // d0 = noErr
-}
-
-func tHandAndHand() {
-    ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
-    bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
-    sethandlesize(bhdl, asize + bsize)
-    aptr := readl(ahdl); bptr = readl(bhdl)
-    memcpy(bptr, aptr, size)
-    writel(a0ptr, bhdl) // a0 = dest handle
-    writel(regs, 0) // d0 = noErr
-
-}
+// func tHandToHand() {
+//     hdl := readl(a0ptr); ptr := readl(hdl)
+//     size := gethandlesize(hdl)
+//     hdl2 := newhandle(size); ptr2 = readl(hdl2)
+//     memcpy(ptr2, ptr, size)
+//     writel(a0ptr, hdl2) // a0 = result
+//     writel(regs, 0) // d0 = noErr
+// }
+//
+// func tPtrToXHand() {
+//     srcptr := readl(a0ptr) // a0
+//     dsthdl := readl(a1ptr) // a1
+//     size := readl(regs) // d0
+//     sethandlesize(dsthdl, size)
+//     dstptr := readl(dsthdl)
+//     memcpy(dstptr, srcptr, size)
+//     writel(a0ptr, dsthdl) // a0
+//     writel(regs, 0) // d0 = noErr
+// }
+//
+// func tPtrToHand() {
+//     srcptr := readl(a0ptr) // a0
+//     size = readl(regs) // d0
+//     dsthdl = newhandle(size)
+//     dstptr = readl(dsthdl)
+//     memcpy(dstptr, srcptr, size)
+//     writel(a0ptr, dsthdl) // a0
+//     writel(regs, 0) // d0 = noErr
+// }
+//
+// func tHandAndHand() {
+//     ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
+//     bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
+//     sethandlesize(bhdl, asize + bsize)
+//     aptr := readl(ahdl); bptr = readl(bhdl)
+//     memcpy(bptr, aptr, size)
+//     writel(a0ptr, bhdl) // a0 = dest handle
+//     writel(regs, 0) // d0 = noErr
+//
+// }
 
 // Trivial do-nothing traps
 
@@ -1535,161 +1536,161 @@ func tPop10RetZero() {
 const os_base = 0
 const tb_base = 0x100
 var my_traps = [...]func(){
-    os_base + 0x00: tOpen,                      // _Open
-    os_base + 0x01: tClose,                     // _Close
-    os_base + 0x02: tReadWrite,                 // _Read
-    os_base + 0x03: tReadWrite,                 // _Write
-    os_base + 0x07: tGetVInfo,                  // _GetVInfo
-    os_base + 0x08: tCreate,                    // _Create
-    os_base + 0x09: tDelete,                    // _Delete
-    os_base + 0x0a: tOpen,                      // _OpenRF
-    os_base + 0x0c: tGetFInfo,                  // _GetFInfo
-    os_base + 0x0d: tSetFInfo,                  // _SetFInfo
-    os_base + 0x11: tGetEOF,                    // _GetEOF
-    os_base + 0x12: tSetEOF,                    // _SetEOF
+//     os_base + 0x00: tOpen,                      // _Open
+//     os_base + 0x01: tClose,                     // _Close
+//     os_base + 0x02: tReadWrite,                 // _Read
+//     os_base + 0x03: tReadWrite,                 // _Write
+//     os_base + 0x07: tGetVInfo,                  // _GetVInfo
+//     os_base + 0x08: tCreate,                    // _Create
+//     os_base + 0x09: tDelete,                    // _Delete
+//     os_base + 0x0a: tOpen,                      // _OpenRF
+//     os_base + 0x0c: tGetFInfo,                  // _GetFInfo
+//     os_base + 0x0d: tSetFInfo,                  // _SetFInfo
+//     os_base + 0x11: tGetEOF,                    // _GetEOF
+//     os_base + 0x12: tSetEOF,                    // _SetEOF
 //     os_base + 0x13: os_pb_trap,                 // _FlushVol
-    os_base + 0x14: tGetVol,                    // _GetVol
-    os_base + 0x15: tSetVol,                    // _SetVol
-    os_base + 0x18: tGetFPos,                   // _GetFPos
-    os_base + 0x1a: tGetZone,                   // _GetZone
-    os_base + 0x1b: tClrD0A0,                   // _SetZone
-    os_base + 0x1c: tFreeMem,                   // _FreeMem
-    os_base + 0x1d: tFreeMem,                   // _MaxMem
-    os_base + 0x1e: tNewPtr,                    // _NewPtr
-    os_base + 0x1f: tDisposPtr,                 // _DisposPtr
-    os_base + 0x20: tSetPtrSize,                // _SetPtrSize
-    os_base + 0x21: tGetPtrSize,                // _GetPtrSize
-    os_base + 0x22: tNewHandle,                 // _NewHandle
-    os_base + 0x23: tDisposHandle,              // _DisposHandle
-    os_base + 0x24: tSetHandleSize,             // _SetHandleSize
-    os_base + 0x25: tGetHandleSize,             // _GetHandleSize
-    os_base + 0x26: tGetZone,                   // _HandleZone
-    os_base + 0x27: tReallocHandle,             // _ReallocHandle
-    os_base + 0x28: tRecoverHandle,             // _RecoverHandle
-    os_base + 0x29: tClrD0,                     // _HLock
-    os_base + 0x2a: tClrD0,                     // _HUnlock
-    os_base + 0x2b: tEmptyHandle,               // _EmptyHandle
-    os_base + 0x2c: tClrD0A0,                   // _InitApplZone
-    os_base + 0x2d: tClrD0A0,                   // _SetApplLimit
-    os_base + 0x2e: tBlockMove,                 // _BlockMove
-    os_base + 0x30: tGetOSEvent,                // _OSEventAvail
-    os_base + 0x31: tGetOSEvent,                // _GetOSEvent
-    os_base + 0x32: tClrD0A0,                   // _FlushEvents
-    os_base + 0x36: tClrD0A0,                   // _MoreMasters
-    os_base + 0x3c: tCmpString,                 // _CmpString
-    os_base + 0x40: tClrD0A0,                   // _ResrvMem
-    os_base + 0x44: tSetFPos,                   // _SetFPos
-    os_base + 0x46: tGetTrapAddress,            // _GetTrapAddress
-    os_base + 0x47: tSetTrapAddress,            // _SetTrapAddress
-    os_base + 0x48: tGetZone,                   // _PtrZone
-    os_base + 0x49: tClrD0,                     // _HPurge
-    os_base + 0x4a: tClrD0,                     // _HNoPurge
-    os_base + 0x4b: tClrD0,                     // _SetGrowZone
-    os_base + 0x4c: tFreeMem,                   // _CompactMem
-    os_base + 0x4d: tClrD0A0,                   // _PurgeMem
-    os_base + 0x55: tNop,                       // _StripAddress
-    os_base + 0x60: tFSDispatch,                // _FSDispatch
-    os_base + 0x62: tFreeMem,                   // _PurgeSpace
-    os_base + 0x63: tClrD0A0,                   // _MaxApplZone
-    os_base + 0x64: tClrD0,                     // _MoveHHi
-    os_base + 0x69: tHGetState,                 // _HGetState
-    os_base + 0x6a: tHSetState,                 // _HSetState
-    os_base + 0x90: tSysEnvirons,               // _SysEnvirons
-    os_base + 0xad: tGestalt,                   // _Gestalt
-    tb_base + 0x00d: tCountResources,           // _Count1Resources
-    tb_base + 0x00e: tGetIndResource,           // _Get1IndResource
-    tb_base + 0x00f: tGetIndType,               // _Get1IndType
-    tb_base + 0x01a: tHOpenResFile,             // _HOpenResFile
-    tb_base + 0x01c: tCountTypes,               // _Count1Types
-    tb_base + 0x01f: tGetResource,              // _Get1Resource
-    tb_base + 0x020: tGetNamedResource,         // _Get1NamedResource
+//     os_base + 0x14: tGetVol,                    // _GetVol
+//     os_base + 0x15: tSetVol,                    // _SetVol
+//     os_base + 0x18: tGetFPos,                   // _GetFPos
+//     os_base + 0x1a: tGetZone,                   // _GetZone
+//     os_base + 0x1b: tClrD0A0,                   // _SetZone
+//     os_base + 0x1c: tFreeMem,                   // _FreeMem
+//     os_base + 0x1d: tFreeMem,                   // _MaxMem
+//     os_base + 0x1e: tNewPtr,                    // _NewPtr
+//     os_base + 0x1f: tDisposPtr,                 // _DisposPtr
+//     os_base + 0x20: tSetPtrSize,                // _SetPtrSize
+//     os_base + 0x21: tGetPtrSize,                // _GetPtrSize
+//     os_base + 0x22: tNewHandle,                 // _NewHandle
+//     os_base + 0x23: tDisposHandle,              // _DisposHandle
+//     os_base + 0x24: tSetHandleSize,             // _SetHandleSize
+//     os_base + 0x25: tGetHandleSize,             // _GetHandleSize
+//     os_base + 0x26: tGetZone,                   // _HandleZone
+//     os_base + 0x27: tReallocHandle,             // _ReallocHandle
+//     os_base + 0x28: tRecoverHandle,             // _RecoverHandle
+//     os_base + 0x29: tClrD0,                     // _HLock
+//     os_base + 0x2a: tClrD0,                     // _HUnlock
+//     os_base + 0x2b: tEmptyHandle,               // _EmptyHandle
+//     os_base + 0x2c: tClrD0A0,                   // _InitApplZone
+//     os_base + 0x2d: tClrD0A0,                   // _SetApplLimit
+//     os_base + 0x2e: tBlockMove,                 // _BlockMove
+//     os_base + 0x30: tGetOSEvent,                // _OSEventAvail
+//     os_base + 0x31: tGetOSEvent,                // _GetOSEvent
+//     os_base + 0x32: tClrD0A0,                   // _FlushEvents
+//     os_base + 0x36: tClrD0A0,                   // _MoreMasters
+//     os_base + 0x3c: tCmpString,                 // _CmpString
+//     os_base + 0x40: tClrD0A0,                   // _ResrvMem
+//     os_base + 0x44: tSetFPos,                   // _SetFPos
+//     os_base + 0x46: tGetTrapAddress,            // _GetTrapAddress
+//     os_base + 0x47: tSetTrapAddress,            // _SetTrapAddress
+//     os_base + 0x48: tGetZone,                   // _PtrZone
+//     os_base + 0x49: tClrD0,                     // _HPurge
+//     os_base + 0x4a: tClrD0,                     // _HNoPurge
+//     os_base + 0x4b: tClrD0,                     // _SetGrowZone
+//     os_base + 0x4c: tFreeMem,                   // _CompactMem
+//     os_base + 0x4d: tClrD0A0,                   // _PurgeMem
+//     os_base + 0x55: tNop,                       // _StripAddress
+//     os_base + 0x60: tFSDispatch,                // _FSDispatch
+//     os_base + 0x62: tFreeMem,                   // _PurgeSpace
+//     os_base + 0x63: tClrD0A0,                   // _MaxApplZone
+//     os_base + 0x64: tClrD0,                     // _MoveHHi
+//     os_base + 0x69: tHGetState,                 // _HGetState
+//     os_base + 0x6a: tHSetState,                 // _HSetState
+//     os_base + 0x90: tSysEnvirons,               // _SysEnvirons
+//     os_base + 0xad: tGestalt,                   // _Gestalt
+//     tb_base + 0x00d: tCountResources,           // _Count1Resources
+//     tb_base + 0x00e: tGetIndResource,           // _Get1IndResource
+//     tb_base + 0x00f: tGetIndType,               // _Get1IndType
+//     tb_base + 0x01a: tHOpenResFile,             // _HOpenResFile
+//     tb_base + 0x01c: tCountTypes,               // _Count1Types
+//     tb_base + 0x01f: tGetResource,              // _Get1Resource
+//     tb_base + 0x020: tGetNamedResource,         // _Get1NamedResource
 //     tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
-    tb_base + 0x034: tPop2,                     // _SetFScaleDisable
-    tb_base + 0x050: tNop,                      // _InitCursor
-    tb_base + 0x051: tPop4,                     // _SetCursor
-    tb_base + 0x052: tNop,                      // _HideCursor
-    tb_base + 0x053: tNop,                      // _ShowCursor
-    tb_base + 0x055: tPop8,                     // _ShieldCursor
-    tb_base + 0x056: tNop,                      // _ObscureCursor
-    tb_base + 0x058: tBitAnd,                   // _BitAnd
-    tb_base + 0x059: tBitXor,                   // _BitXor
-    tb_base + 0x05a: tBitNot,                   // _BitNot
-    tb_base + 0x05b: tBitOr,                    // _BitOr
-    tb_base + 0x05c: tBitShift,                 // _BitShift
-    tb_base + 0x05d: tBitTst,                   // _BitTst
-    tb_base + 0x05e: tBitSet,                   // _BitSet
-    tb_base + 0x05f: tBitClr,                   // _BitClr
-    tb_base + 0x060: tWaitNextEvent,            // _WaitNextEvent
+//     tb_base + 0x034: tPop2,                     // _SetFScaleDisable
+//     tb_base + 0x050: tNop,                      // _InitCursor
+//     tb_base + 0x051: tPop4,                     // _SetCursor
+//     tb_base + 0x052: tNop,                      // _HideCursor
+//     tb_base + 0x053: tNop,                      // _ShowCursor
+//     tb_base + 0x055: tPop8,                     // _ShieldCursor
+//     tb_base + 0x056: tNop,                      // _ObscureCursor
+//     tb_base + 0x058: tBitAnd,                   // _BitAnd
+//     tb_base + 0x059: tBitXor,                   // _BitXor
+//     tb_base + 0x05a: tBitNot,                   // _BitNot
+//     tb_base + 0x05b: tBitOr,                    // _BitOr
+//     tb_base + 0x05c: tBitShift,                 // _BitShift
+//     tb_base + 0x05d: tBitTst,                   // _BitTst
+//     tb_base + 0x05e: tBitSet,                   // _BitSet
+//     tb_base + 0x05f: tBitClr,                   // _BitClr
+//     tb_base + 0x060: tWaitNextEvent,            // _WaitNextEvent
 //     tb_base + 0x061: tRandom,                   // _Random
-    tb_base + 0x06a: tHiWord,                   // _HiWord
-    tb_base + 0x06b: tLoWord,                   // _LoWord
-    tb_base + 0x06e: tInitGraf,                 // _InitGraf
-    tb_base + 0x06f: tPop4,                     // _OpenPort
-    tb_base + 0x073: tSetPort,                  // _SetPort
-    tb_base + 0x074: tGetPort,                  // _GetPort
+//     tb_base + 0x06a: tHiWord,                   // _HiWord
+//     tb_base + 0x06b: tLoWord,                   // _LoWord
+//     tb_base + 0x06e: tInitGraf,                 // _InitGraf
+//     tb_base + 0x06f: tPop4,                     // _OpenPort
+//     tb_base + 0x073: tSetPort,                  // _SetPort
+//     tb_base + 0x074: tGetPort,                  // _GetPort
 //     tb_base + 0x0a7: tSetRect,                  // _SetRect
 //     tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
-    tb_base + 0x0d8: tRetZero,                  // _NewRgn
-    tb_base + 0x0fe: tNop,                      // _InitFonts
-    tb_base + 0x112: tNop,                      // _InitWindows
-    tb_base + 0x124: tRetZero,                  // _FrontWindow
-    tb_base + 0x130: tNop,                      // _InitMenus
-    tb_base + 0x137: tNop,                      // _DrawMenuBar
-    tb_base + 0x138: tPop2,                     // _HiliteMenu
-    tb_base + 0x139: tPop6,                     // _EnableItem
-    tb_base + 0x13a: tPop6,                     // _DisableItem
-    tb_base + 0x13c: tPop4,                     // _SetMenuBar
-    tb_base + 0x13e: tMenuKey,                  // _MenuKey
-    tb_base + 0x149: tPop2RetZero,              // _GetMenuHandle
-    tb_base + 0x14d: tPop8,                     // _AppendResMenu
-    tb_base + 0x170: tGetNextEvent,             // _GetNextEvent
-    tb_base + 0x175: tRetZero,                  // _TickCount
-    tb_base + 0x179: tPop2,                     // _CouldDialog
-    tb_base + 0x17b: tNop,                      // _InitDialogs
-    tb_base + 0x17c: tPop10RetZero,             // _GetNewDialog
-    tb_base + 0x194: tCurResFile,               // _CurResFile
-    tb_base + 0x197: tOpenResFile,              // _OpenResFile
-    tb_base + 0x198: tUseResFile,               // _UseResFile
-    tb_base + 0x199: tPop2,                     // _UpdateResFile
-    tb_base + 0x19b: tPop2,                     // _SetResLoad
-    tb_base + 0x19c: tCountResources,           // _CountResources
-    tb_base + 0x19d: tGetIndResource,           // _GetIndResource
-    tb_base + 0x19e: tCountTypes,               // _CountTypes
-    tb_base + 0x19f: tGetIndType,               // _GetIndType
-    tb_base + 0x1a0: tGetResource,              // _GetResource
-    tb_base + 0x1a1: tGetNamedResource,         // _GetNamedResource
-    tb_base + 0x1a3: tPop4,                     // _ReleaseResource
-    tb_base + 0x1a4: tHomeResFile,              // _HomeResFile
-    tb_base + 0x1a5: tSizeRsrc,                 // _SizeRsrc
+//     tb_base + 0x0d8: tRetZero,                  // _NewRgn
+//     tb_base + 0x0fe: tNop,                      // _InitFonts
+//     tb_base + 0x112: tNop,                      // _InitWindows
+//     tb_base + 0x124: tRetZero,                  // _FrontWindow
+//     tb_base + 0x130: tNop,                      // _InitMenus
+//     tb_base + 0x137: tNop,                      // _DrawMenuBar
+//     tb_base + 0x138: tPop2,                     // _HiliteMenu
+//     tb_base + 0x139: tPop6,                     // _EnableItem
+//     tb_base + 0x13a: tPop6,                     // _DisableItem
+//     tb_base + 0x13c: tPop4,                     // _SetMenuBar
+//     tb_base + 0x13e: tMenuKey,                  // _MenuKey
+//     tb_base + 0x149: tPop2RetZero,              // _GetMenuHandle
+//     tb_base + 0x14d: tPop8,                     // _AppendResMenu
+//     tb_base + 0x170: tGetNextEvent,             // _GetNextEvent
+//     tb_base + 0x175: tRetZero,                  // _TickCount
+//     tb_base + 0x179: tPop2,                     // _CouldDialog
+//     tb_base + 0x17b: tNop,                      // _InitDialogs
+//     tb_base + 0x17c: tPop10RetZero,             // _GetNewDialog
+//     tb_base + 0x194: tCurResFile,               // _CurResFile
+//     tb_base + 0x197: tOpenResFile,              // _OpenResFile
+//     tb_base + 0x198: tUseResFile,               // _UseResFile
+//     tb_base + 0x199: tPop2,                     // _UpdateResFile
+//     tb_base + 0x19b: tPop2,                     // _SetResLoad
+//     tb_base + 0x19c: tCountResources,           // _CountResources
+//     tb_base + 0x19d: tGetIndResource,           // _GetIndResource
+//     tb_base + 0x19e: tCountTypes,               // _CountTypes
+//     tb_base + 0x19f: tGetIndType,               // _GetIndType
+//     tb_base + 0x1a0: tGetResource,              // _GetResource
+//     tb_base + 0x1a1: tGetNamedResource,         // _GetNamedResource
+//     tb_base + 0x1a3: tPop4,                     // _ReleaseResource
+//     tb_base + 0x1a4: tHomeResFile,              // _HomeResFile
+//     tb_base + 0x1a5: tSizeRsrc,                 // _SizeRsrc
 //     tb_base + 0x1a8: tGetResInfo,               // _GetResInfo
-    tb_base + 0x1af: tResError,                 // _ResError
-    tb_base + 0x1b4: tNop,                      // _SystemTask
-    tb_base + 0x1b8: tGetPattern,               // _GetPattern
-    tb_base + 0x1b9: tGetCursor,                // _GetCursor
-    tb_base + 0x1ba: tGetString,                // _GetString
-    tb_base + 0x1bb: tGetIcon,                  // _GetIcon
-    tb_base + 0x1bc: tGetPicture,               // _GetPicture
-    tb_base + 0x1bd: tPop10RetZero,             // _GetNewWindow
-    tb_base + 0x1c0: tPop2RetZero,              // _GetNewMBar
-    tb_base + 0x1c4: tOpenRFPerm,               // _OpenRFPerm
-    tb_base + 0x1c8: tNop,                      // _SysBeep
-    tb_base + 0x1c9: tSysError,                 // _SysError
-    tb_base + 0x1cc: tNop,                      // _TEInit
-    tb_base + 0x1e1: tHandToHand,               // _HandToHand
-    tb_base + 0x1e2: tPtrToXHand,               // _PtrToXHand
-    tb_base + 0x1e3: tPtrToHand,                // _PtrToHand
-    tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
-    tb_base + 0x1e5: tPop2,                     // _InitPack
-    tb_base + 0x1e6: tNop,                      // _InitAllPacks
+//     tb_base + 0x1af: tResError,                 // _ResError
+//     tb_base + 0x1b4: tNop,                      // _SystemTask
+//     tb_base + 0x1b8: tGetPattern,               // _GetPattern
+//     tb_base + 0x1b9: tGetCursor,                // _GetCursor
+//     tb_base + 0x1ba: tGetString,                // _GetString
+//     tb_base + 0x1bb: tGetIcon,                  // _GetIcon
+//     tb_base + 0x1bc: tGetPicture,               // _GetPicture
+//     tb_base + 0x1bd: tPop10RetZero,             // _GetNewWindow
+//     tb_base + 0x1c0: tPop2RetZero,              // _GetNewMBar
+//     tb_base + 0x1c4: tOpenRFPerm,               // _OpenRFPerm
+//     tb_base + 0x1c8: tNop,                      // _SysBeep
+//     tb_base + 0x1c9: tSysError,                 // _SysError
+//     tb_base + 0x1cc: tNop,                      // _TEInit
+//     tb_base + 0x1e1: tHandToHand,               // _HandToHand
+//     tb_base + 0x1e2: tPtrToXHand,               // _PtrToXHand
+//     tb_base + 0x1e3: tPtrToHand,                // _PtrToHand
+//     tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
+//     tb_base + 0x1e5: tPop2,                     // _InitPack
+//     tb_base + 0x1e6: tNop,                      // _InitAllPacks
 //     tb_base + 0x1eb: tFP68K,                    // _FP68K
 //     tb_base + 0x1ec: tElems68K,                 // _Elems68K
 //     tb_base + 0x1ee: tDecStr68K,                // _DecStr68K
-    tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg
-    tb_base + 0x1f1: tPop4,                     // _UnloadSeg
-    tb_base + 0x1f4: tExitToShell,              // _ExitToShell
-    tb_base + 0x1fa: tRetZero,                  // _UnlodeScrap
-    tb_base + 0x1fb: tRetZero,                  // _LodeScrap
-    tb_base + 0x3ff: tDebugStr,                 // _DebugStr
+//     tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg
+//     tb_base + 0x1f1: tPop4,                     // _UnloadSeg
+//     tb_base + 0x1f4: tExitToShell,              // _ExitToShell
+//     tb_base + 0x1fa: tRetZero,                  // _UnlodeScrap
+//     tb_base + 0x1fb: tRetZero,                  // _LodeScrap
+//     tb_base + 0x3ff: tDebugStr,                 // _DebugStr
 }
 
 func lineA(inst uint16) {
@@ -1699,7 +1700,7 @@ func lineA(inst uint16) {
             pushl(pc)
         }
 
-        pc = readl(kOSTable + ((inst & 0xff) * 4))
+        pc = readl(kOSTable + 4 * (uint32(inst) & 0xff))
     } else { // OS trap
         writew(d1ptr + 2, inst)
 
@@ -1711,7 +1712,7 @@ func lineA(inst uint16) {
             pushl(readl(a0ptr))
         }
 
-        call_m68k(readl(kToolTable + ((inst & 0x3ff) * 4)))
+        pc = readl(kOSTable + 4 * (uint32(inst) & 0x3ff))
 
         if inst & 0x100 == 0 {
             writel(a0ptr, popl())
@@ -1730,9 +1731,9 @@ func lineF(inst uint16) {
     check_for_lurkers()
     if inst & 0x800 != 0 { // Go implementation of Toolbox trap
         gCurToolTrapNum = int(inst & 0x3ff)
-        my_traps[tb_table + (inst & 0x3ff)]()
+        my_traps[tb_base + (inst & 0x3ff)]()
     } else { // Go implementation of OS trap
-        my_traps[os_table + (inst & 0xff)]()
+        my_traps[os_base + (inst & 0xff)]()
     }
     pc = popl()
 }
@@ -1756,41 +1757,45 @@ const (
 
 func check_for_lurkers() {
     // we might do more involved things here, like check for heap corruption
-    mem[:64] = bytes(64)
+    write(64, 0, 0)
 }
 
 // Get an address to jump to
 func executable_atrap(trap uint16) (addr uint32) {
-    addr = kATrapTable + (trap & 0xfff) * 16
+    addr = kATrapTable + (uint32(trap) & 0xfff) * 16
 
     writew(addr, trap) // consider using autoPop instead?
     writew(addr + 2, 0x4e75) // RTS
+
+    return
 }
 
 // Get an address to jump to
 func executable_ftrap(trap uint16) (addr uint32) {
-    addr = kFTrapTable + (trap & 0xfff) * 16
+    addr = kFTrapTable + (uint32(trap) & 0xfff) * 16
 
     writew(addr, trap)
+
+    return
 }
 
 func main() {
-    systemFolder, err := ioutil.TempDir("", "NuMPW")
-    if err != nil {
-        panic("Failed to create temp directory")
-    }
+//     systemFolder, err := ioutil.TempDir("", "NuMPW")
+//     if err != nil {
+//         panic("Failed to create temp directory")
+//     }
 
-    dnums = []string{
-        filepath.Join(systemFolder, "MPW"),
-        "",
-        "/",
-    }
+//     dnums = []string{
+//         filepath.Join(systemFolder, "MPW"),
+//         "",
+//         "/",
+//     }
 
     mem = make([]byte, kHeap)
 
     // Poison low memory
-    for i := 0x40; i < kStackBase; i += 2 {
-        writeb(i, 0x68f1)
+    for i := uint32(0x40); i < kStackBase; i += 2 {
+        writew(i, 0x68f1)
     }
 
     // Starting point for stack
@@ -1801,87 +1806,87 @@ func main() {
     writel(a5ptr, kA5World)
 
     // Single fake heap zone, enough to pass validation
-    writel(0x118, kFakeHeapHeader) // TheZone
-    writel(0x2a6, kFakeHeapHeader) // SysZone
-    writel(0x2aa, kFakeHeapHeader) // ApplZone
-    writel(kFakeHeapHeader, 0xffffffe) // bkLim
-    writel(0x130, 0) // ApplLimit
-
-    // 1 Drive Queue Element
-    writew(0x308, 0) // DrvQHdr.QFlags
-    writel(0x308+2, kDQE) // DrvQHdr.QHead
-    writel(0x308+6, kDQE) // DrvQHdr.QTail
-    for i := -4; i < 16; i += 2 {
-        writew(kDQE + i, 0)
-    }
-
-    // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
-    for i := 0; i < 178; i += 2 {
-        writew(kVCB + i, 0)
-    }
-    writew(kVCB + 78, 2) // vcbVRefNum
-    write_pstring(kVCB + 44, onlyvolname) // vcbVName
-
-    // File Control Block table
-    writel(0x34e, kFCBTable) // FCBSPtr
-    writew(0x3f6, 94) // FSFCBLen
-    writew(kFCBTable, 2 + 94 * 348) // size of FCB table
-
-    // Misc globals
-    writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
-    writel(0x2f4, 0) // CaretTime = 0 ticks
-    writel(0x316, 0) // we don't implement the 'MPGM' interface
-    writel(0x31a, 0x00ffffff) // Lo3Bytes
-    writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
-    write_pstring(0x910, "ToolServer")
-    writel(0x9d6, 0) // WindowList empty
-    writel(0xa02, 0x00010001) // OneOne
-    writel(0xa06, 0xffffffff) // MinusOne
-    writel(0xa1c, newhandle(6)) // MenuList empty
-    writel(0xa50, 0) // TopMapHndl
-
-    // Disable the status window in preferences
-    os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"))
-    os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9))
-
-    // Open a script as if from Finder
-    writel(d0ptr, 128)
-    call_m68k(executable_atrap(0xa122))
-    appParms := readl(a0ptr)
-    writel(0xaec, appParms)
-    appParms = readl(appParms) // handle to pointer
-    writew(appParms + 2, 1) // one file
-    writew(appParms + 4, get_macos_dnum(systemFolder))
-    writel(appParms + 6, 0x54455854) // TEXT
-    writePstring(appParms + 12, "Script")
-
-    os.WriteFile(filepath.Join(systemfolder, "Script"), "set") // this is where our command goes!
-    os.WriteFile(filepath.Join(systemfolder, "Script.idump"), "TEXTMPS ")
-    os.Create(filepath.Join(systemfolder, "Script.out"))
-    os.Create(filepath.Join(systemfolder, "Script.err"))
-
-    push(32, 0)
-    fileNamePtr := readl(spptr)
-    pushw(0) // refnum return
-    pushw(2) // vol id
-    pushl(uint32(get_macos_dnum(filepath.Join(systemFolder), "MPW")))
-    write_pstring(fileNamePtr, "ToolServer")
-    pushl(fileNamePtr) // pointer to the file string
-    call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
-
-    writew(0xa58, readw(0xa5a)) // SysMap = CurMap
-
-    pushl(0) // handle return
-    pushl(0x434f4445) // CODE
-    pushw(0) // ID 0
-    call_m68k(executable_atrap(0xa9a0)) // _GetResource
-    code0 := pop(4)
-    code0 = readl(pop(4)) // handle to pointer
-
-    jtsize := readl(code0 + 8)
-    jtoffset := readl(code0 + 12)
-
-    copy(mem[a5world + jtoffset:][:jtsize], mem[pointer + 16:][:jtsize])
-
-    call_m68k(a5world + jtoffset + 2)
+//     writel(0x118, kFakeHeapHeader) // TheZone
+//     writel(0x2a6, kFakeHeapHeader) // SysZone
+//     writel(0x2aa, kFakeHeapHeader) // ApplZone
+//     writel(kFakeHeapHeader, 0xffffffe) // bkLim
+//     writel(0x130, 0) // ApplLimit
+//
+//     // 1 Drive Queue Element
+//     writew(0x308, 0) // DrvQHdr.QFlags
+//     writel(0x308+2, kDQE) // DrvQHdr.QHead
+//     writel(0x308+6, kDQE) // DrvQHdr.QTail
+//     for i := -4; i < 16; i += 2 {
+//         writew(kDQE + uint32(i), 0)
+//     }
+//
+//     // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
+//     for i := 0; i < 178; i += 2 {
+//         writew(kVCB + uint32(i), 0)
+//     }
+//     writew(kVCB + 78, 2) // vcbVRefNum
+//     writePstring(kVCB + 44, onlyvolname) // vcbVName
+//
+//     // File Control Block table
+//     writel(0x34e, kFCBTable) // FCBSPtr
+//     writew(0x3f6, 94) // FSFCBLen
+//     writew(kFCBTable, 2 + 94 * 348) // size of FCB table
+//
+//     // Misc globals
+//     writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
+//     writel(0x2f4, 0) // CaretTime = 0 ticks
+//     writel(0x316, 0) // we don't implement the 'MPGM' interface
+//     writel(0x31a, 0x00ffffff) // Lo3Bytes
+//     writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
+//     writePstring(0x910, "ToolServer")
+//     writel(0x9d6, 0) // WindowList empty
+//     writel(0xa02, 0x00010001) // OneOne
+//     writel(0xa06, 0xffffffff) // MinusOne
+// //     writel(0xa1c, newhandle(6)) // MenuList empty
+//     writel(0xa50, 0) // TopMapHndl
+//
+//     // Disable the status window in preferences
+//     os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
+//     os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
+//
+//     // Open a script as if from Finder
+//     writel(d0ptr, 128)
+//     call_m68k(executable_atrap(0xa122))
+//     appParms := readl(a0ptr)
+//     writel(0xaec, appParms)
+//     appParms = readl(appParms) // handle to pointer
+//     writew(appParms + 2, 1) // one file
+//     writew(appParms + 4, get_macos_dnum(systemFolder))
+//     writel(appParms + 6, 0x54455854) // TEXT
+//     writePstring(appParms + 12, "Script")
+//
+//     os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set"), 0o777) // this is where our command goes!
+//     os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
+//     os.Create(filepath.Join(systemFolder, "Script.out"))
+//     os.Create(filepath.Join(systemFolder, "Script.err"))
+//
+//     push(32, 0)
+//     fileNamePtr := readl(spptr)
+//     pushw(0) // refnum return
+//     pushw(2) // vol id
+//     pushl(uint32(get_macos_dnum(filepath.Join(systemFolder, "MPW"))))
+//     writePstring(fileNamePtr, "ToolServer")
+//     pushl(fileNamePtr) // pointer to the file string
+//     call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
+//
+//     writew(0xa58, readw(0xa5a)) // SysMap = CurMap
+//
+//     pushl(0) // handle return
+//     pushl(0x434f4445) // CODE
+//     pushw(0) // ID 0
+//     call_m68k(executable_atrap(0xa9a0)) // _GetResource
+//     code0 := pop(4)
+//     code0 = readl(pop(4)) // handle to pointer
+//
+//     jtsize := readl(code0 + 8)
+//     jtoffset := readl(code0 + 12)
+//
+//     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
+//
+//     call_m68k(kA5World + jtoffset + 2)
 }
