@@ -891,9 +891,9 @@ func lineC(inst uint16) {
 
         var result uint32
         if inst & 0x100 != 0 { // signed
-            result = uint32(m1) * uint32(m1)
-        } else {
             result = uint32(int32(int16(m1)) * int32(int16(m2)))
+        } else {
+            result = uint32(m1) * uint32(m2)
         }
 
         set_nz(result, 4)
