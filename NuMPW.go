@@ -1036,11 +1036,11 @@ func lineE(inst uint16) {
         if isLeft {
             for i := uint16(0); i < by; i++ {
                 result = (result << 1) | (result >> (numbits - 1))
-                c = result & 1 != 1
+                c = result & 1 != 0
             }
         } else {
             for i := uint16(0); i < by; i++ {
-                c = result & 1 != 1
+                c = result & 1 != 0
                 result = (result << (numbits - 1)) | (result >> 1)
 
             }
