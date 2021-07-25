@@ -62,8 +62,8 @@ func readb(addr uint32) (val uint8) {
 }
 
 func write(numbytes uint32, addr uint32, val uint32) {
-    for i := uint32(0); i < numbytes; i++ {
-        mem[addr+i] = byte(val)
+    for i := numbytes; i > 0; i-- {
+        mem[addr+i-1] = byte(val)
         val >>= 8
     }
     return
@@ -205,8 +205,8 @@ func sub_then_set_vc(a uint32, b uint32, size uint32) (result uint32) { // subtr
 
 func set_nz(num uint32, size uint32) {
     bitsize := size * 8
-    n = num & (1 << (bitsize - 1)) != 1
-    z = num == 0
+    n = num & (1 << (bitsize - 1)) != 0
+    z = num & ((1 << bitsize) - 1) == 0
 }
 
 func get_ccr() (ccr uint16) {
@@ -279,8 +279,8 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
         regptr := aregAddr(mode & 7)
         ptr = readl(regptr) + extwl(readw(pc)); pc += 2
     } else if mode >> 3 == 6 { // d8(An,Xn)
-        xword := readw(pc); pc += 2
         ptr = readl(aregAddr(mode & 7)) // contents of An
+        xword := readw(pc); pc += 2
         ptr += extbl(uint8(xword)) // add constant displacement
         xn := readl(regAddr(xword >> 12 & 15))
         if xword & 0x100 == 0 { // xn is word valued, so sign extend it
@@ -290,8 +290,8 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
     } else if mode == 58 { // d16(PC)
         ptr = pc + extwl(readw(pc)); pc += 2
     } else if mode == 59 { // d8(PC,Xn)
-        xword := readw(pc); pc += 2
         ptr = pc
+        xword := readw(pc); pc += 2
         ptr += extbl(uint8(xword)) // add constant displacement
         xn := readl(regAddr(xword >> 12 & 15))
         if xword & 0x100 == 0 { // xn is word valued, so sign extend it
@@ -451,9 +451,10 @@ func line123(inst uint16) { // move, and movea which is a special-ish case
     src_mode := inst & 63
 
     src := address_by_mode(src_mode, size)
-    datum := signextend(size, read(size, src))
+    datum := read(size, src)
 
     if dest_mode >> 3 == 1 { // movea: sign extend to 32 bits
+        datum = signextend(size, datum)
         size = 4
     } else { // non-movea: set condition codes
         v = false
@@ -469,7 +470,7 @@ func line4(inst uint16) { // very,crowded,line
     if inst >> 6 & 63 == 3 { // move from sr
         dest := address_by_mode(inst & 63, 2) // sr is 2 bytes
         writew(dest, get_ccr())
-    } else if inst >> 6 & 0x3f == 0x37 { // move to sr/ccr
+    } else if inst >> 6 & 63 == 19 || inst >> 6 & 63 == 27 { // move to sr/ccr
         var size uint32
         if inst >> 6 & 8 != 0 {
             size = 1 // ccr
