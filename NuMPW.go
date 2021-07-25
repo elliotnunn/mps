@@ -189,16 +189,18 @@ func extbw(in uint8) uint16 {
 func add_then_set_vc(a uint32, b uint32, size uint32) (result uint32) {
     result = a + b
     var signbit uint32 = 1 << ((size * 8) - 1)
+    var mask uint32 = (1 << (size * 8)) - 1
     v = ((a & signbit) == (b & signbit)) && ((a & signbit) != (result & signbit))
-    c = result < a // could use result < b just as easily
+    c = result & mask < a & mask // could use result < b just as easily
     return
 }
 
 func sub_then_set_vc(a uint32, b uint32, size uint32) (result uint32) { // subtract b from a
     result = a - b
     var signbit uint32 = 1 << ((size * 8) - 1)
-    v = ((a & signbit) == (b & signbit)) && ((a & signbit) != (result & signbit))
-    c = a < b
+    var mask uint32 = (1 << (size * 8)) - 1
+    v = ((a & signbit) != (b & signbit)) && ((b & signbit) == (result & signbit))
+    c = a & mask < b & mask
     return
 }
 
@@ -861,7 +863,7 @@ func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
 
         ea := address_by_mode(inst & 63, size)
         an := inst >> 9 & 7 // ea may be .w/.l but an is always .l
-        result := sub_then_set_vc(readl(regAddr(an)), signextend(size, read(size, ea)), 4)
+        result := sub_then_set_vc(readl(aregAddr(an)), signextend(size, read(size, ea)), 4)
         set_nz(result, 4)
     } else if inst & 0x100 == 0x000 { // cmp
         size := readsize(inst >> 6 & 3)
