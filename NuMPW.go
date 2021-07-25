@@ -1499,6 +1499,10 @@ func tExitToShell() {
 
 // Trivial do-nothing traps
 
+func tUnimplemented() {
+    panic("Unimplemented trap")
+}
+
 func tNop() {
 }
 
@@ -1660,6 +1664,7 @@ var my_traps = [...]func(){
 //     tb_base + 0x06f: tPop4,                     // _OpenPort
 //     tb_base + 0x073: tSetPort,                  // _SetPort
 //     tb_base + 0x074: tGetPort,                  // _GetPort
+    tb_base + 0x09f: tUnimplemented,            // _Unimplemented
 //     tb_base + 0x0a7: tSetRect,                  // _SetRect
 //     tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
 //     tb_base + 0x0d8: tRetZero,                  // _NewRgn
@@ -1732,7 +1737,7 @@ func lineA(inst uint16) {
             pushl(pc)
         }
 
-        pc = readl(kOSTable + 4 * (uint32(inst) & 0xff))
+        pc = readl(kToolTable + 4 * (uint32(inst) & 0x3ff))
     } else { // OS trap
         writew(d1ptr + 2, inst)
 
@@ -1744,7 +1749,7 @@ func lineA(inst uint16) {
             pushl(readl(a0ptr))
         }
 
-        pc = readl(kOSTable + 4 * (uint32(inst) & 0x3ff))
+        pc = readl(kOSTable + 4 * (uint32(inst) & 0xff))
 
         if inst & 0x100 == 0 {
             writel(a0ptr, popl())
@@ -1760,6 +1765,7 @@ func lineA(inst uint16) {
 var gCurToolTrapNum int
 
 func lineF(inst uint16) {
+    pc = popl()
     check_for_lurkers()
     if inst & 0x800 != 0 { // Go implementation of Toolbox trap
         gCurToolTrapNum = int(inst & 0x3ff)
@@ -1767,7 +1773,6 @@ func lineF(inst uint16) {
     } else { // Go implementation of OS trap
         my_traps[os_base + (inst & 0xff)]()
     }
-    pc = popl()
 }
 
 // Set up the Toolbox and launch ToolServer
@@ -1828,6 +1833,20 @@ func main() {
     // Poison low memory
     for i := uint32(0x40); i < kStackBase; i += 2 {
         writew(i, 0x68f1)
+    }
+
+    // Populate trap table
+    for i, impl := range my_traps {
+        tableAddr := kOSTable + 4 * uint32(i)
+        if impl == nil {
+            writel(tableAddr, executable_ftrap(0xf89f))
+        } else {
+            trap := uint16(i)
+            if i > 0x100 {
+                trap = trap - 0x100 + 0x800
+            }
+            writel(tableAddr, executable_ftrap(0xf000 | trap))
+        }
     }
 
     // Starting point for stack
