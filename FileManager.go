@@ -5,8 +5,11 @@ import (
     "embed"
     "strings"
     "os"
-    "io/fs"
     "sort"
+    "fmt"
+    "regexp"
+    "strconv"
+    "encoding/binary"
 )
 
 //go:embed MPW35
@@ -24,21 +27,13 @@ var filebuffers map[uint16][]byte
 // MacOS's idea of the system root
 const onlyvolname macstring = "_"
 
-type myFS interface {
-    fs.FS
-    fs.ReadDirFS
-    fs.ReadFileFS
-}
-
 // Could apply to either filesystem
-func open(path string) (fs.File, error) {
+func whichFS(path string) (string, bool) {
     prefix := string(systemFolder) + "/MPW/"
     if strings.HasPrefix(path, prefix) {
-        file, err := embedMPW.Open(path[len(prefix):])
-        return file, err
+        return path[len(prefix):], true
     } else {
-        file, err := os.Open(path)
-        return file, err
+        return path, false
     }
 }
 
@@ -54,7 +49,7 @@ func fcbFromRefnum(refnum uint16) uint32 {
     return FCBSPtr + uint32(refnum)
 }
 
-func get_host_path(number uint16, macname macstring) (string, int) {
+func get_host_path(number uint16, macname macstring, leafMustExist bool) (string, int) {
     name := macToUnicode(macname)
 
     // If string is abolute then ignore the number, use the special root ID
@@ -63,7 +58,7 @@ func get_host_path(number uint16, macname macstring) (string, int) {
         root_and_name := strings.SplitN(name, ":", 2)
         name = root_and_name[1]
 
-        if root_and_name[0] != onlyvolname {
+        if root_and_name[0] != macToUnicode(onlyvolname) {
             return "", -43 // fnfErr
         }
     }
@@ -84,9 +79,8 @@ func get_host_path(number uint16, macname macstring) (string, int) {
     }
 
     for _, component := range components {
-        unicomponent := macToUnicode(component)
-        if len(unicomponent) > 0 {
-            path = filepath.Join(path, unicomponent)
+        if len(component) > 0 {
+            path = filepath.Join(path, component)
         } else {
             path = filepath.Dir(path)
         }
@@ -96,23 +90,17 @@ func get_host_path(number uint16, macname macstring) (string, int) {
 }
 
 func listdir(path string) ([]macstring, int) {
-    file, err := open(path)
+    path, isEmbed := whichFS(path)
+    readDir := os.ReadDir
+    if isEmbed {
+        readDir = embedMPW.ReadDir
+    }
+
+    dirents, err := readDir(path)
     if err != nil {
-        return nil, -43 // fileNotFoundError
-    }
-    defer file.Close()
-
-    dir, ok := file.(fs.ReadDirFile)
-    if !ok {
-        panic("Failed to cast and get a method! Sad!")
+        panic("Failed reading a directory")
     }
 
-    dirents, err := dir.ReadDir(0)
-    if err != nil {
-        panic("ReadDirNames")
-    }
-
-//     macfiles := make([]macstring, 0, len(dirents))
     var macfiles []macstring
     for _, d := range dirents {
         if macname, ok := unicodeToMac(d.Name()); ok {
@@ -121,7 +109,7 @@ func listdir(path string) ([]macstring, int) {
     }
 
     // HFS sorts files by RelString order
-    sort.Slice(macfiles, func (i, j int) {return relString(macfiles[i], macfiles[j], false, true) > 1})
+    sort.Slice(macfiles, func (i, j int) bool {return relString(macfiles[i], macfiles[j], false, true) > 1})
 
     // Filter out ambiguous or too-long names
     macfiles2 := macfiles
@@ -144,11 +132,11 @@ func listdir(path string) ([]macstring, int) {
 func get_macos_dnum(path string) uint16 {
     for idx, maybepath := range dnums[2:] {
         if maybepath == path {
-            return idx + 2
+            return uint16(idx) + 2
         }
     }
     dnums = append(dnums, path)
-    return len(dnums) - 1
+    return uint16(len(dnums)) - 1
 }
 
 func get_macos_date(path string) uint32 {
@@ -176,6 +164,7 @@ func get_vol_or_dir() (num uint16) {
     if num == 0 {
         num = readw(pb + 22) // whole vRefNum
     }
+    return
 }
 
 func read_fsspec(ptr uint32) (vRefNum uint16, dirID uint32, namePtr uint32) {
@@ -197,7 +186,7 @@ func tOpen() {
         fork = 'r'
     }
 
-    pb := read4(a0ptr)
+    pb := readl(a0ptr)
 
     ioNamePtr := readl(pb + 18)
     ioName := readPstring(ioNamePtr)
@@ -205,34 +194,50 @@ func tOpen() {
 
     number := get_vol_or_dir()
 
-    path := get_host_path(number, ioName)
-    if !is_regular_file(path) {
-        paramblk_return(-39); return // fnfErr
+    path, errno := get_host_path(number, ioName, true)
+    if errno != 0 {
+        paramblk_return(errno); return // fnfErr
     }
 
+    subpath, isEmbed := whichFS(path)
+    readFile := os.ReadFile
+    if isEmbed {
+        readFile = embedMPW.ReadFile
+    }
+
+    // Find a free
     var ioRefNum uint16
     var fcbPtr uint32
-    for ioRefNum = 2; fcbFromRefnum(ioRefNum) != 0; ioRefNum += read2(0x3f6) {
-        fcbPtr = read4(0x34e) + ioRefNum
-        if read4(fcbPtr) != 0 {
+    for ioRefNum = 2; fcbFromRefnum(ioRefNum) != 0; ioRefNum += readw(0x3f6) {
+        fcbPtr = readl(0x34e) + uint32(ioRefNum)
+        if readl(fcbPtr) == 0 {
             break
         }
     }
-    // -42 // tmfoErr ??????
+
+    if readl(fcbPtr) == 0 {
+        panic("Too many files/forks open (hundreds)")
+//         paramblk_return(-42); return // tmfoErr
+    }
 
     var data []byte
     if fork == 'd' {
-        data = os.ReadFile(path)
+        if data, err := readFile(subpath); err != nil {
+            panic("Failed to read a file that we were sure existed")
+        }
     } else if fork == 'r' {
+        fileExchangeScheme := filepath.Join(filepath.Dir(subpath), "RESOURCE.FRK", filepath.Base(subpath))
+        rezScheme := subpath + ".rdump"
+
         // Try various resource fork schemes, fall back on empty fork
-        if rpath := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path)); is_regular_file(rpath) {
-            data = os.ReadFile(rpath)
-        } else if rpath := path + ".rdump"; is_regular_file(rpath) {
-            data = rez(rpath)
+        if data, err := readFile(fileExchangeScheme); err == nil {
+            // use it!
+        } else if data, err := readFile(rezScheme); err == nil {
+            data = rez(data) // rez should be able to panic for now
         }
     }
 
-    flags := 0
+    flags := byte(0)
     if ioPermssn != 1 {
         flags |= 1
     }
@@ -241,15 +246,13 @@ func tOpen() {
     }
 
     filebuffers[ioRefNum] = data
-    for i := 0; i < read2(0x3f6); i++ {
-        writel(fcbPtr + i, 0) // zero the block for safety
-    }
     writel(fcbPtr + 0, 1) // fake non-zero fcbFlNum
     writeb(fcbPtr + 4, flags) // fcbMdRByt
-    writel(fcbPtr + 8, len(data)) // fcbEOF
+    writel(fcbPtr + 8, uint32(len(data))) // fcbEOF
     writel(fcbPtr + 20, 0xa8000) // fcbVPtr
-    writel(fcbPtr + 58, uint32(get_macos_dnum(path.parent))) // fcbDirID
-    write_pstring(fcbPtr + 62, strings.Replace(path.name, ":", -1)) // fcbCName
+    writel(fcbPtr + 58, uint32(get_macos_dnum(filepath.Dir(path)))) // fcbDirID
+    macpath, _ := unicodeToMac(filepath.Base(path)) // we already know it is safe
+    writePstring(fcbPtr + 62, macpath) // fcbCName
 
     writew(pb + 24, ioRefNum)
 }
@@ -264,22 +267,26 @@ func tClose() {
         paramblk_return(-38); return // fnOpnErr
     }
 
-    number := readl(fcb + 58)
+    number := readw(fcb + 58 + 2)
     string := readPstring(fcb + 62)
-    path := get_host_path(number, string)
+    path, errno := get_host_path(number, string, true)
+    if errno != 0 {
+        paramblk_return(errno); return // fnfErr
+    }
 
     // Write out
     fcbMdRByt := readb(fcb + 4)
     buf := filebuffers[ioRefNum]
     delete(filebuffers, ioRefNum)
-    if fcbMdRByt & 1 {
-        os.WriteFile(path, buf)
+    if fcbMdRByt & 1 != 0 {
+        os.WriteFile(path, buf, 0o777)
     }
 
     // Free FCB
-    for i := 0; i < read2(0x3f6); i++ {
-        writel(fcbPtr + i, 0)
-    }
+    writel(fcb, 0)
+//     for i := 0; i < readw(0x3f6); i++ {
+//         writel(fcbPtr + i, 0)
+//     }
 }
 
 func tReadWrite() {
@@ -292,15 +299,15 @@ func tReadWrite() {
         paramblk_return(-38); return // fnOpnErr
     }
 
-    buf := &filebuffers[ioRefNum]
+    buf := filebuffers[ioRefNum]
     ioBuffer := readl(pb + 32)
     ioReqCount := readl(pb + 36)
     ioPosMode := readw(pb + 44)
     ioPosOffset := readl(pb + 46)
-    fcbCrPs = readl(fcb + 16) // the mark
-    fcbEOF = readl(fcb + 8) // leof
+    fcbCrPs := readl(fcb + 16) // the mark
+    fcbEOF := readl(fcb + 8) // leof
 
-    if fcbEOF != len(buf) { // totally effed
+    if fcbEOF != uint32(len(buf)) { // totally effed
         panic("recorded fcbEOF inconsistent with byte slice size")
     }
 
@@ -311,16 +318,16 @@ func tReadWrite() {
     case 1: // fsFromStart
         trymark = int64(ioPosOffset)
     case 2: // fsFromLEOF
-        trymark = int64(fcbEOF) + int32(ioPosOffset)
+        trymark = int64(fcbEOF) + int64(int32(ioPosOffset))
     case 3: // fsFromMark
-        trymark = int64(fcbCrPs) + int32(ioPosOffset)
+        trymark = int64(fcbCrPs) + int64(int32(ioPosOffset))
     }
 
     // assume that mark is inside the file
     mark := uint32(trymark)
 
     // handle mark outside file and continue
-    if trymark > fcbEOF {
+    if trymark > int64(fcbEOF) {
         mark = fcbEOF
         ioReqCount = 0
         paramblk_return(-39) // eofErr
@@ -333,21 +340,23 @@ func tReadWrite() {
     ioActCount := ioReqCount
     if readl(d1ptr) & 0xff == 3 { // _Write
         // if file is too short then lengthen the file
-        for len(buf) < mark + ioActCount {
-            *buf = append(*buf, 0)
+        for uint32(len(buf)) < mark + ioActCount {
+            buf = append(buf, 0)
         }
-        writel(fcb + 8, len(buf)) // fcbEOF needs to be updated
+        writel(fcb + 8, uint32(len(buf))) // fcbEOF needs to be updated
 
         copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
 
     } else { // _Read
         // if file is too short then shorten the read
-        if len(buf) < mark + ioActCount {
-            ioActCount = len(buf) - mark
+        if uint32(len(buf)) < mark + ioActCount {
+            ioActCount = uint32(len(buf)) - mark
         }
 
         copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
     }
+
+    filebuffers[ioRefNum] = buf
 
     writel(pb + 40, ioActCount)
     writel(pb + 46, mark + ioActCount) // ioPosOffset
@@ -360,7 +369,7 @@ func tGetVInfo() {
     ioVNPtr := readl(pb + 18)
 
     if ioVNPtr != 0 {
-        write_pstring(ioVNPtr, unicodeToMac(onlyvolname))
+        writePstring(ioVNPtr, onlyvolname)
     }
     writew(pb + 22, 2) // ioVRefNum: our "root volume" is 2
 
@@ -372,7 +381,7 @@ func tGetVInfo() {
     writew(pb + 44, 0) // ioVAllocPtr
     writew(pb + 46, 0xffff) // ioVNmAlBlks
     writel(pb + 48, 0x200) // ioVAlBlkSiz
-    if trap & 0x200 != 0 {
+    if readw(d1ptr + 2) & 0x200 != 0 {
         writel(pb + 52, 0x200) // ioVClpSiz
         writew(pb + 56, 0x1000) // ioAlBlSt
         writel(pb + 58, 0) // ioVNxtFNum
@@ -398,39 +407,47 @@ func tCreate() {
     ioName := readPstring(ioNamePtr)
 
     number := get_vol_or_dir()
-    path := get_host_path(number, ioName)
+    path, errno := get_host_path(number, ioName, false)
+    if errno != 0 {
+        paramblk_return(errno); return
+    }
 
     fp, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
     if err != nil {
         paramblk_return(-48); return // dupFNErr
     }
-    defer fd.Close()
+    defer fp.Close()
 }
 
 func tDelete() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
-    ioNamePtr = readl(pb + 18)
+    ioNamePtr := readl(pb + 18)
     ioName := readPstring(ioNamePtr)
 
     number := get_vol_or_dir()
-    path := get_host_path(number, ioName)
+    path, errno := get_host_path(number, ioName, true)
+    if errno != 0 {
+        paramblk_return(errno); return
+    }
 
     os.Remove(path)
 }
 
 func tGetFInfo() { // also implements GetCatInfo
+    trap := readw(d1ptr + 2)
+
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioFDirIndex := int16(readw(pb + 28))
-    ioNamePtr = readl(pb + 18)
+    ioNamePtr := readl(pb + 18)
 
     dirid := get_vol_or_dir()
 
     // removed "weird case for _HGetFInfo"
 
-    fname := []byte("")
+    var fname macstring
     return_fname := false
 
     if trap & 0xff == 0x60 && ioFDirIndex < 0 {
@@ -438,7 +455,7 @@ func tGetFInfo() { // also implements GetCatInfo
     } else if ioFDirIndex > 0 {
         return_fname = true
 
-        path, errno := get_host_path(number)
+        path, errno := get_host_path(dirid, macstring(""), true)
         if errno != 0 {
             paramblk_return(errno); return
         }
@@ -448,7 +465,7 @@ func tGetFInfo() { // also implements GetCatInfo
             paramblk_return(errno); return
         }
 
-        if ioFDirIndex >= len(listing) {
+        if int(ioFDirIndex) >= len(listing) {
             paramblk_return(-43); return // fnfErr
         }
 
@@ -458,35 +475,39 @@ func tGetFInfo() { // also implements GetCatInfo
     }
 
     // clear our block of return values, which is longer for GetCatInfo
-    for i := 0; (trap & 0xff == 0x60 && i < 84) || (i < 56); i++ {
+    for i := uint32(0); (trap & 0xff == 0x60 && i < 84) || (i < 56); i++ {
         writeb(pb + 24 + i, 0)
     }
 
-    path, errno := get_host_path(dirid, fname)
+    path, errno := get_host_path(dirid, fname, true)
     if errno != 0 {
         paramblk_return(errno); return
     }
 
     if return_fname && ioNamePtr != 0 {
-        write_pstring(ioNamePtr, fname)
+        writePstring(ioNamePtr, fname)
         // missing logic to switch file separator
     }
 
     if !is_regular_file(path) {
         writeb(pb + 30, 1 << 4) // is a directory
         writel(pb + 48, uint32(get_macos_dnum(path))) // ioDrDirID
-        writel(pb + 52, len(listdir(path))) // ioDrNmFls
+        var numfls uint32
+        listing, errno := listdir(path); if errno == 0 {
+            numfls = uint32(len(listing))
+        }
+        writel(pb + 52, numfls) // ioDrNmFls
     } else {
         // missing quite a bit of logic here
     }
 
     if trap & 0xff == 0x60 {
-        writel(pb + 100, unt32(get_macos_dnum(filepath.Dir(path)))) // ioFlParID
+        writel(pb + 100, uint32(get_macos_dnum(filepath.Dir(path)))) // ioFlParID
     }
 
-    date := get_macos_date(p)
-    writel(pb + 72, date) // ioFlCrDat
-    writel(pb + 76, date) // ioFlMdDat
+//     date := get_macos_date(p)
+//     writel(pb + 72, date) // ioFlCrDat
+//     writel(pb + 76, date) // ioFlMdDat
 }
 
 func tSetFInfo() {
@@ -495,7 +516,7 @@ func tSetFInfo() {
 //     ioName := readPstring(ioNamePtr)
 //
 //     // idiom to get dirID for hierarchical call, but fall back on ioVRefNum
-//     number := (readl(pb + 48) if trap & 0x200 else 0) || readw(pb + 22)
+//     number := (readw(pb + 48 + 2) if trap & 0x200 else 0) || readw(pb + 22)
 //
 //     path = get_host_path(number=number, string=ioName)
 //     if !path.exists() { // fnfErr
@@ -533,11 +554,11 @@ func tSetEOF() {
         paramblk_return(-38); return // fnOpnErr
     }
 
-    for len(filebuffers[ioRefNum]) < ioMisc {
+    for uint32(len(filebuffers[ioRefNum])) < ioMisc {
         filebuffers[ioRefNum] = append(filebuffers[ioRefNum], 0)
     }
 
-    if len(filebuffers[ioRefNum]) > ioMisc {
+    if uint32(len(filebuffers[ioRefNum])) > ioMisc {
         filebuffers[ioRefNum] = filebuffers[ioRefNum][:ioMisc]
     }
 
@@ -549,6 +570,8 @@ func tSetEOF() {
 }
 
 func tGetVol() {
+    trap := readw(d1ptr + 2)
+
     paramblk_return(0) // by default
     pb := readl(a0ptr)
 
@@ -561,11 +584,14 @@ func tGetVol() {
 
     ioVNPtr := readl(pb + 18)
     if ioVNPtr != 0 {
-        write_pstring(ioVNPtr, unicodeToMac(filepath.Base(dnums[0])))
+        macstr, _ := unicodeToMac(filepath.Base(dnums[0]))
+        writePstring(ioVNPtr, macstr)
     }
 }
 
 func tSetVol() {
+    trap := readw(d1ptr + 2)
+
     paramblk_return(0) // by default
     pb := readl(a0ptr)
     ioRefNum := readw(pb + 24)
@@ -573,12 +599,18 @@ func tSetVol() {
     ioVNPtr := readl(pb + 18)
     if ioVNPtr != 0 {
         volname := readPstring(ioVNPtr)
-        if !strings.Contains(volname, ":") { // this is an absolute path
+        if !strings.Contains(string(volname), ":") { // this is an absolute path
             volname += ":"
         }
-        dnums[0] = get_host_path(2, volname)
+
+        path, errno := get_host_path(2, volname, true)
+        if errno != 0 {
+            paramblk_return(errno); return
+        }
+
+        dnums[0] = path
     } else if trap & 0x200 != 0 { // HSetVol
-        dnums[0] = dnums[readl(pb + 48)] // ioDirID
+        dnums[0] = dnums[readw(pb + 48 + 2)] // ioDirID
     } else { // plain SetVol
         dnums[0] = dnums[readw(pb + 22)] // ioVRefNum
     }
@@ -609,9 +641,14 @@ func tFSDispatch() {
     case 1: // OpenWD
         // just return dirID as wdRefNum, because we treat them the same
         ioName := readPstring(readl(pb + 18))
-        ioWDDirID := readl(pb + 48)
+        ioWDDirID := readw(pb + 48 + 2)
 
-        ioVRefNum := get_macos_dnum(get_host_path(ioWDDirID, ioName))
+        path, errno := get_host_path(ioWDDirID, ioName, true)
+        if errno != 0 {
+            paramblk_return(errno); return
+        }
+
+        ioVRefNum := get_macos_dnum(path)
         writew(pb + 22, ioVRefNum)
 
     case 2: // CloseWD
@@ -628,7 +665,7 @@ func tFSDispatch() {
 
         ioRefNum := readw(pb + 24)
         if ioFCBIndx != 0 { // treat as a 1-based index into open FCBs
-            for ioRefNum = 2;; ioRefNum += read2(0x3f6) {
+            for ioRefNum = 2;; ioRefNum += readw(0x3f6) {
                 fcb := fcbFromRefnum(ioRefNum)
                 if fcb == 0 {
                     paramblk_return(-38); return // fnOpnErr
@@ -649,7 +686,7 @@ func tFSDispatch() {
             paramblk_return(-38); return // fnOpnErr
         }
 
-        for i := 0; i < 2; i++ {
+        for i := uint32(0); i < 20; i++ {
             writeb(pb + 20 + i, readb(fcb + i))
         }
 
@@ -659,33 +696,31 @@ func tFSDispatch() {
         writel(pb + 58, readl(fcb + 58)) // ioFCBParID
 
         ioNamePtr := readl(pb + 18)
-        write_pstring(ioNamePtr, readPstring(fcb + 62))
+        writePstring(ioNamePtr, readPstring(fcb + 62))
 
     case 9: // GetCatInfo
-        return tGetFInfo()
+        tGetFInfo()
 
     case 26: // OpenDF
-        return tOpen()
+        tOpen()
 
     case 27: // MakeFSSpec
         ioVRefNum := readw(pb + 22)
-        ioDirID := readl(pb + 48)
+        ioDirID := readw(pb + 48 + 2)
         ioName := readPstring(readl(pb + 18))
         ioMisc := readl(pb + 28)
 
-        path := get_host_path(ioDirID, ioName)
-
-        // The parent must exist
-        if _, err := os.Stat(filepath.Dir(path)); os.IsNotExist(err) {
-            paramblk_return(-39); return // fnfErr
+        path, errno := get_host_path(ioDirID, ioName, false)
+        if errno != 0 {
+            paramblk_return(errno); return // fnfErr
         }
 
         writew(ioMisc, 2) // vRefNum = 2 always
         writel(ioMisc + 2, uint32(get_macos_dnum(filepath.Dir(path))))
-        write_pstring(ioMisc + 6, unicodeToMac(filepath.Base(path)))
+        writePstring(ioMisc + 6, ioName)
 
     default:
-        panic(str.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr + 2)))
+        panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr + 2)))
     }
 }
 
@@ -694,24 +729,23 @@ func tFSDispatch() {
 // Code for reading Finder info and resource forks
 //#######################################################################
 
-func rez_strip_comments(rez string) {
-    pattern := regex.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
-
-    return pattern.ReplaceAllString(rez, `\1 `) // keep quotes, append a space to be safe
+var rezStripPattern = regexp.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
+func rez_strip_comments(in []byte) []byte {
+    return rezStripPattern.ReplaceAll(in, []byte(`\1 `)) // keep quotes, append a space to be safe
 }
 
-func rez_string_literal(string_with_quotes string) {
-    pattern := regex.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
-    string_alone := string_with_quotes[1:-1]
-    splits := pattern.FindAllSubmatchIndex(string_alone)
+func rez_string_literal(string_with_quotes []byte) []byte {
+    pattern := regexp.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
+    string_alone := string_with_quotes[1:len(string_with_quotes) - 1]
+    splits := pattern.FindAllSubmatchIndex(string_alone, 0)
 
-    retval := ""
+    var retval []byte
 
-    for loc := range splits {
+    for _, loc := range splits {
         start := loc[0]
         end := loc[1]
 
-        char := '?'
+        char := byte('?')
         switch end - start {
         case 1:
             char = string_alone[start]
@@ -735,7 +769,8 @@ func rez_string_literal(string_with_quotes string) {
                 char = string_alone[start + 1]
             }
         case 5:
-            char, _ = strconv.ParseInt(string_alone[start+3:start+5], 16, 8)
+            wide, _ := strconv.ParseUint(string(string_alone[start+3:start+5]), 16, 8)
+            char = byte(wide)
         }
         retval = append(retval, char)
     }
@@ -743,23 +778,18 @@ func rez_string_literal(string_with_quotes string) {
     return retval
 }
 
-func rez(path string) (fork []byte, err error) {
-    pattern := regex.MustCompile(
-        `data\s*('(?:[^'\\]|\\.){4}')\s*` +
-        `\(\s*` +
-        `(-?\d+)\s*` +
-        `(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
-        `((?:,\s*(?:\$[0-9a-fA-F]|sysheap|purgeable|locked|protected|preload)\s*)*)` +
-        `\)\s*` +
-        `\{\s*` +
-        `((?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*` +
-        `\}\s*;\s*|.`)
+var rezPattern = regexp.MustCompile(
+    `data\s*('(?:[^'\\]|\\.){4}')\s*` +
+    `\(\s*` +
+    `(-?\d+)\s*` +
+    `(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
+    `((?:,\s*(?:\$[0-9a-fA-F]|sysheap|purgeable|locked|protected|preload)\s*)*)` +
+    `\)\s*` +
+    `\{\s*` +
+    `((?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*` +
+    `\}\s*;\s*|.`)
 
-    rez, err := os.ReadFile(path)
-    if err != nil {
-        return nil, err
-    }
-
+func rez(rez []byte) []byte {
     rez = rez_strip_comments(rez)
 
     type resource struct {
@@ -767,17 +797,17 @@ func rez(path string) (fork []byte, err error) {
         id uint16
         flags uint8
         has_name bool
-        name string
+        name []byte
         data []byte
     }
 
     type_order := make([]uint32, 0)
     type_ids := make(map[uint32][]resource)
 
-    splits := pattern.FindAllSubmatchIndex(rez)
-    for loc := range splits {
+    splits := rezPattern.FindAllSubmatchIndex(rez, 0)
+    for _, loc := range splits {
         if loc[1] - loc[0] == 1 {
-            return nil, errors.New(fmt.Sprintf("bad rez file %s", path))
+            panic("bad rez")
         }
 
         type_str := rez[loc[2]:loc[3]]
@@ -789,17 +819,18 @@ func rez(path string) (fork []byte, err error) {
         var res resource
 
         res.type_ = binary.BigEndian.Uint32(rez_string_literal(type_str))
-        res.id, err = strconv.ParseInt(id_str, 10, 16)
+        id, err := strconv.ParseInt(string(id_str), 10, 16)
         if err != nil { // might fail with out-of-range number
-            return nil, errors.New("out-of-range ID in res file")
+            panic("out-of-range ID in res file")
         }
+        res.id = uint16(id)
 
         if len(name_str) > 0 {
             res.has_name = true
             res.name = rez_string_literal(name_str)
         }
 
-        for _, arg := range string.Split(flags_str, ",") {
+        for _, arg := range strings.Split(string(flags_str), ",") {
             arg = strings.TrimSpace(arg)
             switch arg {
             case "sysheap":
@@ -814,29 +845,29 @@ func rez(path string) (fork []byte, err error) {
                 res.flags |= 0x04
             default: // regex guarantees that this is $FF
                 theseflags, err := strconv.ParseInt(arg[1:], 16, 8)
-                res.flags |= theseflags
+                res.flags |= uint8(theseflags)
             }
         }
 
-        if ids, ok := type_ids[type_]; !ok {
-            type_order = append(type_order, type_)
+        if ids, ok := type_ids[res.type_]; !ok {
+            type_order = append(type_order, res.type_)
         }
 
-        type_ids[type_] = append(type_ids[type_], res)
+        type_ids[res.type_] = append(type_ids[res.type_], res)
     }
 
-    fork = make([]byte, 256) // append resource data as we go
+    fork := make([]byte, 256) // append resource data as we go
 
-    type_list := make([]byte, 2 + 8 * len(types)) // alloc type list, append ref list
+    type_list := make([]byte, 2 + 8 * len(type_order)) // alloc type list, append ref list
     name_list := make([]byte, 0)
 
-    binary.BigEndian.PutUint16(type_list, (len(type_order) - 1) % 0xffff)
+    binary.BigEndian.PutUint16(type_list, uint16(len(type_order) - 1))
 
     for type_n, type_ := range type_order {
         offset := 2 + 8 * type_n
         binary.BigEndian.PutUint32(type_list[offset:], type_)
-        binary.BigEndian.PutUint16(type_list[offset+4:], len(type_ids[type_]) - 1)
-        binary.BigEndian.PutUint16(type_list[offset+6:], len(type_list))
+        binary.BigEndian.PutUint16(type_list[offset+4:], uint16(len(type_ids[type_]) - 1))
+        binary.BigEndian.PutUint16(type_list[offset+6:], uint16(len(type_list)))
 
         for _, res := range type_ids[type_] {
             name_offset := uint16(0xffff)
@@ -845,15 +876,16 @@ func rez(path string) (fork []byte, err error) {
                 name_list = append(name_list, res.name...)
             }
 
+            idEntry := len(type_list)
             for i := 0; i < 12; i++ {
                 type_list = append(type_list, 0)
             }
-            binary.BigEndian.PutUint16(type_list[-12:], uint16(res.id))
-            binary.BigEndian.PutUint16(type_list[-10:], name_offset)
-            binary.BigEndian.PutUint32(type_list[-8:], (uint32(flags) << 24) | (len(fork) - 256))
+            binary.BigEndian.PutUint16(type_list[idEntry:], uint16(res.id))
+            binary.BigEndian.PutUint16(type_list[idEntry + 2:], name_offset)
+            binary.BigEndian.PutUint32(type_list[idEntry + 4:], uint32(res.flags) << 24 | uint32(len(fork) - 256))
 
             fork = append(fork, 0, 0, 0, 0)
-            binary.BigEndian.PutUint32(fork[-4:], len(res.data))
+            binary.BigEndian.PutUint32(fork[len(fork) - 4:], uint32(len(res.data)))
             fork = append(fork, res.data...)
             for len(fork) % 4 != 0 {
                 fork = append(fork, 0)
@@ -867,14 +899,16 @@ func rez(path string) (fork []byte, err error) {
     for i := 0; i < 28; i++ {
         fork = append(fork, 0)
     }
-    binary.BigEndian.PutUint16(type_list[-4:], 28)
-    binary.BigEndian.PutUint16(type_list[-2:], 28 + len(type_list))
+    binary.BigEndian.PutUint16(type_list[boundary + 24:], 28)
+    binary.BigEndian.PutUint16(type_list[boundary + 26:], uint16(28 + len(type_list)))
 
-    fork = append(fork, type_list)
-    fork = append(fork, name_list)
+    fork = append(fork, type_list...)
+    fork = append(fork, name_list...)
 
     binary.BigEndian.PutUint32(fork, 0)
     binary.BigEndian.PutUint32(fork[4:], 256)
-    binary.BigEndian.PutUint32(fork[8:], boundary - 256)
-    binary.BigEndian.PutUint32(fork[12:], len(fork) - boundary)
+    binary.BigEndian.PutUint32(fork[8:], uint32(boundary - 256))
+    binary.BigEndian.PutUint32(fork[12:], uint32(len(fork) - boundary))
+
+    return fork
 }

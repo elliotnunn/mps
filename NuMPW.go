@@ -1850,91 +1850,87 @@ func main() {
     writel(a5ptr, kA5World)
 
     // Single fake heap zone, enough to pass validation
-//     writel(0x118, kFakeHeapHeader) // TheZone
-//     writel(0x2a6, kFakeHeapHeader) // SysZone
-//     writel(0x2aa, kFakeHeapHeader) // ApplZone
-//     writel(kFakeHeapHeader, 0xffffffe) // bkLim
-//     writel(0x130, 0) // ApplLimit
-//
-//     // 1 Drive Queue Element
-//     writew(0x308, 0) // DrvQHdr.QFlags
-//     writel(0x308+2, kDQE) // DrvQHdr.QHead
-//     writel(0x308+6, kDQE) // DrvQHdr.QTail
-//     for i := -4; i < 16; i += 2 {
-//         writew(kDQE + uint32(i), 0)
-//     }
-//
-//     // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
-//     for i := 0; i < 178; i += 2 {
-//         writew(kVCB + uint32(i), 0)
-//     }
-//     writew(kVCB + 78, 2) // vcbVRefNum
-//     writePstring(kVCB + 44, onlyvolname) // vcbVName
-//
-//     // File Control Block table
-//     writel(0x34e, kFCBTable) // FCBSPtr
-//     writew(0x3f6, 94) // FSFCBLen
-//     writew(kFCBTable, 2 + 94 * 348) // size of FCB table
-//
-//     // Misc globals
-//     writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
-//     writel(0x2f4, 0) // CaretTime = 0 ticks
-//     writel(0x316, 0) // we don't implement the 'MPGM' interface
-//     writel(0x31a, 0x00ffffff) // Lo3Bytes
-//     writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
-//     writePstring(0x910, "ToolServer")
-//     writel(0x9d6, 0) // WindowList empty
-//     writel(0xa02, 0x00010001) // OneOne
-//     writel(0xa06, 0xffffffff) // MinusOne
-// //     writel(0xa1c, newhandle(6)) // MenuList empty
-//     writel(0xa50, 0) // TopMapHndl
-//
-//     // Disable the status window in preferences
-//     os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
-//     os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
-//
-//     // Open a script as if from Finder
-//     writel(d0ptr, 128)
-//     call_m68k(executable_atrap(0xa122))
-//     appParms := readl(a0ptr)
-//     writel(0xaec, appParms)
-//     appParms = readl(appParms) // handle to pointer
-//     writew(appParms + 2, 1) // one file
-//     writew(appParms + 4, get_macos_dnum(systemFolder))
-//     writel(appParms + 6, 0x54455854) // TEXT
-//     writePstring(appParms + 12, "Script")
-//
-//     os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set"), 0o777) // this is where our command goes!
-//     os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
-//     os.Create(filepath.Join(systemFolder, "Script.out"))
-//     os.Create(filepath.Join(systemFolder, "Script.err"))
-//
-//     push(32, 0)
-//     fileNamePtr := readl(spptr)
-//     pushw(0) // refnum return
-//     pushw(2) // vol id
-//     pushl(uint32(get_macos_dnum(filepath.Join(systemFolder, "MPW"))))
-//     writePstring(fileNamePtr, "ToolServer")
-//     pushl(fileNamePtr) // pointer to the file string
-//     call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
-//
-//     writew(0xa58, readw(0xa5a)) // SysMap = CurMap
-//
-//     pushl(0) // handle return
-//     pushl(0x434f4445) // CODE
-//     pushw(0) // ID 0
-//     call_m68k(executable_atrap(0xa9a0)) // _GetResource
-//     code0 := pop(4)
-//     code0 = readl(pop(4)) // handle to pointer
-//
-//     jtsize := readl(code0 + 8)
-//     jtoffset := readl(code0 + 12)
-//
-//     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
-//
-//     call_m68k(kA5World + jtoffset + 2)
-    callTo := uint32(len(mem))
-    mem = append(mem, testTool...)
-    call_m68k(callTo)
+    writel(0x118, kFakeHeapHeader) // TheZone
+    writel(0x2a6, kFakeHeapHeader) // SysZone
+    writel(0x2aa, kFakeHeapHeader) // ApplZone
+    writel(kFakeHeapHeader, 0xffffffe) // bkLim
+    writel(0x130, 0) // ApplLimit
 
+    // 1 Drive Queue Element
+    writew(0x308, 0) // DrvQHdr.QFlags
+    writel(0x308+2, kDQE) // DrvQHdr.QHead
+    writel(0x308+6, kDQE) // DrvQHdr.QTail
+    for i := -4; i < 16; i += 2 {
+        writew(kDQE + uint32(i), 0)
+    }
+
+    // 1 Volume Control Block is needed for the "GetVRefNum" glue routine
+    for i := 0; i < 178; i += 2 {
+        writew(kVCB + uint32(i), 0)
+    }
+    writew(kVCB + 78, 2) // vcbVRefNum
+    writePstring(kVCB + 44, onlyvolname) // vcbVName
+
+    // File Control Block table
+    writel(0x34e, kFCBTable) // FCBSPtr
+    writew(0x3f6, 94) // FSFCBLen
+    writew(kFCBTable, 2 + 94 * 348) // size of FCB table
+
+    // Misc globals
+    writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
+    writel(0x2f4, 0) // CaretTime = 0 ticks
+    writel(0x316, 0) // we don't implement the 'MPGM' interface
+    writel(0x31a, 0x00ffffff) // Lo3Bytes
+    writel(0x33c, 0) // IAZNotify = nothing to do when swapping worlds
+    writePstring(0x910, "ToolServer")
+    writel(0x9d6, 0) // WindowList empty
+    writel(0xa02, 0x00010001) // OneOne
+    writel(0xa06, 0xffffffff) // MinusOne
+//     writel(0xa1c, newhandle(6)) // MenuList empty
+    writel(0xa50, 0) // TopMapHndl
+
+    // Disable the status window in preferences
+    os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
+    os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
+
+    // Open a script as if from Finder
+    writel(d0ptr, 128)
+    call_m68k(executable_atrap(0xa122))
+    appParms := readl(a0ptr)
+    writel(0xaec, appParms)
+    appParms = readl(appParms) // handle to pointer
+    writew(appParms + 2, 1) // one file
+    writew(appParms + 4, get_macos_dnum(systemFolder))
+    writel(appParms + 6, 0x54455854) // TEXT
+    writePstring(appParms + 12, "Script")
+
+    os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set"), 0o777) // this is where our command goes!
+    os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
+    os.Create(filepath.Join(systemFolder, "Script.out"))
+    os.Create(filepath.Join(systemFolder, "Script.err"))
+
+    push(32, 0)
+    fileNamePtr := readl(spptr)
+    pushw(0) // refnum return
+    pushw(2) // vol id
+    pushl(uint32(get_macos_dnum(filepath.Join(systemFolder, "MPW"))))
+    writePstring(fileNamePtr, "ToolServer")
+    pushl(fileNamePtr) // pointer to the file string
+    call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
+
+    writew(0xa58, readw(0xa5a)) // SysMap = CurMap
+
+    pushl(0) // handle return
+    pushl(0x434f4445) // CODE
+    pushw(0) // ID 0
+    call_m68k(executable_atrap(0xa9a0)) // _GetResource
+    code0 := pop(4)
+    code0 = readl(pop(4)) // handle to pointer
+
+    jtsize := readl(code0 + 8)
+    jtoffset := readl(code0 + 12)
+
+    copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
+
+    call_m68k(kA5World + jtoffset + 2)
 }
