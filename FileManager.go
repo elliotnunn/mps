@@ -688,3 +688,193 @@ func tFSDispatch() {
         panic(str.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr + 2)))
     }
 }
+
+
+//#######################################################################
+// Code for reading Finder info and resource forks
+//#######################################################################
+
+func rez_strip_comments(rez string) {
+    pattern := regex.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
+
+    return pattern.ReplaceAllString(rez, `\1 `) // keep quotes, append a space to be safe
+}
+
+func rez_string_literal(string_with_quotes string) {
+    pattern := regex.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
+    string_alone := string_with_quotes[1:-1]
+    splits := pattern.FindAllSubmatchIndex(string_alone)
+
+    retval := ""
+
+    for loc := range splits {
+        start := loc[0]
+        end := loc[1]
+
+        char := '?'
+        switch end - start {
+        case 1:
+            char = string_alone[start]
+        case 2:
+            switch string_alone[start + 1] {
+            case 'b':
+                char = 8 // backspace
+            case 't':
+                char = 9 // tab
+            case 'r':
+                char = 10 // LF (opposite to convention)
+            case 'v':
+                char = 11 // vertical tab
+            case 'f':
+                char = 12 // form feed
+            case 'n':
+                char = 13 // CR (opposite to convention)
+            case '?':
+                char = 127 // backspace
+            default:
+                char = string_alone[start + 1]
+            }
+        case 5:
+            char, _ = strconv.ParseInt(string_alone[start+3:start+5], 16, 8)
+        }
+        retval = append(retval, char)
+    }
+
+    return retval
+}
+
+func rez(path string) (fork []byte, err error) {
+    pattern := regex.MustCompile(
+        `data\s*('(?:[^'\\]|\\.){4}')\s*` +
+        `\(\s*` +
+        `(-?\d+)\s*` +
+        `(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
+        `((?:,\s*(?:\$[0-9a-fA-F]|sysheap|purgeable|locked|protected|preload)\s*)*)` +
+        `\)\s*` +
+        `\{\s*` +
+        `((?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*` +
+        `\}\s*;\s*|.`)
+
+    rez, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+
+    rez = rez_strip_comments(rez)
+
+    type resource struct {
+        type_ uint32
+        id uint16
+        flags uint8
+        has_name bool
+        name string
+        data []byte
+    }
+
+    type_order := make([]uint32, 0)
+    type_ids := make(map[uint32][]resource)
+
+    splits := pattern.FindAllSubmatchIndex(rez)
+    for loc := range splits {
+        if loc[1] - loc[0] == 1 {
+            return nil, errors.New(fmt.Sprintf("bad rez file %s", path))
+        }
+
+        type_str := rez[loc[2]:loc[3]]
+        id_str := rez[loc[4]:loc[5]]
+        name_str := rez[loc[6]:loc[7]]
+        flags_str := rez[loc[8]:loc[9]]
+        data_str := rez[loc[10]:loc[11]]
+
+        var res resource
+
+        res.type_ = binary.BigEndian.Uint32(rez_string_literal(type_str))
+        res.id, err = strconv.ParseInt(id_str, 10, 16)
+        if err != nil { // might fail with out-of-range number
+            return nil, errors.New("out-of-range ID in res file")
+        }
+
+        if len(name_str) > 0 {
+            res.has_name = true
+            res.name = rez_string_literal(name_str)
+        }
+
+        for _, arg := range string.Split(flags_str, ",") {
+            arg = strings.TrimSpace(arg)
+            switch arg {
+            case "sysheap":
+                res.flags |= 0x40
+            case "purgeable":
+                res.flags |= 0x20
+            case "locked":
+                res.flags |= 0x10
+            case "protected":
+                res.flags |= 0x08
+            case "preload":
+                res.flags |= 0x04
+            default: // regex guarantees that this is $FF
+                theseflags, err := strconv.ParseInt(arg[1:], 16, 8)
+                res.flags |= theseflags
+            }
+        }
+
+        if ids, ok := type_ids[type_]; !ok {
+            type_order = append(type_order, type_)
+        }
+
+        type_ids[type_] = append(type_ids[type_], res)
+    }
+
+    fork = make([]byte, 256) // append resource data as we go
+
+    type_list := make([]byte, 2 + 8 * len(types)) // alloc type list, append ref list
+    name_list := make([]byte, 0)
+
+    binary.BigEndian.PutUint16(type_list, (len(type_order) - 1) % 0xffff)
+
+    for type_n, type_ := range type_order {
+        offset := 2 + 8 * type_n
+        binary.BigEndian.PutUint32(type_list[offset:], type_)
+        binary.BigEndian.PutUint16(type_list[offset+4:], len(type_ids[type_]) - 1)
+        binary.BigEndian.PutUint16(type_list[offset+6:], len(type_list))
+
+        for _, res := range type_ids[type_] {
+            name_offset := uint16(0xffff)
+            if res.has_name {
+                name_offset = uint16(len(name_list))
+                name_list = append(name_list, res.name...)
+            }
+
+            for i := 0; i < 12; i++ {
+                type_list = append(type_list, 0)
+            }
+            binary.BigEndian.PutUint16(type_list[-12:], uint16(res.id))
+            binary.BigEndian.PutUint16(type_list[-10:], name_offset)
+            binary.BigEndian.PutUint32(type_list[-8:], (uint32(flags) << 24) | (len(fork) - 256))
+
+            fork = append(fork, 0, 0, 0, 0)
+            binary.BigEndian.PutUint32(fork[-4:], len(res.data))
+            fork = append(fork, res.data...)
+            for len(fork) % 4 != 0 {
+                fork = append(fork, 0)
+            }
+        }
+    }
+
+    boundary := len(fork) // between resource data and resource map
+
+    // Create resource map
+    for i := 0; i < 28; i++ {
+        fork = append(fork, 0)
+    }
+    binary.BigEndian.PutUint16(type_list[-4:], 28)
+    binary.BigEndian.PutUint16(type_list[-2:], 28 + len(type_list))
+
+    fork = append(fork, type_list)
+    fork = append(fork, name_list)
+
+    binary.BigEndian.PutUint32(fork, 0)
+    binary.BigEndian.PutUint32(fork[4:], 256)
+    binary.BigEndian.PutUint32(fork[8:], boundary - 256)
+    binary.BigEndian.PutUint32(fork[12:], len(fork) - boundary)
+}

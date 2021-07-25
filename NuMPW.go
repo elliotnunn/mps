@@ -1101,231 +1101,37 @@ func call_m68k(addr uint32) {
 }
 
 //#######################################################################
-// Code for reading Finder info and resource forks
-//#######################################################################
-
-func rez_strip_comments(rez string) {
-    pattern := regex.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
-
-    return pattern.ReplaceAllString(rez, `\1 `) // keep quotes, append a space to be safe
-}
-
-func rez_string_literal(string_with_quotes string) {
-    pattern := regex.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
-    string_alone := string_with_quotes[1:-1]
-    splits := pattern.FindAllSubmatchIndex(string_alone)
-
-    retval := ""
-
-    for loc := range splits {
-        start := loc[0]
-        end := loc[1]
-
-        char := '?'
-        switch end - start {
-        case 1:
-            char = string_alone[start]
-        case 2:
-            switch string_alone[start + 1] {
-            case 'b':
-                char = 8 // backspace
-            case 't':
-                char = 9 // tab
-            case 'r':
-                char = 10 // LF (opposite to convention)
-            case 'v':
-                char = 11 // vertical tab
-            case 'f':
-                char = 12 // form feed
-            case 'n':
-                char = 13 // CR (opposite to convention)
-            case '?':
-                char = 127 // backspace
-            default:
-                char = string_alone[start + 1]
-            }
-        case 5:
-            char, _ = strconv.ParseInt(string_alone[start+3:start+5], 16, 8)
-        }
-        retval = append(retval, char)
-    }
-
-    return retval
-}
-
-func rez(path string) (fork []byte, err error) {
-    pattern := regex.MustCompile(
-        `data\s*('(?:[^'\\]|\\.){4}')\s*` +
-        `\(\s*` +
-        `(-?\d+)\s*` +
-        `(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
-        `((?:,\s*(?:\$[0-9a-fA-F]|sysheap|purgeable|locked|protected|preload)\s*)*)` +
-        `\)\s*` +
-        `\{\s*` +
-        `((?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*` +
-        `\}\s*;\s*|.`)
-
-    rez, err := os.ReadFile(path)
-    if err != nil {
-        return nil, err
-    }
-
-    rez = rez_strip_comments(rez)
-
-    type resource struct {
-        type_ uint32
-        id uint16
-        flags uint8
-        has_name bool
-        name string
-        data []byte
-    }
-
-    type_order := make([]uint32, 0)
-    type_ids := make(map[uint32][]resource)
-
-    splits := pattern.FindAllSubmatchIndex(rez)
-    for loc := range splits {
-        if loc[1] - loc[0] == 1 {
-            return nil, errors.New(fmt.Sprintf("bad rez file %s", path))
-        }
-
-        type_str := rez[loc[2]:loc[3]]
-        id_str := rez[loc[4]:loc[5]]
-        name_str := rez[loc[6]:loc[7]]
-        flags_str := rez[loc[8]:loc[9]]
-        data_str := rez[loc[10]:loc[11]]
-
-        var res resource
-
-        res.type_ = binary.BigEndian.Uint32(rez_string_literal(type_str))
-        res.id, err = strconv.ParseInt(id_str, 10, 16)
-        if err != nil { // might fail with out-of-range number
-            return nil, errors.New("out-of-range ID in res file")
-        }
-
-        if len(name_str) > 0 {
-            res.has_name = true
-            res.name = rez_string_literal(name_str)
-        }
-
-        for _, arg := range string.Split(flags_str, ",") {
-            arg = strings.TrimSpace(arg)
-            switch arg {
-            case "sysheap":
-                res.flags |= 0x40
-            case "purgeable":
-                res.flags |= 0x20
-            case "locked":
-                res.flags |= 0x10
-            case "protected":
-                res.flags |= 0x08
-            case "preload":
-                res.flags |= 0x04
-            default: // regex guarantees that this is $FF
-                theseflags, err := strconv.ParseInt(arg[1:], 16, 8)
-                res.flags |= theseflags
-            }
-        }
-
-        if ids, ok := type_ids[type_]; !ok {
-            type_order = append(type_order, type_)
-        }
-
-        type_ids[type_] = append(type_ids[type_], res)
-    }
-
-    fork = make([]byte, 256) // append resource data as we go
-
-    type_list := make([]byte, 2 + 8 * len(types)) // alloc type list, append ref list
-    name_list := make([]byte, 0)
-
-    binary.BigEndian.PutUint16(type_list, (len(type_order) - 1) % 0xffff)
-
-    for type_n, type_ := range type_order {
-        offset := 2 + 8 * type_n
-        binary.BigEndian.PutUint32(type_list[offset:], type_)
-        binary.BigEndian.PutUint16(type_list[offset+4:], len(type_ids[type_]) - 1)
-        binary.BigEndian.PutUint16(type_list[offset+6:], len(type_list))
-
-        for _, res := range type_ids[type_] {
-            name_offset := uint16(0xffff)
-            if res.has_name {
-                name_offset = uint16(len(name_list))
-                name_list = append(name_list, res.name...)
-            }
-
-            for i := 0; i < 12; i++ {
-                type_list = append(type_list, 0)
-            }
-            binary.BigEndian.PutUint16(type_list[-12:], uint16(res.id))
-            binary.BigEndian.PutUint16(type_list[-10:], name_offset)
-            binary.BigEndian.PutUint32(type_list[-8:], (uint32(flags) << 24) | (len(fork) - 256))
-
-            fork = append(fork, 0, 0, 0, 0)
-            binary.BigEndian.PutUint32(fork[-4:], len(res.data))
-            fork = append(fork, res.data...)
-            for len(fork) % 4 != 0 {
-                fork = append(fork, 0)
-            }
-        }
-    }
-
-    boundary := len(fork) // between resource data and resource map
-
-    // Create resource map
-    for i := 0; i < 28; i++ {
-        fork = append(fork, 0)
-    }
-    binary.BigEndian.PutUint16(type_list[-4:], 28)
-    binary.BigEndian.PutUint16(type_list[-2:], 28 + len(type_list))
-
-    fork = append(fork, type_list)
-    fork = append(fork, name_list)
-
-    binary.BigEndian.PutUint32(fork, 0)
-    binary.BigEndian.PutUint32(fork[4:], 256)
-    binary.BigEndian.PutUint32(fork[8:], boundary - 256)
-    binary.BigEndian.PutUint32(fork[12:], len(fork) - boundary)
-}
-
-//#######################################################################
 // The Macintosh Toolbox. Wish me luck...
 //#######################################################################
 
 // Trap Manager OS traps
 
 // For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
-func trap_kind(requested_trap uint16, requesting_trap uint16) (uint16, rune) {
+func trapTableEntry(requested_trap uint16, requesting_trap uint16) uint32 {
     if requesting_trap & 0x200 != 0 { // newOS/newTool trap
-        if requesting_trap & 0x400 {
-            return requested_trap & 0x3ff, 't'
+        if requesting_trap & 0x400 != 0 {
+            return kToolTable + 4 * uint32(requested_trap & 0x3ff)
         } else {
-            return requested_trap & 0xff, 'o'
+            return kOSTable + 4 * uint32(requested_trap & 0xff)
         }
     } else { // guess, using traditional trap numbering
         requested_trap &= 0x1ff // 64k ROM had a single 512-entry trap table
         if requested_trap <= 0x4f || requested_trap == 0x54 || requested_trap == 0x57 {
-            return requested_trap, 'o'
+            return kOSTable + 4 * uint32(requested_trap)
         } else {
-            return requested_trap, 't'
+            return kToolTable + 4 * uint32(requested_trap)
         }
     }
 }
 
 func tGetTrapAddress() {
-    trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
-    if trapkind == 't' {
-        trapnum += 0x100 // index into our special table
-    }
-    writel(a0ptr, trap_address_table[trapnum])
+    tableEntry := trapTableEntry(readw(d0ptr + 2), readw(d1ptr + 2))
+    writel(a0ptr, readl(tableEntry))
 }
+
 func tSetTrapAddress() {
-    trapnum, trapkind = trap_kind(readw(d0ptr + 2), readw(d1ptr + 2))
-    if trapkind == 't' {
-        trapnum += 0x100 // index into our special table
-    }
-    trap_address_table[trapnum] = readl(a0ptr)
+    tableEntry := trapTableEntry(readw(d0ptr + 2), readw(d1ptr + 2))
+    writel(tableEntry, readl(a0ptr))
 }
 
 // Segment Loader Toolbox traps
@@ -1344,12 +1150,12 @@ func tLoadSeg() {
     count := readw(segPtr + 2) // number of jump table entries
 
     for i := first; i < first + count; i++ {
-        jtEntry := readl(a5ptr) + 32 + 8*i
+        jtEntry := readl(a5ptr) + 32 + 8*uint32(i)
 
         offsetInSegment := readw(jtEntry)
         writew(jtEntry, segNum)
         writew(jtEntry + 2, 0x4ef9) // jmp
-        writel(jtEntry + 4, segPtr + 4 + offsetInSegment)
+        writel(jtEntry + 4, segPtr + 4 + uint32(offsetInSegment))
     }
 
     pc -= 6
@@ -1361,27 +1167,27 @@ func tLoadSeg() {
 
 // QuickDraw Toolbox traps
 func tBitAnd() {
-    result = popl() & popl()
+    result := popl() & popl()
     writel(readl(spptr), result)
 }
 func tBitXor() {
-    result = popl() ^ popl()
+    result := popl() ^ popl()
     writel(readl(spptr), result)
 }
 
 func tBitNot() {
-    result = ^popl()
+    result := ^popl()
     writel(readl(spptr), result)
 }
 
 func tBitOr() {
-    result = popl() | popl()
+    result := popl() | popl()
     writel(readl(spptr), result)
 }
 
 func tBitShift() {
-    by = signed(2, popw())
-    result = popl()
+    by := int16(popw())
+    result := popl()
     if by > 0 {
         result <<= by % 32
     } else {
@@ -1425,16 +1231,16 @@ func tBitClr() {
 // }
 
 func tHiWord() {
-    x = popw(); popw(); writew(readl(spptr), x)
+    val := popw(); popw(); writew(readl(spptr), val)
 }
 
 func tLoWord() {
-    popw(); x = popw(); writew(readl(spptr), x)
+    popw(); val := popw(); writew(readl(spptr), val)
 }
 
 func tInitGraf() {
     a5 := readl(a5ptr)
-    qd = popl()
+    qd := popl()
     writel(a5, qd)
     writel(qd, 0xf8f8f8f8) // illegal thePort address
 }
@@ -1449,8 +1255,8 @@ func tSetPort() {
 func tGetPort() {
     a5 := readl(a5ptr)
     qd := readl(a5)
-    port = readl(qd)
-    retaddr = popl()
+    port := readl(qd)
+    retaddr := popl()
     writel(retaddr, port)
 }
 
@@ -1489,19 +1295,20 @@ func tSysError() {
 func tSysEnvirons() {
     block := readl(a0ptr)
     write(16, block, 0) // wipe
-    writew(block) // environsVersion = 2
+    writew(block, 2) // environsVersion = 2
     writew(block + 2, 3) // machineType = SE
     writew(block + 4, 0x0700) // systemVersion = seven
     writew(block + 6, 3) // processor = 68020
 }
 
 func tGestalt() {
-    selector := d0.to_bytes(4, "big")
+    trap := readw(d0ptr + 2)
+    selector := string(mem[d0ptr:][:4])
 
     if trap & 0x600 == 0 { // ab=00
         var reply uint32
         var err int
-        switch mem[d0:d0+4] {
+        switch selector {
         case "sysv":
             reply = 0x09228000 // highest possible
         case "fs  ":
@@ -1513,7 +1320,7 @@ func tGestalt() {
         }
 
         writel(a0ptr, reply)
-        writew(d0ptr, uint32(err))
+        writew(d0ptr, uint16(err))
 
     } else if trap & 0x600 == 0x200 { // ab=01
         panic("NewGestalt unimplemented")
