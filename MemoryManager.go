@@ -12,7 +12,7 @@ func return_memerr(result int) {
 }
 
 var block_sizes map[uint32]uint32
-var master_ptrs map[uint32]bool
+var master_ptrs map[uint32]uint32
 
 func tGetZone() {
     return_memerr_and_d0(0)
@@ -39,7 +39,7 @@ func tNewPtr() {
         mem = append(mem, 0)
     }
     block := uint32(len(mem))
-    for len(mem) < block + size {
+    for uint32(len(mem)) < block + size {
         mem = append(mem, 0)
     }
     block_sizes[block] = size
@@ -49,8 +49,6 @@ func tNewPtr() {
 
 func tDisposPtr() {
     return_memerr_and_d0(0)
-    ptr := readl(a0ptr)
-    disposptr(ptr)
 }
 
 func tSetPtrSize() {
@@ -79,7 +77,8 @@ func tNewHandle() {
 }
 
 func tDisposHandle() {
-    tDisposPtr(readl(readl(a0ptr)))
+    writel(a0ptr, readl(readl(a0ptr)))
+    tDisposPtr()
 }
 
 func tSetHandleSize() {
@@ -93,7 +92,9 @@ func tSetHandleSize() {
         // can shrink the handle
         block_sizes[ptr] = size
     } else {
-        ptr2 := newptr(size)
+        writel(d0ptr, size)
+        tNewPtr()
+        ptr2 := readl(a0ptr)
         delete(master_ptrs, ptr)
         master_ptrs[ptr2] = handle
         copy(mem[ptr2:ptr2+size], mem[ptr:ptr+size])
@@ -109,15 +110,17 @@ func tGetHandleSize() {
 func tReallocHandle() {
     handle := readl(a0ptr)
     size := readl(d0ptr)
-    emptyhandle(handle)
-    writel(a0ptr, handle)
+    tEmptyHandle()
     writel(d0ptr, size)
-    sethandlesize(handle, size)
+    tNewPtr()
+    writel(handle, readl(a0ptr))
+    writel(a0ptr, handle)
+    return_memerr_and_d0(0)
 }
 
 func tRecoverHandle() {
     return_memerr(0) // preserves d0, oddly
-    writel(a0ptr, master_ptrs[readl(a0)])
+    writel(a0ptr, master_ptrs[readl(a0ptr)])
 }
 
 func tEmptyHandle() {
