@@ -138,7 +138,6 @@ func regAddr(reg uint16) uint32 {
 }
 
 func aregAddr(reg uint16) uint32 {
-    return regs + uint32(reg & 0xf) * 4
     return a0ptr + uint32(reg & 0xf) * 4
 }
 
