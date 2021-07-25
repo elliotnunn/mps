@@ -617,7 +617,7 @@ func line4(inst uint16) { // very,crowded,line
         for reg := uint16(0); reg < 16; reg++ {
             if which & (1 << reg) != 0 {
                 if !(reg >= 8 && mode >> 3 == 3 && reg & 7 == mode & 7) {
-                    regptr := regAddr(reg) + 4 - size
+                    regptr := regAddr(reg)
                     writel(regptr, signextend(size, read(size, ptr)))
                 }
                 ptr += size
