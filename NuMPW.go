@@ -718,16 +718,7 @@ func line7(inst uint16) { // moveq
     dn := inst >> 9 & 7
     val := extbl(uint8(inst))
 
-    n = false
-    if val < 0 {
-        n = true
-    }
-
-    z = false
-    if val == 0 {
-        z = true
-    }
-
+    set_nz(val, 4)
     v = false
     c = false
 
