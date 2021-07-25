@@ -139,6 +139,7 @@ func regAddr(reg uint16) uint32 {
 
 func aregAddr(reg uint16) uint32 {
     return regs + uint32(reg & 0xf) * 4
+    return a0ptr + uint32(reg & 0xf) * 4
 }
 
 func readRegs() (reglist [16]uint32) {
@@ -1058,6 +1059,18 @@ func lineE(inst uint16) {
     write(size, dest, result)
 }
 
+func printState() {
+    r := readRegs()
+    fmt.Printf("d0-7  %08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
+    fmt.Printf("a0-7  %08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
+    sp := readl(spptr)
+    fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11])
+
+    fmt.Println("")
+    fmt.Printf("%x: %04x\n", pc, readw(pc))
+    fmt.Println("")
+}
+
 func call_m68k(addr uint32) {
     const magic_return = 0
 
@@ -1066,6 +1079,7 @@ func call_m68k(addr uint32) {
     pc = addr
 
     for pc != magic_return {
+        printState()
         inst := readw(pc)
         pc += 2
         switch inst >> 12 {
@@ -1279,7 +1293,7 @@ func tGetPort() {
 
 func tDebugStr() {
     string := readPstring(popl())
-    fmt.Print(macToUnicode(string))
+    fmt.Println(macToUnicode(string))
 }
 
 // trap is in toolbox table but actually uses registers
@@ -1690,7 +1704,7 @@ var my_traps = [...]func(){
 //     tb_base + 0x1f4: tExitToShell,              // _ExitToShell
 //     tb_base + 0x1fa: tRetZero,                  // _UnlodeScrap
 //     tb_base + 0x1fb: tRetZero,                  // _LodeScrap
-//     tb_base + 0x3ff: tDebugStr,                 // _DebugStr
+    tb_base + 0x3ff: tDebugStr,                 // _DebugStr
 }
 
 func lineA(inst uint16) {
@@ -1889,4 +1903,8 @@ func main() {
 //     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
 //
 //     call_m68k(kA5World + jtoffset + 2)
+    callTo := uint32(len(mem))
+    mem = append(mem, testTool...)
+    call_m68k(callTo)
+
 }
