@@ -221,8 +221,10 @@ func tOpen() {
     }
 
     var data []byte
+    var err error
     if fork == 'd' {
-        if data, err := readFile(subpath); err != nil {
+        data, err = readFile(subpath)
+        if err != nil {
             panic("Failed to read a file that we were sure existed")
         }
     } else if fork == 'r' {
@@ -230,10 +232,14 @@ func tOpen() {
         rezScheme := subpath + ".rdump"
 
         // Try various resource fork schemes, fall back on empty fork
-        if data, err := readFile(fileExchangeScheme); err == nil {
-            // use it!
-        } else if data, err := readFile(rezScheme); err == nil {
-            data = rez(data) // rez should be able to panic for now
+        data, err = readFile(fileExchangeScheme)
+        if err != nil {
+            data, err = readFile(rezScheme)
+            if err == nil {
+                data = rez(data)
+            } else {
+                data = nil
+            }
         }
     }
 
@@ -594,7 +600,6 @@ func tSetVol() {
 
     paramblk_return(0) // by default
     pb := readl(a0ptr)
-    ioRefNum := readw(pb + 24)
 
     ioVNPtr := readl(pb + 18)
     if ioVNPtr != 0 {
@@ -705,7 +710,6 @@ func tFSDispatch() {
         tOpen()
 
     case 27: // MakeFSSpec
-        ioVRefNum := readw(pb + 22)
         ioDirID := readw(pb + 48 + 2)
         ioName := readPstring(readl(pb + 18))
         ioMisc := readl(pb + 28)
@@ -844,12 +848,32 @@ func rez(rez []byte) []byte {
             case "preload":
                 res.flags |= 0x04
             default: // regex guarantees that this is $FF
-                theseflags, err := strconv.ParseInt(arg[1:], 16, 8)
+                theseflags, _ := strconv.ParseInt(arg[1:], 16, 8)
                 res.flags |= uint8(theseflags)
             }
         }
 
-        if ids, ok := type_ids[res.type_]; !ok {
+        isFirstOfTwo := true
+        for _, hex := range data_str {
+            if '0' <= hex && hex <= '9' {
+                hex = hex - '0'
+            } else if 'a' <= hex && hex <= 'f' {
+                hex = hex - 'a' + 10
+            } else if 'A' <= hex && hex <= 'F' {
+                hex = hex - 'A' + 10
+            } else {
+                continue
+            }
+
+            if isFirstOfTwo {
+                res.data = append(res.data, hex << 4)
+            } else {
+                res.data[len(res.data) - 1] |= hex
+            }
+            isFirstOfTwo = !isFirstOfTwo
+        }
+
+        if _, ok := type_ids[res.type_]; !ok {
             type_order = append(type_order, res.type_)
         }
 

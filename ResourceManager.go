@@ -31,7 +31,6 @@ func resMapEntries(resMap uint32) (retval [][]uint32) {
     resMap = readl(resMap) // handle to pointer
 
     refbase := uint32(readw(resMap + 24))
-    namebase := uint32(readw(resMap + 26))
     num_types := uint32(readw(resMap + refbase) + 1)
 
     for t := uint32(0); t < num_types; t++ {
@@ -202,7 +201,7 @@ func tOpenRFPerm() {
 }
 
 func tHOpenResFile() {
-    permission := popw()
+    popw() // permission
     ioNamePtr := popl()
     ioDirID := popl()
     ioVRefNum := popw()
@@ -317,10 +316,10 @@ func tGetResource() {
     var handle uint32
     for _, resMap := range currentResMaps(only1Please) {
         for _, entriesOfType := range resMapEntries(resMap) {
-        typeEntry := entriesOfType[0]
+            typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
                 if rtype == readl(typeEntry) && rid == readw(idEntry) {
-                    handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                    handle = resToHand(resMap, typeEntry, idEntry, loadPlease)
                     goto found
                 }
             }
@@ -345,11 +344,11 @@ func tGetNamedResource() {
     var handle uint32
     for _, resMap := range currentResMaps(only1Please) {
         for _, entriesOfType := range resMapEntries(resMap) {
-        typeEntry := entriesOfType[0]
+            typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
                 hasName, theName := getResName(resMap, idEntry)
                 if rtype == readl(typeEntry) && hasName && rname == theName {
-                    handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                    handle = resToHand(resMap, typeEntry, idEntry, loadPlease)
                     goto found
                 }
             }
@@ -374,12 +373,12 @@ func tGetIndResource() {
     var handle uint32
     for _, resMap := range currentResMaps(only1Please) {
         for _, entriesOfType := range resMapEntries(resMap) {
-        typeEntry := entriesOfType[0]
+            typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
                 if rtype == readl(typeEntry) {
                     rindex--
                     if rindex == 0 {
-                        handle := resToHand(resMap, typeEntry, idEntry, loadPlease)
+                        handle = resToHand(resMap, typeEntry, idEntry, loadPlease)
                         goto found
                     }
                 }
@@ -439,7 +438,6 @@ func tHomeResFile() {
 
     for _, resMap := range allResMaps() {
         for _, entriesOfType := range resMapEntries(resMap) {
-        typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
                 if handle == readl(resMap + idEntry + 4) {
                     setResError(0)
@@ -459,7 +457,7 @@ func tSizeRsrc() {
 
     for _, resMap := range allResMaps() {
         for _, entriesOfType := range resMapEntries(resMap) {
-        typeEntry := entriesOfType[0]
+            typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
                 if handle == readl(resMap + idEntry + 4) {
                     setResError(0)
