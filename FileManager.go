@@ -12,8 +12,9 @@ import (
     "encoding/binary"
 )
 
-//go:embed MPW35
+//go:embed "ToolServer 1.1.1"
 var embedMPW embed.FS
+const embedDirName = "ToolServer 1.1.1"
 
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
 var dnums []string
@@ -31,7 +32,7 @@ const onlyvolname macstring = "_"
 func whichFS(path string) (string, bool) {
     prefix := systemFolder + "/MPW/"
     if strings.HasPrefix(path, prefix) {
-        return "MPW35/" + path[len(prefix):], true
+        return embedDirName + "/" + path[len(prefix):], true
     } else {
         return path, false
     }
@@ -736,13 +737,13 @@ func tFSDispatch() {
 
 var rezStripPattern = regexp.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
 func rez_strip_comments(in []byte) []byte {
-    return rezStripPattern.ReplaceAll(in, []byte(`\1 `)) // keep quotes, append a space to be safe
+    return rezStripPattern.ReplaceAll(in, []byte(`$1 `)) // keep quotes, append a space to be safe
 }
 
 func rez_string_literal(string_with_quotes []byte) []byte {
     pattern := regexp.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
     string_alone := string_with_quotes[1:len(string_with_quotes) - 1]
-    splits := pattern.FindAllSubmatchIndex(string_alone, 0)
+    splits := pattern.FindAllSubmatchIndex(string_alone, -1)
 
     var retval []byte
 
@@ -809,10 +810,16 @@ func rez(rez []byte) []byte {
     type_order := make([]uint32, 0)
     type_ids := make(map[uint32][]resource)
 
-    splits := rezPattern.FindAllSubmatchIndex(rez, 0)
+    splits := rezPattern.FindAllSubmatchIndex(rez, -1)
     for _, loc := range splits {
         if loc[1] - loc[0] == 1 {
             panic("bad rez")
+        }
+
+        for i := range loc {
+            if loc[i] == -1 {
+                loc[i] = 0
+            }
         }
 
         type_str := rez[loc[2]:loc[3]]
@@ -837,6 +844,10 @@ func rez(rez []byte) []byte {
 
         for _, arg := range strings.Split(string(flags_str), ",") {
             arg = strings.TrimSpace(arg)
+            if len(arg) == 0 {
+                continue
+            }
+
             switch arg {
             case "sysheap":
                 res.flags |= 0x40
@@ -898,6 +909,7 @@ func rez(rez []byte) []byte {
             name_offset := uint16(0xffff)
             if res.has_name {
                 name_offset = uint16(len(name_list))
+                name_list = append(name_list, uint8(len(res.name)))
                 name_list = append(name_list, res.name...)
             }
 
@@ -924,14 +936,14 @@ func rez(rez []byte) []byte {
     for i := 0; i < 28; i++ {
         fork = append(fork, 0)
     }
-    binary.BigEndian.PutUint16(type_list[boundary + 24:], 28)
-    binary.BigEndian.PutUint16(type_list[boundary + 26:], uint16(28 + len(type_list)))
+    binary.BigEndian.PutUint16(fork[boundary + 24:], 28)
+    binary.BigEndian.PutUint16(fork[boundary + 26:], uint16(28 + len(type_list)))
 
     fork = append(fork, type_list...)
     fork = append(fork, name_list...)
 
-    binary.BigEndian.PutUint32(fork, 0)
-    binary.BigEndian.PutUint32(fork[4:], 256)
+    binary.BigEndian.PutUint32(fork, 256)
+    binary.BigEndian.PutUint32(fork[4:], uint32(boundary))
     binary.BigEndian.PutUint32(fork[8:], uint32(boundary - 256))
     binary.BigEndian.PutUint32(fork[12:], uint32(len(fork) - boundary))
 
