@@ -1111,7 +1111,14 @@ func printState() {
         printName = ""
     }
 
-    fmt.Printf("%x: %04x %s\n\n", pc, readw(pc), printName)
+    printSeg := ""
+    for i, segOffset := range gSegmentOffsets {
+        if pc >= segOffset {
+            printSeg = fmt.Sprintf("%s+%x", gSegmentNames[i], pc - segOffset)
+        }
+    }
+
+    fmt.Printf("%x: %04x %s %s\n\n", pc, readw(pc), printSeg, printName)
 }
 
 func call_m68k(addr uint32) {
@@ -1194,6 +1201,8 @@ func tSetTrapAddress() {
 
 // Segment Loader Toolbox traps
 
+var gSegmentOffsets []uint32
+var gSegmentNames []string
 func tLoadSeg() {
     save := readRegs()
 
@@ -1203,6 +1212,9 @@ func tLoadSeg() {
     pushw(segNum)
     call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
     segPtr := readl(popl())
+
+    gSegmentOffsets = append(gSegmentOffsets, segPtr)
+    gSegmentNames = append(gSegmentNames, fmt.Sprintf("seg%d", segNum))
 
     offset := uint32(readw(segPtr)) // offset of first entry within jump table
     count := uint32(readw(segPtr + 2)) // number of jump table entries
