@@ -1175,11 +1175,11 @@ func tLoadSeg() {
     call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
     segPtr := readl(popl())
 
-    first := readw(segPtr) // index of first entry within jump table
-    count := readw(segPtr + 2) // number of jump table entries
+    offset := uint32(readw(segPtr)) // offset of first entry within jump table
+    count := uint32(readw(segPtr + 2)) // number of jump table entries
 
-    for i := first; i < first + count; i++ {
-        jtEntry := readl(a5ptr) + 32 + 8*uint32(i)
+    for i := uint32(0); i < count; i++ {
+        jtEntry := readl(a5ptr) + 0x20 + offset + 8 * i
 
         offsetInSegment := readw(jtEntry)
         writew(jtEntry, segNum)
