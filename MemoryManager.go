@@ -11,8 +11,8 @@ func return_memerr(result int) {
     writew(0x220, uint16(result))
 }
 
-var block_sizes map[uint32]uint32
-var master_ptrs map[uint32]uint32
+var block_sizes = make(map[uint32]uint32)
+var master_ptrs = make(map[uint32]uint32)
 
 func tGetZone() {
     return_memerr_and_d0(0)

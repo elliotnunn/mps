@@ -22,16 +22,16 @@ var dnums []string
 var systemFolder string
 
 // the contents of every open fork, indexed by refnum
-var filebuffers map[uint16][]byte
+var filebuffers = make(map[uint16][]byte)
 
 // MacOS's idea of the system root
 const onlyvolname macstring = "_"
 
 // Could apply to either filesystem
 func whichFS(path string) (string, bool) {
-    prefix := string(systemFolder) + "/MPW/"
+    prefix := systemFolder + "/MPW/"
     if strings.HasPrefix(path, prefix) {
-        return path[len(prefix):], true
+        return "MPW35/" + path[len(prefix):], true
     } else {
         return path, false
     }
@@ -215,7 +215,7 @@ func tOpen() {
         }
     }
 
-    if readl(fcbPtr) == 0 {
+    if readl(fcbPtr) != 0 {
         panic("Too many files/forks open (hundreds)")
 //         paramblk_return(-42); return // tmfoErr
     }

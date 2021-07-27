@@ -150,9 +150,9 @@ func readRegs() (reglist [16]uint32) {
     return
 }
 
-func writeRegs(reglist [16]uint32, which ...int) {
+func writeRegs(reglist [16]uint32, which ...uint32) {
     for _, i := range which {
-        writel(regs + uint32(4 * i), reglist[i])
+        writel(i, reglist[(i - regs) / 4])
     }
 }
 
@@ -1172,7 +1172,7 @@ func tLoadSeg() {
     pushl(0)
     pushl(0x434f4445) // CODE
     pushw(segNum)
-    call_m68k(executable_atrap(0xa9a9)) // _GetResource
+    call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
     segPtr := readl(popl())
 
     first := readw(segPtr) // index of first entry within jump table
@@ -1588,12 +1588,11 @@ func lineA(inst uint16) {
             pushl(readl(a0ptr))
         }
 
-        pc = readl(kOSTable + 4 * (uint32(inst) & 0xff))
+        call_m68k(readl(kOSTable + 4 * (uint32(inst) & 0xff)))
 
         if inst & 0x100 == 0 {
             writel(a0ptr, popl())
         }
-
         writel(a1ptr, popl())
         writel(d1ptr, popl())
         writel(d2ptr, popl())
@@ -1815,7 +1814,8 @@ func main() {
         tb_base + 0x3ff: tDebugStr,                 // _DebugStr
     }
 
-    systemFolder, err := ioutil.TempDir("", "NuMPW")
+    var err error // damn this variable shadowing behaviour!
+    systemFolder, err = ioutil.TempDir("", "NuMPW")
     if err != nil {
         panic("Failed to create temp directory")
     }
@@ -1921,19 +1921,24 @@ func main() {
     pushl(uint32(get_macos_dnum(filepath.Join(systemFolder, "MPW"))))
     writePstring(fileNamePtr, "ToolServer")
     pushl(fileNamePtr) // pointer to the file string
-    call_m68k(executable_atrap(0xa81a)) // _HOpenResFile
+    pushw(0) // permission
+    call_m68k(executable_atrap(0xac1a)) // _HOpenResFile ,autoPop
 
     writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
     pushl(0) // handle return
     pushl(0x434f4445) // CODE
     pushw(0) // ID 0
-    call_m68k(executable_atrap(0xa9a0)) // _GetResource
+    call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
     code0 := pop(4)
-    code0 = readl(pop(4)) // handle to pointer
+    fmt.Printf("c0hdl = %x\n", code0)
+    code0 = readl(code0) // handle to pointer
+    fmt.Printf("c0ptr = %x\n", code0)
 
     jtsize := readl(code0 + 8)
     jtoffset := readl(code0 + 12)
+    fmt.Println(jtsize)
+    fmt.Println(jtoffset)
 
     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
 

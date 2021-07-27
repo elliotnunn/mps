@@ -6,38 +6,42 @@ import (
 
 // Resource Manager Toolbox traps
 
-// All map handles from TopMapHndl
+// A note: all routines accept and return resource map pointers, not handles
+
+// All map POINTERS from TopMapHndl
 func allResMaps() (list []uint32) {
-    for handle := readl(0xa50); handle != 0; handle = readl(readl(handle) + 16) {
-        list = append(list, handle)
+    handle := readl(0xa50)
+    for handle != 0 {
+        ptr := readl(handle)
+        list = append(list, ptr)
+        handle = readl(ptr + 16)
     }
     return
 }
 
-// All map handles from CurMap
+// All map POINTERS from CurMap
 func currentResMaps(stopAt1 bool) (list []uint32) {
-    all_maps := allResMaps()
+    allMaps := allResMaps()
     CurMap := readw(0xa5a)
-    for i, maphdl := range all_maps {
-        if readw(readl(maphdl) + 20) == CurMap {
-            return all_maps[i:]
+    for i, resMap := range allMaps {
+        if readw(resMap + 20) == CurMap {
+            return allMaps[i:]
         }
     }
     return
 }
 
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
+// note that they are all absolute pointers being returned
 func resMapEntries(resMap uint32) (retval [][]uint32) {
-    resMap = readl(resMap) // handle to pointer
-
-    refbase := uint32(readw(resMap + 24))
-    num_types := uint32(readw(resMap + refbase) + 1)
+    refbase := resMap + uint32(readw(resMap + 24))
+    num_types := uint32(readw(refbase) + 1)
 
     for t := uint32(0); t < num_types; t++ {
         this_type_entry := refbase + 2 + 8 * t
-        num_ids := uint32(readw(resMap + this_type_entry + 4) + 1)
-        retval := append(retval, []uint32{this_type_entry})
-        first_of_this_type := uint32(readw(resMap + this_type_entry + 6))
+        num_ids := uint32(readw(this_type_entry + 4) + 1)
+        retval = append(retval, []uint32{this_type_entry})
+        first_of_this_type := uint32(readw(this_type_entry + 6))
 
         for i := uint32(0); i < num_ids; i++ {
             this_id_entry := refbase + first_of_this_type + 12 * i
@@ -50,11 +54,10 @@ func resMapEntries(resMap uint32) (retval [][]uint32) {
 func uniqueTypesInMaps(maps []uint32) (types []uint32) {
     var already map[uint32]bool
 
-    for _, handle := range maps {
-        ptr := readl(handle)
-        for _, entries := range resMapEntries(handle) {
+    for _, resMap := range maps {
+        for _, entries := range resMapEntries(resMap) {
             type_entry := entries[0] // ignore the type entries
-            the_type := readl(ptr + type_entry)
+            the_type := readl(type_entry)
             if !already[the_type] {
                 already[the_type] = true
                 types = append(types, the_type)
@@ -67,11 +70,10 @@ func uniqueTypesInMaps(maps []uint32) (types []uint32) {
 func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
     var already map[uint16]bool
 
-    for _, handle := range maps {
-        ptr := readl(handle)
-        for _, entries := range resMapEntries(handle) {
+    for _, resMap := range maps {
+        for _, entries := range resMapEntries(resMap) {
             type_entry := entries[0] // ignore the type entries
-            if the_type == readl(ptr + type_entry) {
+            if the_type == readl(type_entry) {
                 for _, id_entry := range entries[1:] {
                     the_id := readw(id_entry)
                     if !already[the_id] {
@@ -86,22 +88,18 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
 }
 
 // Use the resource map to find the data
-func resData(resMap, type_entry, id_entry uint32) []byte {
-    resMap = readl(resMap) // handle to pointer
-
+func resData(resMap, id_entry uint32) []byte {
     refnum := readw(resMap + 20)
     filedata := filebuffers[refnum]
 
-    data_ofs := binary.BigEndian.Uint32(filedata) + (readl(resMap + id_entry + 4) & 0xffffff) + 4
+    data_ofs := binary.BigEndian.Uint32(filedata) + (readl(id_entry + 4) & 0xffffff) + 4
     data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
     return filedata[data_ofs:][:data_len]
 }
 
 func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
-    resMap = readl(resMap) // handle to pointer
-
     // Is a memory block already recorded?
-    handle := readl(resMap + idEntry + 8)
+    handle := readl(idEntry + 8)
 
     if loadPlease == false && handle == 0 {
         // Create empty handle
@@ -109,7 +107,7 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
         handle = readl(a0ptr)
     } else if loadPlease == true && handle == 0 {
         // Create full handle
-        data := resData(resMap, typeEntry, idEntry)
+        data := resData(resMap, idEntry)
 
         writel(d0ptr, uint32(len(data)))
         call_m68k(executable_atrap(0xa122)) // _NewHandle
@@ -118,7 +116,7 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
         copy(mem[readl(handle):], data)
     } else if loadPlease == true && handle != 0 && readl(handle) == 0 {
         // Fill empty handle
-        data := resData(resMap, typeEntry, idEntry)
+        data := resData(resMap, idEntry)
 
         writel(d0ptr, uint32(len(data)))
         writel(a0ptr, handle)
@@ -128,15 +126,13 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
     }
 
     // Record memory block in map
-    writel(resMap + idEntry + 8, handle)
+    writel(idEntry + 8, handle)
     return handle
 }
 
 func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
-    resMap = readl(resMap) // handle to pointer
-
     nameList := uint32(readw(resMap + 26))
-    nameOffset := uint32(readw(resMap + idEntry + 2))
+    nameOffset := uint32(readw(idEntry + 2))
 
     if nameOffset == 0xffff {
         return false, ""
@@ -235,12 +231,12 @@ func tHOpenResFile() {
 
     // Create a handle to hold it
     writel(d0ptr, maplen)
-    call_m68k(executable_atrap(0xa20a)) // _NewHandle for map
+    call_m68k(executable_atrap(0xa122)) // _NewHandle for map
     maphdl := readl(a0ptr); mapptr := readl(maphdl)
 
     // The in-memory map's first 16b mirror the on-disk fork's first 16b
-    copy(mem[maphdl:], forkdata[mapstart:][:maplen])
-    copy(mem[maphdl:], forkdata[:16])
+    copy(mem[mapptr:], forkdata[mapstart:][:maplen])
+    copy(mem[mapptr:], forkdata[:16])
     writew(mapptr + 20, ioRefNum) // and there is a spot for the filenum too
 
     // Point TopMapHndl to us (start of the linked list)
@@ -278,34 +274,6 @@ func tGetIndType() {
 
     writel(theTypePtr, theType)
 }
-
-// func tGetResInfo() {
-//     nameptr := popl()
-//     typeptr := popl()
-//     idptr := popl()
-//     handle := popl()
-//
-//     for _, map := range iter_resource_maps(top_only=false, include_inactive=true) {
-//         for type_entry, res_entry in iter_map(map) {
-//             if readl(res_entry + 8) == handle {
-//                 if nameptr {
-//                     write_pstring(nameptr, get_resource_name(map, res_entry) || "")
-//                 }
-//                 if typeptr {
-//                     writel(typeptr, readl(type_entry))
-//                 }
-//                 if idptr {
-//                     writew(idptr, readw(res_entry))
-//
-//                 }
-//                 writew(0xa60, 0) // ResErr = noErr
-//                 return
-//
-//             }
-//         }
-//     }
-//     writew(0xa60, -192) // ResErr = resNotFound
-// }
 
 func tGetResource() {
     only1Please := gCurToolTrapNum & 0x3ff == 0x1f
@@ -439,7 +407,7 @@ func tHomeResFile() {
     for _, resMap := range allResMaps() {
         for _, entriesOfType := range resMapEntries(resMap) {
             for _, idEntry := range entriesOfType[1:] {
-                if handle == readl(resMap + idEntry + 4) {
+                if handle == readl(idEntry + 4) {
                     setResError(0)
                     writew(readl(spptr), readw(resMap + 20))
                     return
@@ -457,11 +425,10 @@ func tSizeRsrc() {
 
     for _, resMap := range allResMaps() {
         for _, entriesOfType := range resMapEntries(resMap) {
-            typeEntry := entriesOfType[0]
             for _, idEntry := range entriesOfType[1:] {
-                if handle == readl(resMap + idEntry + 4) {
+                if handle == readl(idEntry + 4) {
                     setResError(0)
-                    writel(readl(spptr), uint32(len(resData(resMap, typeEntry, idEntry))))
+                    writel(readl(spptr), uint32(len(resData(resMap, idEntry))))
                     return
                 }
             }
