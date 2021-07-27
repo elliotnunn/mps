@@ -639,7 +639,6 @@ func tSetFPos() {
 }
 
 func tFSDispatch() {
-    paramblk_return(0) // by default
     pb := readl(a0ptr)
 
     switch readw(d0ptr + 2) {
@@ -726,6 +725,8 @@ func tFSDispatch() {
     default:
         panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr + 2)))
     }
+
+    paramblk_return(0) // by default
 }
 
 

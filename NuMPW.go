@@ -1331,7 +1331,7 @@ func tSysEnvirons() {
 }
 
 func tGestalt() {
-    trap := readw(d0ptr + 2)
+    trap := readw(d1ptr + 2)
     selector := string(mem[d0ptr:][:4])
 
     if trap & 0x600 == 0 { // ab=00
