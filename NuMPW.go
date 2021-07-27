@@ -1931,14 +1931,10 @@ func main() {
     pushw(0) // ID 0
     call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
     code0 := pop(4)
-    fmt.Printf("c0hdl = %x\n", code0)
     code0 = readl(code0) // handle to pointer
-    fmt.Printf("c0ptr = %x\n", code0)
 
     jtsize := readl(code0 + 8)
     jtoffset := readl(code0 + 12)
-    fmt.Println(jtsize)
-    fmt.Println(jtoffset)
 
     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
 
