@@ -1054,6 +1054,8 @@ func lineE(inst uint16) {
     write(size, dest, result)
 }
 
+var curFuncStart, curFuncEnd uint32
+var curFuncName string
 func printState() {
     conds := []byte("xnzvc")
     if x {
@@ -1079,10 +1081,37 @@ func printState() {
     fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
     fmt.Println("")
 
+    // What about a function name?
+    if pc < curFuncStart || pc >= curFuncEnd {
+        curFuncStart = pc
+        curFuncEnd = uint32(len(mem))
+        curFuncName = ""
+        for try := pc; try + 130 <= uint32(len(mem)); try += 2 {
+            if mem[try] == 0x4e && (mem[try+1] == 0x75 || mem[try+1] == 0xd0) {
+                if mem[try+2] & 0xc0 == 0x80 {
+                    strlen := uint32(mem[try+2] & 0x3f)
+                    ok := true
+                    for _, ch := range mem[try+3:][:strlen] {
+                        if ch < 32 || ch >= 127 {
+                            ok = false
+                        }
+                    }
+                    if ok {
+                        curFuncEnd = try + 2
+                        curFuncName = string(mem[try+3:][:strlen])
+                        break
+                    }
+                }
+            }
+        }
+    }
 
+    printName := curFuncName
+    if pc < 0x100000 {
+        printName = ""
+    }
 
-    fmt.Printf("%x: %04x\n", pc, readw(pc))
-    fmt.Println("")
+    fmt.Printf("%x: %04x %s\n\n", pc, readw(pc), printName)
 }
 
 func call_m68k(addr uint32) {
