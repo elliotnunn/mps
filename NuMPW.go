@@ -6,6 +6,9 @@ import (
     "os"
     "path/filepath"
     "io/ioutil"
+    "embed"
+    "strconv"
+    "strings"
 )
 
 //#######################################################################
@@ -1666,10 +1669,14 @@ const (
     kFCBTable = 0xb0000 // 0x8000 above
     kDQE = 0xb9000 // 0x4 below and 0x10 above
     kVCB = 0xba000 // ????
+    kPACKs = 0xc0000
     kFTrapTable = 0xf0000 // 0x10000 above
     kHeap = 0x100000 // extends up
 )
 
+
+//go:embed "PACKs"
+var embedPACKs embed.FS
 
 func check_for_lurkers() {
     // we might do more involved things here, like check for heap corruption
@@ -1844,9 +1851,6 @@ func main() {
     //     tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
         tb_base + 0x1e5: tPop2,                     // _InitPack
         tb_base + 0x1e6: tNop,                      // _InitAllPacks
-    //     tb_base + 0x1eb: tFP68K,                    // _FP68K
-    //     tb_base + 0x1ec: tElems68K,                 // _Elems68K
-    //     tb_base + 0x1ee: tDecStr68K,                // _DecStr68K
         tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg
         tb_base + 0x1f1: tPop4,                     // _UnloadSeg
         tb_base + 0x1f4: tExitToShell,              // _ExitToShell
@@ -1886,6 +1890,17 @@ func main() {
             }
             writel(tableAddr, executable_ftrap(0xf000 | trap))
         }
+    }
+
+    // Get some PACKs
+    pax, _ := embedPACKs.ReadDir("PACKs")
+    packAddr := uint32(kPACKs)
+    for _, de := range pax {
+        tbTrapNum, _ := strconv.ParseUint(strings.Split(de.Name(), ".")[0], 16, 10)
+        pack, _ := embedPACKs.ReadFile("PACKs/" + de.Name())
+        copy(mem[packAddr:], pack)
+        writel(kToolTable + 4 * uint32(tbTrapNum), packAddr)
+        packAddr += uint32(len(pack))
     }
 
     // Starting point for stack
