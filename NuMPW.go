@@ -1372,6 +1372,7 @@ func tSysEnvirons() {
     writew(block + 2, 3) // machineType = SE
     writew(block + 4, 0x0700) // systemVersion = seven
     writew(block + 6, 3) // processor = 68020
+    writel(d0ptr, 0) // noErr
 }
 
 func tGestalt() {
