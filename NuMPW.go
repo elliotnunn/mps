@@ -1401,7 +1401,7 @@ func tGestalt() {
         }
 
         writel(a0ptr, reply)
-        writew(d0ptr, uint16(err))
+        writel(d0ptr, uint32(err))
 
     } else if trap & 0x600 == 0x200 { // ab=01
         panic("NewGestalt unimplemented")
@@ -1414,37 +1414,35 @@ func tGestalt() {
     }
 }
 
-// func tAliasDispatch() {
-//     selector = readl(regs)
-//     if selector == 0 { // FindFolder
-//         foundDirID = popl(); foundVRefNum = popl()
-//         createFolder = popw() >> 8
-//         folderType = popl().to_bytes(4, "big")
-//         vRefNum := popw() // ignore volume number
-//
-//         known := {b"pref": "Preferences"}
-//         filename := known.get(folderType, folderType.decode("ascii", "ignore"))
-//         path := systemFolder/filename
-//
-//         if createFolder {
-//             path.mkdir(exist_ok=true)
-//
-//         }
-//         if createFolder || path.exists() {
-//             oserr := 0 // noErr
-//             writew(foundVRefNum, 2)
-//             writel(foundDirID, uint32(get_macos_dnum(path)))
-//         } else {
-//             oserr := -43 // fnfErr
-//
-//         }
-//         writew(readl(spptr), oserr)
-//
-//     } else {
-//         raise NotImplementedError(f"_AliasDispatch {selector}")
-//
-//     }
-// }
+func tAliasDispatch() {
+    if readl(d0ptr) == 0 { // FindFolder
+        foundDirID := popl()
+        foundVRefNum := popl()
+        popb() // ignore createFolder
+        folderType := string(mem[readl(spptr):][:4]); popl()
+        popw() // ignore vRefNum
+
+        var path string
+        switch folderType {
+        case "pref", "sprf":
+            path = filepath.Join(systemFolder, "Preferences")
+        case "desk", "sdsk":
+            path = filepath.Join(systemFolder, "Desktop Folder")
+        case "trsh", "strs", "empt":
+            path = filepath.Join(systemFolder, "Trash")
+        case "temp":
+            path = filepath.Join(systemFolder, "Temporary Items")
+        default:
+            path = systemFolder
+        }
+
+        writew(foundVRefNum, 2)
+        writel(foundDirID, uint32(get_macos_dnum(path)))
+        writew(readl(spptr), 0) // noErr
+    } else {
+        panic("Unimplemented _AliasDispatch selector")
+    }
+}
 
 func tCmpString() {
     aptr := readl(a0ptr)
@@ -1780,7 +1778,7 @@ func main() {
         tb_base + 0x01c: tCountTypes,               // _Count1Types
         tb_base + 0x01f: tGetResource,              // _Get1Resource
         tb_base + 0x020: tGetNamedResource,         // _Get1NamedResource
-    //     tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
+        tb_base + 0x023: tAliasDispatch,            // _AliasDispatch
         tb_base + 0x034: tPop2,                     // _SetFScaleDisable
         tb_base + 0x050: tNop,                      // _InitCursor
         tb_base + 0x051: tPop4,                     // _SetCursor
@@ -1957,6 +1955,11 @@ func main() {
     writel(0xa06, 0xffffffff) // MinusOne
 //     writel(0xa1c, newhandle(6)) // MenuList empty
     writel(0xa50, 0) // TopMapHndl
+
+    // Create some useful folders
+    for _, n := range []string{"Preferences", "Desktop Folder", "Trash", "Temporary Items"} {
+        os.Mkdir(filepath.Join(systemFolder, n), 0o777)
+    }
 
     // Disable the status window in preferences
     os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
