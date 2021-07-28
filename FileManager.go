@@ -31,7 +31,9 @@ const onlyvolname macstring = "_"
 // Could apply to either filesystem
 func whichFS(path string) (string, bool) {
     prefix := systemFolder + "/MPW/"
-    if strings.HasPrefix(path, prefix) {
+    if path == prefix[:len(prefix) - 1] {
+        return embedDirName, true
+    } else if strings.HasPrefix(path, prefix) {
         return embedDirName + "/" + path[len(prefix):], true
     } else {
         return path, false
@@ -50,26 +52,27 @@ func fcbFromRefnum(refnum uint16) uint32 {
     return FCBSPtr + uint32(refnum)
 }
 
-func get_host_path(number uint16, macname macstring, leafMustExist bool) (string, int) {
-    name := macToUnicode(macname)
-
+func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
     // If string is abolute then ignore the number, use the special root ID
-    if strings.Contains(name, ":") && !strings.HasPrefix(name, ":") {
+    if strings.Contains(string(name), ":") && !strings.HasPrefix(string(name), ":") {
         number = 2
-        root_and_name := strings.SplitN(name, ":", 2)
-        name = root_and_name[1]
+        root_and_name := strings.SplitN(string(name), ":", 2)
+        name = macstring(root_and_name[1])
 
-        if root_and_name[0] != macToUnicode(onlyvolname) {
+        if macstring(root_and_name[0]) != onlyvolname {
             return "", -43 // fnfErr
         }
     }
 
     if int(number) > len(dnums) {
-        return "", -32 // fnfErr
+        return "", -43 // fnfErr
     }
     path := dnums[number]
 
-    components := strings.Split(name, ":")
+    var components []macstring
+    for _, component := range strings.Split(string(name), ":") {
+        components = append(components, macstring(component))
+    }
 
     // remove stray empty components, because they behave like '..'
     if len(components) > 0 && len(components[0]) == 0 {
@@ -79,11 +82,31 @@ func get_host_path(number uint16, macname macstring, leafMustExist bool) (string
         components = components[:len(components) - 1]
     }
 
-    for _, component := range components {
-        if len(component) > 0 {
-            path = filepath.Join(path, component)
-        } else {
+    for i, component := range components {
+        if len(component) == 0 { // treat :: like ..
             path = filepath.Dir(path)
+        } else {
+            listing, listErr := listdir(path)
+            if listErr != 0 {
+                return "", listErr
+            }
+
+            exists := false
+            for _, el := range listing {
+                if macUpper(el) == macUpper(component) {
+                    component = el // use the correct case in the path
+                    exists = true
+                    break
+                }
+            }
+
+            if !exists { // can tolerate a nonexistent leaf file if instructed
+                if i <= len(components) - 1 || leafMustExist {
+                    return "", -32 // fnfErr
+                }
+            }
+
+            path = filepath.Join(path, macToUnicode(component))
         }
     }
 
@@ -99,7 +122,7 @@ func listdir(path string) ([]macstring, int) {
 
     dirents, err := readDir(path)
     if err != nil {
-        panic("Failed reading a directory")
+        panic(err)
     }
 
     var macfiles []macstring
@@ -196,6 +219,7 @@ func tOpen() {
     number := get_vol_or_dir()
 
     path, errno := get_host_path(number, ioName, true)
+    fmt.Printf("tOpen n=%x ioName=%s i.e. %s %d\n", number, string(ioName), path, errno)
     if errno != 0 {
         paramblk_return(errno); return // fnfErr
     }
@@ -458,9 +482,15 @@ func tGetFInfo() { // also implements GetCatInfo
     var fname macstring
     return_fname := false
 
+    x, _ := get_host_path(dirid, macstring(""), true)
+
+    fmt.Printf("tGetFInfo: ioFDirIndex=%d ioName=%s base=%s\n", ioFDirIndex, macToUnicode(readPstring(ioNamePtr)), x)
+
     if trap & 0xff == 0x60 && ioFDirIndex < 0 {
+        // info about dir specified by ioDirID, ignore ioNamePtr
         return_fname = true
     } else if ioFDirIndex > 0 {
+        // info about file specified by ioVRefNum and ioFDirIndex
         return_fname = true
 
         path, errno := get_host_path(dirid, macstring(""), true)
@@ -478,13 +508,9 @@ func tGetFInfo() { // also implements GetCatInfo
         }
 
         fname = listing[ioFDirIndex - 1]
-    } else {
+    } else { // zero or (if GetFInfo) negative
+        // info about file specified by ioVRefnum and ioNamePtr
         fname = readPstring(ioNamePtr)
-    }
-
-    // clear our block of return values, which is longer for GetCatInfo
-    for i := uint32(0); (trap & 0xff == 0x60 && i < 84) || (i < 56); i++ {
-        writeb(pb + 24 + i, 0)
     }
 
     path, errno := get_host_path(dirid, fname, true)
@@ -492,19 +518,24 @@ func tGetFInfo() { // also implements GetCatInfo
         paramblk_return(errno); return
     }
 
+    // at this point, we know that the file exists. let's try listing
+    listing, listErr := listdir(path)
+    isDir := listErr == 0
+
+    // clear our block of return values, which is longer for GetCatInfo
+    for i := uint32(0); (trap & 0xff == 0x60 && i < 84) || (i < 56); i++ {
+        writeb(pb + 24 + i, 0)
+    }
+
     if return_fname && ioNamePtr != 0 {
         writePstring(ioNamePtr, fname)
         // missing logic to switch file separator
     }
 
-    if !is_regular_file(path) {
+    if isDir {
         writeb(pb + 30, 1 << 4) // is a directory
         writel(pb + 48, uint32(get_macos_dnum(path))) // ioDrDirID
-        var numfls uint32
-        listing, errno := listdir(path); if errno == 0 {
-            numfls = uint32(len(listing))
-        }
-        writel(pb + 52, numfls) // ioDrNmFls
+        writel(pb + 52, uint32(len(listing))) // ioDrNmFls
     } else {
         // missing quite a bit of logic here
     }
