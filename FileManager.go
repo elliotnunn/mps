@@ -206,7 +206,13 @@ func tOpen() {
         readFile = embedMPW.ReadFile
     }
 
-    // Find a free
+    // check for existence of file, and slurp the data fork
+    data, err := readFile(subpath)
+    if err != nil {
+        paramblk_return(-43); return // fnfErr
+    }
+
+    // Find a free FCB
     var ioRefNum uint16
     var fcbPtr uint32
     for ioRefNum = 2; fcbFromRefnum(ioRefNum) != 0; ioRefNum += readw(0x3f6) {
@@ -218,16 +224,11 @@ func tOpen() {
 
     if readl(fcbPtr) != 0 {
         panic("Too many files/forks open (hundreds)")
-//         paramblk_return(-42); return // tmfoErr
+        paramblk_return(-42); return // tmfoErr
     }
 
-    var data []byte
-    var err error
     if fork == 'd' {
-        data, err = readFile(subpath)
-        if err != nil {
-            panic("Failed to read a file that we were sure existed")
-        }
+        // do nothing, because we already slurped the file above
     } else if fork == 'r' {
         fileExchangeScheme := filepath.Join(filepath.Dir(subpath), "RESOURCE.FRK", filepath.Base(subpath))
         rezScheme := subpath + ".rdump"
