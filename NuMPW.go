@@ -1333,18 +1333,25 @@ func tGetPort() {
     writel(retaddr, port)
 }
 
-// func tSetRect() {
-//     br := popl(); tl = popl(); rectptr = popl()
-//     writel(rectptr, tl); writel(rectptr + 4, br)
-// }
-//
-// func tOffsetRect() {
-//     dv = popw(); dh = popw(); rectptr = popl()
-//     for delta, ptr in ((dv, 0), (dh, 2), (dv, 4), (dh, 6)) {
-//         writew(rectptr + ptr, readw(rectptr + ptr) + delta)
-//
-//     }
-// }
+func tSetRect() {
+    botRight := popl()
+    topLeft := popl()
+    rectPtr := popl()
+    writel(rectPtr, topLeft)
+    writel(rectPtr + 4, botRight)
+}
+
+func tOffsetRect() {
+    dv := popw()
+    dh := popw()
+    rectPtr := popl()
+
+    writew(rectPtr + 0, readw(rectPtr + 0) + dv) // top
+    writew(rectPtr + 2, readw(rectPtr + 2) + dh) // left
+    writew(rectPtr + 4, readw(rectPtr + 4) + dv) // bottom
+    writew(rectPtr + 6, readw(rectPtr + 6) + dh) // right
+}
+
 // OS and Toolbox Event Manager traps
 
 // Misc traps
@@ -1798,8 +1805,8 @@ func main() {
         tb_base + 0x073: tSetPort,                  // _SetPort
         tb_base + 0x074: tGetPort,                  // _GetPort
         tb_base + 0x09f: tUnimplemented,            // _Unimplemented
-    //     tb_base + 0x0a7: tSetRect,                  // _SetRect
-    //     tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
+        tb_base + 0x0a7: tSetRect,                  // _SetRect
+        tb_base + 0x0a8: tOffsetRect,               // _OffsetRect
         tb_base + 0x0d8: tRetZero,                  // _NewRgn
         tb_base + 0x0fe: tNop,                      // _InitFonts
         tb_base + 0x112: tNop,                      // _InitWindows
