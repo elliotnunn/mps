@@ -210,8 +210,6 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 }
 
 func tOpen() {
-    paramblk_return(0) // by default
-
     fork := 'd'
     if readl(d1ptr) & 0xff == 0xa {
         fork = 'r'
@@ -294,6 +292,7 @@ func tOpen() {
     writePstring(fcbPtr + 62, macpath) // fcbCName
 
     writew(pb + 24, ioRefNum)
+    paramblk_return(0) // by default
 }
 
 func tClose() {
