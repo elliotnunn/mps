@@ -1862,6 +1862,7 @@ func main() {
         tb_base + 0x1f4: tExitToShell,              // _ExitToShell
         tb_base + 0x1fa: tRetZero,                  // _UnlodeScrap
         tb_base + 0x1fb: tRetZero,                  // _LodeScrap
+        tb_base + 0x252: tHighLevelFSDispatch,      // _HighLevelFSDispatch
         tb_base + 0x3ff: tDebugStr,                 // _DebugStr
     }
 

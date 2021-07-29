@@ -771,6 +771,55 @@ func tFSDispatch() {
     paramblk_return(0) // by default
 }
 
+func tHighLevelFSDispatch() {
+    selector := readb(d0ptr + 3)
+    switch selector {
+    case 1: // pascal OSErr FSMakeFSSpec(short vRefNum, long dirID, ConstStr255Param fileName, FSSpecPtr spec)
+        specPtr := popl()
+        ioNamePtr := popl()
+        ioDirID := popl()
+        ioVRefNum := popw()
+
+        push(128, 0)
+        pb := readl(spptr)
+        writel(a0ptr, pb)
+        writew(pb + 22, ioVRefNum)
+        writel(pb + 48, ioDirID)
+        writel(pb + 18, ioNamePtr)
+        writel(pb + 28, specPtr) // ioMisc
+
+        writel(d0ptr, 0x1b) // MakeFSSpec selector...
+        call_m68k(executable_atrap(0xa260)) // FSDispatch
+        pop(128)
+
+        writew(readl(spptr), readw(d0ptr)) // return osErr
+
+    case 2, 3: // pascal OSErr FSpOpenDF/RF(const FSSpec *spec, char permission, short *refNum)
+        refNumPtr := popl()
+        ioPermssn := popb()
+        specPtr := popl()
+
+        push(128, 0)
+        pb := readl(spptr)
+        writel(a0ptr, pb)
+        writew(pb + 22, readw(specPtr)) // ioVRefNum
+        writel(pb + 48, readl(specPtr + 2)) // ioDirID
+        writel(pb + 18, specPtr + 6) // ioNamePtr
+        writeb(pb + 27, ioPermssn)
+
+        if selector == 2 { // FSpOpenDF
+            writel(d0ptr, 0x1a) // OpenDF selector...
+            call_m68k(executable_atrap(0xa260)) // FSDispatch
+        } else { // FSpOpenRF
+            call_m68k(executable_atrap(0xa20a)) // OpenRF
+        }
+        ioRefNum := readw(pb + 24)
+        pop(128)
+
+        writew(refNumPtr, ioRefNum)
+        writew(readl(spptr), readw(d0ptr)) // return osErr
+    }
+}
 
 //#######################################################################
 // Code for reading Finder info and resource forks
