@@ -1627,7 +1627,7 @@ func lineF(inst uint16) {
 
 const (
     kOSTable = 0x400
-    kToolTable = 0x800 // up to 0x1800
+    kToolTable = 0xe00 // up to 0x1e00
     kStackBase = 0x40000 // extends down, note that registers are here too!
     kA5World = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
     kFakeHeapHeader = 0x90000 // very short
@@ -1849,11 +1849,14 @@ func main() {
     // Populate trap table
     for i, impl := range my_traps {
         tableAddr := kOSTable + 4 * uint32(i)
+        if i >= 0x100 {
+            tableAddr = kToolTable + 4 * uint32(i - 0x100)
+        }
         if impl == nil {
             writel(tableAddr, executable_ftrap(0xf89f))
         } else {
             trap := uint16(i)
-            if i > 0x100 {
+            if i >= 0x100 {
                 trap = trap - 0x100 + 0x800
             }
             writel(tableAddr, executable_ftrap(0xf000 | trap))
