@@ -1985,8 +1985,6 @@ func main() {
 
     call_m68k(kA5World + jtoffset + 2)
 
-    panic(strings.Index(string(mem[0x50000:0x60000]), ".err") - 0x8000)
-
     closeAll()
 
     stdout, err := os.ReadFile(filepath.Join(systemFolder, "Script.out"))
