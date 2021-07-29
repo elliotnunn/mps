@@ -550,7 +550,11 @@ func tGetFInfo() { // also implements GetCatInfo
     }
 
     if trap & 0xff == 0x60 {
-        writel(pb + 100, uint32(get_macos_dnum(filepath.Dir(path)))) // ioFlParID
+        parID := uint32(1) // parent of root
+        if path != filepath.Dir(path) {
+            parID = uint32(get_macos_dnum(filepath.Dir(path)))
+        }
+        writel(pb + 100, parID) // ioFlParID
     }
 
 //     date := get_macos_date(p)
