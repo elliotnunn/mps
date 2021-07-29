@@ -10,6 +10,7 @@ import (
     "regexp"
     "strconv"
     "encoding/binary"
+    "errors"
 )
 
 //go:embed "ToolServer 1.1.1"
@@ -122,7 +123,13 @@ func listdir(path string) ([]macstring, int) {
 
     dirents, err := readDir(path)
     if err != nil {
-        panic(err)
+        if errors.Is(err, os.ErrNotExist) {
+            return nil, -43 // fnfErr
+        } else if strings.HasSuffix(err.Error(), "not a directory") {
+            return nil, -120 // dirNFErr
+        } else {
+            panic(err)
+        }
     }
 
     var macfiles []macstring
@@ -520,7 +527,9 @@ func tGetFInfo() { // also implements GetCatInfo
 
     // at this point, we know that the file exists. let's try listing
     listing, listErr := listdir(path)
-    isDir := listErr == 0
+    if listErr != 0 && listErr != 120 { // accept noErr and dirNFErr (i.e. is file)
+        paramblk_return(listErr); return
+    }
 
     // clear our block of return values, which is longer for GetCatInfo
     for i := uint32(0); (trap & 0xff == 0x60 && i < 84) || (i < 56); i++ {
@@ -532,11 +541,11 @@ func tGetFInfo() { // also implements GetCatInfo
         // missing logic to switch file separator
     }
 
-    if isDir {
+    if listErr == 0 { // folder
         writeb(pb + 30, 1 << 4) // is a directory
         writel(pb + 48, uint32(get_macos_dnum(path))) // ioDrDirID
         writel(pb + 52, uint32(len(listing))) // ioDrNmFls
-    } else {
+    } else { // file
         // missing quite a bit of logic here
     }
 
