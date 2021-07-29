@@ -1569,6 +1569,12 @@ func tPop10RetZero() {
     writel(sp, 0)
 }
 
+func tParamBlkNop() {
+    pb := readl(a0ptr)
+    writew(pb + 16, 0)
+    writel(d0ptr, 0)
+}
+
 const os_base = 0
 const tb_base = 0x100
 var my_traps [0x500]func()
@@ -1677,7 +1683,7 @@ func main() {
         os_base + 0x0d: tSetFInfo,                  // _SetFInfo
         os_base + 0x11: tGetEOF,                    // _GetEOF
         os_base + 0x12: tSetEOF,                    // _SetEOF
-    //     os_base + 0x13: os_pb_trap,                 // _FlushVol
+        os_base + 0x13: tParamBlkNop,               // _FlushVol
         os_base + 0x14: tGetVol,                    // _GetVol
         os_base + 0x15: tSetVol,                    // _SetVol
         os_base + 0x18: tGetFPos,                   // _GetFPos
