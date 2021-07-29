@@ -1093,17 +1093,14 @@ func printState() {
             if mem[try] == 0x4e && (mem[try+1] == 0x75 || mem[try+1] == 0xd0) {
                 if mem[try+2] & 0xc0 == 0x80 {
                     strlen := uint32(mem[try+2] & 0x3f)
-                    ok := true
-                    for _, ch := range mem[try+3:][:strlen] {
+                    curFuncName = string(mem[try+3:][:strlen])
+                    for _, ch := range []byte(curFuncName) {
                         if ch < 32 || ch >= 127 {
-                            ok = false
+                            curFuncName = ""
                         }
                     }
-                    if ok {
-                        curFuncEnd = try + 2
-                        curFuncName = string(mem[try+3:][:strlen])
-                    }
                 }
+                curFuncEnd = try + 2
                 break
             }
         }
