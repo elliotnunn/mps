@@ -1078,8 +1078,8 @@ func printState() {
     }
 
     r := readRegs()
-    fmt.Printf("d0-7  %08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
-    fmt.Printf("a0-7  %08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
+    fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
+    fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
     sp := readl(spptr)
     fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
     fmt.Println("")
@@ -1118,7 +1118,7 @@ func printState() {
         }
     }
 
-    fmt.Printf("%x: %04x %s %s\n\n", pc, readw(pc), printSeg, printName)
+    fmt.Printf("%x: %s %s %04x\n\n", pc, printSeg, printName, readw(pc))
 }
 
 func call_m68k(addr uint32) {
