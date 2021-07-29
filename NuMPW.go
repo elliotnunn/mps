@@ -1500,49 +1500,6 @@ func tExitToShell() {
 
 }
 
-// Munger and related traps
-
-// func tHandToHand() {
-//     hdl := readl(a0ptr); ptr := readl(hdl)
-//     size := gethandlesize(hdl)
-//     hdl2 := newhandle(size); ptr2 = readl(hdl2)
-//     memcpy(ptr2, ptr, size)
-//     writel(a0ptr, hdl2) // a0 = result
-//     writel(regs, 0) // d0 = noErr
-// }
-//
-// func tPtrToXHand() {
-//     srcptr := readl(a0ptr) // a0
-//     dsthdl := readl(a1ptr) // a1
-//     size := readl(regs) // d0
-//     sethandlesize(dsthdl, size)
-//     dstptr := readl(dsthdl)
-//     memcpy(dstptr, srcptr, size)
-//     writel(a0ptr, dsthdl) // a0
-//     writel(regs, 0) // d0 = noErr
-// }
-//
-// func tPtrToHand() {
-//     srcptr := readl(a0ptr) // a0
-//     size = readl(regs) // d0
-//     dsthdl = newhandle(size)
-//     dstptr = readl(dsthdl)
-//     memcpy(dstptr, srcptr, size)
-//     writel(a0ptr, dsthdl) // a0
-//     writel(regs, 0) // d0 = noErr
-// }
-//
-// func tHandAndHand() {
-//     ahdl := readl(a0ptr); asize = gethandlesize(ahdl) // a0
-//     bhdl := readl(a1ptr); bsize = gethandlesize(bhdl) // a1
-//     sethandlesize(bhdl, asize + bsize)
-//     aptr := readl(ahdl); bptr = readl(bhdl)
-//     memcpy(bptr, aptr, size)
-//     writel(a0ptr, bhdl) // a0 = dest handle
-//     writel(regs, 0) // d0 = noErr
-//
-// }
-
 // Trivial do-nothing traps
 
 func tUnimplemented() {
@@ -1851,10 +1808,10 @@ func main() {
         tb_base + 0x1c8: tNop,                      // _SysBeep
         tb_base + 0x1c9: tSysError,                 // _SysError
         tb_base + 0x1cc: tNop,                      // _TEInit
-    //     tb_base + 0x1e1: tHandToHand,               // _HandToHand
-    //     tb_base + 0x1e2: tPtrToXHand,               // _PtrToXHand
-    //     tb_base + 0x1e3: tPtrToHand,                // _PtrToHand
-    //     tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
+        tb_base + 0x1e1: tHandToHand,               // _HandToHand
+        tb_base + 0x1e2: tPtrToXHand,               // _PtrToXHand
+        tb_base + 0x1e3: tPtrToHand,                // _PtrToHand
+        tb_base + 0x1e4: tHandAndHand,              // _HandAndHand
         tb_base + 0x1e5: tPop2,                     // _InitPack
         tb_base + 0x1e6: tNop,                      // _InitAllPacks
         tb_base + 0x1f0: tLoadSeg,                  // _LoadSeg

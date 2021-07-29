@@ -153,3 +153,53 @@ func tHSetState() {
     return_memerr(0)
 }
 
+func tHandToHand() { // duplicate handle
+    srcPtr := readl(readl(a0ptr))
+    size := block_sizes[srcPtr]
+    writel(d0ptr, size)
+    call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
+    dstptr := readl(readl(a0ptr))
+    copy(mem[dstptr:][:size], mem[srcPtr:][:size])
+    return_memerr_and_d0(0)
+}
+
+func tPtrToHand() { // copy to new handle
+    srcPtr := readl(a0ptr)
+    size := readl(d0ptr)
+    call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
+    dstptr := readl(readl(a0ptr))
+    copy(mem[dstptr:][:size], mem[srcPtr:][:size])
+    return_memerr_and_d0(0)
+}
+
+func tPtrToXHand() { // copy to existing handle
+    srcPtr := readl(a0ptr)
+    dstHndl := readl(a1ptr)
+    size := readl(d0ptr)
+    writel(a0ptr, size)
+    tSetHandleSize() // no need to go thru trap dispatcher
+    dstPtr := readl(dstHndl)
+    copy(mem[dstPtr:][:size], mem[srcPtr:][:size])
+    writel(a0ptr, dstHndl)
+    return_memerr_and_d0(0)
+}
+
+func tHandAndHand() { // copy to existing handle
+    aHndl := readl(a0ptr)
+    bHndl := readl(a1ptr)
+
+    aSize := block_sizes[readl(aHndl)]
+    bSize := block_sizes[readl(bHndl)]
+
+    writel(a0ptr, bHndl)
+    writel(d0ptr, aSize + bSize)
+    tSetHandleSize() // of the bHndl
+
+    aPtr := readl(aHndl)
+    bPtr := readl(bHndl)
+
+    copy(mem[bPtr+bSize:][:aSize], mem[aPtr:][:aSize])
+
+    writel(a0ptr, bHndl)
+    return_memerr_and_d0(0)
+}
