@@ -1629,6 +1629,7 @@ const (
     kFCBTable = 0xb0000 // 0x8000 above
     kDQE = 0xb9000 // 0x4 below and 0x10 above
     kVCB = 0xba000 // ????
+    kMenuList = 0xbb000
     kPACKs = 0xc0000
     kFTrapTable = 0xf0000 // 0x10000 above
     kHeap = 0x100000 // extends up
@@ -1908,7 +1909,7 @@ func main() {
     writel(0x9d6, 0) // WindowList empty
     writel(0xa02, 0x00010001) // OneOne
     writel(0xa06, 0xffffffff) // MinusOne
-//     writel(0xa1c, newhandle(6)) // MenuList empty
+    writel(0xa1c, kMenuList) // MenuList empty
     writel(0xa50, 0) // TopMapHndl
 
     // Create some useful folders
