@@ -669,17 +669,17 @@ func tSetVol() {
 
 func tGetFPos() {
     // Act like _Read with ioReqCount=0 and ioPosMode=fsAtMark
-    paramblk_return(0) // by default
     pb := readl(a0ptr)
-    writel(pb + 36, 0)
+    writel(pb + 32, 0) // ioBuffer
+    writel(pb + 36, 0) // ioReqCount
     writew(pb + 44, 0) // ioPosMode
     tReadWrite()
 }
 
 func tSetFPos() {
     // Act like _Read with ioReqCount=0
-    paramblk_return(0) // by default
     pb := readl(a0ptr)
+    writel(pb + 32, 0) // ioBuffer
     writel(pb + 36, 0) // ioReqCount
     tReadWrite()
 }
