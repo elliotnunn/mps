@@ -1102,9 +1102,9 @@ func printState() {
                     if ok {
                         curFuncEnd = try + 2
                         curFuncName = string(mem[try+3:][:strlen])
-                        break
                     }
                 }
+                break
             }
         }
     }
