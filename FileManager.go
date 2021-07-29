@@ -327,6 +327,19 @@ func tClose() {
 //     }
 }
 
+func closeAll() {
+    for ioRefNum := uint16(2); fcbFromRefnum(ioRefNum) != 0; ioRefNum += readw(0x3f6) {
+        if readl(fcbFromRefnum(ioRefNum)) != 0 {
+            push(128, 0)
+            pb := readl(spptr)
+            writel(a0ptr, pb)
+            writew(pb + 24, ioRefNum)
+            tClose() // too late to bother patching traps
+            pop(128)
+        }
+    }
+}
+
 func tReadWrite() {
     paramblk_return(0) // by default
     pb := readl(a0ptr)
