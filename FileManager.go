@@ -737,7 +737,7 @@ func tFSDispatch() {
         }
 
         for i := uint32(0); i < 20; i++ {
-            writeb(pb + 20 + i, readb(fcb + i))
+            writeb(pb + 32 + i, readb(fcb + i))
         }
 
         writew(pb + 24, ioRefNum)

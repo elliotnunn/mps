@@ -1118,6 +1118,15 @@ func printState() {
         }
     }
 
+    if printSeg == "seg1+1554" {
+        sp := readl(spptr)
+        n := readl(sp + 8) * readl(sp + 12)
+        ptr := readl(sp + 4)
+        fmt.Printf("printing %x %x\n", ptr, n)
+        fmt.Printf("print: %q\n", strings.ReplaceAll(string(mem[ptr:][:n]), "\r", "\n"))
+        fmt.Println("")
+    }
+
     fmt.Printf("%x: %s %s %04x\n\n", pc, printSeg, printName, readw(pc))
 }
 
@@ -1449,9 +1458,13 @@ func tCmpString() {
     diacSens := readw(d1ptr) & 0x200 == 0 // ,MARKS
     caseSens := readw(d1ptr) & 0x400 != 0 // ,CASE
 
+    fmt.Printf("compare %s %s = ", mem[aptr:][:alen], mem[bptr:][:blen])
+
     if relString(macstring(mem[aptr:][:alen]), macstring(mem[bptr:][:blen]), caseSens, diacSens) == 0 {
+        fmt.Println("0")
         writel(d0ptr, 0)
     } else {
+        fmt.Println("1")
         writel(d0ptr, 1)
     }
 }
@@ -1941,7 +1954,7 @@ func main() {
     writel(appParms + 6, 0x54455854) // TEXT
     writePstring(appParms + 12, "Script")
 
-    os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set"), 0o777) // this is where our command goes!
+    os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set\r"), 0o777) // this is where our command goes!
     os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
     os.Create(filepath.Join(systemFolder, "Script.out"))
     os.Create(filepath.Join(systemFolder, "Script.err"))
@@ -1971,4 +1984,14 @@ func main() {
     copy(mem[kA5World + jtoffset:][:jtsize], mem[code0 + 16:][:jtsize])
 
     call_m68k(kA5World + jtoffset + 2)
+
+    panic(strings.Index(string(mem[0x50000:0x60000]), ".err") - 0x8000)
+
+    closeAll()
+
+    stdout, err := os.ReadFile(filepath.Join(systemFolder, "Script.out"))
+    os.Stdout.WriteString(strings.ReplaceAll(macToUnicode(macstring(stdout)), "\r", "\n"))
+
+    stderr, _ := os.ReadFile(filepath.Join(systemFolder, "Script.err"))
+    os.Stderr.WriteString(strings.ReplaceAll(macToUnicode(macstring(stderr)), "\r", "\n"))
 }
