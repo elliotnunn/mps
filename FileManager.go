@@ -225,7 +225,11 @@ func tOpen() {
 	number := get_vol_or_dir()
 
 	path, errno := get_host_path(number, ioName, true)
-	fmt.Printf("tOpen n=%x ioName=%s i.e. %s %d\n", number, string(ioName), path, errno)
+
+	if gDebug >= 2 {
+		fmt.Printf("tOpen n=%x ioName=%s i.e. %s %d\n", number, string(ioName), path, errno)
+	}
+
 	if errno != 0 {
 		paramblk_return(errno)
 		return // fnfErr
@@ -513,7 +517,9 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	x, _ := get_host_path(dirid, macstring(""), true)
 
-	fmt.Printf("tGetFInfo: ioFDirIndex=%d ioName=%s base=%s\n", ioFDirIndex, macToUnicode(readPstring(ioNamePtr)), x)
+	if gDebug >= 2 {
+		fmt.Printf("tGetFInfo: ioFDirIndex=%d ioName=%s base=%s\n", ioFDirIndex, macToUnicode(readPstring(ioNamePtr)), x)
+	}
 
 	if trap&0xff == 0x60 && ioFDirIndex < 0 {
 		// info about dir specified by ioDirID, ignore ioNamePtr

@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/bits"
@@ -1157,7 +1158,10 @@ func call_m68k(addr uint32) {
 	pc = addr
 
 	for pc != magic_return {
-		printState()
+		if gDebug >= 5 {
+			printState()
+		}
+
 		inst := readw(pc)
 		pc += 2
 		switch inst >> 12 {
@@ -1482,14 +1486,18 @@ func tCmpString() {
 	diacSens := readw(d1ptr)&0x200 == 0 // ,MARKS
 	caseSens := readw(d1ptr)&0x400 != 0 // ,CASE
 
-	fmt.Printf("compare %s %s = ", mem[aptr:][:alen], mem[bptr:][:blen])
+	if gDebug >= 2 {
+		fmt.Printf("compare %s %s = ", mem[aptr:][:alen], mem[bptr:][:blen])
+	}
 
 	if relString(macstring(mem[aptr:][:alen]), macstring(mem[bptr:][:blen]), caseSens, diacSens) == 0 {
-		fmt.Println("0")
 		writel(d0ptr, 0)
 	} else {
-		fmt.Println("1")
 		writel(d0ptr, 1)
+	}
+
+	if gDebug >= 2 {
+		fmt.Printf("%d\n", readl(d0ptr))
 	}
 }
 
@@ -1707,6 +1715,8 @@ func executable_ftrap(trap uint16) (addr uint32) {
 	return
 }
 
+var gDebug int
+
 func main() {
 	my_traps = [...]func(){
 		os_base + 0x00:  tOpen,             // _Open
@@ -1872,6 +1882,12 @@ func main() {
 	}
 	defer os.RemoveAll(systemFolder)
 
+	// Command line opts
+	toolServer := filepath.Join(systemFolder, "MPW", "ToolServer")
+	flag.IntVar(&gDebug, "d", 0, "debug level (>=5 prints every instruction)")
+	flag.StringVar(&toolServer, "ts", toolServer, "ToolServer (default to built-in version)")
+	flag.Parse()
+
 	dnums = []string{
 		filepath.Join(systemFolder, "MPW"),
 		"",
@@ -1989,8 +2005,8 @@ func main() {
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
 	pushw(2) // vol id
-	pushl(uint32(get_macos_dnum(filepath.Join(systemFolder, "MPW"))))
-	writePstring(fileNamePtr, "ToolServer")
+	pushl(uint32(get_macos_dnum(filepath.Dir(toolServer))))
+	writePstring(fileNamePtr, unicodeToMacOrPanic(filepath.Base(toolServer)))
 	pushl(fileNamePtr)                  // pointer to the file string
 	pushw(0)                            // permission
 	call_m68k(executable_atrap(0xac1a)) // _HOpenResFile ,autoPop

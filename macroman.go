@@ -85,6 +85,14 @@ func macToUnicode(mac macstring) string {
 	return buf.String()
 }
 
+func unicodeToMacOrPanic(str string) macstring {
+	macstr, ok := unicodeToMac(str)
+	if !ok {
+		panic("Not convertible to Mac Roman: " + str)
+	}
+	return macstr
+}
+
 // Slightly overcooked code that turnes (de)composed UTF-8 and gives Mac Roman
 func unicodeToMac(str string) (retval macstring, ok bool) {
 	var macstr []byte
