@@ -559,7 +559,7 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	// at this point, we know that the file exists. let's try listing
 	listing, listErr := listdir(path)
-	if listErr != 0 && listErr != 120 { // accept noErr and dirNFErr (i.e. is file)
+	if listErr != 0 && listErr != -120 { // accept noErr and dirNFErr (i.e. is file)
 		paramblk_return(listErr)
 		return
 	}
@@ -795,9 +795,11 @@ func tFSDispatch() {
 
 	case 9: // GetCatInfo
 		tGetFInfo()
+		return // to avoid paramblk_return
 
 	case 26: // OpenDF
 		tOpen()
+		return // to avoid paramblk_return
 
 	case 27: // MakeFSSpec
 		ioDirID := readw(pb + 48 + 2)
