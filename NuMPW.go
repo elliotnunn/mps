@@ -1870,6 +1870,7 @@ func main() {
 	if err != nil {
 		panic("Failed to create temp directory")
 	}
+	defer os.RemoveAll(systemFolder)
 
 	dnums = []string{
 		filepath.Join(systemFolder, "MPW"),
