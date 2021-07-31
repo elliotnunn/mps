@@ -151,7 +151,7 @@ func listdir(path string) ([]macstring, int) {
 		already[macUpper(mf)]++
 	}
 	for _, mf := range macfiles2 {
-		if already[macUpper(mf)] == 1 && len(mf) < 32 {
+		if already[macUpper(mf)] == 1 && len(mf) < 32 && mf[0] != '.' {
 			macfiles = append(macfiles, mf)
 		}
 	}
