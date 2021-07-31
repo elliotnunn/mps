@@ -564,6 +564,12 @@ func tGetFInfo() { // also implements GetCatInfo
 	}
 
 	if return_fname && ioNamePtr != 0 {
+		unicodeName := filepath.Base(path)
+		if unicodeName == "/" {
+			fname = onlyvolname
+		} else {
+			fname, _ = unicodeToMac(filepath.Base(path))
+		}
 		writePstring(ioNamePtr, fname)
 		// missing logic to switch file separator
 	}
