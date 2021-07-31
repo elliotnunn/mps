@@ -515,17 +515,21 @@ func tGetFInfo() { // also implements GetCatInfo
 	var fname macstring
 	return_fname := false
 
-	x, _ := get_host_path(dirid, macstring(""), true)
-
-	if gDebug >= 2 {
-		fmt.Printf("tGetFInfo: ioFDirIndex=%d ioName=%s base=%s\n", ioFDirIndex, macToUnicode(readPstring(ioNamePtr)), x)
-	}
-
 	if trap&0xff == 0x60 && ioFDirIndex < 0 {
 		// info about dir specified by ioDirID, ignore ioNamePtr
+		if gDebug >= 2 {
+			x, _ := get_host_path(dirid, macstring(""), true)
+			fmt.Printf("GetCatInfo of dir=%d (%s)\n", dirid, x)
+		}
+
 		return_fname = true
 	} else if ioFDirIndex > 0 {
 		// info about file specified by ioVRefNum and ioFDirIndex
+		if gDebug >= 2 {
+			x, _ := get_host_path(dirid, macstring(""), false)
+			fmt.Printf("GetF/CatInfo of\n  vol/dir=%d (%s),\n  idx=%d\n", dirid, x, ioFDirIndex)
+		}
+
 		return_fname = true
 
 		path, errno := get_host_path(dirid, macstring(""), true)
@@ -549,6 +553,11 @@ func tGetFInfo() { // also implements GetCatInfo
 	} else { // zero or (if GetFInfo) negative
 		// info about file specified by ioVRefnum and ioNamePtr
 		fname = readPstring(ioNamePtr)
+
+		if gDebug >= 2 {
+			x, _ := get_host_path(dirid, macstring(""), false)
+			fmt.Printf("GetF/CatInfo vol/dir=%d (%s),\n  name=%s\n", dirid, x, macToUnicode(fname))
+		}
 	}
 
 	path, errno := get_host_path(dirid, fname, true)
