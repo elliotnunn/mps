@@ -1715,6 +1715,46 @@ func executable_ftrap(trap uint16) (addr uint32) {
 	return
 }
 
+// Conservatively convert words in a string that look like Unix paths
+func cmdPathCvt(s string) string {
+	words := strings.Split(s, " ")
+
+	for i := range words {
+		if strings.HasPrefix(words[i], "/") {
+			ok := true
+			for _, c := range words[i] {
+				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'A') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '/') {
+					ok = false
+					break
+				}
+				if ok {
+					words[i] = pathCvt(words[i])
+				}
+			}
+		}
+	}
+
+	return strings.Join(words, " ")
+}
+
+// Convert a Unix to a Mac path
+func pathCvt(s string) string {
+	ss := []byte(s)
+	for i := range ss {
+		if ss[i] == ':' {
+			ss[i] = '/'
+		} else if ss[i] == '/' {
+			ss[i] = ':'
+		}
+	}
+	return string(onlyvolname) + string(ss)
+}
+
+// Quote a string for MPW (but leave it in unicode)
+func quote(s string) string {
+	return "'" + s + "'" // TODO: quote correctly
+}
+
 var gDebug int
 
 func main() {
@@ -1883,10 +1923,25 @@ func main() {
 	defer os.RemoveAll(systemFolder)
 
 	// Command line opts
+	cmdLines := []string{""} // leave space for the "chdir"
 	toolServer := filepath.Join(systemFolder, "MPW", "ToolServer")
+
 	flag.IntVar(&gDebug, "d", 0, "debug level (>=5 prints every instruction)")
 	flag.StringVar(&toolServer, "ts", toolServer, "ToolServer (default to built-in version)")
+	flag.Func("c", "command (/unix/path -> mac:path)", func(s string) error {cmdLines = append(cmdLines, cmdPathCvt(s)); return nil})
+	flag.Func("C", "command (no path conversion)", func(s string) error {cmdLines = append(cmdLines, s); return nil})
+
 	flag.Parse()
+
+	// First command line opt as a "chdir"
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	cmdLines[0] = "directory " + quote(pathCvt(cwd))
+
+	// Make a script to run
+	script := unicodeToMacOrPanic(strings.Join(cmdLines, "\r"))
 
 	dnums = []string{
 		filepath.Join(systemFolder, "MPW"),
@@ -1996,7 +2051,7 @@ func main() {
 	writel(appParms+6, 0x54455854) // TEXT
 	writePstring(appParms+12, "Script")
 
-	os.WriteFile(filepath.Join(systemFolder, "Script"), []byte("set\r"), 0o777) // this is where our command goes!
+	os.WriteFile(filepath.Join(systemFolder, "Script"), []byte(script), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
 	os.Create(filepath.Join(systemFolder, "Script.out"))
 	os.Create(filepath.Join(systemFolder, "Script.err"))
