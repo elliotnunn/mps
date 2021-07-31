@@ -1138,15 +1138,6 @@ func printState() {
 		}
 	}
 
-	if printSeg == "seg1+1554" {
-		sp := readl(spptr)
-		n := readl(sp+8) * readl(sp+12)
-		ptr := readl(sp + 4)
-		fmt.Printf("printing %x %x\n", ptr, n)
-		fmt.Printf("print: %q\n", strings.ReplaceAll(string(mem[ptr:][:n]), "\r", "\n"))
-		fmt.Println("")
-	}
-
 	fmt.Printf("%x: %s %s %04x\n\n", pc, printSeg, printName, readw(pc))
 }
 
