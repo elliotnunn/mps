@@ -52,7 +52,7 @@ func resMapEntries(resMap uint32) (retval [][]uint32) {
 }
 
 func uniqueTypesInMaps(maps []uint32) (types []uint32) {
-	var already map[uint32]bool
+	already := make(map[uint32]bool)
 
 	for _, resMap := range maps {
 		for _, entries := range resMapEntries(resMap) {
@@ -68,7 +68,7 @@ func uniqueTypesInMaps(maps []uint32) (types []uint32) {
 }
 
 func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
-	var already map[uint16]bool
+	already := make(map[uint16]bool)
 
 	for _, resMap := range maps {
 		for _, entries := range resMapEntries(resMap) {
