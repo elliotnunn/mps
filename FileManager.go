@@ -42,6 +42,18 @@ func whichFS(path string) (string, bool) {
 	}
 }
 
+func readFile(path string) ([]byte, error) {
+	subpath, isEmbed := whichFS(path)
+
+	if isEmbed {
+		data, err := embedMPW.ReadFile(subpath)
+		return data, err
+	} else {
+		data, err := os.ReadFile(subpath)
+		return data, err
+	}
+}
+
 // return 0 if invalid
 func fcbFromRefnum(refnum uint16) uint32 {
 	FSFCBLen := readw(0x3f6)
@@ -179,6 +191,24 @@ func get_macos_date(path string) uint32 {
 func is_regular_file(path string) bool {
 	stat, err := os.Stat(path)
 	return err == nil && stat.Mode().IsRegular()
+}
+
+func finderInfo(path string) [16]byte {
+	finfo := [16]byte{'?', '?', '?', '?', '?', '?', '?', '?', 0}
+
+	fileExchangeScheme := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+	rezScheme := path + ".idump"
+
+	// Try various resource fork schemes, fall back on empty fork
+	if data, err := readFile(fileExchangeScheme); err == nil {
+		copy(finfo[:], data)
+	}
+
+	if data, err := readFile(rezScheme); err == nil {
+		copy(finfo[:], data)
+	}
+
+	return finfo
 }
 
 func paramblk_return(result int) {
@@ -594,7 +624,8 @@ func tGetFInfo() { // also implements GetCatInfo
 		writel(pb+48, uint32(get_macos_dnum(path))) // ioDrDirID
 		writel(pb+52, uint32(len(listing)))         // ioDrNmFls
 	} else { // file
-		// missing quite a bit of logic here
+		finfo := finderInfo(path)
+		copy(mem[pb+32:], finfo[:])		            // ioFlFndrInfo (16b)
 	}
 
 	if trap&0xff == 0x60 {
