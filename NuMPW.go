@@ -4,6 +4,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -571,6 +572,11 @@ func quote(s string) string {
 
 var gDebug int
 
+//go:embed "ToolServer 1.1.1/*"
+var embedMPW embed.FS
+
+var gFS UnionFS // use this for ReadFile, etc
+
 func main() {
 	my_traps = [...]func(){
 		os_base + 0x00:  tOpen,                // _Open
@@ -734,6 +740,10 @@ func main() {
 		panic("Failed to create temp directory")
 	}
 	defer os.RemoveAll(systemFolder)
+
+	// Create our fake-FS shim layer
+	subEmbed, _ := fs.Sub(embedMPW, "ToolServer 1.1.1")
+	gFS.Add(subEmbed.(FS), filepath.Join(systemFolder, "MPW"))
 
 	// Command line opts
 	cmdLines := []string{""} // leave space for the "chdir"

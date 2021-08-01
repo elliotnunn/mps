@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,11 +11,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-//go:embed "ToolServer 1.1.1"
-var embedMPW embed.FS
-
-const embedDirName = "ToolServer 1.1.1"
 
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
 var dnums []string
@@ -29,30 +23,6 @@ var filebuffers = make(map[uint16][]byte)
 
 // MacOS's idea of the system root
 const onlyvolname macstring = "_"
-
-// Could apply to either filesystem
-func whichFS(path string) (string, bool) {
-	prefix := systemFolder + "/MPW/"
-	if path == prefix[:len(prefix)-1] {
-		return embedDirName, true
-	} else if strings.HasPrefix(path, prefix) {
-		return embedDirName + "/" + path[len(prefix):], true
-	} else {
-		return path, false
-	}
-}
-
-func readFile(path string) ([]byte, error) {
-	subpath, isEmbed := whichFS(path)
-
-	if isEmbed {
-		data, err := embedMPW.ReadFile(subpath)
-		return data, err
-	} else {
-		data, err := os.ReadFile(subpath)
-		return data, err
-	}
-}
 
 // return 0 if invalid
 func fcbFromRefnum(refnum uint16) uint32 {
@@ -128,13 +98,7 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 }
 
 func listdir(path string) ([]macstring, int) {
-	path, isEmbed := whichFS(path)
-	readDir := os.ReadDir
-	if isEmbed {
-		readDir = embedMPW.ReadDir
-	}
-
-	dirents, err := readDir(path)
+	dirents, err := gFS.ReadDir(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, -43 // fnfErr
@@ -200,11 +164,11 @@ func finderInfo(path string) [16]byte {
 	rezScheme := path + ".idump"
 
 	// Try various resource fork schemes, fall back on empty fork
-	if data, err := readFile(fileExchangeScheme); err == nil {
+	if data, err := gFS.ReadFile(fileExchangeScheme); err == nil {
 		copy(finfo[:], data)
 	}
 
-	if data, err := readFile(rezScheme); err == nil {
+	if data, err := gFS.ReadFile(rezScheme); err == nil {
 		copy(finfo[:], data)
 	}
 
@@ -265,14 +229,8 @@ func tOpen() {
 		return // fnfErr
 	}
 
-	subpath, isEmbed := whichFS(path)
-	readFile := os.ReadFile
-	if isEmbed {
-		readFile = embedMPW.ReadFile
-	}
-
 	// check for existence of file, and slurp the data fork
-	data, err := readFile(subpath)
+	data, err := gFS.ReadFile(path)
 	if err != nil {
 		paramblk_return(-43)
 		return // fnfErr
@@ -297,13 +255,13 @@ func tOpen() {
 	if fork == 'd' {
 		// do nothing, because we already slurped the file above
 	} else if fork == 'r' {
-		fileExchangeScheme := filepath.Join(filepath.Dir(subpath), "RESOURCE.FRK", filepath.Base(subpath))
-		rezScheme := subpath + ".rdump"
+		fileExchangeScheme := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+		rezScheme := path + ".rdump"
 
 		// Try various resource fork schemes, fall back on empty fork
-		data, err = readFile(fileExchangeScheme)
+		data, err = gFS.ReadFile(fileExchangeScheme)
 		if err != nil {
-			data, err = readFile(rezScheme)
+			data, err = gFS.ReadFile(rezScheme)
 			if err == nil {
 				data = rez(data)
 			} else {
