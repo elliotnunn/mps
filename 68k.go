@@ -252,6 +252,89 @@ func readsizeForMove(encoded uint16) uint32 {
 	}
 }
 
+func bcdInst(inst uint16) {
+	if inst & 0x8000 == 0 { // nbcd
+		dest := address_by_mode(inst & 63, 1)
+
+		destbyte := 0x9a - readb(dest)
+		if x {
+			destbyte -= 1
+		}
+
+		if destbyte == 0x9a {
+			destbyte = 0
+			c = false
+			x = false
+		} else {
+			if destbyte & 0xf == 0xa {
+				destbyte = (destbyte & 0xf0) + 0x10
+			}
+
+			c = true
+			x = true
+		}
+
+		set_nz(uint32(destbyte), 1)
+		writeb(dest, destbyte)
+	} else { // abcd,sbcd
+		mode := uint16(0) // Dx,Dy
+		if inst&8 != 0 {
+			mode = 32 // -(Ax),-(Ay)
+		}
+
+		src := address_by_mode(mode|(inst&7), 1)
+		dest := address_by_mode(mode|(inst>>9&7), 1)
+
+		srcbyte := uint16(readb(src))
+		destbyte := uint16(readb(dest))
+
+		if inst&0x4000 != 0 { // abcd
+			result := (destbyte & 0xf) + (srcbyte & 0xf)
+			if x {
+				result += 1
+			}
+
+			if result > 9 {
+				result += 6
+			}
+
+			result += (destbyte & 0xf0) + (srcbyte & 0xf0)
+
+			c = result > 0x99
+			x = c
+			if c {
+				result -= 0xa0
+			}
+
+			destbyte = result
+		} else { // sbcd
+			result := (destbyte & 0xf) - (srcbyte & 0xf)
+			if x {
+				result -= 1
+			}
+
+			if result > 9 {
+				result -= 6
+			}
+
+			result += (destbyte & 0xf0) - (srcbyte & 0xf0)
+
+			c = result > 0x99
+			x = c
+			if c {
+				result += 0xa0
+			}
+
+			destbyte = result
+		}
+
+		old_z := z
+		set_nz(uint32(destbyte), 1)
+		z = z && old_z
+		writeb(dest, uint8(destbyte))
+	}
+}
+
 func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by bottom 6 bits
 	// side effects: predecrement/postincrement, advance pc to get extension word
 
@@ -539,6 +622,8 @@ func line4(inst uint16) { // very,crowded,line
 			c = false
 			writew(regAddr(dn)+2, val)
 		}
+	} else if inst&0xFC0 == 0x800 { // nbcd
+		bcdInst(inst)
 	} else if inst&0xFF8 == 0x840 { // swap.w
 		dest := regAddr(inst & 7)
 		datum := readl(dest)
@@ -742,7 +827,7 @@ func line7(inst uint16) { // moveq
 func line8(inst uint16) { // divu,divs,sbcd,or
 	//    global n, z, v, c
 	if inst&0x1F0 == 0x100 { // sbcd
-		panic("sbcd")
+		bcdInst(inst)
 	} else if inst&0x0C0 == 0x0C0 { // divu,divs
 		ea := address_by_mode(inst&63, 2)
 		divisor := readw(ea)
@@ -918,7 +1003,7 @@ func lineC(inst uint16) {
 		c = false
 		writel(dest, result) // write dn.l
 	} else if inst&0x1F0 == 0x100 { // abcd
-		panic("abcd")
+		bcdInst(inst)
 	} else if inst&0x1F8 == 0x140 || inst&0x1F8 == 0x148 || inst&0x1F8 == 0x188 { // exg
 		rx := inst >> 9 & 7
 		ry := inst & 7
