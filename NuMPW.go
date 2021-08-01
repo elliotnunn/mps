@@ -700,7 +700,7 @@ func main() {
 		tb_base + 0x1a3: tPop4,             // _ReleaseResource
 		tb_base + 0x1a4: tHomeResFile,      // _HomeResFile
 		tb_base + 0x1a5: tSizeRsrc,         // _SizeRsrc
-		//     tb_base + 0x1a8: tGetResInfo,               // _GetResInfo
+		tb_base + 0x1a8: tGetResInfo,       // _GetResInfo
 		tb_base + 0x1af: tResError,            // _ResError
 		tb_base + 0x1b4: tNop,                 // _SystemTask
 		tb_base + 0x1b8: tGetPattern,          // _GetPattern

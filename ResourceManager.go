@@ -141,6 +141,40 @@ func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
 	}
 }
 
+func tGetResInfo() {
+    namePtr := pop(4)
+    typePtr := pop(4)
+    idPtr := pop(4)
+    handle := pop(4)
+
+	for _, resMap := range allResMaps() {
+		for _, entriesOfType := range resMapEntries(resMap) {
+		    typeEntry := entriesOfType[0]
+			for _, idEntry := range entriesOfType[1:] {
+				if handle == readl(idEntry+8) {
+                    if namePtr != 0 {
+                        _, name := getResName(resMap, idEntry)
+                        writePstring(namePtr, name)
+                    }
+
+                    if typePtr != 0 {
+                        writel(typePtr, readl(typeEntry))
+                    }
+
+                    if idPtr != 0 {
+                        writew(idPtr, readw(idEntry))
+                    }
+
+                    setResError(0)
+					return
+				}
+			}
+		}
+	}
+
+    setResError(-192) // resNotFound
+}
+
 // func set_resource_name(map_handle, res_entry_ptr, name) {
 //     if name == nil {
 //         writew(res_entry_ptr + 2, 0xffff)
@@ -409,7 +443,7 @@ func tHomeResFile() {
 	for _, resMap := range allResMaps() {
 		for _, entriesOfType := range resMapEntries(resMap) {
 			for _, idEntry := range entriesOfType[1:] {
-				if handle == readl(idEntry+4) {
+				if handle == readl(idEntry+8) {
 					setResError(0)
 					writew(readl(spptr), readw(resMap+20))
 					return
@@ -428,7 +462,7 @@ func tSizeRsrc() {
 	for _, resMap := range allResMaps() {
 		for _, entriesOfType := range resMapEntries(resMap) {
 			for _, idEntry := range entriesOfType[1:] {
-				if handle == readl(idEntry+4) {
+				if handle == readl(idEntry+8) {
 					setResError(0)
 					writel(readl(spptr), uint32(len(resData(resMap, idEntry))))
 					return
