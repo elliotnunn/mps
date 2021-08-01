@@ -636,9 +636,8 @@ func tGetFInfo() { // also implements GetCatInfo
 		writel(pb+100, parID) // ioFlParID
 	}
 
-	//     date := get_macos_date(p)
-	//     writel(pb + 72, date) // ioFlCrDat
-	//     writel(pb + 76, date) // ioFlMdDat
+	writel(pb + 72, 0xf0000000) // ioFlCrDat
+	writel(pb + 76, 0xf0000000) // ioFlMdDat
 }
 
 func tSetFInfo() {
