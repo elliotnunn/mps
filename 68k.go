@@ -157,6 +157,14 @@ func readPstring(addr uint32) macstring {
 	return macstring(mem[addr+1:][:mem[addr]])
 }
 
+func readCstring(addr uint32) macstring {
+	end := addr
+	for uint32(len(mem)) > end && mem[end] != 0 {
+		end += 1
+	}
+	return macstring(mem[addr:end])
+}
+
 func writePstring(addr uint32, str macstring) {
 	if addr == 0 {
 		return
@@ -1158,30 +1166,6 @@ var curFuncStart, curFuncEnd uint32
 var curFuncName string
 
 func printState() {
-	conds := []byte("xnzvc")
-	if x {
-		conds[0] = 'X'
-	}
-	if n {
-		conds[1] = 'N'
-	}
-	if z {
-		conds[2] = 'Z'
-	}
-	if v {
-		conds[3] = 'V'
-	}
-	if c {
-		conds[4] = 'C'
-	}
-
-	r := readRegs()
-	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
-	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
-	sp := readl(spptr)
-	fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
-	fmt.Println("")
-
 	// What about a function name?
 	if pc < curFuncStart || pc >= curFuncEnd {
 		curFuncStart = pc
@@ -1208,6 +1192,74 @@ func printState() {
 	if pc < 0x100000 {
 		printName = ""
 	}
+
+	if printName == "p2cstr" {
+		if readw(pc) == 0x202f {
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr) + 4))))
+		}
+		return
+	}
+
+	if printName == "c2pstr" {
+		if readw(pc) == 0x202f {
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr) + 4))))
+		}
+		return
+	}
+
+	if printName == "strcpy" {
+		if readw(pc) == 0x4cef {
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr) + 8))))
+		}
+		return
+	}
+
+	if printName == "PLStrCpy" {
+		if readw(pc) == 0x201f {
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr) + 4))))
+		}
+		return
+	}
+
+	if printName == "memcpy" {
+		if readw(pc) == 0x4cef {
+			sp := readl(spptr)
+			fmt.Printf("%s: %d b %x->%x\n\n", printName, readl(sp + 12), readl(sp + 8), readl(sp + 4))
+		}
+		return
+	}
+
+	if printName == "memset" {
+		if readw(pc) == 0x4cef {
+			sp := readl(spptr)
+			fmt.Printf("%s: %d b of %02x -> %x\n\n", printName, readl(sp + 12), readl(sp + 8), readl(sp + 4))
+		}
+		return
+	}
+
+	conds := []byte("xnzvc")
+	if x {
+		conds[0] = 'X'
+	}
+	if n {
+		conds[1] = 'N'
+	}
+	if z {
+		conds[2] = 'Z'
+	}
+	if v {
+		conds[3] = 'V'
+	}
+	if c {
+		conds[4] = 'C'
+	}
+
+	r := readRegs()
+	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
+	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
+	sp := readl(spptr)
+	fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
+	fmt.Println("")
 
 	printSeg := ""
 	for i, segOffset := range gSegmentOffsets {
