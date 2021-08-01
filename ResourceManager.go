@@ -142,37 +142,37 @@ func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
 }
 
 func tGetResInfo() {
-    namePtr := pop(4)
-    typePtr := pop(4)
-    idPtr := pop(4)
-    handle := pop(4)
+	namePtr := pop(4)
+	typePtr := pop(4)
+	idPtr := pop(4)
+	handle := pop(4)
 
 	for _, resMap := range allResMaps() {
 		for _, entriesOfType := range resMapEntries(resMap) {
-		    typeEntry := entriesOfType[0]
+			typeEntry := entriesOfType[0]
 			for _, idEntry := range entriesOfType[1:] {
 				if handle == readl(idEntry+8) {
-                    if namePtr != 0 {
-                        _, name := getResName(resMap, idEntry)
-                        writePstring(namePtr, name)
-                    }
+					if namePtr != 0 {
+						_, name := getResName(resMap, idEntry)
+						writePstring(namePtr, name)
+					}
 
-                    if typePtr != 0 {
-                        writel(typePtr, readl(typeEntry))
-                    }
+					if typePtr != 0 {
+						writel(typePtr, readl(typeEntry))
+					}
 
-                    if idPtr != 0 {
-                        writew(idPtr, readw(idEntry))
-                    }
+					if idPtr != 0 {
+						writew(idPtr, readw(idEntry))
+					}
 
-                    setResError(0)
+					setResError(0)
 					return
 				}
 			}
 		}
 	}
 
-    setResError(-192) // resNotFound
+	setResError(-192) // resNotFound
 }
 
 // func set_resource_name(map_handle, res_entry_ptr, name) {

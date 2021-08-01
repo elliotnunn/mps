@@ -625,7 +625,7 @@ func tGetFInfo() { // also implements GetCatInfo
 		writel(pb+52, uint32(len(listing)))         // ioDrNmFls
 	} else { // file
 		finfo := finderInfo(path)
-		copy(mem[pb+32:], finfo[:])		            // ioFlFndrInfo (16b)
+		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
 	}
 
 	if trap&0xff == 0x60 {
@@ -636,8 +636,8 @@ func tGetFInfo() { // also implements GetCatInfo
 		writel(pb+100, parID) // ioFlParID
 	}
 
-	writel(pb + 72, 0xf0000000) // ioFlCrDat
-	writel(pb + 76, 0xf0000000) // ioFlMdDat
+	writel(pb+72, 0xf0000000) // ioFlCrDat
+	writel(pb+76, 0xf0000000) // ioFlMdDat
 }
 
 func tSetFInfo() {
@@ -869,7 +869,7 @@ func tFSDispatch() {
 		writePstring(ioMisc+6, ioName)
 
 		if gDebug >= 2 {
-			fmt.Printf("MakeFSSpec ... vRefNum=%d dirID=%d name=%s\n", readw(ioMisc), readl(ioMisc + 2), macToUnicode(readPstring(ioMisc + 6)))
+			fmt.Printf("MakeFSSpec ... vRefNum=%d dirID=%d name=%s\n", readw(ioMisc), readl(ioMisc+2), macToUnicode(readPstring(ioMisc+6)))
 		}
 
 	default:

@@ -261,8 +261,8 @@ func readsizeForMove(encoded uint16) uint32 {
 }
 
 func bcdInst(inst uint16) {
-	if inst & 0x8000 == 0 { // nbcd
-		dest := address_by_mode(inst & 63, 1)
+	if inst&0x8000 == 0 { // nbcd
+		dest := address_by_mode(inst&63, 1)
 
 		destbyte := 0x9a - readb(dest)
 		if x {
@@ -274,7 +274,7 @@ func bcdInst(inst uint16) {
 			c = false
 			x = false
 		} else {
-			if destbyte & 0xf == 0xa {
+			if destbyte&0xf == 0xa {
 				destbyte = (destbyte & 0xf0) + 0x10
 			}
 
@@ -1195,28 +1195,28 @@ func printState() {
 
 	if printName == "p2cstr" {
 		if readw(pc) == 0x202f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr) + 4))))
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr)+4))))
 		}
 		return
 	}
 
 	if printName == "c2pstr" {
 		if readw(pc) == 0x202f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr) + 4))))
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr)+4))))
 		}
 		return
 	}
 
 	if printName == "strcpy" {
 		if readw(pc) == 0x4cef {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr) + 8))))
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr)+8))))
 		}
 		return
 	}
 
 	if printName == "PLStrCpy" {
 		if readw(pc) == 0x201f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr) + 4))))
+			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr)+4))))
 		}
 		return
 	}
@@ -1224,7 +1224,7 @@ func printState() {
 	if printName == "memcpy" {
 		if readw(pc) == 0x4cef {
 			sp := readl(spptr)
-			fmt.Printf("%s: %d b %x->%x\n\n", printName, readl(sp + 12), readl(sp + 8), readl(sp + 4))
+			fmt.Printf("%s: %d b %x->%x\n\n", printName, readl(sp+12), readl(sp+8), readl(sp+4))
 		}
 		return
 	}
@@ -1232,7 +1232,7 @@ func printState() {
 	if printName == "memset" {
 		if readw(pc) == 0x4cef {
 			sp := readl(spptr)
-			fmt.Printf("%s: %d b of %02x -> %x\n\n", printName, readl(sp + 12), readl(sp + 8), readl(sp + 4))
+			fmt.Printf("%s: %d b of %02x -> %x\n\n", printName, readl(sp+12), readl(sp+8), readl(sp+4))
 		}
 		return
 	}
