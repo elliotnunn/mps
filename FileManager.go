@@ -794,10 +794,10 @@ func tFSDispatch() {
 		writel(pb+28, 0)                    // ioWDProcID = who cares who created it
 
 	case 8: // GetFCBInfo
-		ioFCBIndx := readl(pb + 28)
-
+		ioFCBIndx := readw(pb + 28)
 		ioRefNum := readw(pb + 24)
-		if ioFCBIndx != 0 { // treat as a 1-based index into open FCBs
+
+		if ioFCBIndx > 0 { // treat as a 1-based index into open FCBs
 			for ioRefNum = 2; ; ioRefNum += readw(0x3f6) {
 				fcb := fcbFromRefnum(ioRefNum)
 				if fcb == 0 {
