@@ -743,7 +743,7 @@ func main() {
 
 	// Create our fake-FS shim layer
 	subEmbed, _ := fs.Sub(embedMPW, "ToolServer 1.1.1")
-	gFS.Add(subEmbed.(FS), filepath.Join(systemFolder, "MPW"))
+	gFS.Add(subEmbed, filepath.Join(systemFolder, "MPW"))
 
 	// Command line opts
 	cmdLines := []string{""} // leave space for the "chdir"

@@ -14,18 +14,12 @@ import (
 	"strings"
 )
 
-type FS interface {
-	fs.FS
-	fs.ReadDirFS
-	fs.ReadFileFS
-}
-
 type UnionFS struct {
-	fses        []FS
+	fses        []fs.FS
 	fsLocations []string
 }
 
-func (fsys *UnionFS) whichFS(path string) (string, FS) {
+func (fsys *UnionFS) whichFS(path string) (string, fs.FS) {
 	for i, loc := range fsys.fsLocations {
 		if strings.HasPrefix(path, loc) {
 			if len(path) == len(loc) || path[len(loc)] == os.PathSeparator {
@@ -45,7 +39,7 @@ func (fsys *UnionFS) whichFS(path string) (string, FS) {
 	return path, nil
 }
 
-func (fsys *UnionFS) Add(what FS, where string) {
+func (fsys *UnionFS) Add(what fs.FS, where string) {
 	fsys.fses = append(fsys.fses, what)
 	fsys.fsLocations = append(fsys.fsLocations, where)
 	os.Mkdir(where, 0o777) // so it shows up in listings
@@ -64,7 +58,7 @@ func (fsys *UnionFS) ReadDir(path string) ([]fs.DirEntry, error) {
 		list, err := os.ReadDir(path)
 		return list, err
 	} else {
-		list, err := subFS.ReadDir(subPath)
+		list, err := fs.ReadDir(subFS, subPath)
 		return list, err
 	}
 }
@@ -76,7 +70,7 @@ func (fsys *UnionFS) ReadFile(path string) ([]byte, error) {
 		data, err := os.ReadFile(path)
 		return data, err
 	} else {
-		data, err := subFS.ReadFile(subPath)
+		data, err := fs.ReadFile(subFS, subPath)
 		return data, err
 	}
 }
