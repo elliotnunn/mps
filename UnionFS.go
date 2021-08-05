@@ -74,3 +74,15 @@ func (fsys *UnionFS) ReadFile(path string) ([]byte, error) {
 		return data, err
 	}
 }
+
+func (fsys *UnionFS) Stat(path string) (fs.FileInfo, error) {
+	subPath, subFS := fsys.whichFS(path)
+
+	if subFS == nil {
+		stat, err := os.Stat(path)
+		return stat, err
+	} else {
+		stat, err := fs.Stat(subFS, subPath)
+		return stat, err
+	}
+}

@@ -2,28 +2,113 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
+// Storage format
+const (
+	kFileExchange = iota // FINDER.DAT/aaa RESOURCE.FRK/aaa
+	kRez                 // aaa.idump aaa.rdump
+	kOSX                 // aaa/..namedfork/rsrc (UNIMPLEMENTED)
+	kAppleDouble         // ._aaa (UNIMPLEMENTED)
+)
+
+// Panics if the file has conflicting storage formats
+func whichFormat(path string) int {
+	format := kFileExchange // should be read from environment variable
+	var complain []string
+
+	fe1 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+	fe2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+	if existsAsFile(fe1) || existsAsFile(fe2) {
+		format = kFileExchange
+		complain = append(complain, "File Exchange")
+	}
+
+	rz1 := path + ".idump"
+	rz2 := path + ".rdump"
+	if existsAsFile(rz1) || existsAsFile(rz2) {
+		format = kRez
+		complain = append(complain, "Rez")
+	}
+
+	if len(complain) > 1 {
+		complaint := strings.Join(complain, " & ")
+		panic(fmt.Sprintf("Conflicting %s data for file: %s", complaint, path))
+	}
+
+	return format
+}
+
+func existsAsFile(path string) bool {
+	stat, err := gFS.Stat(path)
+	return err == nil && stat.Mode().IsRegular()
+}
+
+// Assume the existence of the file
 func finderInfo(path string) [16]byte {
 	finfo := [16]byte{'?', '?', '?', '?', '?', '?', '?', '?', 0}
 
-	fileExchangeScheme := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
-	rezScheme := path + ".idump"
+	switch whichFormat(path) {
+	case kFileExchange:
+		path2 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+		if data, err := gFS.ReadFile(path2); err == nil {
+			copy(finfo[:], data)
+		}
 
-	// Try various resource fork schemes, fall back on empty fork
-	if data, err := gFS.ReadFile(fileExchangeScheme); err == nil {
-		copy(finfo[:], data)
-	}
-
-	if data, err := gFS.ReadFile(rezScheme); err == nil {
-		copy(finfo[:], data)
+	case kRez:
+		path2 := path + ".idump"
+		if data, err := gFS.ReadFile(path2); err == nil {
+			copy(finfo[:], data)
+		}
 	}
 
 	return finfo
+}
+
+func dataFork(path string) []byte {
+	data, _ := gFS.ReadFile(path)
+
+	// Textfile conversion unique to Elliot's idump/rdump system
+	if whichFormat(path) == kRez {
+		finfo := finderInfo(path)
+		if string(finfo[:4]) == "TEXT" || string(finfo[:4]) == "ttro" {
+			// Convert encoding if possible
+			if data2, ok := unicodeToMac(string(data)); ok {
+				data = []byte(data2)
+			}
+		}
+	}
+
+	return data
+}
+
+func resourceFork(path string) []byte {
+	var data []byte
+
+	switch whichFormat(path) {
+	case kFileExchange:
+		path2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+		data, _ = gFS.ReadFile(path2) // accept a nonexistent file
+
+	case kRez:
+		path2 := path + ".rdump"
+		var err error // variable shadowing???
+		data, err = gFS.ReadFile(path2)
+
+		// accept a nonexistent file as an empty data fork
+		if err != nil {
+			return nil
+		}
+
+		data = rez(data) // TODO: this panics, which is messy
+	}
+
+	return data
 }
 
 var rezStripPattern = regexp.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)

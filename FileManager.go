@@ -184,11 +184,7 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 }
 
 func tOpen() {
-	fork := 'd'
-	if readl(d1ptr)&0xff == 0xa {
-		fork = 'r'
-	}
-
+	forkIsRsrc := readl(d1ptr)&0xff == 0xa
 	pb := readl(a0ptr)
 
 	ioNamePtr := readl(pb + 18)
@@ -197,6 +193,7 @@ func tOpen() {
 
 	number := get_vol_or_dir()
 
+	// Checks for file existence
 	path, errno := get_host_path(number, ioName, true)
 
 	if gDebug >= 2 {
@@ -205,13 +202,6 @@ func tOpen() {
 
 	if errno != 0 {
 		paramblk_return(errno)
-		return // fnfErr
-	}
-
-	// check for existence of file, and slurp the data fork
-	data, err := gFS.ReadFile(path)
-	if err != nil {
-		paramblk_return(-43)
 		return // fnfErr
 	}
 
@@ -231,29 +221,18 @@ func tOpen() {
 		return // tmfoErr
 	}
 
-	if fork == 'd' {
-		// do nothing, because we already slurped the file above
-	} else if fork == 'r' {
-		fileExchangeScheme := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
-		rezScheme := path + ".rdump"
-
-		// Try various resource fork schemes, fall back on empty fork
-		data, err = gFS.ReadFile(fileExchangeScheme)
-		if err != nil {
-			data, err = gFS.ReadFile(rezScheme)
-			if err == nil {
-				data = rez(data)
-			} else {
-				data = nil
-			}
-		}
+	var data []byte
+	if forkIsRsrc {
+		data = resourceFork(path)
+	} else {
+		data = dataFork(path)
 	}
 
 	flags := byte(0)
 	if ioPermssn != 1 {
 		flags |= 1
 	}
-	if fork == 'r' {
+	if forkIsRsrc {
 		flags |= 2
 	}
 
