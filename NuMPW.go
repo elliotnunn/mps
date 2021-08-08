@@ -880,6 +880,9 @@ func main() {
 	os.Create(filepath.Join(systemFolder, "Script.out"))
 	os.Create(filepath.Join(systemFolder, "Script.err"))
 
+	// Hack -- this will appear as a writable file despite being in the embedFS
+	os.Create(filepath.Join(systemFolder, "MPW.MinPipe"))
+
 	push(32, 0)
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return

@@ -91,6 +91,11 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 		}
 	}
 
+	// Hack: put MPW's pipe tempfile outside the read-only fake FS
+	if path == filepath.Join(systemFolder, "MPW", "MPW.MinPipe") {
+		path = filepath.Join(systemFolder, "MPW.MinPipe")
+	}
+
 	return path, 0 // noErr
 }
 
