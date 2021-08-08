@@ -239,11 +239,15 @@ func tGestalt() {
 		var err int
 		switch selector {
 		case "sysv":
-			reply = 0x09228000 // highest possible
+			reply = uint32(readw(0x15a)) // SysVersion
 		case "fs  ":
 			reply = 2 // FSSpec calls, not much else
 		case "fold":
 			reply = 1 // Folder Manager present
+		case "mach":
+			reply = 10 // Mac II
+		case "proc":
+			reply = uint32(readb(0x12f)) + 1 // CPUFlag
 		default:
 			err = -5551 // gestaltUndefSelectorErr
 		}
@@ -872,6 +876,8 @@ func main() {
 	write(10, 0xd92, 0)
 
 	// Misc globals
+	writeb(0x12f, 3) // CPUFlag = 68030
+	writew(0x15a, 0x0755) // SysVersion
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writel(0x2b6, kExpandMem)
 	writel(0x2f4, 0)                            // CaretTime = 0 ticks
