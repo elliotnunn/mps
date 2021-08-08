@@ -520,8 +520,12 @@ func tGetFInfo() { // also implements GetCatInfo
 	}
 
 	// clear our block of return values, which is longer for GetCatInfo
-	for i := uint32(0); (trap&0xff == 0x60 && i < 84) || (i < 56); i++ {
-		writeb(pb+24+i, 0)
+	endOfReturnValues := 80
+	if trap&0xff == 0x60 {
+		endOfReturnValues = 108
+	}
+	for i := 32; i < endOfReturnValues; i++ {
+		writeb(pb + uint32(i), 0)
 	}
 
 	if return_fname && ioNamePtr != 0 {
