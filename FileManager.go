@@ -82,8 +82,8 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 			}
 
 			if !exists { // can tolerate a nonexistent leaf file if instructed
-				if i <= len(components)-1 || leafMustExist {
-					return "", -32 // fnfErr
+				if i < len(components)-1 || leafMustExist {
+					return "", -43 // fnfErr
 				}
 			}
 
