@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/bits"
+	"strings"
 )
 
 //#######################################################################
@@ -1162,36 +1163,75 @@ func lineE(inst uint16) {
 	write(size, dest, result)
 }
 
-var curFuncStart, curFuncEnd uint32
-var curFuncName string
+var callStack = []uint32{kStackBase}
+var callStackNames = []string{"root"}
+var lastPrinted = ""
 
-func printState() {
-	// What about a function name?
-	if pc < curFuncStart || pc >= curFuncEnd {
-		curFuncStart = pc
-		curFuncEnd = uint32(len(mem))
-		curFuncName = ""
-		for try := pc; try+130 <= uint32(len(mem)); try += 2 {
-			if mem[try] == 0x4e && (mem[try+1] == 0x75 || mem[try+1] == 0xd0) {
-				if mem[try+2]&0xc0 == 0x80 {
-					strlen := uint32(mem[try+2] & 0x3f)
-					curFuncName = string(mem[try+3:][:strlen])
-					for _, ch := range []byte(curFuncName) {
-						if ch < 32 || ch >= 127 {
-							curFuncName = ""
-						}
-					}
-				}
-				curFuncEnd = try + 2
-				break
-			}
+func printCallStack() {
+	sp := readl(spptr)
+
+	for callStack[len(callStack) - 1] <= sp {
+		callStack = callStack[:len(callStack) - 1]
+		callStackNames = callStackNames[:len(callStackNames) - 1]
+	}
+
+	if callStack[len(callStack) - 1] > sp {
+		callStack = append(callStack, sp)
+		callStackNames = append(callStackNames, curFunc())
+	}
+
+	var toPrint []string
+	alreadyPrinted := callStackNames[0]
+	for _, printName := range callStackNames {
+		if printName != alreadyPrinted && len(printName) != 0 {
+			toPrint = append(toPrint, printName)
+			alreadyPrinted = printName
 		}
 	}
 
-	printName := curFuncName
-	if pc < 0x100000 {
-		printName = ""
+	thisPrint := strings.Join(toPrint, " ")
+	if lastPrinted != thisPrint {
+		fmt.Printf("callstack: %s\n", thisPrint)
+		lastPrinted = thisPrint
 	}
+}
+
+var curFuncStart, curFuncEnd uint32
+var curFuncName string
+
+func curFunc() string {
+	if pc < 0x100000 {
+		return ""
+	}
+
+	if pc >= curFuncStart && pc < curFuncEnd {
+		return curFuncName
+	}
+
+	curFuncStart = pc
+	curFuncEnd = uint32(len(mem))
+	curFuncName = ""
+	for try := pc; try+130 <= uint32(len(mem)); try += 2 {
+		if mem[try] == 0x4e && (mem[try+1] == 0x75 || mem[try+1] == 0xd0) {
+			if mem[try+2]&0xc0 == 0x80 {
+				strlen := uint32(mem[try+2] & 0x3f)
+				curFuncName = string(mem[try+3:][:strlen])
+				for _, ch := range []byte(curFuncName) {
+					if ch < 32 || ch >= 127 {
+						curFuncName = ""
+					}
+				}
+			}
+			curFuncEnd = try + 2
+			break
+		}
+	}
+
+	return curFuncName
+}
+
+func printState() {
+	printName := curFunc()
 
 	if printName == "p2cstr" {
 		if readw(pc) == 0x202f {
@@ -1279,6 +1319,10 @@ func call_m68k(addr uint32) {
 	pc = addr
 
 	for pc != magic_return {
+		if gDebug >= 4 {
+			printCallStack()
+		}
+
 		if gDebug >= 5 {
 			printState()
 		}
