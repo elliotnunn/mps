@@ -81,6 +81,14 @@ func dataFork(path string) []byte {
 			if data2, ok := unicodeToMac(string(data)); ok {
 				data = []byte(data2)
 			}
+
+			// Convert text file line endings always
+			data = []byte(strings.ReplaceAll(string(data), "\r\n", "\r"))
+			for i := 0; i < len(data); i++ {
+				if data[i] == 10 {
+					data[i] = 13
+				}
+			}
 		}
 	}
 
