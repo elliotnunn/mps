@@ -372,28 +372,12 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
 		ptr = readl(regptr) + extwl(readw(pc))
 		pc += 2
 	} else if mode>>3 == 6 { // d8(An,Xn)
-		ptr = readl(aregAddr(mode & 7)) // contents of An
-		xword := readw(pc)
-		pc += 2
-		ptr += extbl(uint8(xword)) // add constant displacement
-		xn := readl(regAddr(xword >> 12 & 15))
-		if xword&0x100 == 0 { // xn is word valued, so sign extend it
-			xn = extwl(uint16(xn))
-		}
-		ptr += xn
+		ptr = extensionWord(readl(aregAddr(mode & 7))) // contents of An
 	} else if mode == 58 { // d16(PC)
 		ptr = pc + extwl(readw(pc))
 		pc += 2
 	} else if mode == 59 { // d8(PC,Xn)
-		ptr = pc
-		xword := readw(pc)
-		pc += 2
-		ptr += extbl(uint8(xword)) // add constant displacement
-		xn := readl(regAddr(xword >> 12 & 15))
-		if xword&0x100 == 0 { // xn is word valued, so sign extend it
-			xn = extwl(uint16(xn))
-		}
-		ptr += xn
+		ptr = extensionWord(pc)
 	} else if mode == 56 { // abs.W
 		ptr = uint32(readw(pc))
 		pc += 2
@@ -415,6 +399,66 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
 		panic("reserved addressing mode")
 	}
 	return
+}
+
+func extensionWord(base uint32) uint32 {
+	brief := readw(pc); pc += 2
+
+	// Index register can be Dn or An
+	index := readl(regs + 4*uint32(brief >> 12 & 0xf))
+
+	// If word, then sign extend to long
+	if brief & 0x800 == 0 {
+		index = extwl(uint16(index))
+	}
+
+	// Scale x1, x2, x4, x8
+	index <<= brief >> 9 & 3
+
+	// Brief (68000-style) instruction word: return early
+	if brief & 0x100 == 0 {
+		disp := extbl(uint8(brief))
+ 		return base + index + disp
+	}
+
+	// BS (base suppress): zero the supplied base
+	if brief & 0x80 != 0 { // base suppress?
+		base = 0
+	}
+
+	// IS (index suppress): zero the index register
+	if brief & 0x40 != 0 {
+		index = 0
+	}
+
+	var baseDisp uint32
+	switch brief >> 4 & 3 {
+	case 2:
+		baseDisp = extwl(readw(pc)); pc += 2
+	case 3:
+		baseDisp = readl(pc); pc += 4
+	}
+
+	// No memory indirect
+	if brief & 7 == 0 {
+		return base + baseDisp + index
+	}
+
+	var outerDisp uint32
+	switch brief & 3 {
+	case 2:
+		outerDisp = extwl(readw(pc)); pc += 2
+	case 3:
+		outerDisp = readl(pc); pc += 4
+	}
+
+	// Preindex or postindex
+	if brief & 4 == 0 {
+		return readl(base + baseDisp + index) + outerDisp
+	} else {
+		return readl(base + baseDisp) + index + outerDisp
+	}
+
 }
 
 func test_condition(cond uint16) bool {
