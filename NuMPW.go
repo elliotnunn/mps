@@ -833,6 +833,7 @@ func main() {
 	for i := 0; i < 178; i += 2 {
 		writew(kVCB+uint32(i), 0)
 	}
+	writew(kVCB+8, 0x4244)             // vcbSigWord
 	writew(kVCB+78, 2)                 // vcbVRefNum
 	writePstring(kVCB+44, onlyvolname) // vcbVName
 

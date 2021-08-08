@@ -240,7 +240,7 @@ func tOpen() {
 	writel(fcbPtr+0, 1)                                           // fake non-zero fcbFlNum
 	writeb(fcbPtr+4, flags)                                       // fcbMdRByt
 	writel(fcbPtr+8, uint32(len(data)))                           // fcbEOF
-	writel(fcbPtr+20, 0xa8000)                                    // fcbVPtr
+	writel(fcbPtr+20, kVCB)                                       // fcbVPtr
 	writel(fcbPtr+58, uint32(get_macos_dnum(filepath.Dir(path)))) // fcbDirID
 	macpath, _ := unicodeToMac(filepath.Base(path))               // we already know it is safe
 	writePstring(fcbPtr+62, macpath)                              // fcbCName
