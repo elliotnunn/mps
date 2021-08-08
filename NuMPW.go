@@ -378,6 +378,90 @@ func tExitToShell() {
 
 }
 
+func tOSDispatch() {
+	selector := popw()
+
+	switch selector {
+	case 0x37: // FUNCTION GetCurrentProcess (VAR PSN: ProcessSerialNumber): OSErr;
+		psn := popl()
+		writed(psn, 1)
+		writew(readl(spptr), 0)
+
+	case 0x38: // FUNCTION GetNextProcess (VAR PSN: ProcessSerialNumber): OSErr;
+		psn := popl()
+		switch readd(psn) {
+		case 0: // kNoProcess
+			writed(psn, 1) // our process
+			writew(readl(spptr), 0) // noErr
+		case 1: // our process
+			writed(psn, 0) // kNoProcess
+			writew(readl(spptr), 0xffff&-600) // procNotFound
+		default: // nonsense value
+			writed(psn, 0) // kNoProcess
+			writew(readl(spptr), 0xffff&-50) // paramErr
+		}
+
+	case 0x3a: // FUNCTION GetProcessInformation (PSN: ProcessSerialNumber; VAR info: ProcessInfoRec): OSErr;
+		info := popl()
+		psn := popl()
+
+		// Nonsense process
+		if readd(psn) != 1 {
+			writew(readl(spptr), 0xffff&-600) // procNotFound
+			return
+		}
+
+		// Reasonable size parameter
+		infoLen := readl(info)
+		if infoLen < 60 {
+			panic("Extended GetProcessInformation")
+			writew(readl(spptr), 0xffff&-50) // paramErr
+		}
+
+		processName := readl(info + 4)
+		if processName != 0 {
+			writePstring(processName, macstring("ToolServer"))
+		}
+
+		processAppSpec := readl(info + 56)
+		if processAppSpec != 0 { // construct our own FSSpec
+			writew(processAppSpec, 2)
+			writel(processAppSpec + 2, uint32(get_macos_dnum(filepath.Dir(toolServer))))
+			writePstring(processAppSpec + 6, unicodeToMacOrPanic(filepath.Base(toolServer)))
+		}
+
+		writed(info + 8, 1) // processNumber
+		writel(info + 16, 0x4150504c) // processType = APPL
+		writel(info + 20, 0x4d505358) // processSignature = MPSX
+		writel(info + 24, 0) // processMode
+		writel(info + 28, kHeap) // processLocation
+		writel(info + 32, 0x7ffffffe) // processSize
+		writel(info + 36, 0x7ffffffe) // processFreeMem
+		writed(info + 40, 0) // processLauncher = kNoProcess
+		writel(info + 48, 1) // processLaunchDate
+		writel(info + 52, 1) // processActiveTime
+
+	default:
+		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
+	}
+}
+
+// These two functions are only used by OSDispatch so far
+func readd(addr uint32) (val uint64) {
+	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | uint64(mem[addr+3] << 32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
+}
+
+func writed(addr uint32, val uint64) {
+	mem[addr] = byte(val >> 56)
+	mem[addr+1] = byte(val >> 48)
+	mem[addr+2] = byte(val >> 40)
+	mem[addr+3] = byte(val >> 32)
+	mem[addr+4] = byte(val >> 24)
+	mem[addr+5] = byte(val >> 16)
+	mem[addr+6] = byte(val >> 8)
+	mem[addr+7] = byte(val)
+}
+
 // Trivial do-nothing traps
 
 func tUnimplemented() {
@@ -692,6 +776,7 @@ func main() {
 		tb_base + 0x06f: tPop4,                // _OpenPort
 		tb_base + 0x073: tSetPort,             // _SetPort
 		tb_base + 0x074: tGetPort,             // _GetPort
+		tb_base + 0x08f: tOSDispatch,          // _OSDispatch
 		tb_base + 0x09f: tUnimplemented,       // _Unimplemented
 		tb_base + 0x0a7: tSetRect,             // _SetRect
 		tb_base + 0x0a8: tOffsetRect,          // _OffsetRect
@@ -769,7 +854,7 @@ func main() {
 
 	// Command line opts
 	cmdLines := []string{""} // leave space for the "chdir"
-	toolServer := filepath.Join(systemFolder, "MPW", "ToolServer")
+	toolServer = filepath.Join(systemFolder, "MPW", "ToolServer")
 
 	flag.IntVar(&gDebug, "d", 0, "debug level (>=5 prints every instruction)")
 	flag.StringVar(&toolServer, "ts", toolServer, "ToolServer (default to built-in version)")

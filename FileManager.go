@@ -14,6 +14,7 @@ var dnums []string
 
 // gets populated by main func
 var systemFolder string
+var toolServer string
 
 // the contents of every open fork, indexed by refnum
 var filebuffers = make(map[uint16][]byte)
