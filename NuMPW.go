@@ -514,6 +514,7 @@ const (
 	kDQE            = 0xb9000 // 0x4 below and 0x10 above
 	kVCB            = 0xba000 // ????
 	kMenuList       = 0xbb000
+	kExpandMem      = 0xbc000
 	kPACKs          = 0xc0000
 	kFTrapTable     = 0xf0000  // 0x10000 above
 	kHeap           = 0x100000 // extends up
@@ -854,13 +855,25 @@ func main() {
 	writew(kVCB+78, 2)                 // vcbVRefNum
 	writePstring(kVCB+44, onlyvolname) // vcbVName
 
+	// VCB header...
+	writew(0x356, 0)
+	writel(0x356+2, kVCB)
+	writel(0x356+6, kVCB)
+
 	// File Control Block table
 	writel(0x34e, kFCBTable)    // FCBSPtr
 	writew(0x3f6, 94)           // FSFCBLen
 	writew(kFCBTable, 2+94*348) // size of FCB table
 
+	// VBL queue: empty
+	write(10, 0x160, 0)
+
+	// DT queue: empty
+	write(10, 0xd92, 0)
+
 	// Misc globals
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
+	writel(0x2b6, kExpandMem)
 	writel(0x2f4, 0)                            // CaretTime = 0 ticks
 	writel(0x316, 0)                            // we don't implement the 'MPGM' interface
 	writel(0x31a, 0x00ffffff)                   // Lo3Bytes
