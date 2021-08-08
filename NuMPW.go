@@ -316,6 +316,22 @@ func tCmpString() {
 	}
 }
 
+func tUprString() {
+	sptr := readl(a0ptr)
+	slen := readl(d0ptr)
+
+	marks := readw(d1ptr)&0x200 != 0
+
+	for i := sptr; i < sptr+slen; i++ {
+		c := readb(i)
+		if marks {
+			c = macStripTab[c]
+		}
+		c = macUpperTab[c]
+		writeb(i, c)
+	}
+}
+
 func tGetOSEvent() {
 	write(16, readl(a0ptr), 0) // null event
 	writel(d0ptr, 0xffffffff)
@@ -631,6 +647,7 @@ func main() {
 		os_base + 0x4b:  tClrD0,               // _SetGrowZone
 		os_base + 0x4c:  tFreeMem,             // _CompactMem
 		os_base + 0x4d:  tClrD0A0,             // _PurgeMem
+		os_base + 0x54:  tUprString,           // _UprString
 		os_base + 0x55:  tNop,                 // _StripAddress
 		os_base + 0x60:  tFSDispatch,          // _FSDispatch
 		os_base + 0x62:  tFreeMem,             // _PurgeSpace
