@@ -280,6 +280,13 @@ func tHOpenResFile() {
 	writel(0xa50, maphdl)
 	writew(0xa5a, ioRefNum) // CurMap = filenum so we are the first searched
 
+    // Some on-disk resource maps have junk in the handle field
+    for _, entriesOfType := range resMapEntries(readl(maphdl)) {
+        for _, idEntry := range entriesOfType[1:] {
+            writel(idEntry + 8, 0)
+        }
+    }
+
 	writew(readl(spptr), ioRefNum) // return refnum
 	setResError(0)
 }
