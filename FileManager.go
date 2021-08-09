@@ -531,7 +531,7 @@ func tGetFInfo() { // also implements GetCatInfo
 		endOfReturnValues = 108
 	}
 	for i := 32; i < endOfReturnValues; i++ {
-		writeb(pb + uint32(i), 0)
+		writeb(pb+uint32(i), 0)
 	}
 
 	if return_fname && ioNamePtr != 0 {

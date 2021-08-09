@@ -391,13 +391,13 @@ func tOSDispatch() {
 		psn := popl()
 		switch readd(psn) {
 		case 0: // kNoProcess
-			writed(psn, 1) // our process
+			writed(psn, 1)          // our process
 			writew(readl(spptr), 0) // noErr
 		case 1: // our process
-			writed(psn, 0) // kNoProcess
+			writed(psn, 0)                    // kNoProcess
 			writew(readl(spptr), 0xffff&-600) // procNotFound
 		default: // nonsense value
-			writed(psn, 0) // kNoProcess
+			writed(psn, 0)                   // kNoProcess
 			writew(readl(spptr), 0xffff&-50) // paramErr
 		}
 
@@ -426,20 +426,20 @@ func tOSDispatch() {
 		processAppSpec := readl(info + 56)
 		if processAppSpec != 0 { // construct our own FSSpec
 			writew(processAppSpec, 2)
-			writel(processAppSpec + 2, uint32(get_macos_dnum(filepath.Dir(toolServer))))
-			writePstring(processAppSpec + 6, unicodeToMacOrPanic(filepath.Base(toolServer)))
+			writel(processAppSpec+2, uint32(get_macos_dnum(filepath.Dir(toolServer))))
+			writePstring(processAppSpec+6, unicodeToMacOrPanic(filepath.Base(toolServer)))
 		}
 
-		writed(info + 8, 1) // processNumber
-		writel(info + 16, 0x4150504c) // processType = APPL
-		writel(info + 20, 0x4d505358) // processSignature = MPSX
-		writel(info + 24, 0) // processMode
-		writel(info + 28, kHeap) // processLocation
-		writel(info + 32, 0x7ffffffe) // processSize
-		writel(info + 36, 0x7ffffffe) // processFreeMem
-		writed(info + 40, 0) // processLauncher = kNoProcess
-		writel(info + 48, 1) // processLaunchDate
-		writel(info + 52, 1) // processActiveTime
+		writed(info+8, 1)           // processNumber
+		writel(info+16, 0x4150504c) // processType = APPL
+		writel(info+20, 0x4d505358) // processSignature = MPSX
+		writel(info+24, 0)          // processMode
+		writel(info+28, kHeap)      // processLocation
+		writel(info+32, 0x7ffffffe) // processSize
+		writel(info+36, 0x7ffffffe) // processFreeMem
+		writed(info+40, 0)          // processLauncher = kNoProcess
+		writel(info+48, 1)          // processLaunchDate
+		writel(info+52, 1)          // processActiveTime
 
 	default:
 		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
@@ -448,7 +448,7 @@ func tOSDispatch() {
 
 // These two functions are only used by OSDispatch so far
 func readd(addr uint32) (val uint64) {
-	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | uint64(mem[addr+3] << 32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
+	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | uint64(mem[addr+3]<<32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
 }
 
 func writed(addr uint32, val uint64) {
@@ -961,14 +961,14 @@ func main() {
 	write(10, 0xd92, 0)
 
 	// Misc globals
-	writeb(0x12f, 3) // CPUFlag = 68030
-	writew(0x15a, 0x0755) // SysVersion
+	writeb(0x12f, 3)                            // CPUFlag = 68030
+	writew(0x15a, 0x0755)                       // SysVersion
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writel(0x2b6, kExpandMem)
-	writel(0x2f4, 0)                            // CaretTime = 0 ticks
-	writel(0x316, 0)                            // we don't implement the 'MPGM' interface
-	writel(0x31a, 0x00ffffff)                   // Lo3Bytes
-	writel(0x33c, 0)                            // IAZNotify = nothing to do when swapping worlds
+	writel(0x2f4, 0)          // CaretTime = 0 ticks
+	writel(0x316, 0)          // we don't implement the 'MPGM' interface
+	writel(0x31a, 0x00ffffff) // Lo3Bytes
+	writel(0x33c, 0)          // IAZNotify = nothing to do when swapping worlds
 	writePstring(0x910, "ToolServer")
 	writel(0x9d6, 0)          // WindowList empty
 	writel(0xa02, 0x00010001) // OneOne

@@ -402,13 +402,14 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
 }
 
 func extensionWord(base uint32) uint32 {
-	brief := readw(pc); pc += 2
+	brief := readw(pc)
+	pc += 2
 
 	// Index register can be Dn or An
-	index := readl(regs + 4*uint32(brief >> 12 & 0xf))
+	index := readl(regs + 4*uint32(brief>>12&0xf))
 
 	// If word, then sign extend to long
-	if brief & 0x800 == 0 {
+	if brief&0x800 == 0 {
 		index = extwl(uint16(index))
 	}
 
@@ -416,47 +417,51 @@ func extensionWord(base uint32) uint32 {
 	index <<= brief >> 9 & 3
 
 	// Brief (68000-style) instruction word: return early
-	if brief & 0x100 == 0 {
+	if brief&0x100 == 0 {
 		disp := extbl(uint8(brief))
- 		return base + index + disp
+		return base + index + disp
 	}
 
 	// BS (base suppress): zero the supplied base
-	if brief & 0x80 != 0 { // base suppress?
+	if brief&0x80 != 0 { // base suppress?
 		base = 0
 	}
 
 	// IS (index suppress): zero the index register
-	if brief & 0x40 != 0 {
+	if brief&0x40 != 0 {
 		index = 0
 	}
 
 	var baseDisp uint32
 	switch brief >> 4 & 3 {
 	case 2:
-		baseDisp = extwl(readw(pc)); pc += 2
+		baseDisp = extwl(readw(pc))
+		pc += 2
 	case 3:
-		baseDisp = readl(pc); pc += 4
+		baseDisp = readl(pc)
+		pc += 4
 	}
 
 	// No memory indirect
-	if brief & 7 == 0 {
+	if brief&7 == 0 {
 		return base + baseDisp + index
 	}
 
 	var outerDisp uint32
 	switch brief & 3 {
 	case 2:
-		outerDisp = extwl(readw(pc)); pc += 2
+		outerDisp = extwl(readw(pc))
+		pc += 2
 	case 3:
-		outerDisp = readl(pc); pc += 4
+		outerDisp = readl(pc)
+		pc += 4
 	}
 
 	// Preindex or postindex
-	if brief & 4 == 0 {
-		return readl(base + baseDisp + index) + outerDisp
+	if brief&4 == 0 {
+		return readl(base+baseDisp+index) + outerDisp
 	} else {
-		return readl(base + baseDisp) + index + outerDisp
+		return readl(base+baseDisp) + index + outerDisp
 	}
 
 }
@@ -1214,12 +1219,12 @@ var lastPrinted = ""
 func printCallStack() {
 	sp := readl(spptr)
 
-	for callStack[len(callStack) - 1] <= sp {
-		callStack = callStack[:len(callStack) - 1]
-		callStackNames = callStackNames[:len(callStackNames) - 1]
+	for callStack[len(callStack)-1] <= sp {
+		callStack = callStack[:len(callStack)-1]
+		callStackNames = callStackNames[:len(callStackNames)-1]
 	}
 
-	if callStack[len(callStack) - 1] > sp {
+	if callStack[len(callStack)-1] > sp {
 		callStack = append(callStack, sp)
 		callStackNames = append(callStackNames, curFunc())
 	}
