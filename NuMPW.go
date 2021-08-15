@@ -448,7 +448,7 @@ func tOSDispatch() {
 
 // These two functions are only used by OSDispatch so far
 func readd(addr uint32) (val uint64) {
-	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | uint64(mem[addr+3]<<32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
+	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | (uint64(mem[addr+3]) << 32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
 }
 
 func writed(addr uint32, val uint64) {
