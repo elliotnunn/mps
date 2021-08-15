@@ -854,10 +854,15 @@ func line5(inst uint16) { // addq,subq,scc,dbcc
 func line6(inst uint16) { // bra,bsr,bcc
 	check_for_lurkers()
 
-	disp := extbl(uint8(inst))
-	if disp == 0 { // word displacement
+	var disp uint32
+	if uint8(inst) == 0 { // word displacement
 		disp = extwl(readw(pc)) - 2
 		pc += 2
+	} else if uint8(inst) == 0xff { // long displacement
+		disp = readl(pc) - 4
+		pc += 4
+	} else { // byte displacement
+		disp = extbl(uint8(inst))
 	}
 
 	cond := inst >> 8 & 15
