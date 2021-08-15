@@ -1119,6 +1119,11 @@ func lineC(inst uint16) {
 }
 
 func lineE(inst uint16) {
+	if inst&0b100_0_11_000000 == 0b100_0_11_000000 {
+		bitFieldInst(inst)
+		return
+	}
+
 	var size uint32
 	var kind uint16
 	var dest uint32
@@ -1230,6 +1235,118 @@ func lineE(inst uint16) {
 	set_nz(result, size)
 
 	write(size, dest, result)
+}
+
+func readBitField(addr uint32, wrap32 bool, bitOffset int, bitWidth int) uint32 {
+	var dblVal uint64
+	if wrap32 {
+		thinVal := readl(addr)
+		dblVal = (uint64(thinVal) << 32) | uint64(thinVal)
+	} else {
+		dblVal = readd(addr)
+	}
+
+	// left-align
+	dblVal <<= bitOffset
+
+	// right-align
+	dblVal >>= 64 - bitWidth
+
+	return uint32(dblVal)
+}
+
+func writeBitField(addr uint32, wrap32 bool, bitOffset int, bitWidth int, val uint32) {
+	dblVal := uint64(val) << (64 - bitWidth - bitOffset)
+	dblMask := ((uint64(1) << bitWidth) - 1) << (64 - bitWidth - bitOffset)
+
+	if wrap32 {
+		longVal := uint32(dblVal | dblVal>>32)
+		longMask := uint32(dblMask | dblMask>>32)
+		writel(addr, readl(addr) & ^longMask | longVal&longMask)
+	} else {
+		writed(addr, readd(addr) & ^dblMask | dblVal&dblMask)
+	}
+}
+
+func bfSetNZVC(bitWidth int, val uint32) {
+	n = val&(1<<(bitWidth-1)) != 0
+	z = val&((1<<bitWidth)-1) == 0
+	v = false
+	c = false
+}
+
+func bitFieldInst(inst uint16) {
+	word2 := readw(pc)
+	pc += 2
+
+	mode := inst & 0x3f
+	eaIsRegister := mode <= 15
+	ea := address_by_mode(mode, 4) // treat as .L to get base of register
+	dPtr := d0ptr + 4*uint32(word2>>12&7)
+
+	var bitOffset, bitWidth int
+
+	if word2&(1<<11) == 0 { // literal
+		bitOffset = int(word2 >> 6 & 0x1f)
+	} else {
+		dn := word2 >> 6 & 7
+		bitOffset = int(int32(readl(d0ptr + 4*uint32(dn))))
+	}
+
+	if word2&(1<<5) == 0 { // literal
+		bitWidth = int(word2 & 0x1f)
+	} else {
+		dn := word2 & 7
+		bitWidth = int(readl(d0ptr+4*uint32(dn)) & 0x1f)
+	}
+
+	if bitWidth == 0 {
+		bitWidth = 32
+	}
+
+	// Force a 4-byte-aligned base address and a bit offset 0..31
+	if eaIsRegister {
+		bitOffset &= 0x1f
+	} else {
+		wideAddr := uint64(ea)*8 + uint64(bitOffset)
+		ea = uint32(wideAddr/8) & 0xfffffffc
+		bitOffset = int(wideAddr & 0x1f)
+	}
+
+	field := readBitField(ea, eaIsRegister, bitOffset, bitWidth)
+	bfSetNZVC(bitWidth, field)
+
+	switch inst >> 8 & 7 {
+	case 0b000: // bftst
+		// already set condition codes, nothing else to do
+		return
+	case 0b001: // bfextu
+		writel(dPtr, field)
+		return
+	case 0b010: // bfchg
+		field = ^field
+	case 0b011: // bfexts
+		shift := 32 - bitWidth
+		field = uint32(int32(field<<shift) >> shift) // sign extend
+		writel(dPtr, field)
+		return
+	case 0b100: // bfclr
+		field = 0
+	case 0b101: // bfffo -- manual is wrong!
+		firstOne := 0
+		for firstOne < bitWidth && field&(0x80000000>>firstOne) != 0 {
+			firstOne++
+		}
+		writel(dPtr, uint32(bitOffset)+uint32(firstOne))
+		return
+	case 0b110: // bfset
+		field = 0xffffffff
+	case 0b111: // bfins
+		field = readl(dPtr)
+		bfSetNZVC(bitWidth, field) // yes, set for INSERTED value
+	}
+
+	writeBitField(ea, eaIsRegister, bitOffset, bitWidth, field)
 }
 
 var callStack = []uint32{kStackBase}
