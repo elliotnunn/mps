@@ -558,6 +558,27 @@ func line0(inst uint16) {
 
 		write(size, ptr, val)
 
+	} else if inst >> 6 & 0b100111 == 0b000011 { // cmp2/chk2
+		word2 := readw(pc); pc += 2
+		size := readsize(inst >> 9 & 3)
+		mask := (uint32(1) << (size * 4)) - 1
+		rangeEA := address_by_mode(inst & 0x3f, size)
+		whichReg := word2 >> 12
+		data := read(size, regs + 4 * uint32(whichReg) + 4 - size)
+
+		lower := read(size, rangeEA)
+		upper := read(size, rangeEA + size)
+
+		data = (data - lower) & mask
+		upper = (upper - lower) & mask
+
+		z = data == 0 || data == upper
+		c = data > upper
+
+		if c && word2 & (1 << 11) != 0 { // chk
+			panic("chk failed")
+		}
+
 	} else { //ori,andi,subi,addi,eori -- including to SR/CCR
 		size := readsize(inst >> 6 & 3)
 
