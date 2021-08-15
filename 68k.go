@@ -50,6 +50,10 @@ func read(numbytes uint32, addr uint32) (val uint32) {
 	return
 }
 
+func readd(addr uint32) (val uint64) {
+	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | (uint64(mem[addr+3]) << 32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
+}
+
 func readl(addr uint32) (val uint32) {
 	return (uint32(mem[addr]) << 24) | (uint32(mem[addr+1]) << 16) | (uint32(mem[addr+2]) << 8) | uint32(mem[addr+3])
 }
@@ -68,6 +72,17 @@ func write(numbytes uint32, addr uint32, val uint32) {
 		val >>= 8
 	}
 	return
+}
+
+func writed(addr uint32, val uint64) {
+	mem[addr] = byte(val >> 56)
+	mem[addr+1] = byte(val >> 48)
+	mem[addr+2] = byte(val >> 40)
+	mem[addr+3] = byte(val >> 32)
+	mem[addr+4] = byte(val >> 24)
+	mem[addr+5] = byte(val >> 16)
+	mem[addr+6] = byte(val >> 8)
+	mem[addr+7] = byte(val)
 }
 
 func writel(addr uint32, val uint32) {
