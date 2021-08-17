@@ -771,6 +771,61 @@ func line4(inst uint16) { // very,crowded,line
 			v = false // cancel overflow
 			writel(regAddr(word2&7), uint32(result>>32))
 		}
+	} else if inst&0xFC0 == 0xC40 { // [t]divu/divs.l
+		word2 := readw(pc)
+		pc += 2
+		isSigned := word2&(1<<11) != 0
+
+		ea := address_by_mode(inst&63, 4) // divisor
+		qa := regAddr(word2 >> 12 & 7)    // dividend, quotient
+		ra := regAddr(word2 & 7)          // remainder, high dividend, high quotient
+
+		if word2&(1<<10) != 0 { // 64-bit dividend
+			dividend := uint64(readl(ra))<<32 | uint64(readl(qa))
+			divisor := uint32(readl(ea))
+
+			var quotient, remainder uint32
+			if isSigned {
+				dblq := int64(dividend) / int64(int32(divisor))
+				dblr := int64(dividend) % int64(int32(divisor))
+				v = dblq != int64(int32(dblq))
+				quotient = uint32(dblq)
+				remainder = uint32(dblr)
+			} else {
+				dblq := dividend / uint64(divisor)
+				dblr := dividend % uint64(divisor)
+				v = dblq>>32 != 0
+				quotient = uint32(dblq)
+				remainder = uint32(dblr)
+			}
+
+			if !v {
+				writel(qa, quotient)
+				writel(ra, remainder)
+				set_nz(quotient, 4)
+			}
+			c = false
+		} else { // 32-bit dividend
+			dividend := readl(qa)
+			divisor := readl(ea)
+			var quotient, remainder uint32
+			if isSigned {
+				quotient = uint32(int32(dividend) / int32(divisor))
+				remainder = uint32(int32(dividend) % int32(divisor))
+			} else {
+				quotient = dividend / divisor
+				remainder = dividend % divisor
+			}
+
+			writel(qa, quotient)
+			if ra != qa {
+				writel(ra, remainder)
+			}
+
+			set_nz(quotient, 4)
+			v = false // overflow can't occur?
+			c = false
+		}
 	} else if inst&0xFF8 == 0xE50 { // link
 		ea := aregAddr(inst & 7)
 		imm := extwl(readw(pc))
