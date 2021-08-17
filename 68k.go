@@ -740,6 +740,37 @@ func line4(inst uint16) { // very,crowded,line
 		if inst>>6&3 == 3 { // tas
 			writeb(dest, uint8(datum)|0x80)
 		}
+	} else if inst&0xFC0 == 0xC00 { // mulu/muls.l
+		word2 := readw(pc)
+		pc += 2
+		src := address_by_mode(inst&63, 4)
+		dest := regAddr(word2 >> 12 & 7)
+
+		m1 := readl(src)
+		m2 := readl(dest)
+
+		var result uint64
+		if word2&(1<<11) != 0 { // signed
+			result = uint64(int64(int32(m1)) * int64(int32(m2)))
+			v = result != uint64(int64(int32(result))) // signed overflow
+		} else {
+			result = uint64(m1) * uint64(m2)
+			v = result>>32 != 0 // unsigned overflow
+		}
+
+		n = result&(1<<31) != 0
+		z = uint32(result) == 0
+		c = false
+
+		writel(dest, uint32(result))
+
+		// 64-bit product with a "high" register
+		if word2&(1<<10) != 0 {
+			n = result&(1<<63) != 0
+			z = result == 0
+			v = false // cancel overflow
+			writel(regAddr(word2&7), uint32(result>>32))
+		}
 	} else if inst&0xFF8 == 0xE50 { // link
 		ea := aregAddr(inst & 7)
 		imm := extwl(readw(pc))
