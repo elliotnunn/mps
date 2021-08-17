@@ -717,7 +717,15 @@ func line4(inst uint16) { // very,crowded,line
 			c = false
 			writew(regAddr(dn)+2, val)
 		}
-	} else if inst&0xFC0 == 0x800 { // nbcd
+	} else if inst&0xFF8 == 0x9C0 { // 68020 extb.l
+		dn := inst & 7
+		val := extbl(readb(regAddr(dn) + 3))
+		set_nz(val, 4)
+		v = false
+		c = false
+		writel(regAddr(dn), val)
+	} else if inst&0xFC0 == 0x800 && inst>>3&7 != 1 { // nbcd
+		// the hack to check bits 5..3 allows fallthru to link.l
 		bcdInst(inst)
 	} else if inst&0xFF8 == 0x840 { // swap.w
 		dest := regAddr(inst & 7)
@@ -836,12 +844,27 @@ func line4(inst uint16) { // very,crowded,line
 		writel(ea, sp)        // move.l sp,a6
 		writel(spptr, sp+imm) // add.w #imm,sp
 
+	} else if inst&0xFF8 == 0x808 { // 68020 link.l
+		ea := aregAddr(inst & 7)
+		imm := readl(pc)
+		pc += 4
+
+		pushl(readl(ea)) // move.l a6,-(sp)
+		sp := readl(spptr)
+		writel(ea, sp)        // move.l sp,a6
+		writel(spptr, sp+imm) // add.l #imm,sp
+
 	} else if inst&0xFF8 == 0xE58 { // unlk
 		ea := aregAddr(inst & 7)
 
 		writel(spptr, readl(ea)) // move.l a6,sp
 		writel(ea, popl())       // move.l (sp)+,a6
 	} else if inst&0xFFF == 0xE71 { // nop
+	} else if inst&0xFFF == 0xE74 { // rtd
+		check_for_lurkers()
+		imm := extwl(readw(pc))
+		pc = popl()
+		writel(spptr, readl(spptr)+imm)
 	} else if inst&0xFFF == 0xE75 { // rts
 		check_for_lurkers()
 		pc = popl()
@@ -1014,6 +1037,44 @@ func line8(inst uint16) { // divu,divs,sbcd,or
 	//    global n, z, v, c
 	if inst&0x1F0 == 0x100 { // sbcd
 		bcdInst(inst)
+	} else if inst&0x1F0 == 0x140 { // pack
+		adjust := readw(pc)
+		pc += 2
+
+		var src, dest uint32
+		if inst&8 == 0 { // reg to reg
+			src = regAddr(inst&7) + 2
+			dest = regAddr(inst>>9&7) + 3
+		} else {
+			src = address_by_mode(0x20|(inst&7), 2)     // predecrement
+			dest = address_by_mode(0x20|(inst>>9&7), 1) // predecrement
+		}
+
+		wide := readw(src)
+		wide += adjust
+		thin := uint8((wide >> 4 & 0xf0) | (wide & 0xf))
+
+		writeb(dest, thin)
+
+	} else if inst&0x1F0 == 0x180 { // unpk
+		adjust := readw(pc)
+		pc += 2
+
+		var src, dest uint32
+		if inst&8 == 0 { // reg to reg
+			src = regAddr(inst&7) + 3
+			dest = regAddr(inst>>9&7) + 2
+		} else {
+			src = address_by_mode(0x20|(inst&7), 1)     // predecrement
+			dest = address_by_mode(0x20|(inst>>9&7), 2) // predecrement
+		}
+
+		thin := readb(src)
+		wide := (uint16(thin) << 4 & 0xf00) | (uint16(thin) & 0xf)
+		wide += adjust
+
+		writew(dest, wide)
+
 	} else if inst&0x0C0 == 0x0C0 { // divu,divs
 		ea := address_by_mode(inst&63, 2)
 		divisor := readw(ea)
