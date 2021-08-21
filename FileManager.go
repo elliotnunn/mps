@@ -100,6 +100,10 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 	return path, 0 // noErr
 }
 
+func quickFile(path string) (number uint16, name macstring) {
+	return get_macos_dnum(filepath.Dir(path)), unicodeToMacOrPanic(filepath.Base(path))
+}
+
 func listdir(path string) ([]macstring, int) {
 	dirents, err := gFS.ReadDir(path)
 	if err != nil {
@@ -242,14 +246,15 @@ func tOpen() {
 		flags |= 2
 	}
 
+	retNum, retName := quickFile(path)
+
 	filebuffers[ioRefNum] = data
-	writel(fcbPtr+0, 1)                                           // fake non-zero fcbFlNum
-	writeb(fcbPtr+4, flags)                                       // fcbMdRByt
-	writel(fcbPtr+8, uint32(len(data)))                           // fcbEOF
-	writel(fcbPtr+20, kVCB)                                       // fcbVPtr
-	writel(fcbPtr+58, uint32(get_macos_dnum(filepath.Dir(path)))) // fcbDirID
-	macpath, _ := unicodeToMac(filepath.Base(path))               // we already know it is safe
-	writePstring(fcbPtr+62, macpath)                              // fcbCName
+	writel(fcbPtr+0, 1)                 // fake non-zero fcbFlNum
+	writeb(fcbPtr+4, flags)             // fcbMdRByt
+	writel(fcbPtr+8, uint32(len(data))) // fcbEOF
+	writel(fcbPtr+20, kVCB)             // fcbVPtr
+	writel(fcbPtr+58, uint32(retNum))   // fcbDirID
+	writePstring(fcbPtr+62, retName)    // fcbCName
 
 	writew(pb+24, ioRefNum)
 	paramblk_return(0) // by default
