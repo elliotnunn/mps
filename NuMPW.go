@@ -374,8 +374,7 @@ func tWaitNextEvent() {
 }
 
 func tExitToShell() {
-	panic("ExitToShell")
-
+	pc = 0
 }
 
 func tOSDispatch() {
