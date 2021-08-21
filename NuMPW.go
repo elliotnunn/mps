@@ -342,13 +342,86 @@ func tGetOSEvent() {
 }
 
 // ToolServer-specific code
-func tMenuKey() {
-	keycode := popw() & 0xff
-	if keycode == 12 { // cmd-Q
-		writel(readl(spptr), 0x00810005) // quit menu item, hardcoded sadly
-		return
+var gScriptsToExecute []string
+var nextGetFileIsScript bool = false
+
+// Standard File
+func tPack3() {
+	selector := popw()
+
+	sp := readl(spptr)
+	replyPtr := uint32(0)
+	isNewStyle := false // hierarchical version of the call
+
+	switch selector {
+	case 2: // SFGetFile
+		isNewStyle = false
+		replyPtr = readl(sp)
+		sp += 26
+	case 4: // SFPGetFile
+		isNewStyle = false
+		replyPtr = readl(sp + 6)
+		sp += 32
+	case 6: // StandardGetFile
+		isNewStyle = true
+		replyPtr = readl(sp)
+		sp += 10
+	case 8: // CustomGetFile
+		isNewStyle = true
+		replyPtr = readl(sp + 26)
+		sp += 34
+	default:
+		panic("SFPutFile unimp")
 	}
-	writel(readl(spptr), 0) // return nothing
+
+	writel(spptr, sp) // pop args from stack
+
+	path := ""
+	if nextGetFileIsScript {
+		nextGetFileIsScript = false
+		path = gScriptsToExecute[0]
+		gScriptsToExecute = gScriptsToExecute[1:]
+	} else {
+		fmt.Print("Enter path for GetFile dialog: ")
+		fmt.Scanln(&path)
+	}
+
+	number, name := quickFile(path)
+	ftype := "TEXT" // finderInfo(path)[:4] // TODO: real type
+
+	if isNewStyle {
+		writeb(replyPtr, 0xff)             // good
+		writeb(replyPtr+1, 0xff)           // replacing
+		copy(mem[replyPtr+2:], ftype)      // type
+		writew(replyPtr+6, 2)              // FSSpec vRefNum
+		writel(replyPtr+8, uint32(number)) // FSSpec dirID
+		writePstring(replyPtr+12, name)    // FSSpec name
+		writew(replyPtr+76, 0)             // script
+		writew(replyPtr+78, 0)             // flags
+		writeb(replyPtr+80, 0)             // isFolder
+		writeb(replyPtr+81, 0)             // isVolume
+	} else {
+		writeb(replyPtr, 0xff)          // good
+		writeb(replyPtr+1, 0xff)        // replacing
+		copy(mem[replyPtr+2:], ftype)   // type
+		writew(replyPtr+6, number)      // vRefNum
+		writew(replyPtr+8, 0)           // version
+		writePstring(replyPtr+10, name) // name
+	}
+}
+
+func tMenuKey() {
+	popw() // ignore the key code
+
+	var retval uint32
+	if len(gScriptsToExecute) > 0 {
+		nextGetFileIsScript = true
+		retval = 0x00810002 // File > Execute
+	} else {
+		retval = 0x00810005 // File > Quit
+	}
+
+	writel(readl(spptr), retval)
 }
 
 func tGetNextEvent() {
@@ -356,10 +429,10 @@ func tGetNextEvent() {
 	write(16, eventrecord, 0)
 	mask := popw()
 
-	// ToolServer-specific code: if accepting high-level events then do cmd-Q
-	if mask&0x400 != 0 {
+	// Tell the top-level event loop about a command-keystroke
+	if mask&0x400 != 0 { // check for high-level events
 		writew(eventrecord, 3)        // keyDown
-		writel(eventrecord+2, 12)     // Q
+		writel(eventrecord+2, 0)      // no particular key
 		writew(eventrecord+14, 0x100) // command
 		writew(readl(spptr), 0xffff)  // return true
 		return
@@ -815,6 +888,7 @@ func main() {
 		tb_base + 0x1e4: tHandAndHand,         // _HandAndHand
 		tb_base + 0x1e5: tPop2,                // _InitPack
 		tb_base + 0x1e6: tNop,                 // _InitAllPacks
+		tb_base + 0x1ea: tPack3,               // _Pack3
 		tb_base + 0x1f0: tLoadSeg,             // _LoadSeg
 		tb_base + 0x1f1: tPop4,                // _UnloadSeg
 		tb_base + 0x1f4: tExitToShell,         // _ExitToShell
@@ -959,6 +1033,13 @@ func main() {
 	writel(0xa1c, kMenuList)  // MenuList empty
 	writel(0xa50, 0)          // TopMapHndl
 
+	// Empty app parameters
+	writel(d0ptr, 128)
+	call_m68k(executable_atrap(0xa122)) // _NewHandle
+	appParms := readl(a0ptr)
+	writel(0xaec, appParms)                  // handle in low memory
+	writel(readl(a5ptr)+16, readl(appParms)) // pointer in a5 world
+
 	// Create some useful folders
 	for _, n := range []string{"Preferences", "Desktop Folder", "Trash", "Temporary Items"} {
 		os.Mkdir(filepath.Join(systemFolder, n), 0o777)
@@ -968,21 +1049,12 @@ func main() {
 	os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
 
-	// Open a script as if from Finder
-	writel(d0ptr, 128)
-	call_m68k(executable_atrap(0xa122)) // _NewHandle
-	appParms := readl(a0ptr)
-	writel(0xaec, appParms)
-	appParms = readl(appParms) // handle to pointer
-	writew(appParms+2, 1)      // one file
-	writew(appParms+4, get_macos_dnum(systemFolder))
-	writel(appParms+6, 0x54455854) // TEXT
-	writePstring(appParms+12, "Script")
-
 	os.WriteFile(filepath.Join(systemFolder, "Script"), []byte(script), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
 	os.Create(filepath.Join(systemFolder, "Script.out"))
 	os.Create(filepath.Join(systemFolder, "Script.err"))
+
+	gScriptsToExecute = []string{filepath.Join(systemFolder, "Script")}
 
 	// Hack -- this will appear as a writable file despite being in the embedFS
 	os.Create(filepath.Join(systemFolder, "MPW.MinPipe"))
