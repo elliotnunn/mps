@@ -203,3 +203,20 @@ func tHandAndHand() { // copy to existing handle
 	writel(a0ptr, bHndl)
 	return_memerr_and_d0(0)
 }
+
+func tPtrAndHand() {
+	ptr := readl(a0ptr)
+	hndl := readl(a1ptr)
+	addSize := readl(d0ptr)
+
+	writel(a0ptr, hndl)
+	tGetHandleSize()
+	oldSize := readl(d0ptr)
+	writel(d0ptr, oldSize+addSize)
+	writel(a0ptr, hndl)
+	tSetHandleSize()
+
+	copy(mem[readl(hndl)+oldSize:][:addSize], mem[ptr:][:addSize])
+	writel(a0ptr, hndl)
+	return_memerr_and_d0(0)
+}
