@@ -1,3 +1,0 @@
-gCodePointers
-qd
-main
