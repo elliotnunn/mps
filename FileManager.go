@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -11,10 +12,6 @@ import (
 
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
 var dnums []string
-
-// gets populated by main func
-var systemFolder string
-var toolServer string
 
 // the contents of every open fork, indexed by refnum
 var filebuffers = make(map[uint16][]byte)
@@ -35,6 +32,22 @@ func fcbFromRefnum(refnum uint16) uint32 {
 }
 
 func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
+	if strings.Contains(string(name), ".stdin") {
+		return ".stdin", 0
+	}
+
+	if strings.Contains(string(name), "StartupTS.out") {
+		return ".stdout", 0
+	}
+
+	if strings.Contains(string(name), ".stdout") {
+		return ".stdout", 0
+	}
+
+	if strings.Contains(string(name), ".stderr") {
+		return ".stdout", 0
+	}
+
 	// If string is abolute then ignore the number, use the special root ID
 	if strings.Contains(string(name), ":") && !strings.HasPrefix(string(name), ":") {
 		number = 2
@@ -90,11 +103,6 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 
 			path = filepath.Join(path, macToUnicode(component))
 		}
-	}
-
-	// Hack: put MPW's pipe tempfile outside the read-only fake FS
-	if path == filepath.Join(systemFolder, "MPW", "MPW.MinPipe") {
-		path = filepath.Join(systemFolder, "MPW.MinPipe")
 	}
 
 	return path, 0 // noErr
@@ -194,27 +202,6 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 }
 
 func tOpen() {
-	forkIsRsrc := readl(d1ptr)&0xff == 0xa
-	pb := readl(a0ptr)
-
-	ioNamePtr := readl(pb + 18)
-	ioName := readPstring(ioNamePtr)
-	ioPermssn := readb(pb + 27)
-
-	number := get_vol_or_dir()
-
-	// Checks for file existence
-	path, errno := get_host_path(number, ioName, true)
-
-	if gDebug >= 2 {
-		fmt.Printf("tOpen n=%x ioName=%s ioPermssn=%d i.e. %s %d\n", number, string(ioName), ioPermssn, path, errno)
-	}
-
-	if errno != 0 {
-		paramblk_return(errno)
-		return // fnfErr
-	}
-
 	// Find a free FCB
 	var ioRefNum uint16
 	var fcbPtr uint32
@@ -226,13 +213,38 @@ func tOpen() {
 	}
 
 	if readl(fcbPtr) != 0 {
-		panic("Too many files/forks open (hundreds)")
-		paramblk_return(-42)
-		return // tmfoErr
+		panic("FCB table exhausted by 348 open files")
+	}
+
+	forkIsRsrc := readl(d1ptr)&0xff == 0xa
+	pb := readl(a0ptr)
+
+	ioNamePtr := readl(pb + 18)
+	ioName := readPstring(ioNamePtr)
+	ioPermssn := readb(pb + 27)
+
+	number := get_vol_or_dir()
+
+	// Checks for file existence, if file is opened in read-only mode
+	path, errno := get_host_path(number, ioName, ioPermssn == 1)
+
+	if gDebug >= 2 {
+		fmt.Printf("tOpen n=%x ioName=%s ioPermssn=%d i.e. %s %d\n", number, string(ioName), ioPermssn, path, errno)
+	}
+
+	if errno != 0 {
+		paramblk_return(errno)
+		return // fnfErr
 	}
 
 	var data []byte
-	if forkIsRsrc {
+	if path == ".stdin" { // special name
+		fmt.Printf("$ ")
+		str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		str = strings.ReplaceAll(str, "\r\n", "\r")
+		str = strings.ReplaceAll(str, "\n", "\r")
+		data = []byte(str)
+	} else if forkIsRsrc {
 		data = resourceFork(path)
 	} else {
 		data = dataFork(path)
@@ -273,7 +285,7 @@ func tClose() {
 
 	number := readw(fcb + 58 + 2)
 	string := readPstring(fcb + 62)
-	path, errno := get_host_path(number, string, true)
+	path, errno := get_host_path(number, string, false)
 	if errno != 0 {
 		paramblk_return(errno)
 		return // fnfErr
@@ -283,7 +295,7 @@ func tClose() {
 	fcbMdRByt := readb(fcb + 4)
 	buf := filebuffers[ioRefNum]
 	delete(filebuffers, ioRefNum)
-	if fcbMdRByt&1 != 0 {
+	if fcbMdRByt&1 != 0 && !strings.HasPrefix(path, ".std") {
 		os.WriteFile(path, buf, 0o777)
 	}
 
@@ -365,6 +377,10 @@ func tReadWrite() {
 		writel(fcb+8, uint32(len(buf))) // fcbEOF needs to be updated
 
 		copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
+
+		if readPstring(fcb+62) == macstring(".stdout") {
+			fmt.Print(strings.ReplaceAll(macToUnicode(macstring(buf[mark:mark+ioActCount])), "\r", "\n"))
+		}
 
 	} else { // _Read
 		// if file is too short then shorten the read
@@ -525,10 +541,6 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	// at this point, we know that the file exists. let's try listing
 	listing, listErr := listdir(path)
-	if listErr != 0 && listErr != -120 { // accept noErr and dirNFErr (i.e. is file)
-		paramblk_return(listErr)
-		return
-	}
 
 	// clear our block of return values, which is longer for GetCatInfo
 	endOfReturnValues := 80
@@ -557,6 +569,11 @@ func tGetFInfo() { // also implements GetCatInfo
 	} else { // file
 		finfo := finderInfo(path)
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
+
+		// hack to make stdin files readable
+		if strings.Contains(path, ".stdin") {
+			copy(mem[pb+32:], "TEXTMPS ")
+		}
 	}
 
 	if trap&0xff == 0x60 {

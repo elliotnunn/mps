@@ -4,7 +4,6 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -341,10 +340,6 @@ func tGetOSEvent() {
 	writel(d0ptr, 0xffffffff)
 }
 
-// ToolServer-specific code
-var gScriptsToExecute []string
-var nextGetFileIsScript bool = false
-
 // Standard File
 func tPack3() {
 	selector := popw()
@@ -377,14 +372,8 @@ func tPack3() {
 	writel(spptr, sp) // pop args from stack
 
 	path := ""
-	if nextGetFileIsScript {
-		nextGetFileIsScript = false
-		path = gScriptsToExecute[0]
-		gScriptsToExecute = gScriptsToExecute[1:]
-	} else {
-		fmt.Print("Enter path for GetFile dialog: ")
-		fmt.Scanln(&path)
-	}
+	fmt.Print("Enter path for GetFile dialog: ")
+	fmt.Scanln(&path)
 
 	number, name := quickFile(path)
 	ftype := "TEXT" // finderInfo(path)[:4] // TODO: real type
@@ -413,15 +402,7 @@ func tPack3() {
 func tMenuKey() {
 	popw() // ignore the key code
 
-	var retval uint32
-	if len(gScriptsToExecute) > 0 {
-		nextGetFileIsScript = true
-		retval = 0x00810002 // File > Execute
-	} else {
-		retval = 0x00810005 // File > Quit
-	}
-
-	writel(readl(spptr), retval)
+	writel(readl(spptr), 0x00810005) // File > Quit
 }
 
 func tGetNextEvent() {
@@ -733,8 +714,10 @@ func quote(s string) string {
 
 var gDebug int
 
-//go:embed "ToolServer 1.1.1/*"
-var embedMPW embed.FS
+//go:embed ToolServerVersions/ToolServer350.rsrc
+var toolServerResourceFork []byte
+
+var tempRW, tempRO, systemFolder, toolServer string
 
 var gFS UnionFS // use this for ReadFile, etc
 
@@ -899,40 +882,101 @@ func main() {
 		tb_base + 0x3ff: tDebugStr,            // _DebugStr
 	}
 
-	var err error // damn this variable shadowing behaviour!
-	systemFolder, err = ioutil.TempDir("", "NuMPW")
-	if err != nil {
+	var temp string
+	var err error
+	if temp, err = ioutil.TempDir("", "Embed"); err != nil {
 		panic("Failed to create temp directory")
 	}
-	defer os.RemoveAll(systemFolder)
+	defer os.RemoveAll(temp)
 
-	// Create our fake-FS shim layer
-	subEmbed, _ := fs.Sub(embedMPW, "ToolServer 1.1.1")
-	gFS.Add(subEmbed, filepath.Join(systemFolder, "MPW"))
+	// tempRO contains scripts, tools, interfaces and libraries
+	tempRO = filepath.Join(temp, "RO")
+	os.Mkdir(tempRO, 0o777)
+
+	// tempRW contains ToolServer, System Folder, Prefs, various temp dirs
+	tempRW = filepath.Join(temp, "RW")
+	os.Mkdir(tempRW, 0o777)
+
+	systemFolder = filepath.Join(tempRW, "System Folder")
+	os.Mkdir(systemFolder, 0o777)
+
+	// Create ToolServer file
+	// TODO: replace this boilerplace with writeResourceFork or similar
+	toolServer := filepath.Join(tempRW, "ToolServer")
+	os.Mkdir(filepath.Join(tempRW, "RESOURCE.FRK"), 0o777)
+	os.Mkdir(filepath.Join(tempRW, "FINDER.DAT"), 0o777)
+	os.WriteFile(filepath.Join(tempRW, "ToolServer"), nil, 0o777)
+	os.WriteFile(filepath.Join(tempRW, "RESOURCE.FRK", "ToolServer"), toolServerResourceFork, 0o777)
+	os.WriteFile(filepath.Join(tempRW, "FINDER.DAT", "ToolServer"), []byte("APPLMPSX"), 0o77)
 
 	// Command line opts
-	cmdLines := []string{""} // leave space for the "chdir"
-	toolServer = filepath.Join(systemFolder, "MPW", "ToolServer")
-
+	var cmdLines []string
 	flag.IntVar(&gDebug, "d", 0, "debug level (>=5 prints every instruction)")
 	flag.StringVar(&toolServer, "ts", toolServer, "ToolServer (default to built-in version)")
-	flag.Func("c", "command (/unix/path -> mac:path)", func(s string) error { cmdLines = append(cmdLines, cmdPathCvt(s)); return nil })
+	flag.Func("c", "command (/unixpath -> macpath:)", func(s string) error { cmdLines = append(cmdLines, cmdPathCvt(s)); return nil })
 	flag.Func("C", "command (no path conversion)", func(s string) error { cmdLines = append(cmdLines, s); return nil })
-
 	flag.Parse()
 
-	// First command line opt as a "chdir"
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	cmdLines[0] = "directory " + quote(pathCvt(cwd))
+	var bild strings.Builder
+	bild.WriteString("# Runtime generated StartupTS file\n")
+	bild.WriteString("Set NuMPW 1; Export NuMPW\n")
+	bild.WriteString("Export BackgroundShell\n")
+	bild.WriteString("Export Boot\n")
+	bild.WriteString("Export SystemFolder\n")
+	bild.WriteString("Export ShellDirectory\n")
+	bild.WriteString("Export Active\n")
+	bild.WriteString("Export Target\n")
+	bild.WriteString("Export Worksheet\n")
+	bild.WriteString("Export Status\n")
+	bild.WriteString("Export User\n")
+	bild.WriteString("Set MPW \"{ShellDirectory}\"; Export MPW\n")
+	bild.WriteString("Export MPWVersiom\n")
+	bild.WriteString("Export ExtendWordSet\n")
+	bild.WriteString("Export InhibitMarkCopy\n")
+	bild.WriteString("Export NewKeyboardLayout\n")
+	bild.WriteString("Export ScreenUpdateDelay\n")
+	bild.WriteString("Export ToolSleepTime\n")
+	bild.WriteString("Set Commands \":\"; Export Commands\n") // todo unsatisfactory
+	bild.WriteString("Export PrefsFolder\n")
+	bild.WriteString("Export TempFolder\n")
+	bild.WriteString("Export SysTempFolder\n")
+	bild.WriteString("Set CaseSensitive 0; Export CaseSensitive\n")
+	bild.WriteString("Set SearchBackward 0; Export SearchBackward\n")
+	bild.WriteString("Set SearchWrap 0; Export SearchWrap\n")
+	bild.WriteString("Set SearchType 0; Export SearchType\n")
+	bild.WriteString("Set Tab 4; Export Tab\n")
+	bild.WriteString("Set Font MPW; Export Font\n")
+	bild.WriteString("Set FontSize 9; Export FontSize\n")
+	bild.WriteString("Set AutoIndent 1; Export AutoIndent\n")
+	bild.WriteString("Set WordSet a-zA-Z_0-9; Export WordSet\n")
+	bild.WriteString("Set Exit 1; Export Exit\n")
+	bild.WriteString("Set Echo 0; Export Echo\n")
+	bild.WriteString("Set Test 0; Export Test\n")
+	cwd, _ := os.Getwd()
+	bild.WriteString("Directory " + quote(pathCvt(cwd)) + "\n")
 
-	// Make a script to run
-	script := unicodeToMacOrPanic(strings.Join(cmdLines, "\r"))
+	// The actual job that we started this process for
+	if len(cmdLines) == 0 { // run each line from stdin as a script
+		bild.WriteString("Set Exit 0\n")
+		bild.WriteString("set N 1\n")
+		bild.WriteString("Loop\n")
+		bild.WriteString("Execute .stdin{N} >.stdout{N} ≥.stderr{N}\n") // super-secret name
+		bild.WriteString("set N `Evaluate {N}+1`\n")
+		bild.WriteString("End\n")
+	} else {
+		bild.WriteString("Begin")
+		for _, cmd := range cmdLines {
+			bild.WriteString(cmd)
+			bild.WriteByte('\n')
+		}
+		bild.WriteString("End >.stdout ≥.stderr")
+	}
+
+	os.WriteFile(filepath.Join(tempRW, "StartupTS"), []byte(bild.String()), 0o777)
+	os.WriteFile(filepath.Join(tempRW, "StartupTS.idump"), []byte("TEXTMPS "), 0o777)
 
 	dnums = []string{
-		filepath.Join(systemFolder, "MPW"),
+		filepath.Dir(toolServer),
 		"",
 		"/",
 	}
@@ -1050,16 +1094,6 @@ func main() {
 	os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
 
-	os.WriteFile(filepath.Join(systemFolder, "Script"), []byte(script), 0o777)
-	os.WriteFile(filepath.Join(systemFolder, "Script.idump"), []byte("TEXTMPS "), 0o777)
-	os.Create(filepath.Join(systemFolder, "Script.out"))
-	os.Create(filepath.Join(systemFolder, "Script.err"))
-
-	gScriptsToExecute = []string{filepath.Join(systemFolder, "Script")}
-
-	// Hack -- this will appear as a writable file despite being in the embedFS
-	os.Create(filepath.Join(systemFolder, "MPW.MinPipe"))
-
 	push(32, 0)
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
@@ -1087,10 +1121,4 @@ func main() {
 	call_m68k(kA5World + jtoffset + 2)
 
 	closeAll()
-
-	stdout, err := os.ReadFile(filepath.Join(systemFolder, "Script.out"))
-	os.Stdout.WriteString(strings.ReplaceAll(macToUnicode(macstring(stdout)), "\r", "\n"))
-
-	stderr, _ := os.ReadFile(filepath.Join(systemFolder, "Script.err"))
-	os.Stderr.WriteString(strings.ReplaceAll(macToUnicode(macstring(stderr)), "\r", "\n"))
 }
