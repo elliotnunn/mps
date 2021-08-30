@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -673,7 +672,11 @@ func executable_ftrap(trap uint16) (addr uint32) {
 }
 
 // Conservatively convert words in a string that look like Unix paths
-func cmdPathCvt(s string) string {
+func cmdPathCvt(s string, force bool) string {
+	if !force && os.Getenv("NUMPW_RAW") == "1" {
+		return s
+	}
+
 	words := strings.Split(s, " ")
 
 	for i := range words {
@@ -709,7 +712,11 @@ func pathCvt(s string) string {
 
 // Quote a string for MPW (but leave it in unicode)
 func quote(s string) string {
-	return "'" + s + "'" // TODO: quote correctly
+	if strings.ContainsAny(s, " \t\n\r{}\"'∂") {
+		return "'" + strings.ReplaceAll(strings.ReplaceAll(s, "∂", "∂∂"), "'", "∂'") + "'"
+	} else {
+		return s
+	}
 }
 
 var gDebug int
@@ -726,6 +733,23 @@ var helpFile []byte
 var errFile []byte
 
 var gFS UnionFS // use this for ReadFile, etc
+
+var kUsage = `NuMPW: Macintosh Programmer's Workshop emulator
+
+Usage:
+	NuMPW                                # interactive
+	NuMPW tool_or_script_name [args...]  # batch-mode
+	NuMPW -c script_string [args...]     # batch-mode
+
+Environment variables:
+	NUMPW_DEBUG=[0..5]                   # debug level
+	NUMPW_RAW=[0..1]                     # don't convert paths in args to Mac
+`
+
+func printUsageAndQuit() {
+	fmt.Print(kUsage)
+	os.Exit(1)
+}
 
 func main() {
 	my_traps = [...]func(){
@@ -919,14 +943,6 @@ func main() {
 	os.WriteFile(filepath.Join(tempRW, "SysErrs.err"), errFile, 0o777)
 	os.WriteFile(filepath.Join(tempRW, "MPW.Help"), helpFile, 0o777)
 
-	// Command line opts
-	var cmdLines []string
-	flag.IntVar(&gDebug, "d", 0, "debug level (>=5 prints every instruction)")
-	flag.StringVar(&toolServer, "ts", toolServer, "ToolServer (default to built-in version)")
-	flag.Func("c", "command (/unixpath -> macpath:)", func(s string) error { cmdLines = append(cmdLines, cmdPathCvt(s)); return nil })
-	flag.Func("C", "command (no path conversion)", func(s string) error { cmdLines = append(cmdLines, s); return nil })
-	flag.Parse()
-
 	var bild strings.Builder
 	bild.WriteString("# Runtime generated StartupTS file\n")
 	bild.WriteString("Set NuMPW 1; Export NuMPW\n")
@@ -965,20 +981,49 @@ func main() {
 	cwd, _ := os.Getwd()
 	bild.WriteString("Directory " + quote(pathCvt(cwd)) + "\n")
 
-	// The actual job that we started this process for
-	if len(cmdLines) == 0 { // run each line from stdin as a script
+	// Environment variables
+	gDebug, _ = strconv.Atoi(os.Getenv("NUMPW_DEBUG"))
+
+	// Command line opts
+	args := os.Args[1:]
+	if len(args) == 0 {
+		// interactive mode
+
 		bild.WriteString("Set Exit 0\n")
+		bild.WriteString("Set REPLStatus 0\n")
 		bild.WriteString("Loop\n")
 		bild.WriteString("Execute .stdin >.stdout ≥.stderr\n") // super-secret name
 		bild.WriteString("Set REPLStatus {Status}\n")          // hack
 		bild.WriteString("End\n")
-	} else {
-		bild.WriteString("Begin")
-		for _, cmd := range cmdLines {
-			bild.WriteString(cmd)
-			bild.WriteByte('\n')
+	} else if strings.HasPrefix(args[0], "-") {
+		// batch mode with -c inline_script
+
+		if args[0] != "-c" || len(args) < 2 {
+			printUsageAndQuit()
 		}
-		bild.WriteString("End >.stdout ≥.stderr")
+
+		os.WriteFile(filepath.Join(tempRW, "SubScript"), []byte(cmdPathCvt(args[1], false)), 0o777)
+		os.WriteFile(filepath.Join(tempRW, "SubScript.idump"), []byte("TEXTMPS "), 0o777)
+
+		bild.WriteString(`"{MPW}SubScript"`)
+
+		for _, arg := range args[2:] {
+			bild.WriteByte(' ')
+			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
+		}
+
+		bild.WriteString(" >.stdout ≥.stderr")
+	} else {
+		// batch mode with script path
+		bild.WriteString("(Execute ")
+		bild.WriteString(quote(cmdPathCvt(args[0], true))) // always convert the first arg
+
+		for _, arg := range args[1:] {
+			bild.WriteByte(' ')
+			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
+		}
+
+		bild.WriteString(") >.stdout ≥.stderr")
 	}
 
 	os.WriteFile(filepath.Join(tempRW, "StartupTS"), []byte(bild.String()), 0o777)
