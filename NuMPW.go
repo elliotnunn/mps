@@ -970,6 +970,7 @@ func main() {
 		bild.WriteString("Set Exit 0\n")
 		bild.WriteString("Loop\n")
 		bild.WriteString("Execute .stdin >.stdout ≥.stderr\n") // super-secret name
+		bild.WriteString("Set REPLStatus {Status}\n")          // hack
 		bild.WriteString("End\n")
 	} else {
 		bild.WriteString("Begin")
