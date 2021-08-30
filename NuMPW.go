@@ -719,6 +719,12 @@ var toolServerResourceFork []byte
 
 var tempRW, tempRO, systemFolder, toolServer string
 
+//go:embed MPW.Help
+var helpFile []byte
+
+//go:embed SysErrs.err
+var errFile []byte
+
 var gFS UnionFS // use this for ReadFile, etc
 
 func main() {
@@ -908,6 +914,10 @@ func main() {
 	os.WriteFile(filepath.Join(tempRW, "ToolServer"), nil, 0o777)
 	os.WriteFile(filepath.Join(tempRW, "RESOURCE.FRK", "ToolServer"), toolServerResourceFork, 0o777)
 	os.WriteFile(filepath.Join(tempRW, "FINDER.DAT", "ToolServer"), []byte("APPLMPSX"), 0o77)
+
+	// Help and error files
+	os.WriteFile(filepath.Join(tempRW, "SysErrs.err"), errFile, 0o777)
+	os.WriteFile(filepath.Join(tempRW, "MPW.Help"), helpFile, 0o777)
 
 	// Command line opts
 	var cmdLines []string
