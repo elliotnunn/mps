@@ -958,10 +958,8 @@ func main() {
 	// The actual job that we started this process for
 	if len(cmdLines) == 0 { // run each line from stdin as a script
 		bild.WriteString("Set Exit 0\n")
-		bild.WriteString("set N 1\n")
 		bild.WriteString("Loop\n")
-		bild.WriteString("Execute .stdin{N} >.stdout{N} ≥.stderr{N}\n") // super-secret name
-		bild.WriteString("set N `Evaluate {N}+1`\n")
+		bild.WriteString("Execute .stdin >.stdout ≥.stderr\n") // super-secret name
 		bild.WriteString("End\n")
 	} else {
 		bild.WriteString("Begin")
