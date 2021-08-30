@@ -501,7 +501,8 @@ func tOSDispatch() {
 // Trivial do-nothing traps
 
 func tUnimplemented() {
-	panic("Unimplemented trap")
+	fmt.Fprintf(os.Stderr, "Unimplemented trap %04x\n", 0xa000|(readw(pc-2)&0xfff))
+	os.Exit(1)
 }
 
 func tNop() {
