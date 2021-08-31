@@ -876,6 +876,55 @@ func tHighLevelFSDispatch() {
 		writew(refNumPtr, ioRefNum)
 		writew(readl(spptr), readw(d0ptr)) // return osErr
 
+	case 7: // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
+		fInfoPtr := popl()
+		specPtr := popl()
+
+		push(128, 0)
+		pb := readl(spptr)
+		writel(a0ptr, pb)
+		writew(pb+22, readw(specPtr))   // ioVRefNum
+		writel(pb+48, readl(specPtr+2)) // ioDirID
+		writel(pb+18, specPtr+6)        // ioNamePtr
+
+		call_m68k(executable_atrap(0xa20c)) // _HGetFInfo
+
+		copy(mem[fInfoPtr:][:16], mem[pb+32:][:16]) // ioFlFndrInfo
+		pop(128)
+
+		writew(readl(spptr), readw(d0ptr)) // return osErr
+
+	case 8: // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
+		fInfoPtr := popl()
+		specPtr := popl()
+
+		push(128, 0)
+		pb := readl(spptr)
+		writel(a0ptr, pb)
+		writew(pb+22, readw(specPtr))               // ioVRefNum
+		writel(pb+48, readl(specPtr+2))             // ioDirID
+		writel(pb+18, specPtr+6)                    // ioNamePtr
+		copy(mem[pb+32:][:16], mem[fInfoPtr:][:16]) // ioFlFndrInfo
+
+		call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
+		pop(128)
+
+		writew(readl(spptr), readw(d0ptr)) // return osErr
+
+	case 13: // pascal short FSpOpenResFile(const FSSpec *spec, char permission)
+		perm := popb()
+		specPtr := popl()
+
+		fmt.Println(readw(specPtr), readl(specPtr+2), readPstring(specPtr+6))
+
+		pushw(readw(specPtr))     // vRefNum
+		pushl(readl(specPtr + 2)) // dirID
+		pushl(specPtr + 6)        // namePtr
+		pushb(perm)
+
+		call_m68k(executable_atrap(0xac1a)) // _HOpenResFile ,autoPop
+		// and the result will be left on the stack for us
+
 	default:
 		panic(fmt.Sprintf("Not implemented: _HighLevelFSDispatch d0=0x%x", selector))
 	}
