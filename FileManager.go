@@ -875,5 +875,8 @@ func tHighLevelFSDispatch() {
 
 		writew(refNumPtr, ioRefNum)
 		writew(readl(spptr), readw(d0ptr)) // return osErr
+
+	default:
+		panic(fmt.Sprintf("Not implemented: _HighLevelFSDispatch d0=0x%x", selector))
 	}
 }
