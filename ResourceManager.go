@@ -31,6 +31,21 @@ func currentResMaps(stopAt1 bool) (list []uint32) {
 	return
 }
 
+// Given a handle, identify which resource map, and which entry inside the map
+func lookupResHandle(handle uint32) (resMap uint32, typeEntry uint32, idEntry uint32, ok bool) {
+	for _, resMap = range allResMaps() {
+		for _, entriesOfType := range resMapEntries(resMap) {
+			typeEntry = entriesOfType[0]
+			for _, idEntry = range entriesOfType[1:] {
+				if readl(idEntry+8) == handle {
+					return
+				}
+			}
+		}
+	}
+	return 0, 0, 0, false
+}
+
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
 // note that they are all absolute pointers being returned
 func resMapEntries(resMap uint32) (retval [][]uint32) {
@@ -147,32 +162,24 @@ func tGetResInfo() {
 	idPtr := pop(4)
 	handle := pop(4)
 
-	for _, resMap := range allResMaps() {
-		for _, entriesOfType := range resMapEntries(resMap) {
-			typeEntry := entriesOfType[0]
-			for _, idEntry := range entriesOfType[1:] {
-				if handle == readl(idEntry+8) {
-					if namePtr != 0 {
-						_, name := getResName(resMap, idEntry)
-						writePstring(namePtr, name)
-					}
-
-					if typePtr != 0 {
-						writel(typePtr, readl(typeEntry))
-					}
-
-					if idPtr != 0 {
-						writew(idPtr, readw(idEntry))
-					}
-
-					setResError(0)
-					return
-				}
-			}
+	if resMap, typeEntry, idEntry, ok := lookupResHandle(handle); ok {
+		if namePtr != 0 {
+			_, name := getResName(resMap, idEntry)
+			writePstring(namePtr, name)
 		}
-	}
 
-	setResError(-192) // resNotFound
+		if typePtr != 0 {
+			writel(typePtr, readl(typeEntry))
+		}
+
+		if idPtr != 0 {
+			writew(idPtr, readw(idEntry))
+		}
+
+		setResError(0)
+	} else {
+		setResError(-192) // resNotFound
+	}
 }
 
 // func set_resource_name(map_handle, res_entry_ptr, name) {
@@ -443,38 +450,26 @@ func tGetPicture() {
 
 func tHomeResFile() {
 	handle := popl()
+	retValPtr := readl(spptr)
 
-	setResError(-192)            // resNotFound
-	writew(readl(spptr), 0xffff) // return this meaning "bad"
-
-	for _, resMap := range allResMaps() {
-		for _, entriesOfType := range resMapEntries(resMap) {
-			for _, idEntry := range entriesOfType[1:] {
-				if handle == readl(idEntry+8) {
-					setResError(0)
-					writew(readl(spptr), readw(resMap+20))
-					return
-				}
-			}
-		}
+	if resMap, _, _, ok := lookupResHandle(handle); ok {
+		setResError(0)                      // noErr
+		writew(retValPtr, readw(resMap+20)) // map refNum
+	} else {
+		setResError(-192)         // resNotFound
+		writew(retValPtr, 0xffff) // invalid refNum
 	}
 }
 
 func tSizeRsrc() {
 	handle := popl()
+	retValPtr := readl(spptr)
 
-	setResError(-192)       // resNotFound
-	writel(readl(spptr), 0) // return this meaning "bad"
-
-	for _, resMap := range allResMaps() {
-		for _, entriesOfType := range resMapEntries(resMap) {
-			for _, idEntry := range entriesOfType[1:] {
-				if handle == readl(idEntry+8) {
-					setResError(0)
-					writel(readl(spptr), uint32(len(resData(resMap, idEntry))))
-					return
-				}
-			}
-		}
+	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
+		setResError(0) // noErr
+		writel(retValPtr, uint32(len(resData(resMap, idEntry))))
+	} else {
+		setResError(-192)    // resNotFound
+		writel(retValPtr, 0) // return this meaning "bad"
 	}
 }
