@@ -72,12 +72,16 @@ func tNewHandle() {
 	tNewPtr()
 
 	ptr := readl(a0ptr)
+	handle := ptr - 16
+	master_ptrs[ptr] = handle
 	writel(ptr-16, ptr) // stash the master pointer in the header
-	writel(a0ptr, ptr-16)
+	writel(a0ptr, handle)
 }
 
 func tDisposHandle() {
-	writel(a0ptr, readl(readl(a0ptr)))
+	ptr := readl(readl(a0ptr))
+	delete(master_ptrs, ptr)
+	writel(a0ptr, ptr)
 	tDisposPtr()
 }
 
