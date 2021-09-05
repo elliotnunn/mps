@@ -610,6 +610,11 @@ func lineA(inst uint16) {
 		writel(d1ptr, popl())
 		writel(d2ptr, popl())
 		writel(a2ptr, popl())
+
+		// tst.w d0
+		d0 := readw(d0ptr + 2)
+		n = d0&0x8000 != 0
+		z = d0 == 0
 	}
 }
 
