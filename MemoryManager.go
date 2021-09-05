@@ -224,3 +224,20 @@ func tPtrAndHand() {
 	writel(a0ptr, hndl)
 	return_memerr_and_d0(0)
 }
+
+func getPtrBlock(ptr uint32) []byte {
+	size, ok := block_sizes[ptr]
+	if !ok {
+		panic("getPtrBlock on bad pointer")
+	}
+
+	return append(make([]byte, 0, size), mem[ptr:][:size]...)
+}
+
+func setHandleBlock(handle uint32, contents []byte) {
+	writel(a0ptr, handle)
+	writel(d0ptr, uint32(len(contents)))
+	tSetHandleSize()
+
+	copy(mem[readl(handle):], contents)
+}

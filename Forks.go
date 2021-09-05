@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -95,6 +96,14 @@ func dataFork(path string) []byte {
 	return data
 }
 
+func writeDataFork(path string, fork []byte) {
+	if !gFS.IsHostPath(path) {
+		return
+	}
+
+	os.WriteFile(path, fork, 0o666) // ignore error
+}
+
 func resourceFork(path string) []byte {
 	var data []byte
 
@@ -117,6 +126,41 @@ func resourceFork(path string) []byte {
 	}
 
 	return data
+}
+
+func writeResourceFork(path string, fork []byte) {
+	if !gFS.IsHostPath(path) {
+		return
+	}
+
+	os.Create(path) // ignore error
+
+	switch whichFormat(path) {
+	case kFileExchange:
+		path2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+		if len(fork) > 256 {
+			os.Mkdir(filepath.Dir(path2), 0o777) // ignore error
+			os.WriteFile(path2, fork, 0o666)     // ignore error
+		} else {
+			os.Remove(path2) // ignore error
+		}
+
+	case kRez:
+		path2 := path + ".rdump"
+		if len(fork) > 256 {
+			os.WriteFile(path2, deRez(fork), 0o666) // ignore error
+		} else {
+			os.Remove(path2) // ignore error
+		}
+	}
+}
+
+func deleteForks(path string) {
+	os.Remove(path)
+	os.Remove(path + ".idump")
+	os.Remove(path + ".rdump")
+	os.Remove(filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path)))
+	os.Remove(filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path)))
 }
 
 var rezStripPattern = regexp.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
@@ -333,4 +377,169 @@ func rez(rez []byte) []byte {
 	binary.BigEndian.PutUint32(fork[12:], uint32(len(fork)-boundary))
 
 	return fork
+}
+
+func rezQuote(str string, dblQuotes bool) (esc string) {
+	quot := byte('\'')
+	if dblQuotes {
+		quot = byte('"')
+	}
+
+	var bild strings.Builder
+	bild.WriteByte(quot)
+
+	for _, c := range []byte(str) { // cast because we want to iterate bytes
+		switch {
+		case c == 0x08:
+			bild.WriteString(`\b`)
+		case c == 0x09:
+			bild.WriteString(`\t`)
+		case c == 0x10:
+			bild.WriteString(`\r`)
+		case c == 0x11:
+			bild.WriteString(`\v`)
+		case c == 0x12:
+			bild.WriteString(`\f`)
+		case c == 0x13:
+			bild.WriteString(`\n`)
+		case c == 0x5c:
+			bild.WriteString(`\\`)
+		case c == 0x7f:
+			bild.WriteString(`\?`)
+		case c == quot:
+			bild.Write([]byte{'\\', quot})
+		case c < 32 || c >= 128:
+			bild.WriteString(fmt.Sprintf(`\0x%02X`, c))
+		default:
+			bild.WriteByte(c)
+		}
+	}
+
+	bild.WriteByte(quot)
+	return bild.String()
+}
+
+// The right-hand comment must not be prematurely closed by */
+// The Rez behaviour is to forbid slash after star, even if there
+// are intervening characters <= ascii 0x1f, despite these being
+// represented by dots. We share this behaviour with Rez.
+// However, unlike Rez, we also turn non-ascii chars into dots.
+// The output should be identical to macresources (my Python pkg).
+func fmtDataAsRezLines(data []byte) string {
+	const lineLen = 16
+	var bild strings.Builder
+
+	for i := 0; i < len(data); i += lineLen {
+		thisLen := lineLen
+		if i+thisLen > len(data) {
+			thisLen = len(data) - i
+		}
+
+		lineStartOffset := bild.Len()
+
+		bild.WriteString("\t$\"")
+		for j := 0; j < thisLen; j++ {
+			bild.WriteString(fmt.Sprintf("%02X", data[i+j]))
+			if j%2 == 1 && j != thisLen-1 {
+				bild.WriteByte(' ')
+			}
+		}
+		bild.WriteByte('"')
+
+		for bild.Len() < lineStartOffset+55 {
+			bild.WriteByte(' ')
+		}
+
+		bild.WriteString("/* ")
+		forbidSlash := false
+		for j := 0; j < thisLen; j++ {
+			c := data[i+j]
+			switch {
+			case c == '*':
+				bild.WriteByte('*')
+				forbidSlash = true
+			case c == '/':
+				if forbidSlash {
+					bild.WriteByte('.')
+				} else {
+					bild.WriteByte('/')
+				}
+				forbidSlash = false
+			case c < 32:
+				bild.WriteByte('.')
+				// do NOT clear forbidSlash
+			case c >= 127:
+				bild.WriteByte('.')
+				forbidSlash = false
+			default:
+				bild.WriteByte(c)
+				forbidSlash = false
+			}
+		}
+		bild.WriteString(" */\n")
+	}
+
+	return bild.String()
+}
+
+func deRez(fork []byte) []byte {
+	mapstart := binary.BigEndian.Uint32(fork[4:])
+	maplen := binary.BigEndian.Uint32(fork[12:])
+
+	var bild strings.Builder
+
+	// Load the map into memory and use the Resource Manager to interpret it
+	// This hack saves code
+	resMap := uint32(len(mem))
+	mem = append(mem, fork[mapstart:][:maplen]...)
+	defer func() { mem = mem[:resMap] }()
+
+	for _, entriesOfType := range resMapEntries(resMap) {
+		typeEntry := entriesOfType[0]
+		for _, idEntry := range entriesOfType[1:] {
+			bild.WriteString("data ")
+			bild.WriteString(rezQuote(string(mem[typeEntry:][:4]), false))
+			bild.WriteString(" (")
+			bild.WriteString(fmt.Sprintf("%d", int16(readw(idEntry))))
+
+			hasName, name := getResName(resMap, idEntry)
+			if hasName {
+				bild.WriteString(", ")
+				bild.WriteString(rezQuote(string(name), true))
+			}
+
+			flags := readb(idEntry + 4)
+			if flags&0x83 != 0 {
+				bild.WriteString(fmt.Sprintf(", $%02X", flags))
+			} else {
+				if flags&0x40 != 0 {
+					bild.WriteString(", sysheap")
+				}
+				if flags&0x20 != 0 {
+					bild.WriteString(", purgeable")
+				}
+				if flags&0x10 != 0 {
+					bild.WriteString(", locked")
+				}
+				if flags&8 != 0 {
+					bild.WriteString(", protected")
+				}
+				if flags&4 != 0 {
+					bild.WriteString(", preload")
+				}
+			}
+
+			dataStart := binary.BigEndian.Uint32(fork) // base of all data within fork
+			dataStart += readl(idEntry+4) & 0xffffff   // this res within fork
+			dataLen := binary.BigEndian.Uint32(fork[dataStart:])
+
+			data := fork[dataStart+4:][:dataLen]
+
+			bild.WriteString(") {\n")
+			bild.WriteString(fmtDataAsRezLines(data))
+			bild.WriteString("};\n\n")
+		}
+	}
+
+	return []byte(bild.String())
 }

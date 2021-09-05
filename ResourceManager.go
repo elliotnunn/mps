@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 )
 
+var bigEndian = binary.BigEndian
+
 // Resource Manager Toolbox traps
 
 // A note: all routines accept and return resource map pointers, not handles
@@ -20,14 +22,19 @@ func allResMaps() (list []uint32) {
 }
 
 // All map POINTERS from CurMap
-func currentResMaps(stopAt1 bool) (list []uint32) {
-	allMaps := allResMaps()
-	CurMap := readw(0xa5a)
-	for i, resMap := range allMaps {
-		if readw(resMap+20) == CurMap {
-			return allMaps[i:]
+func currentResMaps(stopAt1 bool) (maps []uint32) {
+	maps = allResMaps()
+	for len(maps) > 0 {
+		if readw(maps[0]+20) == readw(0xa5a) {
+			break
 		}
+		maps = maps[1:]
 	}
+
+	if len(maps) > 0 && stopAt1 {
+		maps = maps[:1]
+	}
+
 	return
 }
 
@@ -38,12 +45,31 @@ func lookupResHandle(handle uint32) (resMap uint32, typeEntry uint32, idEntry ui
 			typeEntry = entriesOfType[0]
 			for _, idEntry = range entriesOfType[1:] {
 				if readl(idEntry+8) == handle {
+					ok = true
 					return
 				}
 			}
 		}
 	}
 	return 0, 0, 0, false
+}
+
+// Given a refnum, get the corresponding map pointer
+func lookupMapRefnum(refnum uint16) (resMap uint32, ok bool) {
+	for _, resMap := range allResMaps() {
+		if readw(resMap+20) == refnum {
+			return resMap, true
+		}
+	}
+	return 0, false
+}
+
+// Hack to fix things up when we edit File Manager structures directly
+func fixDirectlyEditedFileBuffer(refnum uint16) {
+	FCBSPtr := readl(0x34e)
+	fcb := FCBSPtr + uint32(refnum)
+	correctLen := uint32(len(filebuffers[refnum]))
+	writel(fcb+8, correctLen)
 }
 
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
@@ -353,6 +379,19 @@ found:
 	}
 }
 
+func tReleaseResource() {
+	if _, _, idEntry, ok := lookupResHandle(popl()); ok {
+		// If the resChanged bit is set, then fail silently
+		if readb(idEntry+4)&1 == 0 {
+			writel(idEntry+8, 0) // zero the handle record
+		}
+
+		setResError(0) // noErr
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
 func tGetNamedResource() {
 	only1Please := gCurToolTrapNum&0x3ff == 0x20
 	loadPlease := readb(0xa5e) != 0
@@ -471,5 +510,398 @@ func tSizeRsrc() {
 	} else {
 		setResError(-192)    // resNotFound
 		writel(retValPtr, 0) // return this meaning "bad"
+	}
+}
+
+// Functions that CHANGE resource maps and forks
+
+func setMapDirty(resMap uint32, dirty bool) {
+	mattr := readb(resMap+22) &^ 0x20
+	if dirty {
+		mattr |= 0x20
+	}
+	writeb(resMap+22, mattr)
+}
+
+func getMapDirty(resMap uint32) bool {
+	return readb(resMap+22)&0x20 != 0
+}
+
+func tChangedResource() {
+	handle := popl()
+	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
+		setMapDirty(resMap, true)
+		writeb(idEntry+4, readb(idEntry+4)|1) // resChanged
+		setResError(0)                        // noErr
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
+func tWriteResource() {
+	handle := popl()
+	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
+		if readb(idEntry+4)&9 == 1 { // resChanged and not resProtected
+			writeb(idEntry+4, readb(idEntry+4)&^1) // clear resChanged
+
+			refnum := readw(resMap + 20)
+			buffer := filebuffers[refnum]
+
+			ptr := readl(handle)
+			dataSize := block_sizes[ptr]
+			firstDataInFork := readl(resMap) // usually constant 256
+			dataFromFirstData := uint32(len(buffer)) - firstDataInFork
+
+			// Directly editing a buffer is simpler than using _Write
+			buffer = append(buffer, 0, 0, 0, 0)
+			bigEndian.PutUint32(buffer[len(buffer)-4:], dataSize) // awkward
+			buffer = append(buffer, mem[ptr:][:dataSize]...)
+			filebuffers[refnum] = buffer
+			fixDirectlyEditedFileBuffer(refnum)
+
+			// Awkward 3-byte value in the resource map
+			if dataFromFirstData > 0xffffff {
+				panic("Resource file too big")
+			}
+			writel(idEntry+4, readl(idEntry+4)&0xff000000|dataFromFirstData)
+		}
+
+		setResError(0) // noErr
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
+// Squishes the existing on-disk resources together and appends the in-memory map
+// Does NOT write modified resources to disk
+func compactResFile(resMap uint32) {
+	rmap := dumpMap(getPtrBlock(resMap))
+	refnum := rmap.mRefNum // save this, because we clobber it
+
+	oldFork := filebuffers[refnum]
+	newFork := make([]byte, 256)
+
+	// Copy each resource to the fork
+	for i := range rmap.list {
+		// get the resource data from oldFork, including 4b length
+		dataOnDisk := oldFork[rmap.resDataOffset+rmap.list[i].rLocn:]
+		dataOnDisk = dataOnDisk[:4+binary.BigEndian.Uint32(dataOnDisk)]
+
+		rmap.list[i].rLocn = uint32(len(newFork) - 256)
+		newFork = append(newFork, dataOnDisk...)
+
+		// align to 4
+		for len(newFork)%4 != 0 {
+			newFork = append(newFork, 0)
+		}
+	}
+
+	midpoint := uint32(len(newFork)) // end of data, start of map
+	rmap.cleanForDisk()              // zero out many useless fields
+	newFork = append(newFork, mkMap(rmap)...)
+	endpoint := uint32(len(newFork)) // end of map
+
+	binary.BigEndian.PutUint32(newFork, 256)                    // resDataOffset
+	binary.BigEndian.PutUint32(newFork[4:], midpoint)           // resMapOffset
+	binary.BigEndian.PutUint32(newFork[8:], midpoint-256)       // dataSize
+	binary.BigEndian.PutUint32(newFork[12:], endpoint-midpoint) // mapSize
+
+	filebuffers[refnum] = newFork
+	fixDirectlyEditedFileBuffer(refnum)
+}
+
+func tUpdateResFile() {
+	refnum := popw()
+	if resMap, ok := lookupMapRefnum(refnum); ok {
+		if getMapDirty(resMap) {
+			// First, flush every resource to the file
+			for _, entryList := range resMapEntries(resMap) {
+				for _, idEntry := range entryList[1:] {
+					handle := readl(idEntry + 8)
+					pushl(handle)
+					tWriteResource()
+				}
+			}
+
+			// Second, compact the currently messy file and write a new map to it
+			// MacOS would write the file to disk, but we don't bother
+			compactResFile(resMap)
+
+			setMapDirty(resMap, false)
+		}
+
+		setResError(0) // noErr
+	} else {
+		setResError(-193) // resFNotFound
+	}
+}
+
+func tCloseResFile() {
+	refnum := popw()
+	if resMap, ok := lookupMapRefnum(refnum); ok {
+		// Update the file on disk
+		pushw(refnum)
+		tUpdateResFile()
+
+		// Free every resource from memory
+		for _, entryList := range resMapEntries(resMap) {
+			for _, idEntry := range entryList[1:] {
+				resHand := readl(idEntry + 8)
+				if resHand != 0 {
+					writel(a0ptr, resHand)
+					call_m68k(executable_atrap(0xa023)) // _DisposHandle
+				}
+			}
+		}
+
+		// Remove the resource map from the chain, starting at TopMapHndl
+		for handLoc := uint32(0xa50); readl(handLoc) != 0; handLoc = readl(readl(handLoc)) + 16 {
+			if readl(readl(handLoc)) == resMap {
+				writel(handLoc, readl(readl(readl(handLoc))+16))
+			}
+		}
+
+		// If this is CurMap, pick something else
+		if refnum == readw(0xa5a) {
+			writew(0xa5a, readw(readl(0xa50)+20))
+		}
+
+		// Release the resource map
+		writel(a0ptr, master_ptrs[resMap])
+		call_m68k(executable_atrap(0xa023)) // _DisposHandle
+
+		// Close the underlying fork
+		push(128, 0)
+		paramBlk := readl(spptr)
+		writew(paramBlk+24, refnum) // ioRefNum
+		writel(a0ptr, paramBlk)
+		call_m68k(executable_atrap(0xa001)) // _Close
+		pop(128)
+
+		setResError(0) // noErr
+	} else {
+		setResError(-193) // resFNotFound
+	}
+}
+
+func tAddResource() {
+	namePtr := popl()
+	id := popw()
+	tType := popl()
+	handle := popl()
+
+	res := resourceStruct{
+		tType: tType,
+		rID:   id,
+		rAttr: 1, // resChanged
+		rHndl: handle,
+	}
+
+	if namePtr != 0 {
+		res.hasName = true
+		res.name = readPstring(namePtr)
+	}
+
+	resMap := currentResMaps(true)[0]
+
+	setMapDirty(resMap, true)
+
+	deep := dumpMap(getPtrBlock(resMap))
+	deep.list = append(deep.list, res)
+	setHandleBlock(master_ptrs[resMap], mkMap(deep))
+
+	setResError(0) // noErr
+}
+
+func tRmveResource() {
+	handle := popl()
+	if resMap, _, _, ok := lookupResHandle(handle); ok {
+		setMapDirty(resMap, true)
+
+		deep := dumpMap(getPtrBlock(resMap))
+		for i, res := range deep.list {
+			if res.rHndl == handle {
+				deep.list = append(deep.list[:i], deep.list[i+1:]...)
+				break
+			}
+		}
+		setHandleBlock(master_ptrs[resMap], mkMap(deep))
+
+		setResError(0) // noErr
+	} else {
+		setResError(-196) // rmvResFailed
+	}
+
+}
+
+type mapStruct struct {
+	resDataOffset uint32
+	resMapOffset  uint32
+	dataSize      uint32
+	mapSize       uint32
+	mNext         uint32
+	mRefNum       uint16
+	mAttr         uint16
+	list          []resourceStruct
+}
+
+type resourceStruct struct {
+	tType   uint32
+	rID     uint16
+	hasName bool
+	name    macstring
+	rAttr   uint8
+	rHndl   uint32
+	rLocn   uint32
+}
+
+// Flatten the map to a list of resources
+// Does not depend on anything else
+func dumpMap(flat []byte) (deep mapStruct) {
+	// only resDataOffset is any use, but might as well preserve them all
+	deep.resDataOffset = binary.BigEndian.Uint32(flat)
+	deep.resMapOffset = binary.BigEndian.Uint32(flat[4:])
+	deep.dataSize = binary.BigEndian.Uint32(flat[8:])
+	deep.mapSize = binary.BigEndian.Uint32(flat[12:])
+
+	deep.mNext = binary.BigEndian.Uint32(flat[16:])
+	deep.mRefNum = binary.BigEndian.Uint16(flat[20:])
+	deep.mAttr = binary.BigEndian.Uint16(flat[22:])
+
+	mTypes := binary.BigEndian.Uint16(flat[24:])
+	mNames := binary.BigEndian.Uint16(flat[26:])
+
+	typeCount := binary.BigEndian.Uint16(flat[mTypes:]) + 1 // zero-based
+
+	for i := uint16(0); i < typeCount; i++ {
+		tBase := mTypes + 2 + 8*i
+
+		tCount := binary.BigEndian.Uint16(flat[tBase+4:]) + 1 // zero-based
+		tOffset := binary.BigEndian.Uint16(flat[tBase+6:])
+
+		for j := uint16(0); j < tCount; j++ {
+			rBase := mTypes + tOffset + 12*j
+
+			rNameOff := binary.BigEndian.Uint16(flat[rBase+2:])
+
+			res := resourceStruct{
+				tType: binary.BigEndian.Uint32(flat[tBase:]),
+				rID:   binary.BigEndian.Uint16(flat[rBase:]),
+				rAttr: flat[rBase+4],
+				rLocn: binary.BigEndian.Uint32(flat[rBase+4:]) & 0xffffff,
+				rHndl: binary.BigEndian.Uint32(flat[rBase+8:]),
+			}
+
+			if rNameOff != 0xffff {
+				pstring := flat[mNames+rNameOff:]
+				pstring = pstring[1 : 1+pstring[0]]
+				res.name = macstring(pstring)
+				res.hasName = true
+			}
+
+			deep.list = append(deep.list, res)
+		}
+	}
+	return
+}
+
+func mkMap(deep mapStruct) (flat []byte) {
+	flat = make([]byte, 28)
+
+	binary.BigEndian.PutUint32(flat, deep.resDataOffset)
+	binary.BigEndian.PutUint32(flat[4:], deep.resMapOffset)
+	binary.BigEndian.PutUint32(flat[8:], deep.dataSize)
+	binary.BigEndian.PutUint32(flat[12:], deep.mapSize)
+
+	binary.BigEndian.PutUint32(flat[16:], deep.mNext)
+	binary.BigEndian.PutUint16(flat[20:], deep.mRefNum)
+	binary.BigEndian.PutUint16(flat[22:], deep.mAttr)
+
+	typeOrder := []uint32{}
+	resByType := make(map[uint32][]resourceStruct)
+	for _, res := range deep.list {
+		if _, alreadyExist := resByType[res.tType]; !alreadyExist {
+			typeOrder = append(typeOrder, res.tType)
+		}
+		resByType[res.tType] = append(resByType[res.tType], res)
+	}
+
+	flat = append(flat, make([]byte, 2+8*len(typeOrder))...)
+	nameList := make([]byte, 0)
+
+	binary.BigEndian.PutUint16(flat[24:], 28)                       // mTypes
+	binary.BigEndian.PutUint16(flat[28:], uint16(len(typeOrder))-1) // typeCount
+
+	for i, tType := range typeOrder {
+		typeEntry := 28 + 2 + 8*i
+		binary.BigEndian.PutUint32(flat[typeEntry:], tType)
+		binary.BigEndian.PutUint16(flat[typeEntry+4:], uint16(len(resByType[tType]))-1)
+		binary.BigEndian.PutUint16(flat[typeEntry+6:], uint16(len(flat))-28)
+
+		for _, res := range resByType[tType] {
+			idEntry := len(flat)
+			flat = append(flat, make([]byte, 12)...)
+			binary.BigEndian.PutUint16(flat[idEntry:], res.rID)
+			binary.BigEndian.PutUint32(flat[idEntry+4:], res.rLocn)
+			binary.BigEndian.PutUint32(flat[idEntry+8:], res.rHndl)
+			flat[idEntry+4] = res.rAttr
+
+			if res.hasName {
+				binary.BigEndian.PutUint16(flat[idEntry+2:], uint16(len(nameList)))
+				nameList = append(nameList, byte(len(res.name)))
+				nameList = append(nameList, res.name...)
+			} else {
+				binary.BigEndian.PutUint16(flat[idEntry:+2], 0xffff)
+			}
+		}
+	}
+
+	binary.BigEndian.PutUint16(flat[26:], uint16(len(flat))) // mNames
+	flat = append(flat, nameList...)
+	return
+}
+
+func (deep *mapStruct) cleanForDisk() {
+	deep.resDataOffset = 0
+	deep.resMapOffset = 0
+	deep.dataSize = 0
+	deep.mapSize = 0
+	deep.mNext = 0
+	deep.mRefNum = 0
+	deep.mAttr &= 0xff00
+
+	for i, _ := range deep.list {
+		deep.list[i].rAttr &= 0x7e
+		deep.list[i].rHndl = 0
+	}
+}
+
+func tCreateResFile() {
+	namePtr := popl()
+	pushw(0) // vRefNum
+	pushl(0) // dirID
+	pushl(namePtr)
+	tHCreateResFile()
+}
+
+func tHCreateResFile() {
+	namePtr := popl()
+	dirID := uint16(popl())
+	vRefNum := popw()
+
+	if dirID == 0 {
+		dirID = vRefNum
+	}
+
+	path, errno := get_host_path(dirID, readPstring(namePtr), true)
+	switch errno {
+	case 0: // noErr (but file should NOT already exist)
+		setResError(-48) // dupFNErr
+	case -43: // fnfErr (which we expect)
+		empty := []byte{0x2: 0x01, 0x6: 0x01, 0xf: 0x1e, 0x119: 0x1c, 0x11b: 0x1e, 0x11c: 0xff, 0x11d: 0xff}
+		writeResourceFork(path, empty)
+		setResError(0) // noErr
+	default:
+		setResError(int16(errno))
 	}
 }

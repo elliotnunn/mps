@@ -60,7 +60,7 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 	}
 
 	if int(number) > len(dnums) {
-		return "", -43 // fnfErr
+		panic(fmt.Sprintf("Bogus dirID %02x", number))
 	}
 	path := dnums[number]
 
@@ -77,14 +77,13 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 		components = components[:len(components)-1]
 	}
 
+	errno := 0
 	for i, component := range components {
 		if len(component) == 0 { // treat :: like ..
 			path = filepath.Dir(path)
 		} else {
-			listing, listErr := listdir(path)
-			if listErr != 0 {
-				return "", listErr
-			}
+			// ignore the error because we trust however we got "path"
+			listing, _ := listdir(path)
 
 			exists := false
 			for _, el := range listing {
@@ -95,17 +94,21 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 				}
 			}
 
-			if !exists { // can tolerate a nonexistent leaf file if instructed
-				if i < len(components)-1 || leafMustExist {
-					return "", -43 // fnfErr
+			path = filepath.Join(path, macToUnicode(component))
+
+			if !exists && errno == 0 { // can tolerate a nonexistent leaf file if instructed
+				if i == len(components)-1 {
+					if leafMustExist {
+						errno = -43 // fnfErr
+					}
+				} else {
+					errno = -120 // dirNFErr
 				}
 			}
-
-			path = filepath.Join(path, macToUnicode(component))
 		}
 	}
 
-	return path, 0 // noErr
+	return path, errno
 }
 
 func quickFile(path string) (number uint16, name macstring) {
@@ -297,7 +300,11 @@ func tClose() {
 	buf := filebuffers[ioRefNum]
 	delete(filebuffers, ioRefNum)
 	if fcbMdRByt&1 != 0 && !strings.HasPrefix(path, ".std") {
-		os.WriteFile(path, buf, 0o777)
+		if fcbMdRByt&2 == 0 {
+			writeDataFork(path, buf)
+		} else {
+			writeResourceFork(path, buf)
+		}
 	}
 
 	// Free FCB
@@ -458,7 +465,7 @@ func tDelete() {
 		return
 	}
 
-	os.Remove(path)
+	deleteForks(path)
 }
 
 func tGetFInfo() { // also implements GetCatInfo
@@ -901,8 +908,6 @@ func tHighLevelFSDispatch() {
 	case 13: // pascal short FSpOpenResFile(const FSSpec *spec, char permission)
 		perm := popb()
 		specPtr := popl()
-
-		fmt.Println(readw(specPtr), readl(specPtr+2), readPstring(specPtr+6))
 
 		pushw(readw(specPtr))     // vRefNum
 		pushl(readl(specPtr + 2)) // dirID

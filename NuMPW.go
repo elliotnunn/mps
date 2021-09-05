@@ -825,6 +825,7 @@ func main() {
 		tb_base + 0x00e: tGetIndResource,      // _Get1IndResource
 		tb_base + 0x00f: tGetIndType,          // _Get1IndType
 		tb_base + 0x01a: tHOpenResFile,        // _HOpenResFile
+		tb_base + 0x01b: tHCreateResFile,      // _HCreateResFile
 		tb_base + 0x01c: tCountTypes,          // _Count1Types
 		tb_base + 0x01f: tGetResource,         // _Get1Resource
 		tb_base + 0x020: tGetNamedResource,    // _Get1NamedResource
@@ -876,7 +877,8 @@ func main() {
 		tb_base + 0x194: tCurResFile,          // _CurResFile
 		tb_base + 0x197: tOpenResFile,         // _OpenResFile
 		tb_base + 0x198: tUseResFile,          // _UseResFile
-		tb_base + 0x199: tPop2,                // _UpdateResFile
+		tb_base + 0x199: tUpdateResFile,       // _UpdateResFile
+		tb_base + 0x19a: tCloseResFile,        // _CloseResFile
 		tb_base + 0x19b: tPop2,                // _SetResLoad
 		tb_base + 0x19c: tCountResources,      // _CountResources
 		tb_base + 0x19d: tGetIndResource,      // _GetIndResource
@@ -884,11 +886,16 @@ func main() {
 		tb_base + 0x19f: tGetIndType,          // _GetIndType
 		tb_base + 0x1a0: tGetResource,         // _GetResource
 		tb_base + 0x1a1: tGetNamedResource,    // _GetNamedResource
-		tb_base + 0x1a3: tPop4,                // _ReleaseResource
+		tb_base + 0x1a3: tReleaseResource,     // _ReleaseResource
 		tb_base + 0x1a4: tHomeResFile,         // _HomeResFile
 		tb_base + 0x1a5: tSizeRsrc,            // _SizeRsrc
 		tb_base + 0x1a8: tGetResInfo,          // _GetResInfo
+		tb_base + 0x1aa: tChangedResource,     // _ChangedResource
+		tb_base + 0x1ab: tAddResource,         // _AddResource
+		tb_base + 0x1ad: tRmveResource,        // _RmveResource
 		tb_base + 0x1af: tResError,            // _ResError
+		tb_base + 0x1b0: tWriteResource,       // _WriteResource
+		tb_base + 0x1b1: tCreateResFile,       // _CreateResFile
 		tb_base + 0x1b4: tNop,                 // _SystemTask
 		tb_base + 0x1b8: tGetPattern,          // _GetPattern
 		tb_base + 0x1b9: tGetCursor,           // _GetCursor
