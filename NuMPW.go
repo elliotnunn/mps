@@ -1179,6 +1179,4 @@ func main() {
 	copy(mem[kA5World+jtoffset:][:jtsize], mem[code0+16:][:jtsize])
 
 	call_m68k(kA5World + jtoffset + 2)
-
-	closeAll()
 }
