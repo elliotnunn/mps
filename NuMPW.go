@@ -303,18 +303,10 @@ func tCmpString() {
 	diacSens := readw(d1ptr)&0x200 == 0 // ,MARKS
 	caseSens := readw(d1ptr)&0x400 != 0 // ,CASE
 
-	if gDebug >= 2 {
-		fmt.Printf("compare %s %s = ", mem[aptr:][:alen], mem[bptr:][:blen])
-	}
-
 	if relString(macstring(mem[aptr:][:alen]), macstring(mem[bptr:][:blen]), caseSens, diacSens) == 0 {
 		writel(d0ptr, 0)
 	} else {
 		writel(d0ptr, 1)
-	}
-
-	if gDebug >= 2 {
-		fmt.Printf("%d\n", readl(d0ptr))
 	}
 }
 
@@ -623,12 +615,22 @@ var gCurToolTrapNum int
 func lineF(inst uint16) {
 	pc = popl()
 	check_for_lurkers()
+
+	if gDebugAny {
+		logTrap(inst, true)
+	}
+
 	if inst&0x800 != 0 { // Go implementation of Toolbox trap
 		gCurToolTrapNum = int(inst & 0x3ff)
 		my_traps[tb_base+(inst&0x3ff)]()
 	} else { // Go implementation of OS trap
 		my_traps[os_base+(inst&0xff)]()
 	}
+
+	if gDebugAny {
+		logTrap(inst, false)
+	}
+
 }
 
 // Set up the Toolbox and launch ToolServer
@@ -725,8 +727,6 @@ func quote(s string) string {
 	}
 }
 
-var gDebug int
-
 //go:embed ToolServerVersions/ToolServer350.rsrc
 var toolServerResourceFork []byte
 
@@ -748,7 +748,7 @@ Usage:
 	NuMPW -c script_string [args...]     # batch-mode
 
 Environment variables:
-	NUMPW_DEBUG=[0..5]                   # debug level
+	NUMPW_DEBUG=...                      # ` + allBugFlags + `
 	NUMPW_RAW=[0..1]                     # don't convert paths in args to Mac
 `
 
@@ -993,9 +993,6 @@ func main() {
 	bild.WriteString("Set Test 0; Export Test\n")
 	cwd, _ := os.Getwd()
 	bild.WriteString("Directory " + quote(pathCvt(cwd)) + "\n")
-
-	// Environment variables
-	gDebug, _ = strconv.Atoi(os.Getenv("NUMPW_DEBUG"))
 
 	// Command line opts
 	args := os.Args[1:]

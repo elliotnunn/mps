@@ -1674,11 +1674,11 @@ func call_m68k(addr uint32) {
 	pc = addr
 
 	for pc != magic_return {
-		if gDebug >= 4 {
+		if gDebugStackTrace {
 			printCallStack()
 		}
 
-		if gDebug >= 5 {
+		if gDebugEveryInst {
 			printState()
 		}
 
