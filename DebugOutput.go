@@ -493,7 +493,19 @@ func dumpPBField(f string) {
 	case "ioWDIndex", "csCode":
 		logField(f, readw(pb+26))
 	case "ioPermssn":
-		logField(f, readb(pb+27))
+		perm := readb(pb + 27)
+		name := ""
+		switch perm {
+		case 0:
+			name = "fsCurPerm"
+		case 1:
+			name = "fsRdPerm"
+		case 2:
+			name = "fsRdWrPerm"
+		case 3:
+			name = "fsRdWrPerm"
+		}
+		logField(f, perm, name)
 	case "ioMisc", "ioWDProcID":
 		logField(f, readl(pb+28))
 	case "ioVolIndex", "ioFDirIndex", "ioFCBIndx":
