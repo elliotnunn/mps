@@ -175,9 +175,27 @@ func is_regular_file(path string) bool {
 	return err == nil && stat.Mode().IsRegular()
 }
 
-func paramblk_return(result int) {
-	writew(readl(a0ptr)+16, uint16(int16(result)))
-	writel(d0ptr, uint32(int32(result))) // sign extension
+// Set up param blk fields, but leave d0 alone (contains FSDispatch selector)
+// Safe to call more than once
+func paramBlkSetup() {
+	pb := readl(a0ptr)
+	trap := readw(d1ptr + 2)
+
+	writew(pb+6, trap) // ioTrap
+	writew(pb+16, 0)   // ioResult = noErr by default
+}
+
+// Set ioResult but leave d0 for paramBlkTeardown to set
+func paramBlkResult(result int) {
+	pb := readl(a0ptr)
+	writew(pb+16, uint16(result))
+}
+
+// Copy ioResult to d0
+// Safe to call more than once
+func paramBlkTeardown() {
+	pb := readl(a0ptr)
+	writel(d0ptr, extwl(readw(pb+16)))
 }
 
 func get_vol_or_dir() (num uint16) {
@@ -205,6 +223,9 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 }
 
 func tOpen() {
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	// Find a free FCB
 	var ioRefNum uint16
 	var fcbPtr uint32
@@ -232,7 +253,7 @@ func tOpen() {
 	path, errno := get_host_path(number, ioName, ioPermssn == 1)
 
 	if errno != 0 {
-		paramblk_return(errno)
+		paramBlkResult(errno)
 		return // fnfErr
 	}
 
@@ -269,17 +290,18 @@ func tOpen() {
 	writePstring(fcbPtr+62, retName)    // fcbCName
 
 	writew(pb+24, ioRefNum)
-	paramblk_return(0) // by default
 }
 
 func tClose() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 
 	ioRefNum := readw(pb + 24)
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramblk_return(-38)
+		paramBlkResult(-38)
 		return // fnOpnErr
 	}
 
@@ -287,7 +309,7 @@ func tClose() {
 	string := readPstring(fcb + 62)
 	path, errno := get_host_path(number, string, false)
 	if errno != 0 {
-		paramblk_return(errno)
+		paramBlkResult(errno)
 		return // fnfErr
 	}
 
@@ -311,13 +333,15 @@ func tClose() {
 }
 
 func tReadWrite() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 
 	ioRefNum := readw(pb + 24)
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramblk_return(-38)
+		paramBlkResult(-38)
 		return // fnOpnErr
 	}
 
@@ -352,11 +376,11 @@ func tReadWrite() {
 	if trymark > int64(fcbEOF) {
 		mark = fcbEOF
 		ioReqCount = 0
-		paramblk_return(-39) // eofErr
+		paramBlkResult(-39) // eofErr
 	} else if trymark < 0 {
 		mark = 0
 		ioReqCount = 0
-		paramblk_return(-40) // posErr
+		paramBlkResult(-40) // posErr
 	}
 
 	ioActCount := ioReqCount
@@ -390,7 +414,9 @@ func tReadWrite() {
 }
 
 func tGetVInfo() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 	ioVNPtr := readl(pb + 18)
 
@@ -427,7 +453,9 @@ func tGetVInfo() {
 }
 
 func tCreate() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)
@@ -435,20 +463,22 @@ func tCreate() {
 	number := get_vol_or_dir()
 	path, errno := get_host_path(number, ioName, false)
 	if errno != 0 {
-		paramblk_return(errno)
+		paramBlkResult(errno)
 		return
 	}
 
 	fp, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
 	if err != nil {
-		paramblk_return(-48)
+		paramBlkResult(-48)
 		return // dupFNErr
 	}
 	defer fp.Close()
 }
 
 func tDelete() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 
 	ioNamePtr := readl(pb + 18)
@@ -457,7 +487,7 @@ func tDelete() {
 	number := get_vol_or_dir()
 	path, errno := get_host_path(number, ioName, true)
 	if errno != 0 {
-		paramblk_return(errno)
+		paramBlkResult(errno)
 		return
 	}
 
@@ -465,9 +495,11 @@ func tDelete() {
 }
 
 func tGetFInfo() { // also implements GetCatInfo
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	trap := readw(d1ptr + 2)
 
-	paramblk_return(0) // by default
 	pb := readl(a0ptr)
 	ioFDirIndex := int16(readw(pb + 28))
 	ioNamePtr := readl(pb + 18)
@@ -488,18 +520,18 @@ func tGetFInfo() { // also implements GetCatInfo
 
 		path, errno := get_host_path(dirid, macstring(""), true)
 		if errno != 0 {
-			paramblk_return(errno)
+			paramBlkResult(errno)
 			return
 		}
 
 		listing, errno := listdir(path)
 		if errno != 0 {
-			paramblk_return(errno)
+			paramBlkResult(errno)
 			return
 		}
 
 		if int(ioFDirIndex) >= len(listing) {
-			paramblk_return(-43)
+			paramBlkResult(-43)
 			return // fnfErr
 		}
 
@@ -511,7 +543,7 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	path, errno := get_host_path(dirid, fname, true)
 	if errno != 0 {
-		paramblk_return(errno)
+		paramBlkResult(errno)
 		return
 	}
 
@@ -565,7 +597,9 @@ func tGetFInfo() { // also implements GetCatInfo
 }
 
 func tSetFInfo() {
-	paramblk_return(0)
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	//     ioNamePtr := readl(pb + 18)
 	//     ioName := readPstring(ioNamePtr)
 	//
@@ -585,13 +619,15 @@ func tSetFInfo() {
 }
 
 func tGetEOF() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 	ioRefNum := readw(pb + 24)
 
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramblk_return(-38)
+		paramBlkResult(-38)
 		return // fnOpnErr
 	}
 
@@ -599,14 +635,16 @@ func tGetEOF() {
 }
 
 func tSetEOF() {
-	paramblk_return(0) // by default
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 	ioRefNum := readw(pb + 24)
 	ioMisc := readl(pb + 28)
 
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramblk_return(-38)
+		paramBlkResult(-38)
 		return // fnOpnErr
 	}
 
@@ -626,9 +664,10 @@ func tSetEOF() {
 }
 
 func tGetVol() {
-	trap := readw(d1ptr + 2)
+	paramBlkSetup()
+	defer paramBlkTeardown()
 
-	paramblk_return(0) // by default
+	trap := readw(d1ptr + 2)
 	pb := readl(a0ptr)
 
 	if trap&0x200 != 0 { // HGetVol
@@ -646,9 +685,10 @@ func tGetVol() {
 }
 
 func tSetVol() {
-	trap := readw(d1ptr + 2)
+	paramBlkSetup()
+	defer paramBlkTeardown()
 
-	paramblk_return(0) // by default
+	trap := readw(d1ptr + 2)
 	pb := readl(a0ptr)
 
 	ioVNPtr := readl(pb + 18)
@@ -660,7 +700,7 @@ func tSetVol() {
 
 		path, errno := get_host_path(2, volname, true)
 		if errno != 0 {
-			paramblk_return(errno)
+			paramBlkResult(errno)
 			return
 		}
 
@@ -690,6 +730,10 @@ func tSetFPos() {
 }
 
 func tFSDispatch() {
+	// These might get called twice, which is harmless
+	paramBlkSetup()
+	defer paramBlkTeardown()
+
 	pb := readl(a0ptr)
 
 	switch readw(d0ptr + 2) {
@@ -700,7 +744,7 @@ func tFSDispatch() {
 
 		path, errno := get_host_path(ioWDDirID, ioName, true)
 		if errno != 0 {
-			paramblk_return(errno)
+			paramBlkResult(errno)
 			return
 		}
 
@@ -724,7 +768,7 @@ func tFSDispatch() {
 			for ioRefNum = 2; ; ioRefNum += readw(0x3f6) {
 				fcb := fcbFromRefnum(ioRefNum)
 				if fcb == 0 {
-					paramblk_return(-38)
+					paramBlkResult(-38)
 					return // fnOpnErr
 				}
 
@@ -740,7 +784,7 @@ func tFSDispatch() {
 
 		fcb := fcbFromRefnum(ioRefNum)
 		if fcb == 0 || readl(fcb) == 0 {
-			paramblk_return(-38)
+			paramBlkResult(-38)
 			return // fnOpnErr
 		}
 
@@ -758,11 +802,9 @@ func tFSDispatch() {
 
 	case 9: // GetCatInfo
 		tGetFInfo()
-		return // to avoid paramblk_return
 
 	case 26: // OpenDF
 		tOpen()
-		return // to avoid paramblk_return
 
 	case 27: // MakeFSSpec
 		ioDirID := readw(pb + 48 + 2)
@@ -771,7 +813,7 @@ func tFSDispatch() {
 
 		path, errno := get_host_path(ioDirID, ioName, false)
 		if errno != 0 {
-			paramblk_return(errno)
+			paramBlkResult(errno)
 			return // fnfErr
 		}
 
@@ -782,8 +824,6 @@ func tFSDispatch() {
 	default:
 		panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr+2)))
 	}
-
-	paramblk_return(0) // by default
 }
 
 func tHighLevelFSDispatch() {
