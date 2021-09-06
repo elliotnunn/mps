@@ -231,10 +231,6 @@ func tOpen() {
 	// Checks for file existence, if file is opened in read-only mode
 	path, errno := get_host_path(number, ioName, ioPermssn == 1)
 
-	if gDebug >= 2 {
-		fmt.Printf("tOpen n=%x ioName=%s ioPermssn=%d i.e. %s %d\n", number, string(ioName), ioPermssn, path, errno)
-	}
-
 	if errno != 0 {
 		paramblk_return(errno)
 		return // fnfErr
@@ -485,19 +481,9 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	if trap&0xff == 0x60 && ioFDirIndex < 0 {
 		// info about dir specified by ioDirID, ignore ioNamePtr
-		if gDebug >= 2 {
-			x, _ := get_host_path(dirid, macstring(""), true)
-			fmt.Printf("GetCatInfo of dir=%d (%s)\n", dirid, x)
-		}
-
 		return_fname = true
 	} else if ioFDirIndex > 0 {
 		// info about file specified by ioVRefNum and ioFDirIndex
-		if gDebug >= 2 {
-			x, _ := get_host_path(dirid, macstring(""), false)
-			fmt.Printf("GetF/CatInfo of\n  vol/dir=%d (%s),\n  idx=%d\n", dirid, x, ioFDirIndex)
-		}
-
 		return_fname = true
 
 		path, errno := get_host_path(dirid, macstring(""), true)
@@ -521,11 +507,6 @@ func tGetFInfo() { // also implements GetCatInfo
 	} else { // zero or (if GetFInfo) negative
 		// info about file specified by ioVRefnum and ioNamePtr
 		fname = readPstring(ioNamePtr)
-
-		if gDebug >= 2 {
-			x, _ := get_host_path(dirid, macstring(""), false)
-			fmt.Printf("GetF/CatInfo vol/dir=%d (%s),\n  name=%s\n", dirid, x, macToUnicode(fname))
-		}
 	}
 
 	path, errno := get_host_path(dirid, fname, true)
@@ -740,10 +721,6 @@ func tFSDispatch() {
 		ioRefNum := readw(pb + 24)
 
 		if ioFCBIndx > 0 { // treat as a 1-based index into open FCBs
-			if gDebug >= 2 {
-				fmt.Printf("GetFCBInfo of %d-th FCB\n", ioFCBIndx)
-			}
-
 			for ioRefNum = 2; ; ioRefNum += readw(0x3f6) {
 				fcb := fcbFromRefnum(ioRefNum)
 				if fcb == 0 {
@@ -759,21 +736,12 @@ func tFSDispatch() {
 					break
 				}
 			}
-
-		} else {
-			if gDebug >= 2 {
-				fmt.Printf("GetFCBInfo ioRefNum=%d\n", ioRefNum)
-			}
 		}
 
 		fcb := fcbFromRefnum(ioRefNum)
 		if fcb == 0 || readl(fcb) == 0 {
 			paramblk_return(-38)
 			return // fnOpnErr
-		}
-
-		if gDebug >= 2 {
-			fmt.Printf("  FCB is %s\n", macToUnicode(readPstring(fcb+62)))
 		}
 
 		for i := uint32(0); i < 20; i++ {
@@ -810,10 +778,6 @@ func tFSDispatch() {
 		writew(ioMisc, 2) // vRefNum = 2 always
 		writel(ioMisc+2, uint32(get_macos_dnum(filepath.Dir(path))))
 		writePstring(ioMisc+6, ioName)
-
-		if gDebug >= 2 {
-			fmt.Printf("MakeFSSpec ... vRefNum=%d dirID=%d name=%s\n", readw(ioMisc), readl(ioMisc+2), macToUnicode(readPstring(ioMisc+6)))
-		}
 
 	default:
 		panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr+2)))
