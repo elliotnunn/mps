@@ -511,7 +511,7 @@ func dumpPBField(f string) {
 	case "ioWDVRefNum":
 		logField(f, readw(pb+32))
 	case "ioFlFndrInfo", "ioDrUsrWds":
-		logField(f, fmt.Sprintf("%X", mem[pb+32:][:16]))
+		logField(f, fmt.Sprintf("%X", mem[pb+32:][:16]), macToUnicode(macstring(mem[pb+32:][:8])))
 	case "ioNamePtr":
 		nameptr := readl(pb + 18)
 		logField(f, nameptr, macToUnicode(readPstring(nameptr)))
