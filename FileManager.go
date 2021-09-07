@@ -326,10 +326,9 @@ func tClose() {
 	}
 
 	// Free FCB
-	writel(fcb, 0)
-	//     for i := 0; i < readw(0x3f6); i++ {
-	//         writel(fcbPtr + i, 0)
-	//     }
+	for i := uint32(0); i < uint32(readw(0x3f6)); i++ {
+		writel(fcb+i, 0)
+	}
 }
 
 func tReadWrite() {
