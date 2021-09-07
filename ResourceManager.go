@@ -64,14 +64,6 @@ func lookupMapRefnum(refnum uint16) (resMap uint32, ok bool) {
 	return 0, false
 }
 
-// Hack to fix things up when we edit File Manager structures directly
-func fixDirectlyEditedFileBuffer(refnum uint16) {
-	FCBSPtr := readl(0x34e)
-	fcb := FCBSPtr + uint32(refnum)
-	correctLen := uint32(len(filebuffers[refnum]))
-	writel(fcb+8, correctLen)
-}
-
 // {{type_entry_1, id_entry_1, id_entry_2, ...}, {type_entry_2, ...}, ...}
 // note that they are all absolute pointers being returned
 func resMapEntries(resMap uint32) (retval [][]uint32) {
@@ -131,7 +123,7 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
 // Use the resource map to find the data
 func resData(resMap, id_entry uint32) []byte {
 	refnum := readw(resMap + 20)
-	filedata := filebuffers[refnum]
+	filedata := openForks[forkKeyFromRefNum(refnum)]
 
 	data_ofs := binary.BigEndian.Uint32(filedata) + (readl(id_entry+4) & 0xffffff) + 4
 	data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
@@ -287,7 +279,7 @@ func tHOpenResFile() {
 	}
 
 	ioRefNum := readw(pb + 24)
-	forkdata := filebuffers[ioRefNum] // access buffer directly, not _Read trap
+	forkdata := openForks[forkKeyFromRefNum(ioRefNum)] // access buffer directly, not _Read trap
 	if len(forkdata) < 256 {
 		setResError(-39) // eofErr
 		return
@@ -545,7 +537,7 @@ func tWriteResource() {
 			writeb(idEntry+4, readb(idEntry+4)&^1) // clear resChanged
 
 			refnum := readw(resMap + 20)
-			buffer := filebuffers[refnum]
+			buffer := openForks[forkKeyFromRefNum(refnum)]
 
 			ptr := readl(handle)
 			dataSize := block_sizes[ptr]
@@ -556,8 +548,7 @@ func tWriteResource() {
 			buffer = append(buffer, 0, 0, 0, 0)
 			bigEndian.PutUint32(buffer[len(buffer)-4:], dataSize) // awkward
 			buffer = append(buffer, mem[ptr:][:dataSize]...)
-			filebuffers[refnum] = buffer
-			fixDirectlyEditedFileBuffer(refnum)
+			openForks[forkKeyFromRefNum(refnum)] = buffer
 
 			// Awkward 3-byte value in the resource map
 			if dataFromFirstData > 0xffffff {
@@ -578,7 +569,7 @@ func compactResFile(resMap uint32) {
 	rmap := dumpMap(getPtrBlock(resMap))
 	refnum := rmap.mRefNum // save this, because we clobber it
 
-	oldFork := filebuffers[refnum]
+	oldFork := openForks[forkKeyFromRefNum(refnum)]
 	newFork := make([]byte, 256)
 
 	// Copy each resource to the fork
@@ -606,8 +597,7 @@ func compactResFile(resMap uint32) {
 	binary.BigEndian.PutUint32(newFork[8:], midpoint-256)       // dataSize
 	binary.BigEndian.PutUint32(newFork[12:], endpoint-midpoint) // mapSize
 
-	filebuffers[refnum] = newFork
-	fixDirectlyEditedFileBuffer(refnum)
+	openForks[forkKeyFromRefNum(refnum)] = newFork
 }
 
 func tUpdateResFile() {

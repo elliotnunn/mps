@@ -13,8 +13,33 @@ import (
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
 var dnums []string
 
-// the contents of every open fork, indexed by refnum
-var filebuffers = make(map[uint16][]byte)
+// the contents of every open fork
+var openForks = make(map[forkKey][]byte)
+var openForkRefCounts = make(map[forkKey]int)
+
+type forkKey struct {
+	dirID  uint16
+	name   macstring
+	isRsrc bool
+}
+
+type forkVal struct {
+	buf      []byte
+	refCount int
+}
+
+func forkKeyFromRefNum(refNum uint16) forkKey {
+	fcb := fcbFromRefnum(refNum)
+	if fcb == 0 {
+		panic("invalid fcb")
+	}
+
+	return forkKey{
+		dirID:  readw(fcb + 60),
+		name:   readPstring(fcb + 62),
+		isRsrc: readb(fcb+4)&2 != 0,
+	}
+}
 
 // MacOS's idea of the system root
 const onlyvolname macstring = "_"
@@ -257,19 +282,28 @@ func tOpen() {
 		return // fnfErr
 	}
 
-	var data []byte
-	if path == ".stdin" { // special name
-		fmt.Printf("$ ")
-		str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		str = "`Exit {REPLStatus}`\n" + str // hack, search REPLStatus
-		str = strings.ReplaceAll(str, "\r\n", "\r")
-		str = strings.ReplaceAll(str, "\n", "\r")
-		data = []byte(unicodeToMacOrPanic(str))
-	} else if forkIsRsrc {
-		data = resourceFork(path)
-	} else {
-		data = dataFork(path)
+	dirID, name := quickFile(path)
+
+	fkey := forkKey{dirID: dirID, name: name, isRsrc: forkIsRsrc}
+
+	if openForkRefCounts[fkey] == 0 {
+		var buf []byte
+		if path == ".stdin" { // special name
+			fmt.Printf("$ ")
+			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+			str = "`Exit {REPLStatus}`\n" + str // hack, search REPLStatus
+			str = strings.ReplaceAll(str, "\r\n", "\r")
+			str = strings.ReplaceAll(str, "\n", "\r")
+			buf = []byte(unicodeToMacOrPanic(str))
+		} else if forkIsRsrc {
+			buf = resourceFork(path)
+		} else {
+			buf = dataFork(path)
+		}
+		openForks[fkey] = buf
 	}
+
+	openForkRefCounts[fkey]++
 
 	flags := byte(0)
 	if ioPermssn != 1 {
@@ -279,15 +313,11 @@ func tOpen() {
 		flags |= 2
 	}
 
-	retNum, retName := quickFile(path)
-
-	filebuffers[ioRefNum] = data
-	writel(fcbPtr+0, 1)                 // fake non-zero fcbFlNum
-	writeb(fcbPtr+4, flags)             // fcbMdRByt
-	writel(fcbPtr+8, uint32(len(data))) // fcbEOF
-	writel(fcbPtr+20, kVCB)             // fcbVPtr
-	writel(fcbPtr+58, uint32(retNum))   // fcbDirID
-	writePstring(fcbPtr+62, retName)    // fcbCName
+	writel(fcbPtr+0, 1)              // fake non-zero fcbFlNum
+	writeb(fcbPtr+4, flags)          // fcbMdRByt
+	writel(fcbPtr+20, kVCB)          // fcbVPtr
+	writel(fcbPtr+58, uint32(dirID)) // fcbDirID
+	writePstring(fcbPtr+62, name)    // fcbCName
 
 	writew(pb+24, ioRefNum)
 }
@@ -315,14 +345,23 @@ func tClose() {
 
 	// Write out
 	fcbMdRByt := readb(fcb + 4)
-	buf := filebuffers[ioRefNum]
-	delete(filebuffers, ioRefNum)
-	if fcbMdRByt&1 != 0 && !strings.HasPrefix(path, ".std") {
-		if fcbMdRByt&2 == 0 {
-			writeDataFork(path, buf)
-		} else {
-			writeResourceFork(path, buf)
+
+	fkey := forkKeyFromRefNum(ioRefNum)
+
+	// When the refcount reaches zero, write out
+	openForkRefCounts[fkey]--
+	if openForkRefCounts[fkey] == 0 {
+		buf := openForks[fkey]
+
+		if fcbMdRByt&1 != 0 && !strings.HasPrefix(path, ".std") {
+			if fcbMdRByt&2 == 0 {
+				writeDataFork(path, buf)
+			} else {
+				writeResourceFork(path, buf)
+			}
 		}
+
+		delete(openForks, fkey)
 	}
 
 	// Free FCB
@@ -344,17 +383,14 @@ func tReadWrite() {
 		return // fnOpnErr
 	}
 
-	buf := filebuffers[ioRefNum]
+	fkey := forkKeyFromRefNum(ioRefNum)
+	buf := openForks[fkey]
+
 	ioBuffer := readl(pb + 32)
 	ioReqCount := readl(pb + 36)
 	ioPosMode := readw(pb + 44)
 	ioPosOffset := readl(pb + 46)
 	fcbCrPs := readl(fcb + 16) // the mark
-	fcbEOF := readl(fcb + 8)   // leof
-
-	if fcbEOF != uint32(len(buf)) { // totally effed
-		panic("recorded fcbEOF inconsistent with byte slice size")
-	}
 
 	var trymark int64
 	switch ioPosMode % 4 {
@@ -363,7 +399,7 @@ func tReadWrite() {
 	case 1: // fsFromStart
 		trymark = int64(ioPosOffset)
 	case 2: // fsFromLEOF
-		trymark = int64(fcbEOF) + int64(int32(ioPosOffset))
+		trymark = int64(len(buf)) + int64(int32(ioPosOffset))
 	case 3: // fsFromMark
 		trymark = int64(fcbCrPs) + int64(int32(ioPosOffset))
 	}
@@ -372,8 +408,8 @@ func tReadWrite() {
 	mark := uint32(trymark)
 
 	// handle mark outside file and continue
-	if trymark > int64(fcbEOF) {
-		mark = fcbEOF
+	if trymark > int64(len(buf)) {
+		mark = uint32(len(buf))
 		ioReqCount = 0
 		paramBlkResult(-39) // eofErr
 	} else if trymark < 0 {
@@ -388,7 +424,6 @@ func tReadWrite() {
 		for uint32(len(buf)) < mark+ioActCount {
 			buf = append(buf, 0)
 		}
-		writel(fcb+8, uint32(len(buf))) // fcbEOF needs to be updated
 
 		copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
 
@@ -405,7 +440,7 @@ func tReadWrite() {
 		copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
 	}
 
-	filebuffers[ioRefNum] = buf
+	openForks[fkey] = buf
 
 	writel(pb+40, ioActCount)
 	writel(pb+46, mark+ioActCount)  // ioPosOffset
@@ -630,7 +665,9 @@ func tGetEOF() {
 		return // fnOpnErr
 	}
 
-	writel(pb+28, readl(fcb+8)) // ioMisc = fcbEOF
+	fkey := forkKeyFromRefNum(ioRefNum)
+
+	writel(pb+28, uint32(len(openForks[fkey]))) // ioMisc
 }
 
 func tSetEOF() {
@@ -647,15 +684,18 @@ func tSetEOF() {
 		return // fnOpnErr
 	}
 
-	for uint32(len(filebuffers[ioRefNum])) < ioMisc {
-		filebuffers[ioRefNum] = append(filebuffers[ioRefNum], 0)
+	fkey := forkKeyFromRefNum(ioRefNum)
+	buf := openForks[fkey]
+
+	for uint32(len(buf)) < ioMisc {
+		buf = append(buf, 0)
 	}
 
-	if uint32(len(filebuffers[ioRefNum])) > ioMisc {
-		filebuffers[ioRefNum] = filebuffers[ioRefNum][:ioMisc]
+	if uint32(len(buf)) > ioMisc {
+		buf = buf[:ioMisc]
 	}
 
-	writel(fcb+8, ioMisc) // fcbEOF
+	openForks[fkey] = buf
 
 	if ioMisc < readl(fcb+16) { // can't have mark beyond eof
 		writel(fcb+16, ioMisc)
