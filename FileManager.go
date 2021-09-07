@@ -291,7 +291,6 @@ func tOpen() {
 		if path == ".stdin" { // special name
 			fmt.Printf("$ ")
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			str = "`Exit {REPLStatus}`\n" + str // hack, search REPLStatus
 			str = strings.ReplaceAll(str, "\r\n", "\r")
 			str = strings.ReplaceAll(str, "\n", "\r")
 			buf = []byte(unicodeToMacOrPanic(str))

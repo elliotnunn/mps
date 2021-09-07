@@ -1000,10 +1000,8 @@ func main() {
 		// interactive mode
 
 		bild.WriteString("Set Exit 0\n")
-		bild.WriteString("Set REPLStatus 0\n")
 		bild.WriteString("Loop\n")
 		bild.WriteString("Execute .stdin >.stdout ≥.stderr\n") // super-secret name
-		bild.WriteString("Set REPLStatus {Status}\n")          // hack
 		bild.WriteString("End\n")
 	} else if strings.HasPrefix(args[0], "-") {
 		// batch mode with -c inline_script
