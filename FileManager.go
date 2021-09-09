@@ -308,7 +308,7 @@ func tOpen() {
 	if openForkRefCounts[fkey] == 0 {
 		var buf []byte
 		if path == ".stdin" { // special name
-			fmt.Printf("$ ")
+			fmt.Printf("• ") // Mac-ish prompt character
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 			str = strings.ReplaceAll(str, "\r\n", "\r")
 			str = strings.ReplaceAll(str, "\n", "\r")
