@@ -170,9 +170,28 @@ func listdir(path string) ([]macstring, int) {
 		already[macUpper(mf)]++
 	}
 	for _, mf := range macfiles2 {
-		if already[macUpper(mf)] == 1 && len(mf) < 32 && mf[0] != '.' {
-			macfiles = append(macfiles, mf)
+		if already[macUpper(mf)] > 1 {
+			continue
 		}
+
+		if len(mf) > 31 {
+			continue
+		}
+
+		if mf[0] == '.' {
+			continue
+		}
+
+		mfstr := string(mf)
+		if strings.HasSuffix(mfstr, ".idump") || strings.HasSuffix(mfstr, ".rdump") {
+			continue
+		}
+
+		if mfstr == "RESOURCE.FRK" || mfstr == "FINDER.DAT" {
+			continue
+		}
+
+		macfiles = append(macfiles, mf)
 	}
 
 	// what do do about colons in filenames?
