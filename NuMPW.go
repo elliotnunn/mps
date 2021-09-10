@@ -681,7 +681,7 @@ func executable_ftrap(trap uint16) (addr uint32) {
 
 // Conservatively convert words in a string that look like Unix paths
 func cmdPathCvt(s string, force bool) string {
-	if !force && os.Getenv("NUMPW_RAW") == "1" {
+	if !force && os.Getenv("MPSRAW") == "1" {
 		return s
 	}
 
@@ -740,16 +740,16 @@ var errFile []byte
 
 var gFS UnionFS // use this for ReadFile, etc
 
-var kUsage = `NuMPW: Macintosh Programmer's Workshop emulator
+var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
 
 Usage:
-	NuMPW                                # interactive
-	NuMPW tool_or_script_name [args...]  # batch-mode
-	NuMPW -c script_string [args...]     # batch-mode
+	mps                                # interactive
+	mps tool_or_script_name [args...]  # batch-mode
+	mps -c script_string [args...]     # batch-mode
 
 Environment variables:
-	NUMPW_DEBUG=...                      # ` + allBugFlags + `
-	NUMPW_RAW=[0..1]                     # don't convert paths in args to Mac
+	MPSDEBUG=...                       # ` + allBugFlags + `
+	MPSRAW=[0..1]                      # don't convert paths in args to Mac
 `
 
 func printUsageAndQuit() {
@@ -958,7 +958,7 @@ func main() {
 
 	var bild strings.Builder
 	bild.WriteString("# Runtime generated StartupTS file\n")
-	bild.WriteString("Set NuMPW 1; Export NuMPW\n")
+	bild.WriteString("Set MPW 1; Export MPS\n")
 	bild.WriteString("Export BackgroundShell\n")
 	bild.WriteString("Export Boot\n")
 	bild.WriteString("Export SystemFolder\n")

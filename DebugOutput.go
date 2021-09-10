@@ -8,7 +8,7 @@ import (
 
 const allBugFlags = "6=68k|t=stacktrace|f=FileMgr"
 
-var bugFlags = os.Getenv("NUMPW_DEBUG")
+var bugFlags = os.Getenv("MPSDEBUG")
 
 var (
 	gDebugAny        = bugFlags != ""
