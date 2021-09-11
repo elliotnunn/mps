@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+
+# tapcat - join multiple tap streams into one
+# takes stdin and gives stdout
+# should be rewritten in shell
+
+import re
+import sys
+
+last = 0
+increment = 0
+total = 0
+
+for line in sys.stdin.buffer:
+	line = line.decode('latin-1').rstrip('\n')
+
+	mplan = re.match(r'1..(\d+)', line)
+	if mplan:
+		n = int(mplan.group(1))
+		total += n
+		continue
+
+	mtest = re.match(r'((?:not )?ok )(\d+)(.*)', line)
+	if mtest:
+		n = int(mtest.group(2))
+		if n <= last:
+			increment += last
+		last = n
+		line = mtest.group(1) + str(n + increment) + mtest.group(3)
+
+	line += '\n'
+	sys.stdout.buffer.write(line.encode('latin-1'))
+
+sys.stdout.buffer.write(b'1..%d\n' % total)
