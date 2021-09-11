@@ -1,7 +1,7 @@
 # Build very rudimentary single-segment MPW Tools
 
 all: $(patsubst %.a,%,$(wildcard *.a))
-	@for x in `ls | grep ^Test | grep -v -F .`; do mps -c $$x; done | ./tapcat | ./tapview
+	@ls | grep ^Test | grep -v -F . | xargs -n1 mps -c | ./tapcat | ./tapview
 
 clean:
 	rm -f $(patsubst %.a,%,$(wildcard *.a))
