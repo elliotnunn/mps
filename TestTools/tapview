@@ -1,192 +1,137 @@
-#! /bin/sh
-# tapview - a TAP (Test Anything Protocol) viewer in pure POSIX shell
-#
-# Copyright by Eric S. Raymond
-#
-# This code is intended to be embedded in your project. The author
-# grants permission for it to be distributed under the prevailing
-# license of your project if you choose, provided that license is
-# OSD-compliant; otherwise the following SPDX tag incorporates a
-# license by reference.
-#
-# SPDX-License-Identifier: BSD-2-Clause
-#
-# This is version 1.1
-# A newer version may be available at https://gitlab.com/esr/tapview
-#
-# POSIX allows but does not mandate that -n suppresses emission of a
-# trailing newline in echo. Thus, some shell builtin echos don't do
-# that.  Cope gracefully.
-# shellcheck disable=SC2039
-if [ "$(echo -n "a"; echo "b")" = "ab" ]
-then
-    ECHO="echo"
-elif [ "$(/bin/echo -n "a"; /bin/echo "b")" = "ab" ]
-then
-    ECHO="/bin/echo"
-else
-    echo "tapview: bailing out, your echo lacks -n support."
-    exit 3
-fi
+#!/usr/bin/env python3
 
-OK="."
-FAIL="F"
-SKIP="s"
-TODO_NOT_OK="x"
-TODO_OK="u"
+import re
+import sys
 
-ship_char() {
-    # shellcheck disable=SC2039
-    "${ECHO}" -n "$1"
-}
 
-ship_line() {
-    report="${report}${1}\n"
-}
+sys.stdin.reconfigure(encoding="latin-1")
+sys.stdout.reconfigure(encoding="latin-1")
 
-testcount=0
-failcount=0
-skipcount=0
-todocount=0
-test_before_plan=no
-test_after_plan=no
-expect=""
-xstatus=0
+testcount = 0
+failcount = 0
+skipcount = 0
+todocount = 0
+test_before_plan = False
+test_after_plan = False
+expect = None
+lastnum = 0
+xstatus = 0
+report = ""
 
-report=""
-IFS=""
-state=start
-while read -r line
-do
-    if expr "$line" : "Bail out!" >/dev/null
-    then
-	ship_line "$line"
-	xstatus=2
-	break
-    fi
-    if expr "$line" : '1\.\.[0-9][0-9]*' >/dev/null
-    then
-	if [ "$expect" != "" ]
-	then
-	    if [ "${testcount}" -gt 0 ]
-	    then
-		echo ""
-	    fi
-	    ship_line "Cannot have more than one plan line."
-	    echo "${report}"
-	    exit 1
-	fi
-	if expr "$line" : ".* *SKIP" >/dev/null || expr "$line" : ".* *skip" >/dev/null
-	then
-	    ship_line "$line"
-	    echo "${report}"
-	    exit 1	# Not specified in the standard whether this should exit 1 or 0
-	fi
-	expect=$(expr "$line" : '1\.\.\([0-9][0-9]*\)')
-	continue
-    fi
-    if expr "$line" : "ok" >/dev/null
-    then
-	testcount=$((testcount + 1))
-	if [ "$expect" = "" ]
-	then
-	    test_before_plan=yes
-	else
-	    test_after_plan=yes
-	fi
-	if expr "$line" : ".*# *TODO" >/dev/null || expr "$line" : ".*# *todo" >/dev/null
-	then
-	    ship_char ${TODO_OK}
-	    ship_line "$line"
-	    todocount=$((todocount + 1))
-	elif expr "$line" : ".*# *SKIP" >/dev/null || expr "$line" : ".*# *skip" >/dev/null
-	then
-	    ship_char ${SKIP}
-	    ship_line "$line"
-	    skipcount=$((skipcount + 1))
-	else
-	    ship_char ${OK}
-	fi
-	state=ok
-	continue
-    fi
-    if expr "$line" : "not ok" >/dev/null
-    then
-	testcount=$((testcount + 1))
-	if [ "$expect" = "" ]
-	then
-	    test_before_plan=yes
-	else
-	    test_after_plan=yes
-	fi
-	if expr "$line" : ".*# *SKIP" >/dev/null || expr "$line" : ".*# *skip" >/dev/null
-	then
-	    ship_char "${SKIP}"
-	    state=ok
-	    skipcount=$((skipcount + 1))
-	    continue
-	fi
-	if expr "$line" : ".*# *TODO" >/dev/null || expr "$line" : ".*# *todo" >/dev/null
-	then
-	    ship_char ${TODO_NOT_OK}
-	    state=ok
-	    todocount=$((todocount + 1))
-	    continue
-	fi
-	ship_char "${FAIL}"
-	ship_line "$line"
-	state=not_ok
-	failcount=$((failcount + 1))
-	xstatus=1
-	continue
-    fi
-    # shellcheck disable=SC2166
-    if [ "${state}" = "yaml" ]
-    then
-	ship_line "$line"
-	if expr "$line" : '[ 	]*\.\.\.' >/dev/null
-	then
-	    state=ok
-	fi
-    elif expr "$line" : "[ 	]*---" >/dev/null
-    then
-	ship_line "$line"
-	state=yaml
-    fi
-done
 
-/bin/echo ""
+def ship_char(c):
+    print(c, end="", flush=True)
 
-if [ -z "$expect" ]
-then
-    ship_line "Missing a plan."
-    xstatus=1
-elif [ "$test_before_plan" = "yes" ] && [ "$test_after_plan" = "yes" ]
-then
-    ship_line "A plan line may only be placed before or after all tests."
-    xstatus=1
-elif [ "${expect}" -gt "${testcount}" ]
-then
-    ship_line "Expected ${expect} tests but only ${testcount} ran."
-    xstatus=1
-elif [ "${expect}" -lt "${testcount}" ]
-then
-    ship_line "Expected ${expect} tests but ${testcount} ran."
-    xstatus=1
-fi
 
-report="${report}${testcount} tests, ${failcount} failures"
-if [ "$todocount" != 0 ]
-then
-    report="${report}, ${todocount} TODOs"
-fi
-if [ "$skipcount" != 0 ]
-then
-    report="${report}, ${skipcount} SKIPs"
-fi
+def print_report():
+    print("\n" + report.rstrip("\n"))
 
-echo "${report}."
 
-exit "${xstatus}"
+def ship_line(l):
+    global report
+    report += l + "\n"
 
-# end
+
+for line in sys.stdin:
+    line = line.rstrip("\n")
+
+    if line == "Bail out!":
+        ship_line(line)
+        xstatus = 2
+        break
+
+    if re.match(r"1\.\.\d+", line):
+        if expect is not None:
+            if testcount > 0:
+                print()
+            ship_line("Cannot have more than one plan line.")
+            print_report()
+            sys.exit(1)
+
+        if re.match(r".* *skip", line, re.IGNORECASE):
+            ship_line(line)
+            print_report()
+            sys.exit(1)
+
+        expect = int(re.match(r"\d+", line[3:]).group(0))
+
+        continue
+
+    m = re.match(r"(?:not )?ok (\d+)", line)
+    if m:
+        testcount += 1
+        if expect is None:
+            test_before_plan = True
+        else:
+            test_after_plan = True
+
+        n = int(m.group(1))
+        if n != lastnum + 1:
+            ship_line(line)
+            ship_line("Misnumbered test")
+            print_report()
+            sys.exit(1)
+        lastnum = n
+
+        bad = line.startswith("not")
+        skip = bool(re.search(r"# +skip", line, re.IGNORECASE))
+        todo = bool(re.search(r"# +todo", line, re.IGNORECASE))
+
+        if bad:
+            failcount += 1
+            xstatus = 1
+
+        if todo:
+            todocount += 1
+
+        if skip:
+            skipcount += 1
+
+        if not bad:
+            if todo:
+                ship_char("u")
+                ship_line(line)
+            elif skip:
+                ship_char("s")
+                ship_line(line)
+            else:
+                ship_char(".")
+        else:
+            if skip:
+                ship_char("s")
+            elif todo:
+                ship_char("x")
+            else:
+                ship_char("F")
+                ship_line(line)
+
+if expect is None:
+    ship_line("Missing a plan.")
+    xstatus = 1
+elif test_before_plan and test_after_plan:
+    ship_line("A plan line may only be placed before or after all tests.")
+    xstatus = 1
+elif expect > testcount:
+    ship_line("Expected %d tests but only %d ran." % (expect, testcount))
+    xstatus = 1
+elif expect < testcount:
+    ship_line("Expected %d tests but %d ran." % (expect, testcount))
+    xstatus = 1
+
+lastline = "%d tests, %d failures" % (testcount, failcount)
+
+if todocount:
+    lastline += ", %d TODOs" % todocount
+
+if skipcount:
+    lastline += ", %d SKIPs" % skipcount
+
+lastline += "."
+
+lastline = re.sub(r"\b(1 \w+)s\b", r"\1", lastline)
+
+ship_line(lastline)
+
+print_report()
+
+sys.exit(xstatus)
