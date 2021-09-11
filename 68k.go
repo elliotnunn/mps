@@ -1473,6 +1473,8 @@ func bitFieldInst(inst uint16) {
 		bitWidth = 32
 	}
 
+	reportBitOffset := bitOffset
+
 	// Force a 4-byte-aligned base address and a bit offset 0..31
 	if eaIsRegister {
 		bitOffset &= 0x1f
@@ -1503,10 +1505,10 @@ func bitFieldInst(inst uint16) {
 		field = 0
 	case 0b101: // bfffo -- manual is wrong!
 		firstOne := 0
-		for firstOne < bitWidth && field&(0x80000000>>firstOne) != 0 {
+		for firstOne < bitWidth && field&(1<<(bitWidth-1-firstOne)) == 0 {
 			firstOne++
 		}
-		writel(dPtr, uint32(bitOffset)+uint32(firstOne))
+		writel(dPtr, uint32(reportBitOffset)+uint32(firstOne))
 		return
 	case 0b110: // bfset
 		field = 0xffffffff
