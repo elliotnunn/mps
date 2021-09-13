@@ -57,6 +57,10 @@ func fcbFromRefnum(refnum uint16) uint32 {
 }
 
 func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
+	if strings.Contains(string(name), "MPW.MinPipe") {
+		return filepath.Join(systemFolder, "Temporary Items", "MPW.MinPipe"), 0
+	}
+
 	if strings.Contains(string(name), ".stdin") {
 		return ".stdin", 0
 	}
