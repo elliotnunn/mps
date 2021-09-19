@@ -37,6 +37,11 @@ func whichFormat(path string) int {
 		complain = append(complain, "Rez")
 	}
 
+	if darwinForksExist(path) {
+		format = kOSX
+		complain = append(complain, "native filesystem")
+	}
+
 	if len(complain) > 1 {
 		complaint := strings.Join(complain, " & ")
 		panic(fmt.Sprintf("Conflicting %s data for file: %s", complaint, path))
@@ -65,6 +70,16 @@ func finderInfo(path string) [16]byte {
 		path2 := path + ".idump"
 		if data, err := gFS.ReadFile(path2); err == nil {
 			copy(finfo[:], data)
+		}
+
+	case kOSX:
+		bigfinfo, _ := darwinFInfo(path)
+		copy(finfo[:8], bigfinfo[:8])
+		if finfo[0] == 0 && finfo[1] == 0 && finfo[2] == 0 && finfo[3] == 0 {
+			copy(finfo[:], "????")
+		}
+		if finfo[4] == 0 && finfo[5] == 0 && finfo[6] == 0 && finfo[7] == 0 {
+			copy(finfo[4:], "????")
 		}
 	}
 
@@ -123,6 +138,10 @@ func resourceFork(path string) []byte {
 		}
 
 		data = rez(data) // TODO: this panics, which is messy
+
+	case kOSX:
+		data, _ = os.ReadFile(path + "/..namedfork/rsrc")
+		return data
 	}
 
 	return data
@@ -152,6 +171,9 @@ func writeResourceFork(path string, fork []byte) {
 		} else {
 			os.Remove(path2) // ignore error
 		}
+
+	case kOSX:
+		os.WriteFile(path+"/..namedfork/rsrc", fork, 0o666) // ignore error
 	}
 }
 
