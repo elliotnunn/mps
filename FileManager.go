@@ -57,10 +57,6 @@ func fcbFromRefnum(refnum uint16) uint32 {
 }
 
 func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
-	if strings.Contains(string(name), "MPW.MinPipe") {
-		return filepath.Join(systemFolder, "Temporary Items", "MPW.MinPipe"), 0
-	}
-
 	if strings.Contains(string(name), ".stdin") {
 		return ".stdin", 0
 	}
@@ -111,6 +107,11 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 		if len(component) == 0 { // treat :: like ..
 			path = filepath.Dir(path)
 		} else {
+			// Fake out the pipe
+			if path == tempRW && strings.HasPrefix(string(component), "MPW.MinPipe") {
+				path = filepath.Join(systemFolder, "Temporary Items")
+			}
+
 			// ignore the error because we trust however we got "path"
 			listing, _ := listdir(path)
 
