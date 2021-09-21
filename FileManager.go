@@ -57,10 +57,6 @@ func fcbFromRefnum(refnum uint16) uint32 {
 }
 
 func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
-	if strings.Contains(string(name), ".stdin") {
-		return ".stdin", 0
-	}
-
 	if strings.Contains(string(name), "StartupTS.out") {
 		return ".stdout", 0
 	}
@@ -110,6 +106,11 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 			// Fake out the pipe
 			if path == tempRW && strings.HasPrefix(string(component), "MPW.MinPipe") {
 				path = filepath.Join(systemFolder, "Temporary Items")
+			}
+
+			// Fake out the REPL file (the only time we return a non-absolute path)
+			if string(component) == ".MPSPrompt" {
+				return string(component), 0
 			}
 
 			// ignore the error because we trust however we got "path"
@@ -312,7 +313,7 @@ func tOpen() {
 
 	if openForkRefCounts[fkey] == 0 {
 		var buf []byte
-		if path == ".stdin" { // special name
+		if path == ".MPSPrompt" { // special name
 			fmt.Printf("• ") // Mac-ish prompt character
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 			str = strings.ReplaceAll(str, "\r\n", "\r")
@@ -636,7 +637,7 @@ func tGetFInfo() { // also implements GetCatInfo
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
 
 		// hack to make stdin files readable
-		if strings.Contains(path, ".stdin") {
+		if path == ".MPSPrompt" {
 			copy(mem[pb+32:], "TEXTMPS ")
 		}
 	}
