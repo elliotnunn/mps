@@ -362,9 +362,10 @@ func tPack3() {
 
 	writel(spptr, sp) // pop args from stack
 
-	path := ""
-	fmt.Print("Enter path for GetFile dialog: ")
-	fmt.Scanln(&path)
+	os.Stdout.Write([]byte("Enter path for GetFile dialog: "))
+	stdinNonBlock(false) // insist on a full string
+	path, _ := bufin.ReadString('\n')
+	path = strings.TrimRight(path, "\n")
 
 	number, name := quickFile(path)
 	ftype := "TEXT" // finderInfo(path)[:4] // TODO: real type

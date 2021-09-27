@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -302,8 +301,9 @@ func tOpen() {
 	if openForkRefCounts[fkey] == 0 {
 		var buf []byte
 		if path == ".MPSPrompt" { // special name
-			fmt.Printf("• ") // Mac-ish prompt character
-			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+			fmt.Printf("• ")     // Mac-ish prompt character
+			stdinNonBlock(false) // insist on a full string
+			str, _ := bufin.ReadString('\n')
 			buf = []byte(unicodeToMacOrPanic(str))
 		} else if forkIsRsrc {
 			buf = resourceFork(path)
