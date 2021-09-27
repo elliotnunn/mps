@@ -367,6 +367,8 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			macbyte = 0xd9
 		case codepoint == 0x2044: // FRACTION SLASH
 			macbyte = 0xda
+		case codepoint == 0xa4: // CURRENCY SIGN (pre-8.5)
+			macbyte = 0xdb
 		case codepoint == 0x20ac: // EURO SIGN
 			macbyte = 0xdb
 		case codepoint == 0x2039: // SINGLE LEFT-POINTING ANGLE QUOTATION MARK

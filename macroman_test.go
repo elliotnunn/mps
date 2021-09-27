@@ -51,8 +51,8 @@ func Test2CharToUnicode(t *testing.T) {
 			mac := pair1.mac + pair2.mac
 			utf := pair1.utf + pair2.utf
 
-			// We never output combining characters
-			if bytes.Contains([]byte(utf), []byte{0xcc}) {
+			// We never output combining characters or the pre-8.5 currency sign
+			if bytes.Contains([]byte(utf), []byte{0xcc}) || bytes.Contains([]byte(utf), []byte{0xc2, 0xa4}) {
 				continue
 			}
 
@@ -330,6 +330,7 @@ var utfMacPairList = []utfMacPair{
 	{"\xd9", "\u0178"},
 	{"\xd9", "Y\u0308"},
 	{"\xda", "\u2044"},
+	{"\xdb", "\u00a4"},
 	{"\xdb", "\u20ac"},
 	{"\xdc", "\u2039"},
 	{"\xdd", "\u203a"},

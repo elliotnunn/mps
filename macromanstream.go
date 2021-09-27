@@ -371,6 +371,8 @@ func stdinReadMac(rom []byte) int {
 			rom[i] = 0xd9
 		case r == 0x2044: // FRACTION SLASH
 			rom[i] = 0xda
+		case r == 0xa4: // CURRENCY SIGN (pre-8.5)
+			rom[i] = 0xdb
 		case r == 0x20ac: // EURO SIGN
 			rom[i] = 0xdb
 		case r == 0x2039: // SINGLE LEFT-POINTING ANGLE QUOTATION MARK
