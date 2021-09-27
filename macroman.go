@@ -9,7 +9,7 @@ type macstring string
 
 var macToUnicodeTable = [...]rune{
 	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
-	0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
+	0x0008, 0x0009, 0xfffd, 0x000b, 0x000c, 0x000a, 0x000e, 0x000f,
 	0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
 	0x0018, 0x0019, 0x001a, 0x001b, 0x001c, 0x001d, 0x001e, 0x001f,
 	0x0020, 0x0021, 0x0022, 0x0023, 0x0024, 0x0025, 0x0026, 0x0027,
@@ -150,7 +150,10 @@ var macStripTab = [...]byte{
 func macToUnicode(mac macstring) string {
 	var buf bytes.Buffer
 	for i := 0; i < len(mac); i++ {
-		buf.WriteRune(macToUnicodeTable[mac[i]])
+		r := macToUnicodeTable[mac[i]]
+		if r != 0xfffd { // essentially, skip LFs
+			buf.WriteRune(r)
+		}
 	}
 	return buf.String()
 }
@@ -176,6 +179,10 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 	for _, codepoint := range str {
 		var macbyte byte
 		switch {
+		case codepoint == 0x0a:
+			macbyte = 0x0d // LF to CR
+		case codepoint == 0x0d:
+			continue // CR to nothing
 		case codepoint < 0x80:
 			macbyte = byte(codepoint)
 		case codepoint == 0xc4: // LATIN CAPITAL LETTER A WITH DIAERESIS

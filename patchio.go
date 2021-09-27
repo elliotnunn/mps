@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"os"
-	"strings"
 )
 
 // Overwrite our two functions
@@ -70,10 +69,8 @@ func tSpecialStdoutStderr() {
 		return
 	}
 
-	str := macToUnicode(macstring(slice))
-	str = strings.ReplaceAll(str, "\n", "")   // delete LF
-	str = strings.ReplaceAll(str, "\r", "\n") // CR to LF
-	stream.Write([]byte(str))
+	slice = []byte(macToUnicode(macstring(slice)))
+	stream.Write(slice)
 
 	writel(fstruct+12, 0) // no bytes left over
 	writew(fstruct+2, 0)

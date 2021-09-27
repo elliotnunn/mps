@@ -304,8 +304,6 @@ func tOpen() {
 		if path == ".MPSPrompt" { // special name
 			fmt.Printf("• ") // Mac-ish prompt character
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			str = strings.ReplaceAll(str, "\r\n", "\r")
-			str = strings.ReplaceAll(str, "\n", "\r")
 			buf = []byte(unicodeToMacOrPanic(str))
 		} else if forkIsRsrc {
 			buf = resourceFork(path)
