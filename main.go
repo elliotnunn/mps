@@ -922,6 +922,8 @@ func main() {
 		tb_base + 0x1fa: tRetZero,             // _UnlodeScrap
 		tb_base + 0x1fb: tRetZero,             // _LodeScrap
 		tb_base + 0x252: tHighLevelFSDispatch, // _HighLevelFSDispatch
+		tb_base + 0x3fd: tSpecialStdoutStderr, // (inauthentic)
+		tb_base + 0x3fe: tSpecialStdin,        // (inauthentic)
 		tb_base + 0x3ff: tDebugStr,            // _DebugStr
 	}
 
@@ -1001,7 +1003,7 @@ func main() {
 
 		bild.WriteString("Set Exit 0\n")
 		bild.WriteString("Loop\n")
-		bild.WriteString("Execute .MPSPrompt >.stdout ≥.stderr\n") // super-secret name
+		bild.WriteString("Execute .MPSPrompt\n") // super-secret name
 		bild.WriteString("End\n")
 	} else if strings.HasPrefix(args[0], "-") {
 		// batch mode with -c inline_script
@@ -1019,19 +1021,15 @@ func main() {
 			bild.WriteByte(' ')
 			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
 		}
-
-		bild.WriteString(" >.stdout ≥.stderr")
 	} else {
 		// batch mode with script path
-		bild.WriteString("(Execute ")
+		bild.WriteString("Execute ")
 		bild.WriteString(quote(cmdPathCvt(args[0], true))) // always convert the first arg
 
 		for _, arg := range args[1:] {
 			bild.WriteByte(' ')
 			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
 		}
-
-		bild.WriteString(") >.stdout ≥.stderr")
 	}
 
 	os.WriteFile(filepath.Join(tempRW, "StartupTS"), []byte(bild.String()), 0o777)

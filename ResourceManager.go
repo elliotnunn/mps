@@ -130,6 +130,11 @@ func resData(resMap, type_entry, id_entry uint32) []byte {
 
 	data := filedata[data_ofs:][:data_len]
 
+	// Edit ToolServer CODE resources
+	if refnum == 2 && readl(type_entry) == 0x434f4445 && readw(id_entry) != 0 {
+		ioCodePatch(data)
+	}
+
 	return data
 }
 
