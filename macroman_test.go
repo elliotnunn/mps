@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"strings"
 	"testing"
@@ -28,6 +29,44 @@ func testStdinWithPair(t *testing.T, mac string, utf string) {
 	}
 }
 
+func Test2CharToMac(t *testing.T) {
+	for _, pair1 := range utfMacPairList {
+		for _, pair2 := range utfMacPairList {
+			mac := pair1.mac + pair2.mac
+			utf := pair1.utf + pair2.utf
+			name := hex.EncodeToString([]byte(utf)) + "_" + hex.EncodeToString([]byte(mac))
+			t.Run(name, func(t *testing.T) {
+				got := string(unicodeToMacOrPanic(utf))
+				if got != mac {
+					t.Fatalf("Got %s", hex.EncodeToString([]byte(got)))
+				}
+			})
+		}
+	}
+}
+
+func Test2CharToUnicode(t *testing.T) {
+	for _, pair1 := range utfMacPairList {
+		for _, pair2 := range utfMacPairList {
+			mac := pair1.mac + pair2.mac
+			utf := pair1.utf + pair2.utf
+
+			// We never output combining characters
+			if bytes.Contains([]byte(utf), []byte{0xcc}) {
+				continue
+			}
+
+			name := hex.EncodeToString([]byte(mac)) + "_" + hex.EncodeToString([]byte(utf))
+			t.Run(name, func(t *testing.T) {
+				got := macToUnicode(macstring(mac))
+				if got != utf {
+					t.Fatalf("Got %s", hex.EncodeToString([]byte(got)))
+				}
+			})
+		}
+	}
+}
+
 type utfMacPair struct {
 	mac string
 	utf string
@@ -35,6 +74,7 @@ type utfMacPair struct {
 
 var utfMacPairList = []utfMacPair{
 	{"", ""},
+	{"\r", "\n"},
 	{"\x00", "\u0000"},
 	{"\x01", "\u0001"},
 	{"\x02", "\u0002"},
@@ -45,10 +85,8 @@ var utfMacPairList = []utfMacPair{
 	{"\x07", "\u0007"},
 	{"\x08", "\u0008"},
 	{"\x09", "\u0009"},
-	{"\x0d", "\u000a"}, // LF to CR
 	{"\x0b", "\u000b"},
 	{"\x0c", "\u000c"},
-	{"", "\u000d"}, // CR to nothing
 	{"\x0e", "\u000e"},
 	{"\x0f", "\u000f"},
 	{"\x10", "\u0010"},
