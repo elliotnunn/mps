@@ -121,13 +121,16 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
 }
 
 // Use the resource map to find the data
-func resData(resMap, id_entry uint32) []byte {
+func resData(resMap, type_entry, id_entry uint32) []byte {
 	refnum := readw(resMap + 20)
 	filedata := openForks[forkKeyFromRefNum(refnum)]
 
 	data_ofs := binary.BigEndian.Uint32(filedata) + (readl(id_entry+4) & 0xffffff) + 4
 	data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
-	return filedata[data_ofs:][:data_len]
+
+	data := filedata[data_ofs:][:data_len]
+
+	return data
 }
 
 func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
@@ -140,7 +143,7 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 		handle = readl(a0ptr)
 	} else if loadPlease == true && handle == 0 {
 		// Create full handle
-		data := resData(resMap, idEntry)
+		data := resData(resMap, typeEntry, idEntry)
 
 		writel(d0ptr, uint32(len(data)))
 		call_m68k(executable_atrap(0xa122)) // _NewHandle
@@ -149,7 +152,7 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 		copy(mem[readl(handle):], data)
 	} else if loadPlease == true && handle != 0 && readl(handle) == 0 {
 		// Fill empty handle
-		data := resData(resMap, idEntry)
+		data := resData(resMap, typeEntry, idEntry)
 
 		writel(d0ptr, uint32(len(data)))
 		writel(a0ptr, handle)
@@ -496,9 +499,9 @@ func tSizeRsrc() {
 	handle := popl()
 	retValPtr := readl(spptr)
 
-	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
+	if resMap, typeEntry, idEntry, ok := lookupResHandle(handle); ok {
 		setResError(0) // noErr
-		writel(retValPtr, uint32(len(resData(resMap, idEntry))))
+		writel(retValPtr, uint32(len(resData(resMap, typeEntry, idEntry))))
 	} else {
 		setResError(-192)    // resNotFound
 		writel(retValPtr, 0) // return this meaning "bad"
