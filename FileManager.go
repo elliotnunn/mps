@@ -57,18 +57,6 @@ func fcbFromRefnum(refnum uint16) uint32 {
 }
 
 func get_host_path(number uint16, name macstring, leafMustExist bool) (string, int) {
-	if strings.Contains(string(name), "StartupTS.out") {
-		return ".stdout", 0
-	}
-
-	if strings.Contains(string(name), ".stdout") {
-		return ".stdout", 0
-	}
-
-	if strings.Contains(string(name), ".stderr") {
-		return ".stdout", 0
-	}
-
 	// If string is abolute then ignore the number, use the special root ID
 	if strings.Contains(string(name), ":") && !strings.HasPrefix(string(name), ":") {
 		number = 2
@@ -377,7 +365,7 @@ func tClose() {
 	if openForkRefCounts[fkey] == 0 {
 		buf := openForks[fkey]
 
-		if fcbMdRByt&1 != 0 && !strings.HasPrefix(path, ".std") {
+		if fcbMdRByt&1 != 0 {
 			if fcbMdRByt&2 == 0 {
 				writeDataFork(path, buf)
 			} else {
@@ -450,11 +438,6 @@ func tReadWrite() {
 		}
 
 		copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
-
-		if readPstring(fcb+62) == macstring(".stdout") {
-			fmt.Print(strings.ReplaceAll(macToUnicode(macstring(buf[mark:mark+ioActCount])), "\r", "\n"))
-		}
-
 	} else { // _Read
 		// if file is too short then shorten the read
 		if uint32(len(buf)) < mark+ioActCount {
