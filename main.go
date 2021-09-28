@@ -331,94 +331,6 @@ func tGetOSEvent() {
 	writel(d0ptr, 0xffffffff)
 }
 
-// Standard File
-func tPack3() {
-	selector := popw()
-
-	sp := readl(spptr)
-	replyPtr := uint32(0)
-	isNewStyle := false // hierarchical version of the call
-
-	switch selector {
-	case 2: // SFGetFile
-		isNewStyle = false
-		replyPtr = readl(sp)
-		sp += 26
-	case 4: // SFPGetFile
-		isNewStyle = false
-		replyPtr = readl(sp + 6)
-		sp += 32
-	case 6: // StandardGetFile
-		isNewStyle = true
-		replyPtr = readl(sp)
-		sp += 10
-	case 8: // CustomGetFile
-		isNewStyle = true
-		replyPtr = readl(sp + 26)
-		sp += 34
-	default:
-		panic("SFPutFile unimp")
-	}
-
-	writel(spptr, sp) // pop args from stack
-
-	os.Stdout.Write([]byte("Enter path for GetFile dialog: "))
-	stdinNonBlock(false) // insist on a full string
-	path, _ := bufin.ReadString('\n')
-	path = strings.TrimRight(path, "\n")
-
-	number, name := quickFile(path)
-	ftype := "TEXT" // finderInfo(path)[:4] // TODO: real type
-
-	if isNewStyle {
-		writeb(replyPtr, 0xff)             // good
-		writeb(replyPtr+1, 0xff)           // replacing
-		copy(mem[replyPtr+2:], ftype)      // type
-		writew(replyPtr+6, 2)              // FSSpec vRefNum
-		writel(replyPtr+8, uint32(number)) // FSSpec dirID
-		writePstring(replyPtr+12, name)    // FSSpec name
-		writew(replyPtr+76, 0)             // script
-		writew(replyPtr+78, 0)             // flags
-		writeb(replyPtr+80, 0)             // isFolder
-		writeb(replyPtr+81, 0)             // isVolume
-	} else {
-		writeb(replyPtr, 0xff)          // good
-		writeb(replyPtr+1, 0xff)        // replacing
-		copy(mem[replyPtr+2:], ftype)   // type
-		writew(replyPtr+6, number)      // vRefNum
-		writew(replyPtr+8, 0)           // version
-		writePstring(replyPtr+10, name) // name
-	}
-}
-
-func tMenuKey() {
-	popw() // ignore the key code
-
-	writel(readl(spptr), 0x00810005) // File > Quit
-}
-
-func tGetNextEvent() {
-	eventrecord := popl()
-	write(16, eventrecord, 0)
-	mask := popw()
-
-	// Tell the top-level event loop about a command-keystroke
-	if mask&0x400 != 0 { // check for high-level events
-		writew(eventrecord, 3)        // keyDown
-		writel(eventrecord+2, 0)      // no particular key
-		writew(eventrecord+14, 0x100) // command
-		writew(readl(spptr), 0xffff)  // return true
-		return
-
-	}
-	writew(readl(spptr), 0) // return false
-}
-
-func tWaitNextEvent() {
-	pop(8) // ignore sleep and mouseRgn args
-	tGetNextEvent()
-}
-
 func tExitToShell() {
 	pc = 0
 }
@@ -719,15 +631,6 @@ func pathCvt(s string) string {
 	return string(onlyvolname) + string(ss)
 }
 
-// Quote a string for MPW (but leave it in unicode)
-func quote(s string) string {
-	if strings.ContainsAny(s, " \t\n\r{}\"'∂") {
-		return "'" + strings.ReplaceAll(strings.ReplaceAll(s, "∂", "∂∂"), "'", "∂'") + "'"
-	} else {
-		return s
-	}
-}
-
 //go:embed ToolServerVersions/ToolServer350.rsrc
 var toolServerResourceFork []byte
 
@@ -959,83 +862,6 @@ func main() {
 	os.WriteFile(filepath.Join(tempRW, "SysErrs.err"), errFile, 0o777)
 	os.WriteFile(filepath.Join(tempRW, "MPW.Help"), helpFile, 0o777)
 
-	var bild strings.Builder
-	bild.WriteString("# Runtime generated StartupTS file\n")
-	bild.WriteString("Set MPW 1; Export MPS\n")
-	bild.WriteString("Export BackgroundShell\n")
-	bild.WriteString("Export Boot\n")
-	bild.WriteString("Export SystemFolder\n")
-	bild.WriteString("Export ShellDirectory\n")
-	bild.WriteString("Export Active\n")
-	bild.WriteString("Export Target\n")
-	bild.WriteString("Export Worksheet\n")
-	bild.WriteString("Export Status\n")
-	bild.WriteString("Export User\n")
-	bild.WriteString("Set MPW \"{ShellDirectory}\"; Export MPW\n")
-	bild.WriteString("Export MPWVersiom\n")
-	bild.WriteString("Export ExtendWordSet\n")
-	bild.WriteString("Export InhibitMarkCopy\n")
-	bild.WriteString("Export NewKeyboardLayout\n")
-	bild.WriteString("Export ScreenUpdateDelay\n")
-	bild.WriteString("Export ToolSleepTime\n")
-	bild.WriteString("Set Commands \":\"; Export Commands\n") // todo unsatisfactory
-	bild.WriteString("Export PrefsFolder\n")
-	bild.WriteString("Export TempFolder\n")
-	bild.WriteString("Export SysTempFolder\n")
-	bild.WriteString("Set CaseSensitive 0; Export CaseSensitive\n")
-	bild.WriteString("Set SearchBackward 0; Export SearchBackward\n")
-	bild.WriteString("Set SearchWrap 0; Export SearchWrap\n")
-	bild.WriteString("Set SearchType 0; Export SearchType\n")
-	bild.WriteString("Set Tab 4; Export Tab\n")
-	bild.WriteString("Set Font MPW; Export Font\n")
-	bild.WriteString("Set FontSize 9; Export FontSize\n")
-	bild.WriteString("Set AutoIndent 1; Export AutoIndent\n")
-	bild.WriteString("Set WordSet a-zA-Z_0-9; Export WordSet\n")
-	bild.WriteString("Set Exit 1; Export Exit\n")
-	bild.WriteString("Set Echo 0; Export Echo\n")
-	bild.WriteString("Set Test 0; Export Test\n")
-	cwd, _ := os.Getwd()
-	bild.WriteString("Directory " + quote(pathCvt(cwd)) + "\n")
-
-	// Command line opts
-	args := os.Args[1:]
-	if len(args) == 0 {
-		// interactive mode
-
-		bild.WriteString("Set Exit 0\n")
-		bild.WriteString("Loop\n")
-		bild.WriteString("Execute .MPSPrompt\n") // super-secret name
-		bild.WriteString("End\n")
-	} else if strings.HasPrefix(args[0], "-") {
-		// batch mode with -c inline_script
-
-		if args[0] != "-c" || len(args) < 2 {
-			printUsageAndQuit()
-		}
-
-		os.WriteFile(filepath.Join(tempRW, "SubScript"), []byte(cmdPathCvt(args[1], false)), 0o777)
-		os.WriteFile(filepath.Join(tempRW, "SubScript.idump"), []byte("TEXTMPS "), 0o777)
-
-		bild.WriteString(`"{MPW}SubScript"`)
-
-		for _, arg := range args[2:] {
-			bild.WriteByte(' ')
-			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
-		}
-	} else {
-		// batch mode with script path
-		bild.WriteString("Execute ")
-		bild.WriteString(quote(cmdPathCvt(args[0], true))) // always convert the first arg
-
-		for _, arg := range args[1:] {
-			bild.WriteByte(' ')
-			bild.WriteString(quote(cmdPathCvt(arg, false))) // need not convert subsequent ones
-		}
-	}
-
-	os.WriteFile(filepath.Join(tempRW, "StartupTS"), []byte(bild.String()), 0o777)
-	os.WriteFile(filepath.Join(tempRW, "StartupTS.idump"), []byte("TEXTMPS "), 0o777)
-
 	dnums = []string{
 		filepath.Dir(toolServer),
 		"",
@@ -1178,6 +1004,8 @@ func main() {
 	jtoffset := readl(code0 + 12)
 
 	copy(mem[kA5World+jtoffset:][:jtsize], mem[code0+16:][:jtsize])
+
+	initPuppetStrings(os.Args[1:])
 
 	call_m68k(kA5World + jtoffset + 2)
 }

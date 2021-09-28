@@ -95,8 +95,8 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 				path = filepath.Join(systemFolder, "Temporary Items")
 			}
 
-			// Fake out the REPL file (the only time we return a non-absolute path)
-			if string(component) == ".MPSPrompt" {
+			// Return a special recognisable (non-slash-prefixed) path for "puppet string" scripts
+			if i == len(components)-1 && isPuppetFile(string(component)) {
 				return string(component), 0
 			}
 
@@ -300,11 +300,8 @@ func tOpen() {
 
 	if openForkRefCounts[fkey] == 0 {
 		var buf []byte
-		if path == ".MPSPrompt" { // special name
-			fmt.Printf("• ")     // Mac-ish prompt character
-			stdinNonBlock(false) // insist on a full string
-			str, _ := bufin.ReadString('\n')
-			buf = []byte(unicodeToMacOrPanic(str))
+		if isPuppetFile(path) { // special name
+			buf = puppetFile(path)
 		} else if forkIsRsrc {
 			buf = resourceFork(path)
 		} else {
@@ -617,8 +614,8 @@ func tGetFInfo() { // also implements GetCatInfo
 		finfo := finderInfo(path)
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
 
-		// hack to make stdin files readable
-		if path == ".MPSPrompt" {
+		// hack to make puppet-string scripts executable
+		if isPuppetFile(path) {
 			copy(mem[pb+32:], "TEXTMPS ")
 		}
 	}
