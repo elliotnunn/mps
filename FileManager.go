@@ -10,7 +10,11 @@ import (
 )
 
 // a number for each directory encountered, usable as wdrefnum.w or dirid.l
-var dnums []string
+var dnums = []string{
+	"/", // current directory
+	"",  // parent of root, never used
+	"/", // root
+}
 
 // the contents of every open fork
 var openForks = make(map[forkKey][]byte)
@@ -91,7 +95,7 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 			path = filepath.Dir(path)
 		} else {
 			// Fake out the pipe
-			if path == tempRW && strings.HasPrefix(string(component), "MPW.MinPipe") {
+			if path == mpwFolder && strings.HasPrefix(string(component), "MPW.MinPipe") {
 				path = filepath.Join(systemFolder, "Temporary Items")
 			}
 

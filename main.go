@@ -382,9 +382,14 @@ func tOSDispatch() {
 
 		processAppSpec := readl(info + 56)
 		if processAppSpec != 0 { // construct our own FSSpec
-			writew(processAppSpec, 2)
-			writel(processAppSpec+2, uint32(get_macos_dnum(filepath.Dir(toolServer))))
-			writePstring(processAppSpec+6, unicodeToMacOrPanic(filepath.Base(toolServer)))
+			fcb := fcbFromRefnum(2) // hack, assumes app is opened first
+			fcbVPtr := readl(fcb + 20)
+			vcbVRefNum := readw(fcbVPtr + 78)
+			fcbDirID := readl(fcb + 58)
+			fcbCName := readPstring(fcb + 62)
+			writew(processAppSpec, vcbVRefNum)
+			writel(processAppSpec+2, fcbDirID)
+			writePstring(processAppSpec+6, fcbCName)
 		}
 
 		writed(info+8, 1)           // processNumber
@@ -631,16 +636,7 @@ func pathCvt(s string) string {
 	return string(onlyvolname) + string(ss)
 }
 
-//go:embed ToolServerVersions/ToolServer350.rsrc
-var toolServerResourceFork []byte
-
-var tempRW, tempRO, systemFolder, toolServer string
-
-//go:embed MPW.Help
-var helpFile []byte
-
-//go:embed SysErrs.err
-var errFile []byte
+var systemFolder, mpwFolder string
 
 var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
 
@@ -652,6 +648,10 @@ Usage:
 Environment variables:
 	MPSDEBUG=...                       # ` + allBugFlags + `
 	MPSRAW=[0..1]                      # don't convert paths in args to Mac
+	MPW=...                            # override default MPW path
+	                                   #    $HOME/mpw
+	                                   #    /usr/local/share/mpw
+	                                   #    /usr/share/mpw
 `
 
 func printUsageAndQuit() {
@@ -829,42 +829,14 @@ func main() {
 		tb_base + 0x3ff: tDebugStr,            // _DebugStr
 	}
 
-	var temp string
-	var err error
-	if temp, err = ioutil.TempDir("", "Embed"); err != nil {
-		panic("Failed to create temp directory")
-	}
-	defer os.RemoveAll(temp)
+	// Set CurVol to the MPW distribution
+	mpwFolder = mpwSearch()
+	get_macos_dnum(mpwFolder)
+	dnums[0] = mpwFolder
 
-	// tempRO contains scripts, tools, interfaces and libraries
-	tempRO = filepath.Join(temp, "RO")
-	os.Mkdir(tempRO, 0o777)
-
-	// tempRW contains ToolServer, System Folder, Prefs, various temp dirs
-	tempRW = filepath.Join(temp, "RW")
-	os.Mkdir(tempRW, 0o777)
-
-	systemFolder = filepath.Join(tempRW, "System Folder")
-	os.Mkdir(systemFolder, 0o777)
-
-	// Create ToolServer file
-	// TODO: replace this boilerplace with writeResourceFork or similar
-	toolServer := filepath.Join(tempRW, "ToolServer")
-	os.Mkdir(filepath.Join(tempRW, "RESOURCE.FRK"), 0o777)
-	os.Mkdir(filepath.Join(tempRW, "FINDER.DAT"), 0o777)
-	os.WriteFile(filepath.Join(tempRW, "ToolServer"), nil, 0o777)
-	os.WriteFile(filepath.Join(tempRW, "RESOURCE.FRK", "ToolServer"), toolServerResourceFork, 0o777)
-	os.WriteFile(filepath.Join(tempRW, "FINDER.DAT", "ToolServer"), []byte("APPLMPSX"), 0o77)
-
-	// Help and error files
-	os.WriteFile(filepath.Join(tempRW, "SysErrs.err"), errFile, 0o777)
-	os.WriteFile(filepath.Join(tempRW, "MPW.Help"), helpFile, 0o777)
-
-	dnums = []string{
-		filepath.Dir(toolServer),
-		"",
-		"/",
-	}
+	// System Folder is ephemeral, containing temp stuff mainly
+	systemFolder, _ = ioutil.TempDir("", "System Folder ")
+	defer os.RemoveAll(systemFolder)
 
 	mem = make([]byte, kHeap)
 
@@ -982,12 +954,9 @@ func main() {
 	push(32, 0)
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
-	pushw(2) // vol id
-	pushl(uint32(get_macos_dnum(filepath.Dir(toolServer))))
-	writePstring(fileNamePtr, unicodeToMacOrPanic(filepath.Base(toolServer)))
+	writePstring(fileNamePtr, "ToolServer")
 	pushl(fileNamePtr)                  // pointer to the file string
-	pushw(0)                            // permission
-	call_m68k(executable_atrap(0xac1a)) // _HOpenResFile ,autoPop
+	call_m68k(executable_atrap(0xad97)) // _OpenResFile ,autoPop
 
 	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
