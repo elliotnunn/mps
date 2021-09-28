@@ -51,7 +51,7 @@ func whichFormat(path string) int {
 }
 
 func existsAsFile(path string) bool {
-	stat, err := gFS.Stat(path)
+	stat, err := os.Stat(path)
 	return err == nil && stat.Mode().IsRegular()
 }
 
@@ -62,13 +62,13 @@ func finderInfo(path string) [16]byte {
 	switch whichFormat(path) {
 	case kFileExchange:
 		path2 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
-		if data, err := gFS.ReadFile(path2); err == nil {
+		if data, err := os.ReadFile(path2); err == nil {
 			copy(finfo[:], data)
 		}
 
 	case kRez:
 		path2 := path + ".idump"
-		if data, err := gFS.ReadFile(path2); err == nil {
+		if data, err := os.ReadFile(path2); err == nil {
 			copy(finfo[:], data)
 		}
 
@@ -87,7 +87,7 @@ func finderInfo(path string) [16]byte {
 }
 
 func dataFork(path string) []byte {
-	data, _ := gFS.ReadFile(path)
+	data, _ := os.ReadFile(path)
 
 	// Textfile conversion unique to Elliot's idump/rdump system
 	if whichFormat(path) == kRez {
@@ -104,10 +104,6 @@ func dataFork(path string) []byte {
 }
 
 func writeDataFork(path string, fork []byte) {
-	if !gFS.IsHostPath(path) {
-		return
-	}
-
 	os.WriteFile(path, fork, 0o666) // ignore error
 }
 
@@ -117,12 +113,12 @@ func resourceFork(path string) []byte {
 	switch whichFormat(path) {
 	case kFileExchange:
 		path2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
-		data, _ = gFS.ReadFile(path2) // accept a nonexistent file
+		data, _ = os.ReadFile(path2) // accept a nonexistent file
 
 	case kRez:
 		path2 := path + ".rdump"
 		var err error // variable shadowing???
-		data, err = gFS.ReadFile(path2)
+		data, err = os.ReadFile(path2)
 
 		// accept a nonexistent file as an empty data fork
 		if err != nil {
@@ -140,10 +136,6 @@ func resourceFork(path string) []byte {
 }
 
 func writeResourceFork(path string, fork []byte) {
-	if !gFS.IsHostPath(path) {
-		return
-	}
-
 	os.Create(path) // ignore error
 
 	switch whichFormat(path) {

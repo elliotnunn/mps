@@ -642,8 +642,6 @@ var helpFile []byte
 //go:embed SysErrs.err
 var errFile []byte
 
-var gFS UnionFS // use this for ReadFile, etc
-
 var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
 
 Usage:

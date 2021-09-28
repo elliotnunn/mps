@@ -134,7 +134,7 @@ func quickFile(path string) (number uint16, name macstring) {
 }
 
 func listdir(path string) ([]macstring, int) {
-	dirents, err := gFS.ReadDir(path)
+	dirents, err := os.ReadDir(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, -43 // fnfErr
