@@ -136,7 +136,11 @@ func resourceFork(path string) []byte {
 }
 
 func writeResourceFork(path string, fork []byte) {
-	os.Create(path) // ignore error
+	// Ensure that the main file exists
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err == nil {
+		f.Close()
+	}
 
 	switch whichFormat(path) {
 	case kFileExchange:
