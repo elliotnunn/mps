@@ -719,6 +719,7 @@ func main() {
 		os_base + 0x62:  tFreeMem,             // _PurgeSpace
 		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
 		os_base + 0x64:  tClrD0,               // _MoveHHi
+		os_base + 0x66:  tNewEmptyHandle,      // _NewEmptyHandle
 		os_base + 0x69:  tHGetState,           // _HGetState
 		os_base + 0x6a:  tHSetState,           // _HSetState
 		os_base + 0x90:  tSysEnvirons,         // _SysEnvirons

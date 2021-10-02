@@ -78,6 +78,12 @@ func tNewHandle() {
 	writel(a0ptr, handle)
 }
 
+func tNewEmptyHandle() {
+	writel(d0ptr, 0)
+	tNewHandle()
+	writel(readl(a0ptr), 0) // points nowhere!
+}
+
 func tDisposHandle() {
 	ptr := readl(readl(a0ptr))
 	delete(master_ptrs, ptr)
