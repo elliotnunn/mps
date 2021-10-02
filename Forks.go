@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +55,10 @@ func existsAsFile(path string) bool {
 
 // Assume the existence of the file
 func finderInfo(path string) [16]byte {
+	return finderInfoTextHack(path, true)
+}
+
+func finderInfoTextHack(path string, textHack bool) [16]byte {
 	finfo := [16]byte{'?', '?', '?', '?', '?', '?', '?', '?', 0}
 
 	switch whichFormat(path) {
@@ -80,17 +85,28 @@ func finderInfo(path string) [16]byte {
 		}
 	}
 
+	// Present as text file if persuaded that it is one
+	if textHack && string(finfo[:4]) == "????" {
+		if data, err := os.ReadFile(path); err == nil {
+			if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
+				if _, ok := unicodeToMac(string(data)); ok {
+					copy(finfo[:], "TEXTMPS ")
+				}
+			}
+		}
+	}
+
 	return finfo
 }
 
 func dataFork(path string) []byte {
 	data, _ := os.ReadFile(path)
 
-	// Textfile conversion unique to Elliot's idump/rdump system
-	if whichFormat(path) == kRez {
-		finfo := finderInfo(path)
-		if string(finfo[:4]) == "TEXT" || string(finfo[:4]) == "ttro" {
-			// Convert encoding if possible
+	// Convert the data fork if persuaded it is a text file
+	finfo := finderInfoTextHack(path, false)
+	ftype := string(finfo[:4])
+	if ftype == "TEXT" || ftype == "????" {
+		if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
 			if data2, ok := unicodeToMac(string(data)); ok {
 				data = []byte(data2)
 			}
