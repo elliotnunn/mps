@@ -842,7 +842,7 @@ func main() {
 	mem = make([]byte, kHeap)
 
 	// Poison low memory
-	for i := uint32(0x40); i < kStackBase; i += 2 {
+	for i := uint32(0xc0); i < kStackBase; i += 2 {
 		writew(i, 0x68f1)
 	}
 
@@ -923,18 +923,25 @@ func main() {
 	// Misc globals
 	writeb(0x12f, 3)                            // CPUFlag = 68030
 	writew(0x15a, 0x0755)                       // SysVersion
+	writel(0x16a, 0)                            // Ticks
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writel(0x2b6, kExpandMem)
-	writel(0x2f4, 0)          // CaretTime = 0 ticks
-	writel(0x316, 0)          // we don't implement the 'MPGM' interface
-	writel(0x31a, 0x00ffffff) // Lo3Bytes
-	writel(0x33c, 0)          // IAZNotify = nothing to do when swapping worlds
+	writel(0x2f4, 0)            // CaretTime = 0 ticks
+	writel(0x316, 0)            // we don't implement the 'MPGM' interface
+	writel(0x31a, 0x00ffffff)   // Lo3Bytes
+	writel(0x33c, 0)            // IAZNotify = nothing to do when swapping worlds
+	writel(0x3e2, 0)            // FSQueueHook
+	writel(0x8e0, 0)            // JSwapFont
+	writel(0x904, readl(a5ptr)) // CurrentA5
 	writePstring(0x910, "ToolServer")
 	writel(0x9d6, 0)          // WindowList empty
 	writel(0xa02, 0x00010001) // OneOne
 	writel(0xa06, 0xffffffff) // MinusOne
 	writel(0xa1c, kMenuList)  // MenuList empty
+	writew(0xa5e, 0xffff)     // ResLoad = true
 	writel(0xa50, 0)          // TopMapHndl
+	writew(0xb22, 0)          // HWCfgFlags = can't do anything
+	writel(0xcb0, 0x00000100) // MMUFlags.b MMUType.b MMU32bit.b
 
 	// Empty app parameters
 	writel(d0ptr, 128)
