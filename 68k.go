@@ -42,7 +42,16 @@ const (
 	spptr = regs + 60
 )
 
+const memcheck = false
+
+func mempanic(addr uint32) {
+	panic(fmt.Sprintf("bad memory access at %x", addr))
+}
+
 func read(numbytes uint32, addr uint32) (val uint32) {
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		mempanic(addr)
+	}
 	for i := uint32(0); i < numbytes; i++ {
 		val <<= 8
 		val += uint32(mem[addr+i])
@@ -55,14 +64,23 @@ func readd(addr uint32) (val uint64) {
 }
 
 func readl(addr uint32) (val uint32) {
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		mempanic(addr)
+	}
 	return (uint32(mem[addr]) << 24) | (uint32(mem[addr+1]) << 16) | (uint32(mem[addr+2]) << 8) | uint32(mem[addr+3])
 }
 
 func readw(addr uint32) (val uint16) {
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		mempanic(addr)
+	}
 	return (uint16(mem[addr]) << 8) | uint16(mem[addr+1])
 }
 
 func readb(addr uint32) (val uint8) {
+	if memcheck && mem[addr&^1] == 0x68 && mem[(addr&^1)+1] == 0xf1 {
+		mempanic(addr)
+	}
 	return uint8(mem[addr])
 }
 
