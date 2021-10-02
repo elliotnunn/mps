@@ -180,7 +180,7 @@ func tPtrToXHand() { // copy to existing handle
 	srcPtr := readl(a0ptr)
 	dstHndl := readl(a1ptr)
 	size := readl(d0ptr)
-	writel(a0ptr, size)
+	writel(a0ptr, dstHndl)
 	tSetHandleSize() // no need to go thru trap dispatcher
 	dstPtr := readl(dstHndl)
 	copy(mem[dstPtr:][:size], mem[srcPtr:][:size])
