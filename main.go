@@ -880,7 +880,7 @@ func main() {
 	writel(0x2a6, kFakeHeapHeader)     // SysZone
 	writel(0x2aa, kFakeHeapHeader)     // ApplZone
 	writel(kFakeHeapHeader, 0xffffffe) // bkLim
-	writel(0x130, 0)                   // ApplLimit
+	writel(0x130, 0xffffffe)           // ApplLimit
 
 	// 1 Drive Queue Element
 	writew(0x308, 0)      // DrvQHdr.QFlags
