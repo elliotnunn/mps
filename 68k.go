@@ -1676,14 +1676,7 @@ func printState() {
 	fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
 	fmt.Println("")
 
-	printSeg := ""
-	for i, segOffset := range gSegmentOffsets {
-		if pc >= segOffset {
-			printSeg = fmt.Sprintf("%s+%x", gSegmentNames[i], pc-segOffset)
-		}
-	}
-
-	fmt.Printf("%x: %s %s %04x\n\n", pc, printSeg, printName, readw(pc))
+	fmt.Printf("%x: %s %s %04x\n\n", pc, whichSegmentIs(pc), printName, readw(pc))
 }
 
 func call_m68k(addr uint32) {

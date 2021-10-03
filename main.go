@@ -46,9 +46,6 @@ func tSetTrapAddress() {
 
 // Segment Loader Toolbox traps
 
-var gSegmentOffsets []uint32
-var gSegmentNames []string
-
 func tLoadSeg() {
 	save := readRegs()
 
@@ -58,9 +55,6 @@ func tLoadSeg() {
 	pushw(segNum)
 	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
 	segPtr := readl(popl())
-
-	gSegmentOffsets = append(gSegmentOffsets, segPtr)
-	gSegmentNames = append(gSegmentNames, fmt.Sprintf("seg%d", segNum))
 
 	offset := uint32(readw(segPtr))    // offset of first entry within jump table
 	count := uint32(readw(segPtr + 2)) // number of jump table entries

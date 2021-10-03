@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 var bigEndian = binary.BigEndian
@@ -169,6 +170,48 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 	// Record memory block in map
 	writel(idEntry+8, handle)
 	return handle
+}
+
+var (
+	curSegStart = uint32(1)
+	curSegEnd   = uint32(0)
+	curSegName  = ""
+)
+
+func whichSegmentIs(pc uint32) string {
+	if curSegStart <= pc && pc < curSegEnd {
+		goto got
+	}
+
+	// Search every loaded resource
+	for _, resMapAddr := range allResMaps() {
+		resMap := dumpMap(mem[resMapAddr:])
+		for _, entry := range resMap.list {
+			if entry.tType == 0x434f4445 {
+				if entry.rHndl != 0 {
+					curSegStart = readl(entry.rHndl)
+					curSegEnd = curSegStart + block_sizes[curSegStart]
+					if curSegStart <= pc && pc < curSegEnd {
+						fcb := fcbFromRefnum(resMap.mRefNum)
+						fname := macToUnicode(readPstring(fcb + 62))
+
+						curSegName = fmt.Sprintf("%s %s(%x)", fname, macToUnicode(entry.name), entry.rID)
+
+						goto got
+					}
+				}
+			}
+		}
+	}
+
+	// We lose
+	curSegStart = 1
+	curSegEnd = 0
+	return ""
+
+	// We win
+got:
+	return fmt.Sprintf("%s+%x", curSegName, pc-curSegStart)
 }
 
 func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
