@@ -922,9 +922,12 @@ func main() {
 
 	// Misc globals
 	writeb(0x12f, 3)                            // CPUFlag = 68030
+	writeb(0x12c, 0)                            // DskVerify = don't care
+	writeb(0x12d, 0)                            // LoadTrap = off
 	writew(0x15a, 0x0755)                       // SysVersion
 	writel(0x16a, 0)                            // Ticks
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
+	writew(0x28e, 0x3fff)                       // ROM85
 	writel(0x2b6, kExpandMem)
 	writel(0x2f4, 0)            // CaretTime = 0 ticks
 	writel(0x316, 0)            // we don't implement the 'MPGM' interface
@@ -941,6 +944,8 @@ func main() {
 	writew(0xa5e, 0xffff)     // ResLoad = true
 	writel(0xa50, 0)          // TopMapHndl
 	writew(0xb22, 0)          // HWCfgFlags = can't do anything
+	writeb(0xbb2, 0xff)       // SegHiEnable = no need to disable MoveHHi
+	writeb(0xbb3, 0xff)       // FDevDisable = don't care
 	writel(0xcb0, 0x00000100) // MMUFlags.b MMUType.b MMU32bit.b
 
 	// Empty app parameters
@@ -978,6 +983,7 @@ func main() {
 	jtsize := readl(code0 + 8)
 	jtoffset := readl(code0 + 12)
 
+	writel(0x934, jtoffset) // CurJTOffset
 	copy(mem[kA5World+jtoffset:][:jtsize], mem[code0+16:][:jtsize])
 
 	initPuppetStrings(os.Args[1:])
