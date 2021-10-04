@@ -927,6 +927,7 @@ func main() {
 	writeb(0x12d, 0)                            // LoadTrap = off
 	writew(0x15a, 0x0755)                       // SysVersion
 	writel(0x16a, 1)                            // Ticks
+	writel(0x20c, 0xb492f400)                   // Time = 2000-01-01 00:00:00
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writew(0x28e, 0x3fff)                       // ROM85
 	writel(0x2b6, kExpandMem)
