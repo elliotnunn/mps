@@ -179,9 +179,17 @@ func writeResourceFork(path string, fork []byte) {
 }
 
 func deleteForks(path string) {
-	os.Remove(path)
-	os.Remove(path + ".idump")
-	os.Remove(path + ".rdump")
-	os.Remove(filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path)))
-	os.Remove(filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path)))
+	for _, p := range underlyingPaths(path) {
+		os.Remove(p)
+	}
+}
+
+func underlyingPaths(path string) []string {
+	return []string{
+		path,
+		path + ".idump",
+		path + ".rdump",
+		filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path)),
+		filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path)),
+	}
 }
