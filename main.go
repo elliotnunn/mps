@@ -376,7 +376,7 @@ func tOSDispatch() {
 
 		processAppSpec := readl(info + 56)
 		if processAppSpec != 0 { // construct our own FSSpec
-			fcb := fcbFromRefnum(2) // hack, assumes app is opened first
+			fcb := fcbFromRefnum(readw(0x900)) // CurApRefNum
 			fcbVPtr := readl(fcb + 20)
 			vcbVRefNum := readw(fcbVPtr + 78)
 			fcbDirID := readl(fcb + 58)
@@ -1041,6 +1041,13 @@ func main() {
 	writePstring(fileNamePtr, "ToolServer")
 	pushl(fileNamePtr)                  // pointer to the file string
 	call_m68k(executable_atrap(0xad97)) // _OpenResFile ,autoPop
+	appRefNum := popw()
+	writew(0x900, appRefNum) // CurApRefNum
+
+	if appRefNum == 0xffff {
+		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dnums[0])
+		os.Exit(1)
+	}
 
 	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
