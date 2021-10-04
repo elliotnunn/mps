@@ -822,13 +822,14 @@ func main() {
 		tb_base + 0x198: tUseResFile,          // _UseResFile
 		tb_base + 0x199: tUpdateResFile,       // _UpdateResFile
 		tb_base + 0x19a: tCloseResFile,        // _CloseResFile
-		tb_base + 0x19b: tPop2,                // _SetResLoad
+		tb_base + 0x19b: tSetResLoad,          // _SetResLoad
 		tb_base + 0x19c: tCountResources,      // _CountResources
 		tb_base + 0x19d: tGetIndResource,      // _GetIndResource
 		tb_base + 0x19e: tCountTypes,          // _CountTypes
 		tb_base + 0x19f: tGetIndType,          // _GetIndType
 		tb_base + 0x1a0: tGetResource,         // _GetResource
 		tb_base + 0x1a1: tGetNamedResource,    // _GetNamedResource
+		tb_base + 0x1a2: tLoadResource,        // _LoadResource
 		tb_base + 0x1a3: tReleaseResource,     // _ReleaseResource
 		tb_base + 0x1a4: tHomeResFile,         // _HomeResFile
 		tb_base + 0x1a5: tSizeRsrc,            // _SizeRsrc

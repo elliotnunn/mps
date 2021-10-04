@@ -276,6 +276,10 @@ func tResError() {
 	writew(readl(spptr), ResError)
 }
 
+func tSetResLoad() {
+	writeb(0xa5e, popb())
+}
+
 func tCurResFile() {
 	CurMap := readw(0xa5a)
 	writew(readl(spptr), CurMap)
@@ -493,6 +497,17 @@ found:
 	} else {
 		setResError(0)
 	}
+}
+
+func tLoadResource() {
+	resMap, typeEntry, idEntry, ok := lookupResHandle(popl())
+	if !ok {
+		setResError(-192) // resNotFound
+		return
+	}
+
+	resToHand(resMap, typeEntry, idEntry, true)
+	setResError(0)
 }
 
 func tGetPattern() {
