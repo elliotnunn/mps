@@ -651,6 +651,9 @@ func tSetFInfo() {
 	}
 
 	if stat, err := os.Stat(path); err == nil && !stat.Mode().IsDir() {
+		var finfo [16]byte
+		copy(finfo[:], mem[pb+32:])
+		writeFinderInfo(path, finfo)
 	}
 }
 

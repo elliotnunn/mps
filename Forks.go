@@ -99,6 +99,38 @@ func finderInfoTextHack(path string, textHack bool) [16]byte {
 	return finfo
 }
 
+func writeFinderInfo(path string, finfo [16]byte) {
+	// We do not care for the last few bytes
+	for i := 8; i < 16; i++ {
+		finfo[i] = 0
+	}
+
+	switch whichFormat(path) {
+	case kFileExchange:
+		path2 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+		if string(finfo[:8]) == "????????" {
+			os.Remove(path2)
+			os.Remove(filepath.Dir(path2))
+		} else {
+			os.Mkdir(filepath.Dir(path2), 0o755)
+			os.WriteFile(path2, finfo[:], 0o644)
+		}
+
+	case kRez:
+		path2 := path + ".idump"
+		if string(finfo[:8]) == "????????" {
+			os.Remove(path2)
+		} else {
+			os.WriteFile(path2, finfo[:8], 0o644)
+		}
+
+	case kOSX:
+		var bigfinfo [32]byte
+		copy(bigfinfo[:8], finfo[:8])
+		setDarwinFInfo(path, bigfinfo)
+	}
+}
+
 func dataFork(path string) []byte {
 	data, _ := os.ReadFile(path)
 
