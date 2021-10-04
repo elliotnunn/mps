@@ -640,22 +640,18 @@ func tSetFInfo() {
 	paramBlkSetup()
 	defer paramBlkTeardown()
 
-	//     ioNamePtr := readl(pb + 18)
-	//     ioName := readPstring(ioNamePtr)
-	//
-	//     // idiom to get dirID for hierarchical call, but fall back on ioVRefNum
-	//     number := (readw(pb + 48 + 2) if trap & 0x200 else 0) || readw(pb + 22)
-	//
-	//     path = get_host_path(number=number, string=ioName)
-	//     if !path.exists() { // fnfErr
-	//         return -43
-	//     }
-	//     idump = path.parent / (path.name + ".idump")
-	//     typecreator = mem[a0+32:a0+40]
-	//     if typecreator != b"????????" || idump.exists() {
-	//         idump.write_bytes(typecreator)
-	//     }
-	//     // todo: mtime
+	pb := readl(a0ptr)
+	ioName := readPstring(readl(pb + 18))
+	dirid := get_vol_or_dir()
+
+	path, errno := get_host_path(dirid, ioName, true)
+	if errno != 0 {
+		paramBlkResult(errno)
+		return
+	}
+
+	if stat, err := os.Stat(path); err == nil && !stat.Mode().IsDir() {
+	}
 }
 
 func tGetEOF() {
@@ -847,6 +843,9 @@ func tFSDispatch() {
 
 	case 9: // GetCatInfo
 		tGetFInfo()
+
+	case 10: // SetCatInfo
+		tSetFInfo()
 
 	case 26: // OpenDF
 		tOpen()

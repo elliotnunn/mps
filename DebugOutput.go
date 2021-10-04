@@ -239,6 +239,7 @@ func logFileMgrTrap(num uint16, isPre bool) {
 	case 0x0d:
 		trapName("_SetFInfo")
 		if isPre {
+			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
 			dumpPBField("ioDirID?")
 			dumpPBField("ioFlFndrInfo")
@@ -422,6 +423,21 @@ func logFileMgrTrap(num uint16, isPre bool) {
 					dumpPBField("ioFlParID")
 					dumpPBField("ioFlClpSiz")
 				}
+			}
+
+		case 10:
+			trapName("_FSDispatch _SetCatInfo")
+			if isPre {
+				dumpPBField("ioNamePtr")
+				dumpPBField("ioVRefNum")
+				dumpPBField("ioDirID")
+				dumpPBField("ioFlAttrib")
+				dumpPBField("ioFlFndrInfo")
+				dumpPBField("ioFlCrDat")
+				dumpPBField("ioFlMdDat")
+				dumpPBField("ioFlBkDat")
+			} else {
+				dumpPBField("ioNamePtr")
 			}
 
 		case 26:
