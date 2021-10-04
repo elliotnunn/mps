@@ -926,7 +926,7 @@ func main() {
 	writeb(0x12c, 0)                            // DskVerify = don't care
 	writeb(0x12d, 0)                            // LoadTrap = off
 	writew(0x15a, 0x0755)                       // SysVersion
-	writel(0x16a, 0)                            // Ticks
+	writel(0x16a, 1)                            // Ticks
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writew(0x28e, 0x3fff)                       // ROM85
 	writel(0x2b6, kExpandMem)

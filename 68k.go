@@ -1679,6 +1679,8 @@ func printState() {
 	fmt.Printf("%x: %s %s %04x\n\n", pc, whichSegmentIs(pc), printName, readw(pc))
 }
 
+var instCount uint16 = 0
+
 func call_m68k(addr uint32) {
 	const magic_return = 0
 
@@ -1687,6 +1689,12 @@ func call_m68k(addr uint32) {
 	pc = addr
 
 	for pc != magic_return {
+		// Update Ticks
+		instCount++
+		if instCount == 0 {
+			writel(0x16a, readl(0x16a)+1)
+		}
+
 		if gDebugStackTrace {
 			printCallStack()
 		}
