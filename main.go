@@ -397,6 +397,9 @@ func tOSDispatch() {
 		writel(info+48, 1)          // processLaunchDate
 		writel(info+52, 1)          // processActiveTime
 
+	case 0x15, 0x16, 0x18, 0x1d, 0x1e, 0x1f, 0x20:
+		mfMemRoutine(selector)
+
 	default:
 		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
 	}

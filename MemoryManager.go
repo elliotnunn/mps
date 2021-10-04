@@ -247,3 +247,41 @@ func setHandleBlock(handle uint32, contents []byte) {
 
 	copy(mem[readl(handle):], contents)
 }
+
+func mfMemRoutine(selector uint16) {
+	switch selector {
+	case 0x15: // FUNCTION TempMaxMem (VAR grow: Size): Size;
+		writel(popl(), 0) // the weird grow parameter
+		writel(readl(spptr), 0x7ffffffe)
+
+	case 0x16: // FUNCTION TempTopMem: Ptr;
+		writel(readl(spptr), 0x7ffffffe)
+
+	case 0x18: // FUNCTION TempFreeMem: LONGINT;
+		writel(readl(spptr), 0x7ffffffe)
+
+	case 0x1d: // FUNCTION TempNewHandle(logicalSize: Size;VAR resultCode: OSErr): Handle;
+		writew(popl(), 0) // resultCode = noErr
+		size := popl()
+
+		writel(d0ptr, size)
+		tNewHandle()
+		handle := readl(a0ptr)
+
+		writel(readl(spptr), handle)
+
+	case 0x1e, 0x1f: // PROCEDURE TempH[Un]Lock(h: Handle;VAR resultCode: OSErr);
+		writew(popl(), 0) // resultCode = noErr
+		popl()            // discard handle arg
+
+	case 0x20: // PROCEDURE TempDisposeHandle(h: Handle;VAR resultCode: OSErr);
+		writew(popl(), 0) // resultCode = noErr
+		handle := popl()
+
+		writel(a0ptr, handle)
+		tDisposHandle()
+
+	default:
+		panic("mfMemRoutine: unknown MF temp mem selector")
+	}
+}
