@@ -888,6 +888,7 @@ func main() {
 		tb_base + 0x1e5: tPop2,                // _InitPack
 		tb_base + 0x1e6: tNop,                 // _InitAllPacks
 		tb_base + 0x1ea: tPack3,               // _Pack3
+		tb_base + 0x1ed: tPack6,               // _Pack6
 		tb_base + 0x1ef: tPtrAndHand,          // _PtrAndHand
 		tb_base + 0x1f0: tLoadSeg,             // _LoadSeg
 		tb_base + 0x1f1: tPop4,                // _UnloadSeg
@@ -1042,8 +1043,18 @@ func main() {
 
 	// With resources
 	writel(0xa50, newHandleFrom(mkMap(mapStruct{ // TopMapHndl
-		mRefNum: readw(0xa58),
+		mRefNum: readw(0xa58), mAttr: 0x2000, // mAttr and rAttr indicate dirty map and resources
+		list: []resourceStruct{
+			{tType: 0x494e544c, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: 1}, // INTL (old style)
+			{tType: 0x494e544c, rID: 1, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: 1}, // INTL (old style)
+			{tType: 0x69746c30, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: 1}, // itl0 (new style)
+			{tType: 0x69746c31, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: 1}, // itl1 (new style)
+		},
 	})))
+
+	// Serialise the resource file so that resources can be recovered after being detached
+	pushw(readw(0xa58))
+	tUpdateResFile()
 
 	push(32, 0)
 	fileNamePtr := readl(spptr)
