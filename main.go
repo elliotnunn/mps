@@ -757,6 +757,9 @@ func main() {
 		os_base + 0x4d:  tClrD0A0,             // _PurgeMem
 		os_base + 0x54:  tUprString,           // _UprString
 		os_base + 0x55:  tNop,                 // _StripAddress
+		os_base + 0x58:  tClrD0,               // _InsTime
+		os_base + 0x59:  tClrD0,               // _RmvTime
+		os_base + 0x5a:  tClrD0,               // _PrimeTime
 		os_base + 0x60:  tFSDispatch,          // _FSDispatch
 		os_base + 0x62:  tFreeMem,             // _PurgeSpace
 		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
