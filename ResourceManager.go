@@ -57,6 +57,10 @@ func lookupResHandle(handle uint32) (resMap uint32, typeEntry uint32, idEntry ui
 
 // Given a refnum, get the corresponding map pointer
 func lookupMapRefnum(refnum uint16) (resMap uint32, ok bool) {
+	if refnum == 0 {
+		refnum = readw(0xa58) // 0 means SysMap
+	}
+
 	for _, resMap := range allResMaps() {
 		if readw(resMap+20) == refnum {
 			return resMap, true

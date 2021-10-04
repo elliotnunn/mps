@@ -285,3 +285,21 @@ func mfMemRoutine(selector uint16) {
 		panic("mfMemRoutine: unknown MF temp mem selector")
 	}
 }
+
+// Utility routines for other code
+
+func newHandleFrom(data []byte) uint32 {
+	writel(d0ptr, uint32(len(data)))
+	call_m68k(executable_atrap(0xa122))
+	handle := readl(a0ptr)
+	copy(mem[readl(handle):], data)
+	return handle
+}
+
+func newPtrFrom(data []byte) uint32 {
+	writel(d0ptr, uint32(len(data)))
+	call_m68k(executable_atrap(0xa11e))
+	ptr := readl(a0ptr)
+	copy(mem[ptr:], data)
+	return ptr
+}

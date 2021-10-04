@@ -1035,6 +1035,16 @@ func main() {
 	os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
 
+	// Reserve fcb 2 for the System resource map
+	writew(0xa58, 2)            // SysMap = first possible FCB
+	writew(0xa5a, readw(0xa58)) // CurMap = SysMap
+	writel(fcbFromRefnum(readw(0xa58)), 1)
+
+	// With resources
+	writel(0xa50, newHandleFrom(mkMap(mapStruct{ // TopMapHndl
+		mRefNum: readw(0xa58),
+	})))
+
 	push(32, 0)
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
@@ -1048,8 +1058,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dnums[0])
 		os.Exit(1)
 	}
-
-	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
 	pushl(0)                            // handle return
 	pushl(0x434f4445)                   // CODE
