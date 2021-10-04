@@ -411,43 +411,64 @@ func tGetFNum() {
 	writed(numPtr, 0)
 }
 
-var months = []int{
-	31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // leap year
-	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // common years...
-	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
-	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
-}
-
 func tSecs2Date() {
 	secs := readl(d0ptr)
 	rec := readl(a0ptr)
 
-	// simple: hh:mm:ss
-	writew(rec+10, uint16(secs%60))          // second
-	writew(rec+8, uint16((secs/60)%60))      // minute
-	writew(rec+6, uint16((secs/(60*60))%24)) // hour
+	y, m, d := secs2ymd(secs)
+	writew(rec, y)
+	writew(rec+2, m)
+	writew(rec+4, d)
 
-	// all further calculations depend only this
-	day := secs / (24 * 60 * 60)
+	h, m, s := secs2hms(secs)
+	writew(rec+6, h)
+	writew(rec+8, m)
+	writew(rec+10, s)
 
-	// simple: day of week
-	writew(rec+12, uint16((day+5)%7+1))
+	dow := secs2dow(secs)
+	writew(rec+12, dow)
+}
 
-	// more involved: leap year calculation (can assume EVERY 4th is a leap year)
+func secs2hms(secs uint32) (h, m, s uint16) {
+	h = uint16((secs / (60 * 60)) % 24)
+	m = uint16((secs / 60) % 60)
+	s = uint16(secs % 60)
+	return
+}
+
+func secs2dow(secs uint32) uint16 {
+	d := uint16(secs / (24 * 60 * 60))
+	return (d+5)%7 + 1
+}
+
+func secs2ymd(secs uint32) (y, m, d uint16) {
+	d = uint16(secs / (24 * 60 * 60))
+
+	// a quad is a leap-common-common-common cycle
 	const daysPerQuad = 366 + 365 + 365 + 365
-	year := day / daysPerQuad * 4
-	day %= daysPerQuad
+	y = d / daysPerQuad * 4
+	d %= daysPerQuad
 
-	for month, mlen := range months {
-		if day < uint32(mlen) {
-			writew(rec, uint16(1904+year+uint32(month)/12)) // year
-			writew(rec+2, uint16(uint32(month)%12+1))       // month
-			writew(rec+4, uint16(day+1))                    // day
+	for m_, mlen := range quadMonths {
+		m = uint16(m_)
+		if d < mlen {
+			y = 1904 + y + m/12
+			m = m%12 + 1
+			d += 1
 			break
 		}
 
-		day -= uint32(mlen)
+		d -= uint16(mlen)
 	}
+
+	return
+}
+
+var quadMonths = []uint16{
+	31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // leap year
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // common years...
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
 }
 
 // Trivial do-nothing traps
