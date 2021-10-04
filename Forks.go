@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Storage format
@@ -150,6 +151,7 @@ func dataFork(path string) []byte {
 
 func writeDataFork(path string, fork []byte) {
 	os.WriteFile(path, fork, 0o666) // ignore error
+	nowMtime(path)
 }
 
 func resourceFork(path string) []byte {
@@ -208,6 +210,63 @@ func writeResourceFork(path string, fork []byte) {
 	case kOSX:
 		os.WriteFile(path+"/..namedfork/rsrc", fork, 0o666) // ignore error
 	}
+
+	nowMtime(path)
+}
+
+var frozenTime = time.Now()
+
+// Map a zero Unix time to a zero Macintosh time
+// (which tends to indicate a corrupt file)
+func mtime(path string) uint32 {
+	var modTime time.Time
+	// Check forks, but ignore the files containing Finder info
+	for _, p := range []string{path, path + ".rdump", filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))} {
+		if stat, err := os.Stat(p); err == nil {
+			t := stat.ModTime()
+			if t.Unix() == 0 {
+				return 0
+			}
+			if t.After(modTime) {
+				modTime = t
+			}
+		}
+	}
+
+	// Lowmem Time is unchanging and corresponds with frozenTime
+	macTime := int64(readl(0x20c)) + int64(modTime.Sub(frozenTime))
+
+	// Clip to earliest and latest practical Mac times
+	if macTime < 0x80000000 {
+		return 0x80000000
+	}
+	if macTime > 0xffffffff {
+		return 0xffffffff
+	}
+
+	return uint32(macTime)
+}
+
+func writeMtime(path string, macTime uint32) {
+	// Do not set the time if it would make no difference anyway,
+	// to prevent subtly altering files when setting only the type/creator
+	if macTime == mtime(path) {
+		return
+	}
+
+	t := time.Unix(0, 0)
+	if macTime != 0 {
+		t = frozenTime.Add(time.Duration(int64(macTime) - int64(readl(0x20c))))
+	}
+
+	// Do not touch the files containing the Finder info
+	for _, p := range []string{path, path + ".rdump", filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))} {
+		os.Chtimes(p, t, t)
+	}
+}
+
+func nowMtime(path string) {
+	writeMtime(path, readl(0x20c))
 }
 
 func deleteForks(path string) {

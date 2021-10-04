@@ -632,8 +632,9 @@ func tGetFInfo() { // also implements GetCatInfo
 		writel(pb+100, parID) // ioFlParID
 	}
 
-	writel(pb+72, 0xf0000000) // ioFlCrDat
-	writel(pb+76, 0xf0000000) // ioFlMdDat
+	t := mtime(path)
+	writel(pb+72, t) // ioFlCrDat
+	writel(pb+76, t) // ioFlMdDat
 }
 
 func tSetFInfo() {
@@ -654,6 +655,8 @@ func tSetFInfo() {
 		var finfo [16]byte
 		copy(finfo[:], mem[pb+32:])
 		writeFinderInfo(path, finfo)
+
+		writeMtime(path, readl(pb+76)) // ioFlMdDat
 	}
 }
 
