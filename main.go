@@ -408,6 +408,45 @@ func tGetFNum() {
 	writed(numPtr, 0)
 }
 
+var months = []int{
+	31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // leap year
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, // common years...
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+}
+
+func tSecs2Date() {
+	secs := readl(d0ptr)
+	rec := readl(a0ptr)
+
+	// simple: hh:mm:ss
+	writew(rec+10, uint16(secs%60))          // second
+	writew(rec+8, uint16((secs/60)%60))      // minute
+	writew(rec+6, uint16((secs/(60*60))%24)) // hour
+
+	// all further calculations depend only this
+	day := secs / (24 * 60 * 60)
+
+	// simple: day of week
+	writew(rec+12, uint16((day+5)%7+1))
+
+	// more involved: leap year calculation (can assume EVERY 4th is a leap year)
+	const daysPerQuad = 366 + 365 + 365 + 365
+	year := day / daysPerQuad * 4
+	day %= daysPerQuad
+
+	for month, mlen := range months {
+		if day < uint32(mlen) {
+			writew(rec, uint16(1904+year+uint32(month)/12)) // year
+			writew(rec+2, uint16(uint32(month)%12+1))       // month
+			writew(rec+4, uint16(day+1))                    // day
+			break
+		}
+
+		day -= uint32(mlen)
+	}
+}
+
 // Trivial do-nothing traps
 
 func tUnimplemented() {
@@ -809,6 +848,7 @@ func main() {
 		tb_base + 0x1bd: tPop10RetZero,        // _GetNewWindow
 		tb_base + 0x1c0: tPop2RetZero,         // _GetNewMBar
 		tb_base + 0x1c4: tOpenRFPerm,          // _OpenRFPerm
+		tb_base + 0x1c6: tSecs2Date,           // _Secs2Date
 		tb_base + 0x1c8: tNop,                 // _SysBeep
 		tb_base + 0x1c9: tSysError,            // _SysError
 		tb_base + 0x1cc: tNop,                 // _TEInit
