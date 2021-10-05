@@ -799,17 +799,21 @@ func tRmveResource() {
 		deep := dumpMap(getPtrBlock(resMap))
 		for i, res := range deep.list {
 			if res.rHndl == handle {
-				deep.list = append(deep.list[:i], deep.list[i+1:]...)
-				break
+				if res.rAttr&0x20 != 0 { // not purgeable
+					setResError(-196) // rmvResFailed
+					return
+				} else {
+					writeb(handle+4, readb(handle+4)&^0x20) // orphan the handle
+					deep.list = append(deep.list[:i], deep.list[i+1:]...)
+					setHandleBlock(master_ptrs[resMap], mkMap(deep))
+					setResError(0)
+					return
+				}
 			}
 		}
-		setHandleBlock(master_ptrs[resMap], mkMap(deep))
-
-		setResError(0) // noErr
-	} else {
-		setResError(-196) // rmvResFailed
 	}
 
+	setResError(-196) // rmvResFailed
 }
 
 type mapStruct struct {
