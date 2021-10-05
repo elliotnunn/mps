@@ -430,10 +430,14 @@ found:
 }
 
 func tReleaseResource() {
-	if _, _, idEntry, ok := lookupResHandle(popl()); ok {
+	handle := popl()
+	if _, _, idEntry, ok := lookupResHandle(handle); ok {
 		// If the resChanged bit is set, then fail silently
 		if readb(idEntry+4)&1 == 0 {
 			writel(idEntry+8, 0) // zero the handle record
+
+			writel(a0ptr, handle)
+			call_m68k(executable_atrap(0xa023)) // _DisposHandle
 		}
 
 		setResError(0) // noErr
