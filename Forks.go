@@ -234,7 +234,7 @@ func mtime(path string) uint32 {
 	}
 
 	// Lowmem Time is unchanging and corresponds with frozenTime
-	macTime := int64(readl(0x20c)) + int64(modTime.Sub(frozenTime))
+	macTime := int64(readl(0x20c)) + int64(modTime.Sub(frozenTime))/1e9
 
 	// Clip to earliest and latest practical Mac times
 	if macTime < 0x80000000 {
@@ -256,7 +256,7 @@ func writeMtime(path string, macTime uint32) {
 
 	t := time.Unix(0, 0)
 	if macTime != 0 {
-		t = frozenTime.Add(time.Duration(int64(macTime) - int64(readl(0x20c))))
+		t = frozenTime.Add(time.Duration((int64(macTime) - int64(readl(0x20c))) * 1e9))
 	}
 
 	// Do not touch the files containing the Finder info
