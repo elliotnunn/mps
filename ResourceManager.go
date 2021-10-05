@@ -167,6 +167,9 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 		copy(mem[readl(handle):], data)
 	}
 
+	// Declare block to be a resource
+	writeb(handle+4, readb(handle+4)|0x20)
+
 	// Record memory block in map
 	writel(idEntry+8, handle)
 	return handle
