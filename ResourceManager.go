@@ -439,6 +439,21 @@ func tReleaseResource() {
 	}
 }
 
+func tDetachResource() {
+	handle := popl()
+	if _, _, idEntry, ok := lookupResHandle(handle); ok {
+		// If the resChanged bit is set, then fail silently
+		if readb(idEntry+4)&1 == 0 {
+			writel(idEntry+8, 0)                    // zero the handle record
+			writeb(handle+4, readb(handle+4)&^0x20) // orphan the handle
+		}
+
+		setResError(0) // noErr
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
 func tGetNamedResource() {
 	only1Please := gCurToolTrapNum&0x3ff == 0x20
 	loadPlease := readb(0xa5e) != 0

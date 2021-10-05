@@ -817,6 +817,7 @@ func main() {
 		tb_base + 0x179: tPop2,                // _CouldDialog
 		tb_base + 0x17b: tNop,                 // _InitDialogs
 		tb_base + 0x17c: tPop10RetZero,        // _GetNewDialog
+		tb_base + 0x192: tDetachResource,      // _DetachResource
 		tb_base + 0x194: tCurResFile,          // _CurResFile
 		tb_base + 0x197: tOpenResFile,         // _OpenResFile
 		tb_base + 0x198: tUseResFile,          // _UseResFile
