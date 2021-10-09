@@ -290,8 +290,14 @@ func tOpen() {
 
 	number := get_vol_or_dir()
 
-	// Checks for file existence, if file is opened in read-only mode
-	path, errno := get_host_path(number, ioName, ioPermssn == 1)
+	// Checks for file existence
+	path, errno := get_host_path(number, ioName, true)
+
+	// If fnfErr and we are allowed to create the file, then create it
+	if errno == -43 && ioPermssn != 1 {
+		writeDataFork(path, nil)
+		errno = 0 // handled the case, so noErr
+	}
 
 	if errno != 0 {
 		paramBlkResult(errno)
