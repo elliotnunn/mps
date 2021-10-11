@@ -1008,6 +1008,7 @@ func main() {
 	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
 	writew(0x28e, 0x3fff)                       // ROM85
 	writel(0x2b6, kExpandMem)
+	writel(0x282, 0)            // SwitchVars, not sure, same as Sys7
 	writel(0x2f4, 0)            // CaretTime = 0 ticks
 	writel(0x316, 0)            // we don't implement the 'MPGM' interface
 	writel(0x31a, 0x00ffffff)   // Lo3Bytes
@@ -1019,6 +1020,10 @@ func main() {
 	writel(0x9d6, 0)          // WindowList empty
 	writel(0xa02, 0x00010001) // OneOne
 	writel(0xa06, 0xffffffff) // MinusOne
+	writel(0xaa0, 0)          // DAStrings 0
+	writel(0xaa4, 0)          // DAStrings 1
+	writel(0xaa8, 0)          // DAStrings 2
+	writel(0xaac, 0)          // DAStrings 3
 	writel(0xa1c, kMenuList)  // MenuList empty
 	writew(0xa5e, 0xffff)     // ResLoad = true
 	writel(0xa50, 0)          // TopMapHndl
@@ -1026,6 +1031,7 @@ func main() {
 	writeb(0xbb2, 0xff)       // SegHiEnable = no need to disable MoveHHi
 	writeb(0xbb3, 0xff)       // FDevDisable = don't care
 	writel(0xcb0, 0x00000100) // MMUFlags.b MMUType.b MMU32bit.b
+	writel(0xd50, 0)          // MenuCInfo
 
 	// Empty app parameters
 	writel(d0ptr, 128)
