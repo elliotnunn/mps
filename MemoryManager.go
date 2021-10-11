@@ -44,7 +44,7 @@ func tNewPtr() {
 		mem = append(mem, 0)
 	}
 	block := uint32(len(mem))
-	for uint32(len(mem)) < block+size {
+	for uint32(len(mem)) < block+size || uint32(len(mem)) < block+256 {
 		mem = append(mem, 0)
 	}
 	block_sizes[block] = size
