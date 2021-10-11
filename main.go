@@ -564,8 +564,6 @@ func lineA(inst uint16) {
 
 		pc = readl(kToolTable + 4*(uint32(inst)&0x3ff))
 	} else { // OS trap
-		writew(d1ptr+2, inst)
-
 		pushl(readl(a2ptr))
 		pushl(readl(d2ptr))
 		pushl(readl(d1ptr))
@@ -573,6 +571,8 @@ func lineA(inst uint16) {
 		if inst&0x100 == 0 {
 			pushl(readl(a0ptr))
 		}
+
+		writew(d1ptr+2, inst)
 
 		call_m68k(readl(kOSTable + 4*(uint32(inst)&0xff)))
 
