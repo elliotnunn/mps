@@ -828,6 +828,7 @@ func main() {
 		tb_base + 0x0d8: tRetZero,             // _NewRgn
 		tb_base + 0x0fe: tNop,                 // _InitFonts
 		tb_base + 0x100: tGetFNum,             // _GetFNum
+		tb_base + 0x106: tNewString,           // _NewString
 		tb_base + 0x112: tNop,                 // _InitWindows
 		tb_base + 0x124: tRetZero,             // _FrontWindow
 		tb_base + 0x130: tNop,                 // _InitMenus
