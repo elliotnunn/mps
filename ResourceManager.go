@@ -993,6 +993,12 @@ func tHCreateResFile() {
 	}
 
 	path, errno := get_host_path(dirID, readPstring(namePtr), true)
+
+	// Treat a file with no valid resource fork as nonexistent
+	if errno == 0 && len(resourceFork(path)) <= 256 {
+		errno = -43 // fnfErr
+	}
+
 	switch errno {
 	case 0: // noErr (but file should NOT already exist)
 		setResError(-48) // dupFNErr
