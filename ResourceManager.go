@@ -1004,3 +1004,50 @@ func tHCreateResFile() {
 		setResError(int16(errno))
 	}
 }
+
+func tGetResAttrs() {
+	resHandle := popl()
+	_, _, idEntry, ok := lookupResHandle(resHandle)
+	if ok {
+		writew(readl(spptr), uint16(readb(idEntry+4)))
+		setResError(0)
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
+func tSetResAttrs() {
+	attrs := popw()
+	resHandle := popl()
+	_, _, idEntry, ok := lookupResHandle(resHandle)
+	if ok {
+		writeb(idEntry+4, uint8(attrs))
+		setResError(0)
+	} else {
+		setResError(-192) // resNotFound
+	}
+}
+
+func tGetResFileAttrs() {
+	refNum := popw()
+	mapPtr, ok := lookupMapRefnum(refNum)
+	if ok {
+		writew(readl(spptr), uint16(readb(mapPtr+22))) // return mAttr in low byte
+		setResError(0)
+	} else {
+		writew(readl(spptr), 0)
+		setResError(-193) // resFNotFound
+	}
+}
+
+func tSetResFileAttrs() {
+	attrs := popw()
+	refNum := popw()
+	mapPtr, ok := lookupMapRefnum(refNum)
+	if ok {
+		writeb(mapPtr+22, uint8(attrs)) // set mAttr
+		setResError(0)
+	} else {
+		setResError(-193) // resFNotFound
+	}
+}

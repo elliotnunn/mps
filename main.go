@@ -861,6 +861,8 @@ func main() {
 		tb_base + 0x1a3: tReleaseResource,     // _ReleaseResource
 		tb_base + 0x1a4: tHomeResFile,         // _HomeResFile
 		tb_base + 0x1a5: tSizeRsrc,            // _SizeRsrc
+		tb_base + 0x1a6: tGetResAttrs,         // _GetResAttrs
+		tb_base + 0x1a7: tSetResAttrs,         // _SetResAttrs
 		tb_base + 0x1a8: tGetResInfo,          // _GetResInfo
 		tb_base + 0x1aa: tChangedResource,     // _ChangedResource
 		tb_base + 0x1ab: tAddResource,         // _AddResource
@@ -893,6 +895,8 @@ func main() {
 		tb_base + 0x1f0: tLoadSeg,             // _LoadSeg
 		tb_base + 0x1f1: tPop4,                // _UnloadSeg
 		tb_base + 0x1f4: tExitToShell,         // _ExitToShell
+		tb_base + 0x1f6: tGetResFileAttrs,     // _GetResFileAttrs
+		tb_base + 0x1f7: tSetResFileAttrs,     // _SetResFileAttrs
 		tb_base + 0x1fa: tRetZero,             // _UnlodeScrap
 		tb_base + 0x1fb: tRetZero,             // _LodeScrap
 		tb_base + 0x252: tHighLevelFSDispatch, // _HighLevelFSDispatch
