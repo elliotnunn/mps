@@ -619,6 +619,7 @@ func lineF(inst uint16) {
 const (
 	kOSTable        = 0x400
 	kToolTable      = 0xe00   // up to 0x1e00
+	kStackLimit     = 0x2000  // for _StackSpace
 	kStackBase      = 0x40000 // extends down, note that registers are here too!
 	kA5World        = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
 	kFakeHeapHeader = 0x90000 // very short
@@ -785,6 +786,7 @@ func main() {
 		os_base + 0x62:  tFreeMem,             // _PurgeSpace
 		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
 		os_base + 0x64:  tClrD0,               // _MoveHHi
+		os_base + 0x65:  tStackSpace,          // _StackSpace
 		os_base + 0x66:  tNewEmptyHandle,      // _NewEmptyHandle
 		os_base + 0x69:  tHGetState,           // _HGetState
 		os_base + 0x6a:  tHSetState,           // _HSetState

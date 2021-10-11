@@ -26,6 +26,11 @@ func tFreeMem() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
 	writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
 }
 
+func tStackSpace() {
+	return_memerr(0)
+	writel(d0ptr, (readl(spptr)-kStackLimit-200)&0xfffffffc)
+}
+
 // Final common pathway for making heap blocks
 // TODO: improve on this bump allocator
 func tNewPtr() {
