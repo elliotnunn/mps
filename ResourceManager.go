@@ -854,6 +854,15 @@ type resourceStruct struct {
 	rLocn   uint32
 }
 
+func (s *resourceStruct) String() string {
+	tstr := macToUnicode(macstring([]byte{byte(s.tType >> 24), byte(s.tType >> 16), byte(s.tType >> 8), byte(s.tType)}))
+	if s.hasName {
+		return fmt.Sprintf("{'%s' (%d, \"%s\", $%x) handle=%08x locn=%06x}", tstr, s.rID, s.name, s.rAttr, s.rHndl, s.rLocn)
+	} else {
+		return fmt.Sprintf("{'%s' (%d, $%x) handle=%08x locn=%06x}", tstr, s.rID, s.rAttr, s.rHndl, s.rLocn)
+	}
+}
+
 // Flatten the map to a list of resources
 // Does not depend on anything else
 func dumpMap(flat []byte) (deep mapStruct) {
