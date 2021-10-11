@@ -1045,10 +1045,10 @@ func main() {
 	writel(0xa50, newHandleFrom(mkMap(mapStruct{ // TopMapHndl
 		mRefNum: readw(0xa58), mAttr: 0x2000, // mAttr and rAttr indicate dirty map and resources
 		list: []resourceStruct{
-			{tType: 0x494e544c, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: 1}, // INTL (old style)
-			{tType: 0x494e544c, rID: 1, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: 1}, // INTL (old style)
-			{tType: 0x69746c30, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: 1}, // itl0 (new style)
-			{tType: 0x69746c31, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: 1}, // itl1 (new style)
+			{tType: 0x494e544c, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: resChanged}, // INTL (old style)
+			{tType: 0x494e544c, rID: 1, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: resChanged}, // INTL (old style)
+			{tType: 0x69746c30, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: resChanged}, // itl0 (new style)
+			{tType: 0x69746c31, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: resChanged}, // itl1 (new style)
 		},
 	})))
 

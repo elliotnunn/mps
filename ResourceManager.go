@@ -5,6 +5,16 @@ import (
 	"fmt"
 )
 
+const (
+	resSysHeap   = 0x40
+	resPurgeable = 0x20
+	resLocked    = 0x10
+	resProtected = 0x08
+	resPreload   = 0x04
+	resChanged   = 0x02
+	resAll       = 0x7f
+)
+
 var bigEndian = binary.BigEndian
 
 // Resource Manager Toolbox traps
@@ -439,7 +449,7 @@ func tReleaseResource() {
 	handle := popl()
 	if _, _, idEntry, ok := lookupResHandle(handle); ok {
 		// If the resChanged bit is set, then fail silently
-		if readb(idEntry+4)&1 == 0 {
+		if readb(idEntry+4)&resChanged == 0 {
 			writel(idEntry+8, 0) // zero the handle record
 
 			writel(a0ptr, handle)
@@ -456,7 +466,7 @@ func tDetachResource() {
 	handle := popl()
 	if _, _, idEntry, ok := lookupResHandle(handle); ok {
 		// If the resChanged bit is set, then fail silently
-		if readb(idEntry+4)&1 == 0 {
+		if readb(idEntry+4)&resChanged == 0 {
 			writel(idEntry+8, 0)                    // zero the handle record
 			writeb(handle+4, readb(handle+4)&^0x20) // orphan the handle
 		}
@@ -617,8 +627,8 @@ func tChangedResource() {
 	handle := popl()
 	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
 		setMapDirty(resMap, true)
-		writeb(idEntry+4, readb(idEntry+4)|1) // resChanged
-		setResError(0)                        // noErr
+		writeb(idEntry+4, readb(idEntry+4)|resChanged)
+		setResError(0) // noErr
 	} else {
 		setResError(-192) // resNotFound
 	}
@@ -627,8 +637,9 @@ func tChangedResource() {
 func tWriteResource() {
 	handle := popl()
 	if resMap, _, idEntry, ok := lookupResHandle(handle); ok {
-		if readb(idEntry+4)&9 == 1 { // resChanged and not resProtected
-			writeb(idEntry+4, readb(idEntry+4)&^1) // clear resChanged
+		attr := readb(idEntry + 4)
+		if attr&resChanged != 0 && attr&resProtected == 0 {
+			writeb(idEntry+4, attr&^resChanged)
 
 			refnum := readw(resMap + 20)
 			buffer := openForks[forkKeyFromRefNum(refnum)]
@@ -777,7 +788,7 @@ func tAddResource() {
 	res := resourceStruct{
 		tType: tType,
 		rID:   id,
-		rAttr: 1, // resChanged
+		rAttr: resChanged,
 		rHndl: handle,
 	}
 
