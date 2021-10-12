@@ -206,16 +206,6 @@ func get_macos_dnum(path string) uint16 {
 	return uint16(len(dnums)) - 1
 }
 
-func get_macos_date(path string) uint32 {
-	return 0
-	// logic missing from here
-}
-
-func is_regular_file(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.Mode().IsRegular()
-}
-
 // Set up param blk fields, but leave d0 alone (contains FSDispatch selector)
 // Safe to call more than once
 func paramBlkSetup() {
