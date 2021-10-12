@@ -1,125 +1,141 @@
-	include	'Header.a'
+			MAIN
+			MACHINE	MC68000
+			IMPORT	TestOpen, TestClose, TestPlan, TestStrCmp
+			IMPORT	TestX0, TestX1, TestN0, TestN1, TestZ0, TestZ1, TestV0, TestV1, TestC0, TestC1
 
-	; Delete the tempfile just in case a previous run was interrupted
-	bsr		PushPB
-	pea		TheFileName
-	move.l	(sp)+,$12(a0) ; ioNamePtr
-	dc.w	$a009
-	bsr		PopPB
+			; Delete the tempfile just in case a previous run was interrupted
+			bsr		PushPB
+			pea		TheFileName
+			move.l	(sp)+,$12(a0) ; ioNamePtr
+			dc.w	$a009
+			bsr		PopPB
 
-	StartOfTest 'CreateResFile TestToolbox.tmp; check ResError'
-	bsr		PoisonResError
-	pea		TheFileName
-	dc.w	$a9b1 ; _CreateResFile
-	tst.w	$a60
-	z1
-	EndOfTest
+			pea		#'CreateResFile TestToolbox.tmp; check ResError'
+			jsr		TestOpen
+			bsr		PoisonResError
+			pea		TheFileName
+			dc.w	$a9b1 ; _CreateResFile
+			tst.w	$a60
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'CreateResFile TestToolbox.tmp; check ResError, expecting dupFNErr'
-	bsr		PoisonResError
-	pea		TheFileName
-	dc.w	$a9b1 ; _CreateResFile
-	cmp.w	#-48,$a60
-	z1
-	EndOfTest
+			pea		#'CreateResFile TestToolbox.tmp; check ResError, expecting dupFNErr'
+			jsr		TestOpen
+			bsr		PoisonResError
+			pea		TheFileName
+			dc.w	$a9b1 ; _CreateResFile
+			cmp.w	#-48,$a60
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'OpenResFile TestToolbox.tmp; check result matches CurMap; check ResError'
-	bsr		PoisonResError
-	move.w	#$b33f,-(sp)
-	pea		TheFileName
-	dc.w	$a997 ; _OpenResFile
-	move.w	(sp)+,d7 ; keep the refnum in d7
-	cmp.w	$a5a,d7
-	z1
-	tst.w	$a60
-	z1
-	EndOfTest
+			pea		#'OpenResFile TestToolbox.tmp; check result matches CurMap; check ResError'
+			jsr		TestOpen
+			bsr		PoisonResError
+			move.w	#$b33f,-(sp)
+			pea		TheFileName
+			dc.w	$a997 ; _OpenResFile
+			move.w	(sp)+,d7 ; keep the refnum in d7
+			cmp.w	$a5a,d7
+			jsr		TestZ1
+			tst.w	$a60
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'Count1Types, expecting 0'
-	move.w	#$b33f,-(sp)
-	dc.w	$a81c ; _Count1Types
-	tst.w	(sp)+
-	z1
-	EndOfTest
+			pea		#'Count1Types, expecting 0'
+			jsr		TestOpen
+			move.w	#$b33f,-(sp)
+			dc.w	$a81c ; _Count1Types
+			tst.w	(sp)+
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'NewHandle'
-	moveq.l	#4,d0
-	dc.w	$a122 ; _NewHandle
-	z1
-	move.l	a0,a4 ; keep the handle in a4
-	EndOfTest
+			pea		#'NewHandle'
+			jsr		TestOpen
+			moveq.l #4,d0
+			dc.w	$a122 ; _NewHandle
+			jsr		TestZ1
+			move.l	a0,a4 ; keep the handle in a4
+			jsr		TestClose
 
-	move.l	(a4),a0 ; populate the handle
-	move.l	#'4byt',(a0)
+			move.l	(a4),a0 ; populate the handle
+			move.l	#'4byt',(a0)
 
-	StartOfTest 'AddResource; check ResError'
-	bsr		PoisonResError
-	move.l	a4,-(sp)
-	move.l	#'Test',-(sp)
-	move.w	#128,-(sp)
-	pea		TheResourceName
-	dc.w	$a9ab
-	tst.w	$a60
-	z1
-	EndOfTest
+			pea		#'AddResource; check ResError'
+			jsr		TestOpen
+			bsr		PoisonResError
+			move.l	a4,-(sp)
+			move.l	#'Test',-(sp)
+			move.w	#128,-(sp)
+			pea		TheResourceName
+			dc.w	$a9ab
+			tst.w	$a60
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'Count1Types, expecting 1'
-	move.w	#$b33f,-(sp)
-	dc.w	$a81c ; _Count1Types
-	cmp.w	#1,(sp)+
-	z1
-	EndOfTest
+			pea		#'Count1Types, expecting 1'
+			jsr		TestOpen
+			move.w	#$b33f,-(sp)
+			dc.w	$a81c ; _Count1Types
+			cmp.w	#1,(sp)+
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'CloseResFile; check ResError'
-	bsr		PoisonResError
-	move.w	d7,-(sp)
-	dc.w	$a99a
-	tst.w	$a60
-	z1
-	EndOfTest
+			pea		#'CloseResFile; check ResError'
+			jsr		TestOpen
+			bsr		PoisonResError
+			move.w	d7,-(sp)
+			dc.w	$a99a
+			tst.w	$a60
+			jsr		TestZ1
+			jsr		TestClose
 
-	StartOfTest 'Delete TestToolbox.tmp'
-	bsr		PushPB
-	pea		TheFileName
-	move.l	(sp)+,$12(a0) ; ioNamePtr
-	dc.w	$a009
-	z1
-	bsr		PopPB
-	EndOfTest
+			pea		#'Delete TestToolbox.tmp'
+			jsr		TestOpen
+			bsr		PushPB
+			pea		TheFileName
+			move.l	(sp)+,$12(a0) ; ioNamePtr
+			dc.w	$a009
+			jsr		TestZ1
+			bsr		PopPB
+			jsr		TestClose
 
-	StartOfTest 'Delete TestToolbox.tmp again, expecting fnfErr'
-	bsr		PushPB
-	pea		TheFileName
-	move.l	(sp)+,$12(a0) ; ioNamePtr
-	dc.w	$a009
-	cmp.w	#-43,d0
-	z1
-	bsr		PopPB
-	EndOfTest
+			pea		#'Delete TestToolbox.tmp again, expecting fnfErr'
+			jsr		TestOpen
+			bsr		PushPB
+			pea		TheFileName
+			move.l	(sp)+,$12(a0) ; ioNamePtr
+			dc.w	$a009
+			cmp.w	#-43,d0
+			jsr		TestZ1
+			bsr		PopPB
+			jsr		TestClose
 
-	PrintPlan
-	rts
+			jsr		TestPlan
+			rts
 
 TheFileName
-	dc.b	15, 'TestToolbox.tmp'
+			dc.b	15, 'TestToolbox.tmp'
 
 TheResourceName
-	dc.b	17, 'The Resource Name'
+			dc.b	17, 'The Resource Name'
 
 PushPB
-	move.l	(sp)+,a1
-	moveq	#31,d0
-.loop
-	clr.l	-(sp)
-	dbra	d0,.loop
-	move.l	sp,a0
-	jmp		(a1)
+			move.l	(sp)+,a1
+			moveq	#31,d0
+@loop
+			clr.l	-(sp)
+			dbra	d0,@loop
+			move.l	sp,a0
+			jmp		(a1)
 
 PopPB
-	move.l	(sp)+,a0
-	add.w	#128,sp
-	jmp		(a0)
+			move.l	(sp)+,a0
+			add.w	#128,sp
+			jmp		(a0)
 
 PoisonResError
-	move.w	#$ffff,$a60
-	rts
+			move.w	#$ffff,$a60
+			rts
+
+			END
+v

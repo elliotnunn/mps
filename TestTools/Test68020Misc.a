@@ -1,0 +1,136 @@
+			MAIN
+			MACHINE	MC68020
+			OPT		NONE
+			IMPORT	TestOpen, TestClose, TestPlan, TestStrCmp
+			IMPORT	TestX0, TestX1, TestN0, TestN1, TestZ0, TestZ1, TestV0, TestV1, TestC0, TestC1
+
+			pea		#'extb.l positive'
+			jsr		TestOpen
+			move.l	#$ffffff7f,d3
+			move	#$f,ccr
+			extb.l	d3
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#$0000007f,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'extb.l negative'
+			jsr		TestOpen
+			move.l	#$00ff00f0,d3
+			move	#$f,ccr
+			extb.l	d3
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#$fffffff0,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'extb.l zero'
+			jsr		TestOpen
+			move.l	#$00ff0000,d3
+			move	#$f,ccr
+			extb.l	d3
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#$00000000,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'link.l a6,#imm'
+			jsr		TestOpen
+			movea.l	#$12345678,a6
+			lea		-4(sp),a0
+			movea.l	a6,a1
+			lea		-14(sp),a2
+			dc.w	$480E ; link.l a6,#imm, prevent assembler from optimising
+			dc.l	-10
+			cmpa.l	a6,a0
+			jsr		TestZ1
+			cmpa.l	(a6),a1
+			jsr		TestZ1
+			cmpa.l	sp,a2
+			jsr		TestZ1
+			adda.w	#14,sp
+			jsr		TestClose
+
+			pea		#'rtd positive'
+			jsr		TestOpen
+			movea.l	sp,a3 ; save sp
+			lea		-100(sp),sp
+			pea		rtdPositive
+			rtd		#20
+rtdPositive
+			lea		-80(a3),a0
+			cmpa.l	a0,sp
+			jsr		TestZ1
+			movea.l	a3,sp
+			jsr		TestClose
+
+			pea		#'rtd negative'
+			jsr		TestOpen
+			movea.l	sp,a3 ; save sp
+			lea		-100(sp),sp
+			pea		rtdNegative
+			rtd		#-20
+rtdNegative
+			lea		-120(a3),a0
+			cmpa.l	a0,sp
+			jsr		TestZ1
+			movea.l	a3,sp
+			jsr		TestClose
+
+			pea		#'pack dn,dn'
+			jsr		TestOpen
+			move.l	#$ffff0607,d5
+			clr.l	d6
+			pack	d5,d6,#$0200
+			pack	d5,d5,#$0200
+			cmp.l	#$00000087,d6
+			jsr		TestZ1
+			cmp.l	#$ffff0687,d5
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'pack -(an),-(an)'
+			jsr		TestOpen
+			lea		-100(a5),a4
+			lea		-200(a5),a3
+			move.w	#$0102,(a3)+
+			pack	-(a3),-(a4),#$0304
+			cmpi.b	#$46,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'unpk dn,dn'
+			jsr		TestOpen
+			move.l	#$ffffff67,d5
+			clr.l	d6
+			unpk	d5,d6,#$0200
+			unpk	d5,d5,#$0200
+			cmp.l	#$00000807,d6
+			jsr		TestZ1
+			cmp.l	#$ffff0807,d5
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'unpk -(an),-(an)'
+			jsr		TestOpen
+			lea		-100(a5),a4
+			lea		-200(a5),a3
+			move.b	#$12,(a3)+
+			unpk	-(a3),-(a4),#$0304
+			cmpi.w	#$0406,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			jsr		TestPlan
+			rts
+
+			END

@@ -1,0 +1,4147 @@
+Kilobyte1	RECORD	EXPORT
+			ds.b	1024
+
+Kilobyte2	RECORD	EXPORT
+			ds.b	1024
+
+			MAIN
+			MACHINE	MC68000
+			OPT		NONE
+			IMPORT	TestOpen, TestClose, TestPlan, TestStrCmp
+			IMPORT	TestX0, TestX1, TestN0, TestN1, TestZ0, TestZ1, TestV0, TestV1, TestC0, TestC1
+			IMPORT	LineAppend, LineFlush
+			IMPORT	Kilobyte1:data, Kilobyte2:data
+
+ApplScratch	equ		$A78
+
+			pea		#'abcd dn,dn'
+			jsr		TestOpen
+			move.w	#$05,d3
+			move.w	#$05,d4
+			move	#$04,ccr ; set z only
+			abcd.b	d3,d4
+			jsr		TestZ0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$10,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'abcd dn,dn'
+			jsr		TestOpen
+			move.w	#$0a,d3
+			move.w	#$05,d4
+			move	#$04,ccr ; set z only
+			abcd.b	d3,d4
+			jsr		TestZ0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$15,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'abcd dn,dn'
+			jsr		TestOpen
+			move.w	#$99,d3
+			move.w	#$02,d4
+			move	#$04,ccr ; set z only
+			abcd.b	d3,d4
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$01,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'abcd -(ax),-(ay)'
+			jsr		TestOpen
+			lea		Kilobyte1,a2
+			lea		Kilobyte2,a3
+			move.l	#$443f3009,(a2)+
+			move.l	#$8128ba49,(a3)+
+			move	#$04,ccr ; set z only
+			abcd.b	-(a2),-(a3)
+			abcd.b	-(a2),-(a3)
+			abcd.b	-(a2),-(a3)
+			abcd.b	-(a2),-(a3)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.l	#$256e5058,(a3)+
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'add dn,dn'
+			jsr		TestOpen
+			move.w	#$8000,d3
+			move.w	#$8000,d4
+			add.w	d3,d4
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add an,dn'
+			jsr		TestOpen
+			movea.w #$3288,a3
+			move.w	#$8968,d3
+			add.w	a3,d3
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$bbf0,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'add (an),dn'
+			jsr		TestOpen
+			movea.w #ApplScratch,a3
+			move.w	#$9963,(a3)
+			move.w	#$4404,d5
+			add.w	(a3),d5
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'add (an)+,dn'
+			jsr		TestOpen
+			movea.w #ApplScratch,a3
+			move.w	#$4aa0,(a3)
+			move.w	#$4f66,d5
+			add.w	(a3)+,d5
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'add -(an),dn'
+			jsr		TestOpen
+			movea.w #ApplScratch,a3
+			move.w	#$d056,(a3)+
+			move.w	#$9b8d,d5
+			add.w	-(a3),d5
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add d(an),dn'
+			jsr		TestOpen
+			movea.w #ApplScratch,a3
+			move.w	#$ace9,ApplScratch+10
+			move.w	#$139a,d5
+			add.w	10(a3),d5
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'add d(an,dn),dn'
+			jsr		TestOpen
+			movea.w #ApplScratch,a3
+			move.w	#10,d0
+			move.w	#$cfe0,ApplScratch+20
+			move.w	#$3e58,d5
+			add.w	10(a3,d0),d5
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add pcrel,dn'
+			jsr		TestOpen
+			bra.s	pcrelSkip
+pcrelX		dc.w	$8f8c
+pcrelSkip
+			move.w	#$fe38,d1
+			add.w	pcrelX(pc),d1
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add pcrel(xn),dn'
+			jsr		TestOpen
+			bra.s	pcrelregSkip
+pcrelregX	dc.w	$0,$0,$0,$9b56
+pcrelregSkip
+			move.w	#6,d0
+			move.w	#$bbc5,d1
+			add.w	pcrelregX(pc,d0),d1
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add abs.w,dn'
+			jsr		TestOpen
+			move.w	#$7ae8,ApplScratch
+			move.w	#$e73a,d7
+			add.w	ApplScratch,d7
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add abs.l,dn'
+			jsr		TestOpen
+			move.w	#$61ba,ApplScratch
+			move.w	#$f028,d7
+			add.w	(ApplScratch).l,d7
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add #imm,dn'
+			jsr		TestOpen
+			move.w	#$fa4e,d7
+			add.w	#$8771,d7
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'add dn,abs.w'
+			jsr		TestOpen
+			move.w	#$2c7e,ApplScratch
+			move.w	#$743e,d7
+			add.w	d7,ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$A0BC,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'addi #imm,dn'
+			jsr		TestOpen
+			move.w	#$e27c,d7
+			addi.w	#$9a70,d7
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'addi #imm,abs.w'
+			jsr		TestOpen
+			move.w	#$2c21,ApplScratch
+			addi.w	#$b2aa,ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'addq #imm,dn'
+			jsr		TestOpen
+			move.w	#$7ffc,d7
+			addq.w	#8,d7
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'addq #imm,abs.w'
+			jsr		TestOpen
+			move.w	#$ffff,ApplScratch
+			addq.w	#1,ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'addx dn,dn'
+			jsr		TestOpen
+			ori		#$10,ccr ; set x bit
+			move.l	#$fffffffe,d0
+			move.l	#1,d1
+			addx.l	d1,d0
+			jsr		TestN0
+			jsr		TestZ0 ; should be preserved from before addx
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			tst.l	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'addx -(an),-(an)'
+			jsr		TestOpen
+			lea		ApplScratch+4,a2
+			lea		ApplScratch+8,a3
+			move.l	#$670ee7f1,-4(a2)
+			move.l	#$e800422a,-4(a3)
+			move	#$04,ccr ; x=0,z=1
+			addx.b	-(a2),-(a3)
+			addx.b	-(a2),-(a3)
+			addx.b	-(a2),-(a3)
+			addx.b	-(a2),-(a3)
+			jsr		TestN0
+			jsr		TestZ0 ; gets cleared if any addx is nonzero
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.l	#$4f0f2a1b,(a3)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'and abs.w,dn'
+			jsr		TestOpen
+			ori		#$1f,ccr
+			move.w	#$9288,d3
+			move.w	#$d878,ApplScratch
+			move	#$1f,ccr ; set v and c, which should be zeroed, also x
+			and.w	ApplScratch,d3
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; untouched
+			cmpi.w	#$9008,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'and dn,abs.w'
+			jsr		TestOpen
+			andi	#0,ccr
+			move.w	#$a11f,d3
+			move.w	#$5ee0,ApplScratch ; its inverse
+			move	#$0f,ccr ; set v and c, which should be zeroed
+			and.w	d3,ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0 ; untouched
+			jsr		TestClose
+
+			pea		#'andi #imm,abs.w'
+			jsr		TestOpen
+			andi	#0,ccr
+			move.l	#$16dc3b11,ApplScratch
+			andi.l	#$3127441d,ApplScratch
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0 ; untouched
+			cmpi.l	#$10040011,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'asl dn,dn'
+			jsr		TestOpen
+			move.w	#$1003,d0
+			move.w	#$5555,d1
+			asl.w	d0,d1
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1 ; msb changed in any iteration
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$aaa8,d1
+			jsr		TestZ1
+			asl.w	d0,d1
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			move.w	#$0000,d1
+			asl.w	d0,d1
+			jsr		TestV0 ; msb never changed
+			jsr		TestClose
+
+			pea		#'asr dn,dn'
+			jsr		TestOpen
+			move	#$02,ccr ; set v only, to confirm it is cleared
+			move.w	#$0002,d0
+			move.w	#$8002,d1
+			asr.w	d0,d1
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0 ; msb changed in any iteration
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'asl #imm,dn'
+			jsr		TestOpen
+			move.l	#$695f0ebd,d0
+			asl.l	#8,d0
+			cmpi.l	#$5f0ebd00,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'asr #imm,dn'
+			jsr		TestOpen
+			move.l	#$5d10831b,d0
+			asr.l	#2,d0
+			cmpi.l	#$174420c6,d0 ; no sign extension, behold
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'asr abs.w'
+			jsr		TestOpen
+			move.w	#$2244,ApplScratch
+			asr.w	ApplScratch
+			cmpi.w	#$1122,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'asl abs.w'
+			jsr		TestOpen
+			move.w	#$2244,ApplScratch
+			asl.w	ApplScratch
+			cmpi.w	#$4488,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'bchg dn,abs.w'
+			jsr		TestOpen
+			move.w	#44,d4
+			move.b	#$10,ApplScratch
+			bchg.b	d4,ApplScratch
+			jsr		TestZ0
+			bchg.b	d4,ApplScratch
+			jsr		TestZ1
+			bchg.b	d4,ApplScratch
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'bchg #imm,abs.w'
+			jsr		TestOpen
+			move.b	#$10,ApplScratch
+			move	#$1f,ccr
+			bchg.b	#3,ApplScratch
+			jsr		TestZ1
+			bchg.b	#3,ApplScratch
+			jsr		TestZ0
+			bchg.b	#3,ApplScratch
+			jsr		TestZ1
+			jsr		TestN1 ; all these bits should be untouched...
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'bclr dn,abs.w'
+			jsr		TestOpen
+			move.w	#44,d4
+			move.b	#$10,ApplScratch
+			bclr.b	d4,ApplScratch
+			jsr		TestZ0
+			bclr.b	d4,ApplScratch
+			jsr		TestZ1
+			bclr.b	d4,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'bclr #imm,abs.w'
+			jsr		TestOpen
+			move.b	#$10,ApplScratch
+			bclr.b	#3,ApplScratch
+			jsr		TestZ1
+			bclr.b	#3,ApplScratch
+			jsr		TestZ1
+			bclr.b	#3,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'bset dn,abs.w'
+			jsr		TestOpen
+			move.w	#44,d4
+			move.b	#$10,ApplScratch
+			bset.b	d4,ApplScratch
+			jsr		TestZ0
+			bset.b	d4,ApplScratch
+			jsr		TestZ0
+			bset.b	d4,ApplScratch
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'bset #imm,abs.w'
+			jsr		TestOpen
+			move.b	#$10,ApplScratch
+			bset.b	#3,ApplScratch
+			jsr		TestZ1
+			bset.b	#3,ApplScratch
+			jsr		TestZ0
+			bset.b	#3,ApplScratch
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'btst dn,abs.w'
+			jsr		TestOpen
+			move.w	#44,d4
+			move.b	#$10,ApplScratch
+			btst.b	d4,ApplScratch
+			jsr		TestZ0
+			btst.b	d4,ApplScratch
+			jsr		TestZ0
+			btst.b	d4,ApplScratch
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'btst #imm,abs.w'
+			jsr		TestOpen
+			move.b	#$10,ApplScratch
+			btst.b	#3,ApplScratch
+			jsr		TestZ1
+			btst.b	#3,ApplScratch
+			jsr		TestZ1
+			btst.b	#3,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'chk #imm,dn'
+			jsr		TestOpen
+			move.w	#10,d0 ; lame test
+			chk		#10,d0
+			jsr		TestClose
+
+			pea		#'clr abs.w'
+			jsr		TestOpen
+			move.w	#-1,ApplScratch
+			tst.w	ApplScratch
+			jsr		TestZ0
+			clr.w	ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			tst.w	ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'cmp #imm,dn'
+			jsr		TestOpen
+			move	#$1f,ccr
+			move.w	#$c000,d0
+			cmpi.w	#$c000,d0
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpi.w	#$bfff,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpi.w	#$c001,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1 ; because we set it above
+			jsr		TestClose
+
+			pea		#'cmpa #imm,an'
+			jsr		TestOpen ; lifted from cmp tests
+			move	#$1f,ccr
+			movea.l	#$ffffc000,a0
+			cmpa.w	#$c000,a0
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpa.w	#$bfff,a0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpa.w	#$c001,a0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1 ; because we set it above
+			jsr		TestClose
+
+			pea		#'cmpi #imm,(an)'
+			jsr		TestOpen ; lifted from cmp tests
+			move	#$1f,ccr
+			lea		ApplScratch,a0
+			move.w	#$c000,(a0)
+			cmpi.w	#$c000,(a0)
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpi.w	#$bfff,(a0)
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpi.w	#$c001,(a0)
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1 ; because we set it above
+			jsr		TestClose
+
+			pea		#'cmpm (an)+,(an)+'
+			jsr		TestOpen
+			move	#$1f,ccr
+			lea		ApplScratch,a0
+			lea		ApplScratch+2,a1
+			move.l	#$01010100,(a0)
+			cmpm.b	(a0)+,(a1)+
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; because we set it above
+			cmpm.b	(a0)+,(a1)+
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1 ; because we set it above
+			jsr		TestClose
+
+			pea		#'dbf dn,targ'
+			jsr		TestOpen
+			clr.l	d3
+			move.l	#$1000f,d0 ; top should be ignored, do 16 iterations
+dbfLoop		addq.l	#1,d3
+			dbf		d0,dbfLoop
+			cmpi.l	#$10,d3
+			jsr		TestZ1
+			cmpi.l	#$0001ffff,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'dbeq dn,targ'
+			jsr		TestOpen
+			clr.l	d3
+			move.l	#$1000f,d0 ; top should be ignored, do 16 iterations
+dbeqLoop	addq.l	#1,d3
+			cmp.w	#8,d3 ; only do half the iterations
+			dbeq	d0,dbeqLoop
+			cmpi.l	#$8,d3 ; did the right number of iterations?
+			jsr		TestZ1
+			cmpi.l	#$00010008,d0 ; "eq" get tested before ctr decremented?
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'divu #imm,dn'
+			jsr		TestOpen
+			move.l	#10,d0
+			divu	#3,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$00010003,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'divs #imm,dn'
+			jsr		TestOpen
+			move.l	#10,d0
+			divu	#3,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$00010003,d0 ; q3 r1
+			jsr		TestZ1
+
+			move.l	#10,d0
+			divs	#-3,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$0001fffd,d0 ; q-3 r1
+			jsr		TestZ1
+
+			move.l	#-10,d0
+			divs	#3,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$fffffffd,d0 ; q-3 r-1
+			jsr		TestZ1
+
+			move.l	#-10,d0
+			divs	#-3,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$ffff0003,d0 ; q3 r-1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'eor dn,abs.w'
+			jsr		TestOpen
+			move	#$03,ccr
+			move.l	#$4328736d,ApplScratch
+			move.l	#$cbcca890,d0
+			eor.l	d0,ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$88e4dbfd,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'eori #imm,abs.w'
+			jsr		TestOpen
+			move	#$03,ccr
+			move.l	#$bf1f5142,ApplScratch
+			eori.l	#$e626941d,ApplScratch
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$5939c55f,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'eori #imm,ccr'
+			jsr		TestOpen
+			move	#$00,ccr
+			eori	#$1f,ccr
+			move	sr,d0
+			cmpi.b	#$1f,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'exg dn,dn'
+			jsr		TestOpen
+			move.l	#-1,d0
+			move.l	#1,d1
+			exg		d0,d1
+			cmp.l	#1,d0
+			jsr		TestZ1
+			cmp.l	#-1,d1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'exg an,dn'
+			jsr		TestOpen
+			move.l	#-1,d0
+			movea.l	#1,a1
+			exg		d0,a1
+			cmp.l	#1,d0
+			jsr		TestZ1
+			cmpa.l	#-1,a1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'exg an,an'
+			jsr		TestOpen
+			movea.l	#-1,a0
+			movea.l	#1,a1
+			exg		a0,a1
+			cmpa.l	#1,a0
+			jsr		TestZ1
+			cmpa.l	#-1,a1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ext.l dn'
+			jsr		TestOpen
+			move.l	#$736f8c72,d4
+			ext.l	d4
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$ffff8c72,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ext.w dn'
+			jsr		TestOpen
+			move.l	#$736f8c72,d4
+			ext.w	d4
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$736f0072,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ext.w dn'
+			jsr		TestOpen
+			move.l	#$736f8c72,d4
+			ext.w	d4
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$736f0072,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'jmp (d,pc,xn)'
+			jsr		TestOpen
+			movea.l	#$1111fffc,a0
+			jmp		jmpx+4(pc,a0.w)
+			pea		#'# BAD: fell short'
+			jsr		LineAppend
+			jsr		LineFlush
+jmpx
+			bra.s	jmpy
+			pea		#'# BAD: fell long'
+			jsr		LineAppend
+			jsr		LineFlush
+jmpy
+			jsr		TestClose
+
+			pea		#'jsr (d,pc)'
+			jsr		TestOpen
+			jsr		jsrx
+			bra.s	jsry
+jsrx
+			rts
+jsry
+			jsr		TestClose
+
+			pea		#'lea d(an),an'
+			jsr		TestOpen
+			movea.l	#$00014000,a0
+			lea		-$8000(a0),a1
+			cmpa.l	#$0000c000,a1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'link a6,#imm'
+			jsr		TestOpen
+			movea.l	#$12345678,a6
+			lea		-4(sp),a0
+			movea.l	a6,a1
+			lea		-14(sp),a2
+			link	a6,#-10
+			cmpa.l	a6,a0
+			jsr		TestZ1
+			cmpa.l	(a6),a1
+			jsr		TestZ1
+			cmpa.l	sp,a2
+			jsr		TestZ1
+			adda.w	#14,sp
+			jsr		TestClose
+
+			pea		#'lsr dn'
+			jsr		TestOpen
+			move.w	#$8111,d0
+			move	#$02,ccr ; set v to see it cleared
+			lsr.w	#1,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$4088,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'lsl dn'
+			jsr		TestOpen
+			move.w	#$c111,d0
+			move	#$02,ccr ; set v to see it cleared
+			lsl.w	#1,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$8222,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'move dn,abs.w'
+			jsr		TestOpen
+			move	#$1f,ccr
+			move.l	#$79e1182c,d0
+			move.l	d0,ApplScratch
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1
+			cmpi.l	#$79e1182c,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movea dn,an'
+			jsr		TestOpen
+			move.l	#$79e1182c,d0
+			move	#$1f,ccr
+			movea.l d0,a1
+			jsr		TestN1 ; all one because untouched
+			jsr		TestZ1
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			cmpa.l	#$79e1182c,a1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'move dn,ccr'
+			jsr		TestOpen
+			move.b	#$15,d0
+			move	d0,ccr
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'move sr,dn'
+			jsr		TestOpen
+			move.l	#-1,d0
+			clr.w	d0
+			move	sr,d0
+			and.w	#$000f,d0
+			cmpi.l	#$ffff0004,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'move dn,sr'
+			jsr		TestOpen
+			move	sr,d5 ; preserve upper byte on real machines
+			move.b	#$15,d5
+			move	d5,sr
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'movem.l regs,-(an)'
+			jsr		TestOpen
+			move.w	#$c0de,-(sp)
+			move.l	#$11111111,d0
+			move.l	#$22222222,d1
+			movea.l	#$33333333,a2
+			movea.l	#$44444444,a3
+			movem.l d0/d1/a2/a3,-(sp)
+			cmpi.l	#$11111111,(sp)+
+			jsr		TestZ1
+			cmpi.l	#$22222222,(sp)+
+			jsr		TestZ1
+			cmpi.l	#$33333333,(sp)+
+			jsr		TestZ1
+			cmpi.l	#$44444444,(sp)+
+			jsr		TestZ1
+			cmpi.w	#$c0de,(sp)+ ; check stack
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.w regs,-(an)'
+			jsr		TestOpen
+			move.w	#$c0de,-(sp)
+			move.w	#$1111,d0
+			move.w	#$2222,d1
+			movea.w	#$3333,a2
+			movea.w	#$4444,a3
+			movem.w d0/d1/a2/a3,-(sp)
+			cmpi.w	#$1111,(sp)+
+			jsr		TestZ1
+			cmpi.w	#$2222,(sp)+
+			jsr		TestZ1
+			cmpi.w	#$3333,(sp)+
+			jsr		TestZ1
+			cmpi.w	#$4444,(sp)+
+			jsr		TestZ1
+			cmpi.w	#$c0de,(sp)+ ; check stack
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l (an)+,regs'
+			jsr		TestOpen
+			move.w	#$c0de,-(sp)
+			move.l	#$66666666,-(sp)
+			move.l	#$77777777,-(sp)
+			move.l	#$88888888,-(sp)
+			move.l	#$99999999,-(sp)
+			movem.l (sp)+,d4/d5/a0/a1
+			cmpi.l	#$99999999,d4
+			jsr		TestZ1
+			cmpi.l	#$88888888,d5
+			jsr		TestZ1
+			cmpa.l	#$77777777,a0
+			jsr		TestZ1
+			cmpa.l	#$66666666,a1
+			jsr		TestZ1
+			cmpi.w	#$c0de,(sp)+
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.w (an)+,regs'
+			jsr		TestOpen
+			move.w	#$c0de,-(sp)
+			move.w	#$7777,-(sp)
+			move.w	#$8888,-(sp)
+			move.w	#$6666,-(sp)
+			move.w	#$9999,-(sp)
+			movem.w (sp)+,d4/d5/a0/a1
+			cmpi.l	#$ffff9999,d4 ; test sign extension
+			jsr		TestZ1
+			cmpi.l	#$00006666,d5
+			jsr		TestZ1
+			cmpa.l	#$ffff8888,a0
+			jsr		TestZ1
+			cmpa.l	#$00007777,a1
+			jsr		TestZ1
+			cmpi.w	#$c0de,(sp)+
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l regs,(an)'
+			jsr		TestOpen
+			lea		ApplScratch,a0
+			move.l	#$11111111,d0
+			move.l	#$22222222,d1
+			movea.l	#$33333333,a2
+			movea.l	#$44444444,a3
+			movem.l d0/d1/a2/a3,(a0)
+			cmpi.l	#$11111111,(a0)
+			jsr		TestZ1
+			cmpi.l	#$22222222,4(a0)
+			jsr		TestZ1
+			cmpi.l	#$33333333,8(a0)
+			jsr		TestZ1
+			cmpi.l	#$44444444,12(a0)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l (an),regs'
+			jsr		TestOpen
+			lea		ApplScratch,a0
+			move.l	#$aaaaaaaa,(a0)
+			move.l	#$bbbbbbbb,4(a0)
+			move.l	#$cccccccc,8(a0)
+			move.l	#$dddddddd,12(a0)
+			movem.l (a0),d0/d1/a2/a3
+			cmpi.l	#$aaaaaaaa,d0
+			jsr		TestZ1
+			cmpi.l	#$bbbbbbbb,d1
+			jsr		TestZ1
+			cmpa.l	#$cccccccc,a2
+			jsr		TestZ1
+			cmpa.l	#$dddddddd,a3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l ax,-(ax)'
+			jsr		TestOpen ; register decremented then stored
+			lea		Kilobyte1,a3
+			movem.l a3,-(a3)
+			cmpa.l	(a3),a3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l _/ax/_,-(ax)'
+			jsr		TestOpen
+			lea		Kilobyte1,a3
+			movem.l d0/a3/a4,-(a3)
+			cmpa.l	4(a3),a3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l (ax)+,_/ax/_'
+			jsr		TestOpen ; register incremented, ignoring loaded copy
+			lea		Kilobyte1,a3
+			movem.l (a3)+,d0/a3/a4
+			lea		Kilobyte1+12,a0
+			cmpa.l	a0,a3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'movem.l (ax),ax'
+			jsr		TestOpen
+			lea		Kilobyte1,a3
+			move.l	#$abbabeef,(a3)
+			movem.l (a3),a3
+			cmpa.l	#$abbabeef,a3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'moveq #imm,dn'
+			jsr		TestOpen
+			ori		#$1f,sr ; set all bits
+			moveq.l #0,d0
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#0,d0
+			jsr		TestZ1
+			moveq.l #-2,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#-2,d0
+			jsr		TestZ1
+			moveq.l #127,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#127,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'mulu #imm,dn'
+			jsr		TestOpen
+			move.w	#40000,d0
+			move	#$1f,ccr ; set v and c, which should be zeroed, also x
+			mulu	#39000,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#40000*39000,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'muls #imm,dn'
+			jsr		TestOpen
+			move.w	#-20000,d0
+			move	#$0f,ccr ; set v and c, which should be zeroed
+			muls	#-30000,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmp.l	#20000*30000,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $00 x=0'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$00,(a4)
+			move	#$04,ccr ; set z only
+			nbcd.b	(a4)
+			jsr		TestZ1
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.b	#$00,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $00 x=1'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$00,(a4)
+			move	#$14,ccr ; set z and x
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$99,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $01 x=0'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$01,(a4)
+			move	#$04,ccr ; set z only
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$99,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $01 x=1'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$01,(a4)
+			move	#$14,ccr ; set z and x
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$98,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $09 x=0'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$09,(a4)
+			move	#$04,ccr ; set z only
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$91,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $09 x=1'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$09,(a4)
+			move	#$14,ccr ; set z and x
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$90,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $40 x=0'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$40,(a4)
+			move	#$04,ccr ; set z only
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$60,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $40 x=1'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$40,(a4)
+			move	#$14,ccr ; set z and x
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$59,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $99 x=0'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$99,(a4)
+			move	#$04,ccr ; set z only
+			nbcd.b	(a4)
+			jsr		TestZ0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$01,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nbcd (an) $99 x=1'
+			jsr		TestOpen
+			lea		Kilobyte1,a4
+			move.b	#$99,(a4)
+			move	#$14,ccr ; set z and x
+			nbcd.b	(a4)
+			jsr		TestZ1
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.b	#$00,(a4)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'neg dn 0'
+			jsr		TestOpen
+			move.w	#0,d0
+			neg		d0
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			cmp.w	#0,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'neg dn 1'
+			jsr		TestOpen
+			move.w	#1,d0
+			neg		d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			cmp.w	#-1,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'neg dn -1'
+			jsr		TestOpen
+			move.w	#-1,d0
+			neg		d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			cmp.w	#1,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'negx -(an)'
+			jsr		TestOpen
+			lea		ApplScratch+4,a2
+			move.l	#123456,ApplScratch
+			move	#$00,ccr ; clear x
+			negx.b	-(a2)
+			negx.b	-(a2)
+			negx.b	-(a2)
+			negx.b	-(a2)
+			cmpi.l	#-123456,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nop'
+			jsr		TestOpen
+			nop
+			jsr		TestClose
+
+			pea		#'not dn'
+			jsr		TestOpen
+			move.b	#%01101110,d3
+			move	#$1f,ccr ; check that v/c get zeroed
+			not.b	d3
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; untouched
+			cmp.b	#%10010001,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'or abs.w,dn'
+			jsr		TestOpen
+			move.w	#$f0f0,d2
+			move.w	#$00ff,ApplScratch
+			move	#$1f,ccr ; check that v/c get zeroed
+			or.w	ApplScratch,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; untouched
+			cmpi.w	#$f0ff,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'or dn,abs.w'
+			jsr		TestOpen
+			move.w	#$f0f0,d2
+			move.w	#$00ff,ApplScratch
+			move	#$1f,ccr ; check that v/c get zeroed
+			or.w	d2,ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; untouched
+			cmpi.w	#$f0ff,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ori #imm,d(an)'
+			jsr		TestOpen
+			move.w	#$0888,Kilobyte1
+			move	#$1f,ccr ; check that v/c get zeroed
+			ori.w	#$0082,Kilobyte1
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX1 ; untouched
+			cmpi.w	#$088a,Kilobyte1
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ori #imm,ccr'
+			jsr		TestOpen
+			move	#$10,ccr
+			ori		#$02,ccr
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX1
+
+			jsr		TestClose
+
+			pea		#'ori #imm,sr'
+			jsr		TestOpen
+			move	#$10,ccr
+			ori		#$02,sr
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'pea d(an)'
+			jsr		TestOpen
+			move.w	#$7676,Kilobyte1
+			pea		Kilobyte1
+			movea.l	(sp)+,a0
+			cmpi.w	#$7676,(a0)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'rol #imm,dn'
+			jsr		TestOpen
+			move.w	#$4000,d0
+			rol.w	#2,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			cmpi.w	#$0001,d0
+			jsr		TestZ1
+
+			move.w	#$4000,d0
+			rol.w	#1,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.w	#$8000,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'ror #imm,dn'
+			jsr		TestOpen
+			move.w	#$0002,d0
+			ror.w	#2,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			cmpi.w	#$8000,d0
+			jsr		TestZ1
+
+			move.w	#$0002,d0
+			ror.w	#1,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.w	#$0001,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'roxl -(an)'
+			jsr		TestOpen
+			lea		ApplScratch,a4
+			move.l	#$88008080,(a4)+
+			move	#$00,ccr
+			roxl.w	-(a4)
+			roxl.w	-(a4)
+			jsr		TestX1
+			cmpi.l	#$10010101,(a4)
+			jsr		TestClose
+
+			pea		#'roxr -(an)'
+			jsr		TestOpen
+			lea		ApplScratch,a4
+			move.l	#$11001010,(a4)
+			move	#$00,ccr
+			roxr.w	(a4)+
+			roxr.w	(a4)+
+			jsr		TestX0
+			cmpi.l	#$08800808,-(a4)
+			jsr		TestClose
+
+			pea		#'rtr'
+			jsr		TestOpen
+			bra.s	rtr_skip
+rtr_fakefunction
+			move.w	#$0005,-(sp) ; pretend to save
+			rtr
+rtr_skip
+			bsr.s	rtr_fakefunction
+			move	sr,d0
+			cmpi.b	#$05,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'rts'
+			jsr		TestOpen
+			pea		rts_here
+			rts
+			dc.w	$a9ff
+rts_here
+			jsr		TestClose
+
+			pea		#'sbcd -(ax),-(ay)'
+			jsr		TestOpen
+			lea		Kilobyte1,a2
+			lea		Kilobyte2,a3
+			move.l	#$82964979,(a2)+
+			move.l	#$91285849,(a3)+
+			move	#$04,ccr ; set z only
+			sbcd.b	-(a2),-(a3)
+			sbcd.b	-(a2),-(a3)
+			sbcd.b	-(a2),-(a3)
+			sbcd.b	-(a2),-(a3)
+			jsr		TestZ0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.l	#$08320870,(a3)+
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; st dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; st dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; st dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; st dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; st dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; st dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; st dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; st dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; st dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; st dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; st dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; st dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; st dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; st dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; st dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; st dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			st		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sf dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sf dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sf dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sf dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sf dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sf dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sf dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sf dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sf dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sf dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sf dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sf dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sf dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sf dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sf dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sf dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sf		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; shi dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; shi dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; shi dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; shi dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; shi dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; shi dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; shi dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; shi dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; shi dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; shi dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; shi dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; shi dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; shi dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; shi dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; shi dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; shi dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			shi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sls dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sls dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sls dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sls dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sls dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sls dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sls dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sls dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sls dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sls dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sls dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sls dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sls dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sls dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sls dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sls dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sls		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; scc dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; scc dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; scc dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; scc dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; scc dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; scc dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; scc dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; scc dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; scc dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; scc dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; scc dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; scc dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; scc dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; scc dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; scc dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; scc dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			scc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; scs dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; scs dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; scs dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; scs dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; scs dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; scs dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; scs dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; scs dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; scs dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; scs dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; scs dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; scs dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; scs dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; scs dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; scs dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; scs dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			scs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sne dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sne dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sne dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sne dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sne dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sne dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sne dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sne dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sne dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sne dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sne dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sne dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sne dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sne dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sne dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sne dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sne		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; seq dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; seq dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; seq dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; seq dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; seq dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; seq dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; seq dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; seq dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; seq dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; seq dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; seq dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; seq dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; seq dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; seq dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; seq dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; seq dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			seq		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; svc dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; svc dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; svc dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; svc dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; svc dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; svc dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; svc dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; svc dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; svc dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; svc dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; svc dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; svc dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; svc dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; svc dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; svc dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; svc dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			svc		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; svs dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; svs dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; svs dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; svs dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; svs dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; svs dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; svs dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; svs dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; svs dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; svs dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; svs dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; svs dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; svs dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; svs dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; svs dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; svs dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			svs		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; spl dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; spl dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; spl dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; spl dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; spl dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; spl dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; spl dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; spl dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; spl dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; spl dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; spl dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; spl dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; spl dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; spl dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; spl dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; spl dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			spl		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; smi dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; smi dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; smi dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; smi dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; smi dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; smi dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; smi dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; smi dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; smi dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; smi dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; smi dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; smi dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; smi dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; smi dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; smi dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; smi dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			smi		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sge dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sge dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sge dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sge dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sge dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sge dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sge dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sge dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sge dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sge dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sge dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sge dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sge dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sge dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sge dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sge dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sge		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0000; slt dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; slt dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; slt dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; slt dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; slt dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; slt dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; slt dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; slt dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; slt dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; slt dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; slt dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; slt dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; slt dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; slt dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; slt dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; slt dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			slt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sgt dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sgt dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sgt dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sgt dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sgt dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sgt dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sgt dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sgt dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sgt dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sgt dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sgt dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sgt dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sgt dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sgt dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sgt dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sgt dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sgt		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0000; sle dn'
+			jsr		TestOpen
+			move	#%0000,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0001; sle dn'
+			jsr		TestOpen
+			move	#%0001,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=0010; sle dn'
+			jsr		TestOpen
+			move	#%0010,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0011; sle dn'
+			jsr		TestOpen
+			move	#%0011,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0100; sle dn'
+			jsr		TestOpen
+			move	#%0100,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0101; sle dn'
+			jsr		TestOpen
+			move	#%0101,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0110; sle dn'
+			jsr		TestOpen
+			move	#%0110,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=0111; sle dn'
+			jsr		TestOpen
+			move	#%0111,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1000; sle dn'
+			jsr		TestOpen
+			move	#%1000,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1001; sle dn'
+			jsr		TestOpen
+			move	#%1001,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1010; sle dn'
+			jsr		TestOpen
+			move	#%1010,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1011; sle dn'
+			jsr		TestOpen
+			move	#%1011,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'nxvc=1100; sle dn'
+			jsr		TestOpen
+			move	#%1100,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1101; sle dn'
+			jsr		TestOpen
+			move	#%1101,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1110; sle dn'
+			jsr		TestOpen
+			move	#%1110,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'nxvc=1111; sle dn'
+			jsr		TestOpen
+			move	#%1111,ccr
+			sle		d0
+			tst.b	d0
+			jsr		TestZ0
+
+			jsr		TestClose
+
+			pea		#'sub dn,dn f1cb-5315'
+			jsr		TestOpen
+			move.w	#$5315,d1
+			move.w	#$f1cb,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$9eb6,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 7906-4df6'
+			jsr		TestOpen
+			move.w	#$4df6,d1
+			move.w	#$7906,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$2b10,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 2eca-bd4b'
+			jsr		TestOpen
+			move.w	#$bd4b,d1
+			move.w	#$2eca,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$717f,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 4c8c-a273'
+			jsr		TestOpen
+			move.w	#$a273,d1
+			move.w	#$4c8c,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$aa19,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 03ab-0974'
+			jsr		TestOpen
+			move.w	#$0974,d1
+			move.w	#$03ab,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$fa37,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 2484-3e19'
+			jsr		TestOpen
+			move.w	#$3e19,d1
+			move.w	#$2484,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$e66b,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn b38b-e062'
+			jsr		TestOpen
+			move.w	#$e062,d1
+			move.w	#$b38b,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$d329,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn bf4b-f4f2'
+			jsr		TestOpen
+			move.w	#$f4f2,d1
+			move.w	#$bf4b,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$ca59,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 98ea-13d7'
+			jsr		TestOpen
+			move.w	#$13d7,d1
+			move.w	#$98ea,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$8513,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn d2ab-9355'
+			jsr		TestOpen
+			move.w	#$9355,d1
+			move.w	#$d2ab,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$3f56,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 1db7-a626'
+			jsr		TestOpen
+			move.w	#$a626,d1
+			move.w	#$1db7,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$7791,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn becc-27dd'
+			jsr		TestOpen
+			move.w	#$27dd,d1
+			move.w	#$becc,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$96ef,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn f516-8a38'
+			jsr		TestOpen
+			move.w	#$8a38,d1
+			move.w	#$f516,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$6ade,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 61a2-10c6'
+			jsr		TestOpen
+			move.w	#$10c6,d1
+			move.w	#$61a2,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$50dc,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 3cab-f18b'
+			jsr		TestOpen
+			move.w	#$f18b,d1
+			move.w	#$3cab,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$4b20,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn f382-f9d5'
+			jsr		TestOpen
+			move.w	#$f9d5,d1
+			move.w	#$f382,d2
+			sub.w	d1,d2
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$f9ad,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 29b7-f005'
+			jsr		TestOpen
+			move.w	#$f005,d1
+			move.w	#$29b7,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$39b2,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn d4dc-56e3'
+			jsr		TestOpen
+			move.w	#$56e3,d1
+			move.w	#$d4dc,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$7df9,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 8816-305f'
+			jsr		TestOpen
+			move.w	#$305f,d1
+			move.w	#$8816,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$57b7,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'sub dn,dn 548d-463e'
+			jsr		TestOpen
+			move.w	#$463e,d1
+			move.w	#$548d,d2
+			sub.w	d1,d2
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			cmpi.w	#$0e4f,d2
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'suba.w #imm,an'
+			jsr		TestOpen
+			move	#$13,ccr
+			movea.l	#0,a0
+			suba.w	#$10,a0
+			move	sr,d0
+			cmpi.b	#$13,d0
+			jsr		TestZ1
+			cmpa.l	#$fffffff0,a0
+			jsr		TestZ1
+
+			jsr		TestClose
+
+			pea		#'suba.l #imm,an'
+			jsr		TestOpen
+			move	#$13,ccr
+			movea.l	#$10000000,a0
+			suba.l	#$0fffffff,a0
+			move	sr,d0
+			cmpi.b	#$13,d0
+			jsr		TestZ1
+			cmpa.l	#$1,a0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-(-0x8000)'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#-$8000,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV1
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-(-0x7fff)'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#-$7fff,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-(-2)'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#-2,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 -1'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#-1,d0
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-0'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#0,d0
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestX0
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-1'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#1,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-2'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#2,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-0x7ffe'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#$7ffe,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subi #imm,d0 0-0x7fff'
+			jsr		TestOpen
+			move.w	#0,d0
+			subi	#$7fff,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			jsr		TestClose
+
+			pea		#'subq #imm,abs.w'
+			jsr		TestOpen
+			move.l	#$10000000,ApplScratch
+			subq.l	#1,ApplScratch
+			cmpi.l	#$0fffffff,ApplScratch
+			jsr		TestZ1
+			subq.l	#8,ApplScratch
+			cmpi.l	#$0ffffff7,ApplScratch
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'subq #imm,d0 0-1'
+			jsr		TestOpen
+			move.w	#0,d0
+			subq.w	#1,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmp.w	#-1,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'subq #imm,d0 0-8'
+			jsr		TestOpen
+			move.w	#0,d0
+			subq.w	#8,d0
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmp.w	#-8,d0
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'subx dn,dn'
+			jsr		TestOpen
+			move	#$10,ccr ; set x bit
+			move.w	#$10,d3
+			move.w	#$10,d4
+			subx.w	d3,d4
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC1
+			jsr		TestX1
+			cmpi.w	#$ffff,d4
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'subx -(an),-(an)'
+			jsr		TestOpen
+			lea		Kilobyte1,a0
+			lea		Kilobyte2,a1
+			move.l	#$31a959af,(a0)+
+			move.l	#$25e3dfcc,(a1)+
+			move	#$00,ccr ; clear x bit
+			subx.b	-(a0),-(a1)
+			subx.b	-(a0),-(a1)
+			subx.b	-(a0),-(a1)
+			subx.b	-(a0),-(a1)
+			jsr		TestX1
+			cmpi.l	#$f43a861d,(a1)
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'swap dn'
+			jsr		TestOpen
+			move.l	#$fffe0002,d3
+			swap	d3
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$0002fffe,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'swap dn'
+			jsr		TestOpen
+			move.l	#$fffe0002,d3
+			swap	d3
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			cmpi.l	#$0002fffe,d3
+			jsr		TestZ1
+			jsr		TestClose
+
+			pea		#'tas abs.w'
+			jsr		TestOpen
+			clr.b	ApplScratch
+			tas		ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			tas		ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'tas abs.w'
+			jsr		TestOpen
+			clr.b	ApplScratch
+			tas		ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			tas		ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestClose
+
+			pea		#'tst abs.w'
+			jsr		TestOpen
+			move.b	#$00,ApplScratch
+			tst.b	ApplScratch
+			jsr		TestN0
+			jsr		TestZ1
+			jsr		TestV0
+			jsr		TestC0
+			move.b	#$01,ApplScratch
+			tst.b	ApplScratch
+			jsr		TestN0
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			move.b	#$ff,ApplScratch
+			tst.b	ApplScratch
+			jsr		TestN1
+			jsr		TestZ0
+			jsr		TestV0
+			jsr		TestC0
+			jsr		TestClose
+
+			pea		#'unlk an'
+			jsr		TestOpen
+			move.w	#$7777,-(sp)
+			move.l	#$e7701111,-(sp)
+			movea.l	sp,a6
+			suba.w	#20,sp
+			unlk	a6
+			cmpa.l	#$e7701111,a6
+			jsr		TestZ1
+			cmpi	#$7777,(sp)+
+			jsr		TestZ1
+			jsr		TestClose
+
+			jsr		TestPlan
+			rts
+
+			END

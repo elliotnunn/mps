@@ -1,0 +1,261 @@
+; Basic 68k routines for a Test Anything Protocol (TAP) producer
+
+LineBuffer	RECORD
+len			ds.l	1
+buf			ds.b	512
+			endr
+
+
+LineAppend	PROC	EXPORT
+			IMPORT	LineBuffer:data
+
+			move.l	4(sp),a0				; a0 src
+			lea		LineBuffer.buf,a1
+			add.l	LineBuffer.len,a1		; a1 dest
+			moveq.l	#0,d0
+			move.b	(a0)+,d0				; d0 count
+			add.l	d0,LineBuffer
+			dc.w	$a22e					; _BlockMoveData
+			move.l	(sp)+,a0
+			addq.l	#4,sp
+			jmp		(a0)
+
+
+LineAppendN	PROC	EXPORT					; arg is a 2-byte BCD
+
+			move.w	4(sp),d0
+
+			clr.l	d2						; essentially an UNPK instruction
+			move.w	d0,d1
+			asl.l	#6,d1
+			asl.l	#6,d1
+			and.l	#$0f000000,d1
+			move.l	d1,d2
+			move.w	d0,d1
+			asl.l	#8,d1
+			and.l	#$000f0000,d1
+			or.l	d1,d2
+			move.w	d0,d1
+			asl.w	#4,d1
+			and.w	#$0f00,d1
+			or.w	d1,d2
+			and.b	#$0f,d0
+			or.b	d0,d2
+
+			move.l	d2,-(sp)				; push to stack
+			move.w	#4,-(sp)				; and place a length byte
+
+			moveq	#2,d1					; snip up to three zeros
+zeroCutLoop	tst.b	2(sp)
+			bne.s	escape
+			sub.w	#1,(sp)
+			move.l	2(sp),d0
+			asl.l	#8,d0
+			move.l	d0,2(sp)
+			dbra	d1,zeroCutLoop
+escape
+
+			add.l	#'0000',2(sp)
+			pea		1(sp)
+			jsr		LineAppend
+			addq	#6,sp
+
+			move.l	(sp)+,a0
+			addq	#2,sp
+			jmp		(a0)
+
+
+LineFlush	PROC	EXPORT
+			IMPORT	LineBuffer:data
+
+			move.l	LineBuffer.len,d0		; append newline
+			clr.l	LineBuffer.len
+			lea		LineBuffer.buf,a0
+			move.b	#13,(a0,d0)
+			addq.l	#1,d0
+
+			move.l	$316,a1
+			move.l	4(a1),a1
+			move.l	28(a1),a1				; io table
+			lea		20(a1),a1				; point to stdout entry
+			move.l	d0,12(a1)				; byte count
+			move.l	a0,16(a1)				; buffer ptr
+			move.l	a1,-(sp)				; this struct is an arg
+			move.l	4(a1),a1				; follow to fsys table
+			move.l	16(a1),a1 				; where we find func ptr
+			jsr		(a1)
+			addq	#4,sp
+
+			rts
+
+
+TestState	RECORD
+decCtr		ds.b	2
+namePtr		ds.l	1
+notOk		ds.b	1
+			endr
+
+
+TestOpen	PROC	EXPORT
+			IMPORT	TestState:data
+
+			lea		TestState.decCtr+2,a1	; increment BCD counter
+			lea		bcdAdd+2,a0
+			abcd.b	-(a0),-(a1)
+			abcd.b	-(a0),-(a1)
+
+			clr.b	TestState.notOk			; declare the test ok
+
+			move.l	(sp)+,a0				; save name and return
+			move.l	(sp)+,TestState.namePtr
+			jmp		(a0)
+
+bcdAdd		dc.w	$0001
+
+
+TestClose	PROC	EXPORT
+			IMPORT	TestState:data
+			IMPORT	LineAppend, LineFlush, LineAppendN
+
+			tst.b	TestState.notOk
+			beq.s	ok
+			pea		#'not '
+			jsr		LineAppend
+ok
+
+			pea		#'ok '
+			jsr		LineAppend
+
+			move.w	TestState.decCtr,-(sp)
+			jsr		LineAppendN
+
+			pea		#' - '
+			jsr		LineAppend
+
+			move.l	TestState.namePtr,-(sp)
+			jsr		LineAppend
+
+			jsr		LineFlush
+
+			rts
+
+
+TestFail	PROC	EXPORT
+			IMPORT	TestState:data
+			st		TestState.notOk
+			rts
+
+
+TestPlan	PROC	EXPORT
+			IMPORT	LineAppend, LineFlush, LineAppendN
+			pea		#'1..'
+			jsr		LineAppend
+			move.w	TestState.decCtr,-(sp)
+			jsr		LineAppendN
+			jsr		LineFlush
+			rts
+
+
+TestStrCmp	PROC	EXPORT
+			IMPORT	LineAppend, LineFlush, TestFail
+
+			movem.l 4(sp),a0/a1
+			clr.w	d1
+			move.b	(a0),d1
+
+loop		cmpm.b	(a0)+,(a1)+
+			bne.s	fail
+			dbra	d1,loop
+
+return		move.l	(sp)+,a0
+			addq	#8,sp
+			jmp		(a0)
+
+fail		jsr		TestFail
+			pea		#'# Failed comparison: "'
+			bsr		LineAppend
+			move.l	4(sp),-(sp)
+			bsr		LineAppend
+			pea		#'" == "'
+			bsr		LineAppend
+			move.l	8(sp),-(sp)
+			bsr		LineAppend
+			pea		#'"'
+			bsr		LineAppend
+			bsr		LineFlush
+			bra.s	return
+
+
+			PROC
+
+			EXPORT	TestN0
+TestN0		move	sr,-(sp)
+			bpl.s	pass
+			pea		#'N=1'
+			bra.s	fail
+
+			EXPORT	TestN1
+TestN1		move	sr,-(sp)
+			bmi.s	pass
+			pea		#'N=0'
+			bra.s	fail
+
+			EXPORT	TestZ0
+TestZ0		move	sr,-(sp)
+			bne.s	pass
+			pea		#'Z=1'
+			bra.s	fail
+
+			EXPORT	TestZ1
+TestZ1		move	sr,-(sp)
+			beq.s	pass
+			pea		#'Z=0'
+			; fall through
+
+			IMPORT	LineAppend, LineFlush,TestFail
+fail		pea		#'# bad: '		; in the middle so we can short-branch
+			jsr		LineAppend
+			jsr		LineAppend
+			jsr		LineFlush
+			jsr		TestFail
+pass		rtr
+
+			EXPORT	TestV0
+TestV0		move	sr,-(sp)
+			bvc.s	pass
+			pea		#'V=1'
+			bra.s	fail
+
+			EXPORT	TestV1
+TestV1		move	sr,-(sp)
+			bvs.s	pass
+			pea		#'V=0'
+			bra.s	fail
+
+			EXPORT	TestC0
+TestC0		move	sr,-(sp)
+			bcc.s	pass
+			pea		#'C=1'
+			bra.s	fail
+
+			EXPORT	TestC1
+TestC1		move	sr,-(sp)
+			bcs.s	pass
+			pea		#'C=0'
+			bra.s	fail
+
+			EXPORT	TestX0
+TestX0		move	sr,-(sp)
+			btst.b	#4,1(sp)
+			beq.s	pass
+			pea		#'X=1'
+			bra.s	fail
+
+			EXPORT	TestX1
+TestX1		move	sr,-(sp)
+			btst.b	#4,1(sp)
+			bne.s	pass
+			pea		#'X=0'
+			bra.s	fail
+
+			END
