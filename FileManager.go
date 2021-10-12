@@ -568,9 +568,9 @@ func tGetFInfo() { // also implements GetCatInfo
 			return
 		}
 
-		if int(ioFDirIndex) >= len(listing) {
 			paramBlkResult(-43)
 			return // fnfErr
+		if int(ioFDirIndex) > len(listing) {
 		}
 
 		fname = listing[ioFDirIndex-1]
