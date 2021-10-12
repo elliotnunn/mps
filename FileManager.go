@@ -507,18 +507,20 @@ func tCreate() {
 	ioName := readPstring(ioNamePtr)
 
 	number := get_vol_or_dir()
-	path, errno := get_host_path(number, ioName, false)
-	if errno != 0 {
+	path, errno := get_host_path(number, ioName, true)
+	switch errno {
+	case 0: // noErr: already exists
+		paramBlkResult(-48) // dupFNErr
+	case -43: // fnfErr: create the file/folder
+		if readb(d1ptr+3) == 0x60 { // DirCreate
+			os.Mkdir(path, 0o755)
+			writel(pb+48, uint32(get_macos_dnum(path))) // return ioDirID
+		} else { // Create
+			writeDataFork(path, nil)
+		}
+	default: // likely a containing folder not found, complain loudly
 		paramBlkResult(errno)
-		return
 	}
-
-	fp, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
-	if err != nil {
-		paramBlkResult(-48)
-		return // dupFNErr
-	}
-	defer fp.Close()
 }
 
 func tDelete() {
@@ -807,6 +809,9 @@ func tFSDispatch() {
 	case 2: // CloseWD
 		// do nothing
 
+	case 6: // DirCreate
+		tCreate()
+
 	case 7: // GetWDInfo
 		// the opposite transformation to OpenWD
 		writel(pb+48, uint32(readw(pb+22))) // ioWDDirID = ioVRefNum
@@ -928,6 +933,28 @@ func tHighLevelFSDispatch() {
 		pop(128)
 
 		writew(refNumPtr, ioRefNum)
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
+
+	case 5: // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
+		idPtr := popl()
+		popw() // discard scriptTag
+		specPtr := popl()
+
+		push(128, 0)
+		pb := readl(spptr)
+		writel(a0ptr, pb)
+		writew(pb+22, readw(specPtr))   // ioVRefNum
+		writel(pb+48, readl(specPtr+2)) // ioDirID
+		writel(pb+18, specPtr+6)        // ioNamePtr
+
+		writel(d0ptr, 6)                    // DirCreate selector
+		call_m68k(executable_atrap(0xa260)) // FSDispatch
+		ioDirID := readl(pb + 48)
+		pop(128)
+
+		if readw(d0ptr+2) == 0 {
+			writel(idPtr, ioDirID)
+		}
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 7: // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
