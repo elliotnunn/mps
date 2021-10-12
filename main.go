@@ -725,22 +725,22 @@ func printUsageAndQuit() {
 
 func main() {
 	my_traps = [...]func(){
-		os_base + 0x00:  tOpen,                // _Open
-		os_base + 0x01:  tClose,               // _Close
-		os_base + 0x02:  tReadWrite,           // _Read
-		os_base + 0x03:  tReadWrite,           // _Write
-		os_base + 0x07:  tGetVInfo,            // _GetVInfo
-		os_base + 0x08:  tCreate,              // _Create
-		os_base + 0x09:  tDelete,              // _Delete
-		os_base + 0x0a:  tOpen,                // _OpenRF
-		os_base + 0x0c:  tGetFInfo,            // _GetFInfo
-		os_base + 0x0d:  tSetFInfo,            // _SetFInfo
-		os_base + 0x11:  tGetEOF,              // _GetEOF
-		os_base + 0x12:  tSetEOF,              // _SetEOF
+		os_base + 0x00:  pbWrap(tOpen),        // _Open
+		os_base + 0x01:  pbWrap(tClose),       // _Close
+		os_base + 0x02:  pbWrap(tReadWrite),   // _Read
+		os_base + 0x03:  pbWrap(tReadWrite),   // _Write
+		os_base + 0x07:  pbWrap(tGetVInfo),    // _GetVInfo
+		os_base + 0x08:  pbWrap(tCreate),      // _Create
+		os_base + 0x09:  pbWrap(tDelete),      // _Delete
+		os_base + 0x0a:  pbWrap(tOpen),        // _OpenRF
+		os_base + 0x0c:  pbWrap(tGetFInfo),    // _GetFInfo
+		os_base + 0x0d:  pbWrap(tSetFInfo),    // _SetFInfo
+		os_base + 0x11:  pbWrap(tGetEOF),      // _GetEOF
+		os_base + 0x12:  pbWrap(tSetEOF),      // _SetEOF
 		os_base + 0x13:  tParamBlkNop,         // _FlushVol
-		os_base + 0x14:  tGetVol,              // _GetVol
-		os_base + 0x15:  tSetVol,              // _SetVol
-		os_base + 0x18:  tGetFPos,             // _GetFPos
+		os_base + 0x14:  pbWrap(tGetVol),      // _GetVol
+		os_base + 0x15:  pbWrap(tSetVol),      // _SetVol
+		os_base + 0x18:  pbWrap(tGetFPos),     // _GetFPos
 		os_base + 0x1a:  tGetZone,             // _GetZone
 		os_base + 0x1b:  tClrD0A0,             // _SetZone
 		os_base + 0x1c:  tFreeMem,             // _FreeMem
@@ -768,7 +768,7 @@ func main() {
 		os_base + 0x36:  tClrD0A0,             // _MoreMasters
 		os_base + 0x3c:  tCmpString,           // _CmpString
 		os_base + 0x40:  tClrD0A0,             // _ResrvMem
-		os_base + 0x44:  tSetFPos,             // _SetFPos
+		os_base + 0x44:  pbWrap(tSetFPos),     // _SetFPos
 		os_base + 0x46:  tGetTrapAddress,      // _GetTrapAddress
 		os_base + 0x47:  tSetTrapAddress,      // _SetTrapAddress
 		os_base + 0x48:  tGetZone,             // _PtrZone
@@ -782,7 +782,7 @@ func main() {
 		os_base + 0x58:  tClrD0,               // _InsTime
 		os_base + 0x59:  tClrD0,               // _RmvTime
 		os_base + 0x5a:  tClrD0,               // _PrimeTime
-		os_base + 0x60:  tFSDispatch,          // _FSDispatch
+		os_base + 0x60:  pbWrap(tFSDispatch),  // _FSDispatch
 		os_base + 0x62:  tFreeMem,             // _PurgeSpace
 		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
 		os_base + 0x64:  tClrD0,               // _MoveHHi

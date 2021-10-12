@@ -206,27 +206,19 @@ func get_macos_dnum(path string) uint16 {
 	return uint16(len(dnums)) - 1
 }
 
-// Set up param blk fields, but leave d0 alone (contains FSDispatch selector)
-// Safe to call more than once
-func paramBlkSetup() {
-	pb := readl(a0ptr)
-	trap := readw(d1ptr + 2)
+// Let the funcs in this file accept a pb pointer and return an osErr
+func pbWrap(actualTrap func(uint32) int) func() {
+	return func() {
+		pb := readl(a0ptr)
+		trap := readw(d1ptr + 2)
 
-	writew(pb+6, trap) // ioTrap
-	writew(pb+16, 0)   // ioResult = noErr by default
-}
+		writew(pb+6, trap) // ioTrap
 
-// Set ioResult but leave d0 for paramBlkTeardown to set
-func paramBlkResult(result int) {
-	pb := readl(a0ptr)
-	writew(pb+16, uint16(result))
-}
+		err := actualTrap(pb)
 
-// Copy ioResult to d0
-// Safe to call more than once
-func paramBlkTeardown() {
-	pb := readl(a0ptr)
-	writel(d0ptr, extwl(readw(pb+16)))
+		writew(pb+16, uint16(err)) // ioResult
+		writel(d0ptr, uint32(err))
+	}
 }
 
 func get_vol_or_dir() (num uint16) {
@@ -253,10 +245,7 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 	writel(pb+18, namePtr) // ioNamePtr
 }
 
-func tOpen() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
+func tOpen(pb uint32) int {
 	// Find a free FCB
 	var ioRefNum uint16
 	var fcbPtr uint32
@@ -272,7 +261,6 @@ func tOpen() {
 	}
 
 	forkIsRsrc := readl(d1ptr)&0xff == 0xa
-	pb := readl(a0ptr)
 
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)
@@ -290,8 +278,7 @@ func tOpen() {
 	}
 
 	if errno != 0 {
-		paramBlkResult(errno)
-		return // fnfErr
+		return errno
 	}
 
 	dirID, name := quickFile(path)
@@ -327,27 +314,21 @@ func tOpen() {
 	writePstring(fcbPtr+62, name)    // fcbCName
 
 	writew(pb+24, ioRefNum)
+	return 0
 }
 
-func tClose() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
-
+func tClose(pb uint32) int {
 	ioRefNum := readw(pb + 24)
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramBlkResult(-38)
-		return // fnOpnErr
+		return -38 // fnOpnErr
 	}
 
 	number := readw(fcb + 58 + 2)
 	string := readPstring(fcb + 62)
 	path, errno := get_host_path(number, string, false)
 	if errno != 0 {
-		paramBlkResult(errno)
-		return // fnfErr
+		return errno
 	}
 
 	// Write out
@@ -375,19 +356,14 @@ func tClose() {
 	for i := uint32(0); i < uint32(readw(0x3f6)); i++ {
 		writel(fcb+i, 0)
 	}
+	return 0
 }
 
-func tReadWrite() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
-
+func tReadWrite(pb uint32) (result int) {
 	ioRefNum := readw(pb + 24)
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramBlkResult(-38)
-		return // fnOpnErr
+		return -38 // fnOpnErr
 	}
 
 	fkey := forkKeyFromRefNum(ioRefNum)
@@ -418,11 +394,11 @@ func tReadWrite() {
 	if trymark > int64(len(buf)) {
 		mark = uint32(len(buf))
 		ioReqCount = 0
-		paramBlkResult(-39) // eofErr
+		result = -39 // eofErr
 	} else if trymark < 0 {
 		mark = 0
 		ioReqCount = 0
-		paramBlkResult(-40) // posErr
+		result = -40 // posErr
 	}
 
 	ioActCount := ioReqCount
@@ -447,13 +423,11 @@ func tReadWrite() {
 	writel(pb+40, ioActCount)
 	writel(pb+46, mark+ioActCount)  // ioPosOffset
 	writel(fcb+16, mark+ioActCount) // fcbCrPs
+
+	return // noErr, eofErr or posErr
 }
 
-func tGetVInfo() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
+func tGetVInfo(pb uint32) int {
 	ioVNPtr := readl(pb + 18)
 
 	if ioVNPtr != 0 {
@@ -486,13 +460,11 @@ func tGetVInfo() {
 		write(32, pb+90, 0)                                 // ioVFndrInfo
 		writel(pb+90, uint32(get_macos_dnum(systemFolder))) // must match BootDrive
 	}
+
+	return 0
 }
 
-func tCreate() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
+func tCreate(pb uint32) int {
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)
 
@@ -500,7 +472,7 @@ func tCreate() {
 	path, errno := get_host_path(number, ioName, true)
 	switch errno {
 	case 0: // noErr: already exists
-		paramBlkResult(-48) // dupFNErr
+		return -48 // dupFNErr
 	case -43: // fnfErr: create the file/folder
 		if readb(d1ptr+3) == 0x60 { // DirCreate
 			os.Mkdir(path, 0o755)
@@ -508,37 +480,30 @@ func tCreate() {
 		} else { // Create
 			writeDataFork(path, nil)
 		}
+		return 0
 	default: // likely a containing folder not found, complain loudly
-		paramBlkResult(errno)
+		return errno
 	}
 }
 
-func tDelete() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
-
+func tDelete(pb uint32) int {
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)
 
 	number := get_vol_or_dir()
 	path, errno := get_host_path(number, ioName, true)
 	if errno != 0 {
-		paramBlkResult(errno)
-		return
+		return errno
 	}
 
 	deleteForks(path)
+
+	return 0
 }
 
-func tGetFInfo() { // also implements GetCatInfo
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
+func tGetFInfo(pb uint32) int { // also implements GetCatInfo
 	trap := readw(d1ptr + 2)
 
-	pb := readl(a0ptr)
 	ioFDirIndex := int16(readw(pb + 28))
 	ioNamePtr := readl(pb + 18)
 
@@ -558,19 +523,16 @@ func tGetFInfo() { // also implements GetCatInfo
 
 		path, errno := get_host_path(dirid, macstring(""), true)
 		if errno != 0 {
-			paramBlkResult(errno)
-			return
+			return errno
 		}
 
 		listing, errno := listdir(path)
 		if errno != 0 {
-			paramBlkResult(errno)
-			return
+			return errno
 		}
 
-			paramBlkResult(-43)
-			return // fnfErr
 		if int(ioFDirIndex) > len(listing) {
+			return -43 // fnfErr
 		}
 
 		fname = listing[ioFDirIndex-1]
@@ -581,8 +543,7 @@ func tGetFInfo() { // also implements GetCatInfo
 
 	path, errno := get_host_path(dirid, fname, true)
 	if errno != 0 {
-		paramBlkResult(errno)
-		return
+		return errno
 	}
 
 	// at this point, we know that the file exists. let's try listing
@@ -633,20 +594,17 @@ func tGetFInfo() { // also implements GetCatInfo
 	t := mtime(path)
 	writel(pb+72, t) // ioFlCrDat
 	writel(pb+76, t) // ioFlMdDat
+
+	return 0
 }
 
-func tSetFInfo() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
+func tSetFInfo(pb uint32) int {
 	ioName := readPstring(readl(pb + 18))
 	dirid := get_vol_or_dir()
 
 	path, errno := get_host_path(dirid, ioName, true)
 	if errno != 0 {
-		paramBlkResult(errno)
-		return
+		return errno
 	}
 
 	if stat, err := os.Stat(path); err == nil && !stat.Mode().IsDir() {
@@ -656,38 +614,31 @@ func tSetFInfo() {
 
 		writeMtime(path, readl(pb+76)) // ioFlMdDat
 	}
+
+	return 0
 }
 
-func tGetEOF() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
+func tGetEOF(pb uint32) int {
 	ioRefNum := readw(pb + 24)
 
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramBlkResult(-38)
-		return // fnOpnErr
+		return -38 // fnOpnErr
 	}
 
 	fkey := forkKeyFromRefNum(ioRefNum)
 
 	writel(pb+28, uint32(len(openForks[fkey]))) // ioMisc
+	return 0
 }
 
-func tSetEOF() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
+func tSetEOF(pb uint32) int {
 	ioRefNum := readw(pb + 24)
 	ioMisc := readl(pb + 28)
 
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
-		paramBlkResult(-38)
-		return // fnOpnErr
+		return -38 // fnOpnErr
 	}
 
 	fkey := forkKeyFromRefNum(ioRefNum)
@@ -706,14 +657,11 @@ func tSetEOF() {
 	if ioMisc < readl(fcb+16) { // can't have mark beyond eof
 		writel(fcb+16, ioMisc)
 	}
+	return 0
 }
 
-func tGetVol() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
+func tGetVol(pb uint32) int {
 	trap := readw(d1ptr + 2)
-	pb := readl(a0ptr)
 
 	if trap&0x200 != 0 { // HGetVol
 		writew(pb+22, 2)                                // ioVRefNum = 2
@@ -727,14 +675,12 @@ func tGetVol() {
 		macstr, _ := unicodeToMac(filepath.Base(dnums[0]))
 		writePstring(ioVNPtr, macstr)
 	}
+
+	return 0
 }
 
-func tSetVol() {
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
+func tSetVol(pb uint32) int {
 	trap := readw(d1ptr + 2)
-	pb := readl(a0ptr)
 
 	ioVNPtr := readl(pb + 18)
 	if ioVNPtr != 0 {
@@ -745,8 +691,7 @@ func tSetVol() {
 
 		path, errno := get_host_path(2, volname, true)
 		if errno != 0 {
-			paramBlkResult(errno)
-			return
+			return errno
 		}
 
 		dnums[0] = path
@@ -755,32 +700,27 @@ func tSetVol() {
 	} else { // plain SetVol
 		dnums[0] = dnums[readw(pb+22)] // ioVRefNum
 	}
+
+	return 0
 }
 
-func tGetFPos() {
+func tGetFPos(pb uint32) int {
 	// Act like _Read with ioReqCount=0 and ioPosMode=fsAtMark
-	pb := readl(a0ptr)
 	writel(pb+32, 0) // ioBuffer
 	writel(pb+36, 0) // ioReqCount
 	writew(pb+44, 0) // ioPosMode
-	tReadWrite()
+	return tReadWrite(pb)
 }
 
-func tSetFPos() {
+func tSetFPos(pb uint32) int {
 	// Act like _Read with ioReqCount=0
-	pb := readl(a0ptr)
 	writel(pb+32, 0) // ioBuffer
 	writel(pb+36, 0) // ioReqCount
-	tReadWrite()
+	return tReadWrite(pb)
 }
 
-func tFSDispatch() {
+func tFSDispatch(pb uint32) int {
 	// These might get called twice, which is harmless
-	paramBlkSetup()
-	defer paramBlkTeardown()
-
-	pb := readl(a0ptr)
-
 	switch readw(d0ptr + 2) {
 	case 1: // OpenWD
 		// just return dirID as wdRefNum, because we treat them the same
@@ -789,8 +729,7 @@ func tFSDispatch() {
 
 		path, errno := get_host_path(ioWDDirID, ioName, true)
 		if errno != 0 {
-			paramBlkResult(errno)
-			return
+			return errno
 		}
 
 		ioVRefNum := get_macos_dnum(path)
@@ -800,7 +739,7 @@ func tFSDispatch() {
 		// do nothing
 
 	case 6: // DirCreate
-		tCreate()
+		return tCreate(pb)
 
 	case 7: // GetWDInfo
 		// the opposite transformation to OpenWD
@@ -816,8 +755,7 @@ func tFSDispatch() {
 			for ioRefNum = 2; ; ioRefNum += readw(0x3f6) {
 				fcb := fcbFromRefnum(ioRefNum)
 				if fcb == 0 {
-					paramBlkResult(-38)
-					return // fnOpnErr
+					return -38 // fnOpnErr
 				}
 
 				if readl(fcb) != 0 { // if open then decrement the index
@@ -832,8 +770,7 @@ func tFSDispatch() {
 
 		fcb := fcbFromRefnum(ioRefNum)
 		if fcb == 0 || readl(fcb) == 0 {
-			paramBlkResult(-38)
-			return // fnOpnErr
+			return -38 // fnOpnErr
 		}
 
 		for i := uint32(0); i < 20; i++ {
@@ -849,13 +786,13 @@ func tFSDispatch() {
 		writePstring(ioNamePtr, readPstring(fcb+62))
 
 	case 9: // GetCatInfo
-		tGetFInfo()
+		return tGetFInfo(pb)
 
 	case 10: // SetCatInfo
-		tSetFInfo()
+		return tSetFInfo(pb)
 
 	case 26: // OpenDF
-		tOpen()
+		return tOpen(pb)
 
 	case 27: // MakeFSSpec
 		ioDirID := readw(pb + 48 + 2)
@@ -864,8 +801,7 @@ func tFSDispatch() {
 
 		path, errno := get_host_path(ioDirID, ioName, false)
 		if errno != 0 {
-			paramBlkResult(errno)
-			return // fnfErr
+			return errno
 		}
 
 		writew(ioMisc, 2) // vRefNum = 2 always
@@ -875,6 +811,8 @@ func tFSDispatch() {
 	default:
 		panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr+2)))
 	}
+
+	return 0
 }
 
 func tHighLevelFSDispatch() {
