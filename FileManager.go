@@ -903,7 +903,7 @@ func tHighLevelFSDispatch() {
 		call_m68k(executable_atrap(0xa260)) // FSDispatch
 		pop(128)
 
-		writew(readl(spptr), readw(d0ptr)) // return osErr
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 2, 3: // pascal OSErr FSpOpenDF/RF(const FSSpec *spec, char permission, short *refNum)
 		refNumPtr := popl()
@@ -928,7 +928,7 @@ func tHighLevelFSDispatch() {
 		pop(128)
 
 		writew(refNumPtr, ioRefNum)
-		writew(readl(spptr), readw(d0ptr)) // return osErr
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 7: // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
 		fInfoPtr := popl()
@@ -946,7 +946,7 @@ func tHighLevelFSDispatch() {
 		copy(mem[fInfoPtr:][:16], mem[pb+32:][:16]) // ioFlFndrInfo
 		pop(128)
 
-		writew(readl(spptr), readw(d0ptr)) // return osErr
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 8: // pascal OSErr FSpSetFInfo(const FSSpec *spec, const FInfo *fndrInfo)
 		fInfoPtr := popl()
@@ -963,7 +963,7 @@ func tHighLevelFSDispatch() {
 		call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
 		pop(128)
 
-		writew(readl(spptr), readw(d0ptr)) // return osErr
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 13: // pascal short FSpOpenResFile(const FSSpec *spec, char permission)
 		perm := popb()
