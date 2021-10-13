@@ -555,7 +555,7 @@ func tGetFInfo(pb uint32) int { // also implements GetCatInfo
 	if trap&0xff == 0x60 {
 		endOfReturnValues = 108
 	}
-	for i := 32; i < endOfReturnValues; i++ {
+	for i := 30; i < endOfReturnValues; i++ {
 		writeb(pb+uint32(i), 0)
 	}
 
