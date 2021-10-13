@@ -413,6 +413,7 @@ func tReadWrite(pb uint32) (result int) {
 		// if file is too short then shorten the read
 		if uint32(len(buf)) < mark+ioActCount {
 			ioActCount = uint32(len(buf)) - mark
+			result = -39 // eofErr
 		}
 
 		copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
