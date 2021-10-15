@@ -10,487 +10,6 @@ import (
 	"strings"
 )
 
-//#######################################################################
-// The Macintosh Toolbox. Wish me luck...
-//#######################################################################
-
-// Trap Manager OS traps
-
-// For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
-func trapTableEntry(requested_trap uint16, requesting_trap uint16) uint32 {
-	if requesting_trap&0x200 != 0 { // newOS/newTool trap
-		if requesting_trap&0x400 != 0 {
-			return kToolTable + 4*uint32(requested_trap&0x3ff)
-		} else {
-			return kOSTable + 4*uint32(requested_trap&0xff)
-		}
-	} else { // guess, using traditional trap numbering
-		requested_trap &= 0x1ff // 64k ROM had a single 512-entry trap table
-		if requested_trap <= 0x4f || requested_trap == 0x54 || requested_trap == 0x57 {
-			return kOSTable + 4*uint32(requested_trap)
-		} else {
-			return kToolTable + 4*uint32(requested_trap)
-		}
-	}
-}
-
-func tGetTrapAddress() {
-	tableEntry := trapTableEntry(readw(d0ptr+2), readw(d1ptr+2))
-	writel(a0ptr, readl(tableEntry))
-}
-
-func tSetTrapAddress() {
-	tableEntry := trapTableEntry(readw(d0ptr+2), readw(d1ptr+2))
-	writel(tableEntry, readl(a0ptr))
-}
-
-// Segment Loader Toolbox traps
-
-func tLoadSeg() {
-	save := readRegs()
-
-	segNum := popw()
-	pushl(0)
-	pushl(0x434f4445) // CODE
-	pushw(segNum)
-	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
-	segPtr := readl(popl())
-
-	offset := uint32(readw(segPtr))    // offset of first entry within jump table
-	count := uint32(readw(segPtr + 2)) // number of jump table entries
-
-	for i := uint32(0); i < count; i++ {
-		jtEntry := readl(a5ptr) + 0x20 + offset + 8*i
-
-		offsetInSegment := readw(jtEntry)
-		writew(jtEntry, segNum)
-		writew(jtEntry+2, 0x4ef9) // jmp
-		writel(jtEntry+4, segPtr+4+uint32(offsetInSegment))
-	}
-
-	pc -= 6
-
-	writeRegs(save, a0ptr, a1ptr, d0ptr, d1ptr, d2ptr) // ??? really need to do this?
-}
-
-// Package Toolbox traps
-
-// OS and Toolbox Event Manager traps
-
-// Misc traps
-
-func tDebugStr() {
-	string := readPstring(popl())
-	fmt.Println(macToUnicode(string))
-}
-
-// trap is in toolbox table but actually uses registers
-func tSysError() {
-	err := int16(readw(d0ptr + 2))
-	panicstr := fmt.Sprintf("_SysError %d", err)
-	if err == -491 { // display string on stack
-		panicstr += macToUnicode(readPstring(popl()))
-	}
-	panic(panicstr)
-}
-
-func tSysEnvirons() {
-	block := readl(a0ptr)
-	write(16, block, 0)     // wipe
-	writew(block, 2)        // environsVersion = 2
-	writew(block+2, 3)      // machineType = SE
-	writew(block+4, 0x0700) // systemVersion = seven
-	writew(block+6, 3)      // processor = 68020
-	writel(d0ptr, 0)        // noErr
-}
-
-func tGestalt() {
-	trap := readw(d1ptr + 2)
-	selector := string(mem[d0ptr:][:4])
-
-	if trap&0x600 == 0 { // ab=00
-		var reply uint32
-		var err int
-		switch selector {
-		case "sysv":
-			reply = uint32(readw(0x15a)) // SysVersion
-		case "fs  ":
-			reply = 2 // FSSpec calls, not much else
-		case "fold":
-			reply = 1 // Folder Manager present
-		case "mach":
-			reply = 10 // Mac II
-		case "proc":
-			reply = uint32(readb(0x12f)) + 1 // CPUFlag
-		default:
-			err = -5551 // gestaltUndefSelectorErr
-		}
-
-		writel(a0ptr, reply)
-		writel(d0ptr, uint32(err))
-
-	} else if trap&0x600 == 0x200 { // ab=01
-		panic("NewGestalt unimplemented")
-
-	} else if trap&0x600 == 0x400 { // ab=10
-		panic("ReplaceGestalt unimplemented")
-
-	} else { // ab=11
-		panic("GetGestaltProcPtr unimplemented")
-	}
-}
-
-func tAliasDispatch() {
-	if readl(d0ptr) == 0 { // FindFolder
-		foundDirID := popl()
-		foundVRefNum := popl()
-		popb() // ignore createFolder
-		folderType := string(mem[readl(spptr):][:4])
-		popl()
-		popw() // ignore vRefNum
-
-		var path string
-		switch folderType {
-		case "pref", "sprf":
-			path = filepath.Join(systemFolder, "Preferences")
-		case "desk", "sdsk":
-			path = filepath.Join(systemFolder, "Desktop Folder")
-		case "trsh", "strs", "empt":
-			path = filepath.Join(systemFolder, "Trash")
-		case "temp":
-			path = filepath.Join(systemFolder, "Temporary Items")
-		default:
-			path = systemFolder
-		}
-
-		writew(foundVRefNum, 2)
-		writel(foundDirID, uint32(get_macos_dnum(path)))
-		writew(readl(spptr), 0) // noErr
-	} else {
-		panic("Unimplemented _AliasDispatch selector")
-	}
-}
-
-func tGetOSEvent() {
-	write(16, readl(a0ptr), 0) // null event
-	writel(d0ptr, 0xffffffff)
-}
-
-func tExitToShell() {
-	pc = 0
-}
-
-func tOSDispatch() {
-	selector := popw()
-
-	switch selector {
-	case 0x37: // FUNCTION GetCurrentProcess (VAR PSN: ProcessSerialNumber): OSErr;
-		psn := popl()
-		writed(psn, 1)
-		writew(readl(spptr), 0)
-
-	case 0x38: // FUNCTION GetNextProcess (VAR PSN: ProcessSerialNumber): OSErr;
-		psn := popl()
-		switch readd(psn) {
-		case 0: // kNoProcess
-			writed(psn, 1)          // our process
-			writew(readl(spptr), 0) // noErr
-		case 1: // our process
-			writed(psn, 0)                    // kNoProcess
-			writew(readl(spptr), 0xffff&-600) // procNotFound
-		default: // nonsense value
-			writed(psn, 0)                   // kNoProcess
-			writew(readl(spptr), 0xffff&-50) // paramErr
-		}
-
-	case 0x3a: // FUNCTION GetProcessInformation (PSN: ProcessSerialNumber; VAR info: ProcessInfoRec): OSErr;
-		info := popl()
-		psn := popl()
-
-		// Nonsense process
-		if readd(psn) != 1 {
-			writew(readl(spptr), 0xffff&-600) // procNotFound
-			return
-		}
-
-		// Reasonable size parameter
-		infoLen := readl(info)
-		if infoLen < 60 {
-			panic("Extended GetProcessInformation")
-			writew(readl(spptr), 0xffff&-50) // paramErr
-		}
-
-		processName := readl(info + 4)
-		if processName != 0 {
-			writePstring(processName, macstring("ToolServer"))
-		}
-
-		processAppSpec := readl(info + 56)
-		if processAppSpec != 0 { // construct our own FSSpec
-			fcb := fcbFromRefnum(readw(0x900)) // CurApRefNum
-			fcbVPtr := readl(fcb + 20)
-			vcbVRefNum := readw(fcbVPtr + 78)
-			fcbDirID := readl(fcb + 58)
-			fcbCName := readPstring(fcb + 62)
-			writew(processAppSpec, vcbVRefNum)
-			writel(processAppSpec+2, fcbDirID)
-			writePstring(processAppSpec+6, fcbCName)
-		}
-
-		writed(info+8, 1)           // processNumber
-		writel(info+16, 0x4150504c) // processType = APPL
-		writel(info+20, 0x4d505358) // processSignature = MPSX
-		writel(info+24, 0)          // processMode
-		writel(info+28, kHeap)      // processLocation
-		writel(info+32, 0x7ffffffe) // processSize
-		writel(info+36, 0x7ffffffe) // processFreeMem
-		writed(info+40, 0)          // processLauncher = kNoProcess
-		writel(info+48, 1)          // processLaunchDate
-		writel(info+52, 1)          // processActiveTime
-
-	case 0x15, 0x16, 0x18, 0x1d, 0x1e, 0x1f, 0x20:
-		mfMemRoutine(selector)
-
-	default:
-		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
-	}
-}
-
-func tGetFNum() {
-	numPtr := popl()
-	popl() // discard name ptr
-	writed(numPtr, 0)
-}
-
-// Trivial do-nothing traps
-
-func tUnimplemented() {
-	fmt.Fprintf(os.Stderr, "Unimplemented trap %04x\n", 0xa000|(readw(pc-2)&0xfff))
-	os.Exit(1)
-}
-
-func tNop() {
-}
-
-func tClrD0() {
-	writel(d0ptr, 0)
-}
-
-func tClrD0A0() {
-	writel(d0ptr, 0)
-	writel(a0ptr, 0)
-}
-
-func tPop2() {
-	writel(spptr, readl(spptr)+2)
-}
-
-func tPop4() {
-	writel(spptr, readl(spptr)+4)
-}
-
-func tPop6() {
-	writel(spptr, readl(spptr)+6)
-}
-
-func tPop8() {
-	writel(spptr, readl(spptr)+8)
-}
-
-func tPop10() {
-	writel(spptr, readl(spptr)+10)
-}
-
-func tRetZero() {
-	writel(readl(spptr), 0)
-}
-
-func tPop2RetZero() {
-	sp := readl(spptr) + 2
-	writel(spptr, sp)
-	writel(sp, 0)
-}
-
-func tPop4RetZero() {
-	sp := readl(spptr) + 4
-	writel(spptr, sp)
-	writel(sp, 0)
-}
-
-func tPop6RetZero() {
-	sp := readl(spptr) + 6
-	writel(spptr, sp)
-	writel(sp, 0)
-}
-
-func tPop8RetZero() {
-	sp := readl(spptr) + 8
-	writel(spptr, sp)
-	writel(sp, 0)
-}
-
-func tPop10RetZero() {
-	sp := readl(spptr) + 10
-	writel(spptr, sp)
-	writel(sp, 0)
-}
-
-func tParamBlkNop() {
-	pb := readl(a0ptr)
-	writew(pb+16, 0)
-	writel(d0ptr, 0)
-}
-
-const os_base = 0
-const tb_base = 0x100
-
-var my_traps [0x500]func()
-
-func lineA(inst uint16) {
-	if inst&0x800 != 0 { // Toolbox trap
-		// Push a return address unless autoPop is used
-		if inst&0x400 == 0 {
-			pushl(pc)
-		}
-
-		pc = readl(kToolTable + 4*(uint32(inst)&0x3ff))
-	} else { // OS trap
-		pushl(readl(a2ptr))
-		pushl(readl(d2ptr))
-		pushl(readl(d1ptr))
-		pushl(readl(a1ptr))
-		if inst&0x100 == 0 {
-			pushl(readl(a0ptr))
-		}
-
-		writew(d1ptr+2, inst)
-
-		call_m68k(readl(kOSTable + 4*(uint32(inst)&0xff)))
-
-		if inst&0x100 == 0 {
-			writel(a0ptr, popl())
-		}
-		writel(a1ptr, popl())
-		writel(d1ptr, popl())
-		writel(d2ptr, popl())
-		writel(a2ptr, popl())
-
-		// tst.w d0
-		d0 := readw(d0ptr + 2)
-		n = d0&0x8000 != 0
-		z = d0 == 0
-	}
-}
-
-var gCurToolTrapNum int
-
-func lineF(inst uint16) {
-	pc = popl()
-	check_for_lurkers()
-
-	if gDebugAny {
-		logTrap(inst, true)
-	}
-
-	if inst&0x800 != 0 { // Go implementation of Toolbox trap
-		gCurToolTrapNum = int(inst & 0x3ff)
-		my_traps[tb_base+(inst&0x3ff)]()
-	} else { // Go implementation of OS trap
-		my_traps[os_base+(inst&0xff)]()
-	}
-
-	if gDebugAny {
-		logTrap(inst, false)
-	}
-
-}
-
-// Set up the Toolbox and launch ToolServer
-
-const (
-	kOSTable        = 0x400
-	kToolTable      = 0xe00   // up to 0x1e00
-	kStackLimit     = 0x2000  // for _StackSpace
-	kStackBase      = 0x40000 // extends down, note that registers are here too!
-	kA5World        = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
-	kFakeHeapHeader = 0x90000 // very short
-	kATrapTable     = 0xa0000 // 0x10000 above
-	kFCBTable       = 0xb0000 // 0x8000 above
-	kDQE            = 0xb9000 // 0x4 below and 0x10 above
-	kVCB            = 0xba000 // ????
-	kMenuList       = 0xbb000
-	kExpandMem      = 0xbc000
-	kPACKs          = 0xc0000
-	kFTrapTable     = 0xf0000  // 0x10000 above
-	kHeap           = 0x100000 // extends up
-)
-
-//go:embed "PACKs"
-var embedPACKs embed.FS
-
-func check_for_lurkers() {
-	// we might do more involved things here, like check for heap corruption
-	write(64, 0, 0)
-}
-
-// Get an address to jump to
-func executable_atrap(trap uint16) (addr uint32) {
-	addr = kATrapTable + (uint32(trap)&0xfff)*16
-
-	writew(addr, trap)     // consider using autoPop instead?
-	writew(addr+2, 0x4e75) // RTS
-
-	return
-}
-
-// Get an address to jump to
-func executable_ftrap(trap uint16) (addr uint32) {
-	addr = kFTrapTable + (uint32(trap)&0xfff)*16
-
-	writew(addr, trap)
-
-	return
-}
-
-// Conservatively convert words in a string that look like Unix paths
-func cmdPathCvt(s string, force bool) string {
-	if !force && os.Getenv("MPSRAW") == "1" {
-		return s
-	}
-
-	words := strings.Split(s, " ")
-
-	for i := range words {
-		if strings.HasPrefix(words[i], "/") {
-			ok := true
-			for _, c := range words[i] {
-				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'A') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '/') {
-					ok = false
-					break
-				}
-				if ok {
-					words[i] = pathCvt(words[i])
-				}
-			}
-		}
-	}
-
-	return strings.Join(words, " ")
-}
-
-// Convert a Unix to a Mac path
-func pathCvt(s string) string {
-	ss := []byte(s)
-	for i := range ss {
-		if ss[i] == ':' {
-			ss[i] = '/'
-		} else if ss[i] == '/' {
-			ss[i] = ':'
-		}
-	}
-	return string(onlyvolname) + string(ss)
-}
-
 var systemFolder, mpwFolder string
 
 var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
@@ -509,10 +28,28 @@ Environment variables:
 	                                   #    /usr/share/mpw
 `
 
-func printUsageAndQuit() {
-	fmt.Print(kUsage)
-	os.Exit(1)
-}
+// Memory layout
+const (
+	kOSTable        = 0x400
+	kToolTable      = 0xe00   // up to 0x1e00
+	kStackLimit     = 0x2000  // for _StackSpace
+	kStackBase      = 0x40000 // extends down, note that registers are here too!
+	kA5World        = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
+	kFakeHeapHeader = 0x90000 // very short
+	kATrapTable     = 0xa0000 // 0x10000 above
+	kFCBTable       = 0xb0000 // 0x8000 above
+	kDQE            = 0xb9000 // 0x4 below and 0x10 above
+	kVCB            = 0xba000 // ????
+	kMenuList       = 0xbb000
+	kExpandMem      = 0xbc000
+	kPACKs          = 0xc0000
+	kFTrapTable     = 0xf0000  // 0x10000 above
+	kHeap           = 0x100000 // extends up
+)
+
+// Embedded 68k code, remove when possible
+//go:embed "PACKs"
+var embedPACKs embed.FS
 
 func main() {
 	my_traps = [...]func(){
@@ -890,4 +427,430 @@ func main() {
 	initPuppetStrings(os.Args[1:])
 
 	call_m68k(kA5World + jtoffset + 2)
+}
+
+func printUsageAndQuit() {
+	fmt.Print(kUsage)
+	os.Exit(1)
+}
+
+// Trap Dispatcher
+// - my_traps function list is set up in main() above
+// - A-trap handler calls the 68k routine in the dispatch table
+// - F-trap handler calls the Go routine
+
+const os_base = 0
+const tb_base = 0x100
+
+var my_traps [0x500]func()
+
+func lineA(inst uint16) {
+	if inst&0x800 != 0 { // Toolbox trap
+		// Push a return address unless autoPop is used
+		if inst&0x400 == 0 {
+			pushl(pc)
+		}
+
+		pc = readl(kToolTable + 4*(uint32(inst)&0x3ff))
+	} else { // OS trap
+		pushl(readl(a2ptr))
+		pushl(readl(d2ptr))
+		pushl(readl(d1ptr))
+		pushl(readl(a1ptr))
+		if inst&0x100 == 0 {
+			pushl(readl(a0ptr))
+		}
+
+		writew(d1ptr+2, inst)
+
+		call_m68k(readl(kOSTable + 4*(uint32(inst)&0xff)))
+
+		if inst&0x100 == 0 {
+			writel(a0ptr, popl())
+		}
+		writel(a1ptr, popl())
+		writel(d1ptr, popl())
+		writel(d2ptr, popl())
+		writel(a2ptr, popl())
+
+		// tst.w d0
+		d0 := readw(d0ptr + 2)
+		n = d0&0x8000 != 0
+		z = d0 == 0
+	}
+}
+
+var gCurToolTrapNum int
+
+func lineF(inst uint16) {
+	pc = popl()
+	check_for_lurkers()
+
+	if gDebugAny {
+		logTrap(inst, true)
+	}
+
+	if inst&0x800 != 0 { // Go implementation of Toolbox trap
+		gCurToolTrapNum = int(inst & 0x3ff)
+		my_traps[tb_base+(inst&0x3ff)]()
+	} else { // Go implementation of OS trap
+		my_traps[os_base+(inst&0xff)]()
+	}
+
+	if gDebugAny {
+		logTrap(inst, false)
+	}
+
+}
+
+// For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
+func trapTableEntry(requested_trap uint16, requesting_trap uint16) uint32 {
+	if requesting_trap&0x200 != 0 { // newOS/newTool trap
+		if requesting_trap&0x400 != 0 {
+			return kToolTable + 4*uint32(requested_trap&0x3ff)
+		} else {
+			return kOSTable + 4*uint32(requested_trap&0xff)
+		}
+	} else { // guess, using traditional trap numbering
+		requested_trap &= 0x1ff // 64k ROM had a single 512-entry trap table
+		if requested_trap <= 0x4f || requested_trap == 0x54 || requested_trap == 0x57 {
+			return kOSTable + 4*uint32(requested_trap)
+		} else {
+			return kToolTable + 4*uint32(requested_trap)
+		}
+	}
+}
+
+func tGetTrapAddress() {
+	tableEntry := trapTableEntry(readw(d0ptr+2), readw(d1ptr+2))
+	writel(a0ptr, readl(tableEntry))
+}
+
+func tSetTrapAddress() {
+	tableEntry := trapTableEntry(readw(d0ptr+2), readw(d1ptr+2))
+	writel(tableEntry, readl(a0ptr))
+}
+
+// Get a reserved address, containing an A-trap, that can be run as code
+func executable_atrap(trap uint16) (addr uint32) {
+	addr = kATrapTable + (uint32(trap)&0xfff)*16
+
+	writew(addr, trap)     // consider using autoPop instead?
+	writew(addr+2, 0x4e75) // RTS
+
+	return
+}
+
+// Get a reserved address, containing an F-trap, that can be run as code
+func executable_ftrap(trap uint16) (addr uint32) {
+	addr = kFTrapTable + (uint32(trap)&0xfff)*16
+
+	writew(addr, trap)
+
+	return
+}
+
+// Expensive cleanup on function call (JSR), return (RTS) and A-trap
+func check_for_lurkers() {
+	// we might do more involved things here, like check for heap corruption
+	write(64, 0, 0)
+}
+
+// Placeholder trap in the A5-based dispatch table
+// _UnLoadSeg not implemented because we do not purge resources
+func tLoadSeg() {
+	save := readRegs()
+
+	segNum := popw()
+	pushl(0)
+	pushl(0x434f4445) // CODE
+	pushw(segNum)
+	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+	segPtr := readl(popl())
+
+	offset := uint32(readw(segPtr))    // offset of first entry within jump table
+	count := uint32(readw(segPtr + 2)) // number of jump table entries
+
+	for i := uint32(0); i < count; i++ {
+		jtEntry := readl(a5ptr) + 0x20 + offset + 8*i
+
+		offsetInSegment := readw(jtEntry)
+		writew(jtEntry, segNum)
+		writew(jtEntry+2, 0x4ef9) // jmp
+		writel(jtEntry+4, segPtr+4+uint32(offsetInSegment))
+	}
+
+	pc -= 6
+
+	writeRegs(save, a0ptr, a1ptr, d0ptr, d1ptr, d2ptr) // ??? really need to do this?
+}
+
+// Informational message that would bomb if MacsBug weren't installed
+func tDebugStr() {
+	string := readPstring(popl())
+	fmt.Println(macToUnicode(string))
+}
+
+// "Bomb" error
+func tSysError() {
+	err := int16(readw(d0ptr + 2))
+	panicstr := fmt.Sprintf("_SysError %d", err)
+	if err == -491 { // display string on stack
+		panicstr += macToUnicode(readPstring(popl()))
+	}
+	panic(panicstr)
+}
+
+// Baby version of Gestalt
+// TODO: should match the SysEnvirons routine in the MPW libraries
+func tSysEnvirons() {
+	block := readl(a0ptr)
+	write(16, block, 0)     // wipe
+	writew(block, 2)        // environsVersion = 2
+	writew(block+2, 3)      // machineType = SE
+	writew(block+4, 0x0700) // systemVersion = seven
+	writew(block+6, 3)      // processor = 68020
+	writel(d0ptr, 0)        // noErr
+}
+
+// Key-value storage to test for presence of OS features
+func tGestalt() {
+	trap := readw(d1ptr + 2)
+	selector := string(mem[d0ptr:][:4])
+
+	if trap&0x600 == 0 { // ab=00
+		var reply uint32
+		var err int
+		switch selector {
+		case "sysv":
+			reply = uint32(readw(0x15a)) // SysVersion
+		case "fs  ":
+			reply = 2 // FSSpec calls, not much else
+		case "fold":
+			reply = 1 // Folder Manager present
+		case "mach":
+			reply = 10 // Mac II
+		case "proc":
+			reply = uint32(readb(0x12f)) + 1 // CPUFlag
+		default:
+			err = -5551 // gestaltUndefSelectorErr
+		}
+
+		writel(a0ptr, reply)
+		writel(d0ptr, uint32(err))
+
+	} else if trap&0x600 == 0x200 { // ab=01
+		panic("NewGestalt unimplemented")
+
+	} else if trap&0x600 == 0x400 { // ab=10
+		panic("ReplaceGestalt unimplemented")
+
+	} else { // ab=11
+		panic("GetGestaltProcPtr unimplemented")
+	}
+}
+
+// Alias Manager: only implemented enough to find "special" disk locations
+func tAliasDispatch() {
+	if readl(d0ptr) == 0 { // FindFolder
+		foundDirID := popl()
+		foundVRefNum := popl()
+		popb() // ignore createFolder
+		folderType := string(mem[readl(spptr):][:4])
+		popl()
+		popw() // ignore vRefNum
+
+		var path string
+		switch folderType {
+		case "pref", "sprf":
+			path = filepath.Join(systemFolder, "Preferences")
+		case "desk", "sdsk":
+			path = filepath.Join(systemFolder, "Desktop Folder")
+		case "trsh", "strs", "empt":
+			path = filepath.Join(systemFolder, "Trash")
+		case "temp":
+			path = filepath.Join(systemFolder, "Temporary Items")
+		default:
+			path = systemFolder
+		}
+
+		writew(foundVRefNum, 2)
+		writel(foundDirID, uint32(get_macos_dnum(path)))
+		writew(readl(spptr), 0) // noErr
+	} else {
+		panic("Unimplemented _AliasDispatch selector")
+	}
+}
+
+func tGetOSEvent() {
+	write(16, readl(a0ptr), 0) // null event
+	writel(d0ptr, 0xffffffff)
+}
+
+// Will cause the topmost invocation of call_m68k to return -- not enough?
+func tExitToShell() {
+	pc = 0
+}
+
+// MultiFinder/ProcessManager routines
+func tOSDispatch() {
+	selector := popw()
+
+	switch selector {
+	case 0x37: // FUNCTION GetCurrentProcess (VAR PSN: ProcessSerialNumber): OSErr;
+		psn := popl()
+		writed(psn, 1)
+		writew(readl(spptr), 0)
+
+	case 0x38: // FUNCTION GetNextProcess (VAR PSN: ProcessSerialNumber): OSErr;
+		psn := popl()
+		switch readd(psn) {
+		case 0: // kNoProcess
+			writed(psn, 1)          // our process
+			writew(readl(spptr), 0) // noErr
+		case 1: // our process
+			writed(psn, 0)                    // kNoProcess
+			writew(readl(spptr), 0xffff&-600) // procNotFound
+		default: // nonsense value
+			writed(psn, 0)                   // kNoProcess
+			writew(readl(spptr), 0xffff&-50) // paramErr
+		}
+
+	case 0x3a: // FUNCTION GetProcessInformation (PSN: ProcessSerialNumber; VAR info: ProcessInfoRec): OSErr;
+		info := popl()
+		psn := popl()
+
+		// Nonsense process
+		if readd(psn) != 1 {
+			writew(readl(spptr), 0xffff&-600) // procNotFound
+			return
+		}
+
+		// Reasonable size parameter
+		infoLen := readl(info)
+		if infoLen < 60 {
+			panic("Extended GetProcessInformation")
+			writew(readl(spptr), 0xffff&-50) // paramErr
+		}
+
+		processName := readl(info + 4)
+		if processName != 0 {
+			writePstring(processName, macstring("ToolServer"))
+		}
+
+		processAppSpec := readl(info + 56)
+		if processAppSpec != 0 { // construct our own FSSpec
+			fcb := fcbFromRefnum(readw(0x900)) // CurApRefNum
+			fcbVPtr := readl(fcb + 20)
+			vcbVRefNum := readw(fcbVPtr + 78)
+			fcbDirID := readl(fcb + 58)
+			fcbCName := readPstring(fcb + 62)
+			writew(processAppSpec, vcbVRefNum)
+			writel(processAppSpec+2, fcbDirID)
+			writePstring(processAppSpec+6, fcbCName)
+		}
+
+		writed(info+8, 1)           // processNumber
+		writel(info+16, 0x4150504c) // processType = APPL
+		writel(info+20, 0x4d505358) // processSignature = MPSX
+		writel(info+24, 0)          // processMode
+		writel(info+28, kHeap)      // processLocation
+		writel(info+32, 0x7ffffffe) // processSize
+		writel(info+36, 0x7ffffffe) // processFreeMem
+		writed(info+40, 0)          // processLauncher = kNoProcess
+		writel(info+48, 1)          // processLaunchDate
+		writel(info+52, 1)          // processActiveTime
+
+	case 0x15, 0x16, 0x18, 0x1d, 0x1e, 0x1f, 0x20:
+		mfMemRoutine(selector)
+
+	default:
+		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
+	}
+}
+
+// Get font number: outside the scope of mps!
+func tGetFNum() {
+	numPtr := popl()
+	popl() // discard name ptr
+	writed(numPtr, 0)
+}
+
+// Trivial do-nothing traps
+
+func tUnimplemented() {
+	fmt.Fprintf(os.Stderr, "Unimplemented trap %04x\n", 0xa000|(readw(pc-2)&0xfff))
+	os.Exit(1)
+}
+
+func tNop() {
+}
+
+func tClrD0() {
+	writel(d0ptr, 0)
+}
+
+func tClrD0A0() {
+	writel(d0ptr, 0)
+	writel(a0ptr, 0)
+}
+
+func tPop2() {
+	writel(spptr, readl(spptr)+2)
+}
+
+func tPop4() {
+	writel(spptr, readl(spptr)+4)
+}
+
+func tPop6() {
+	writel(spptr, readl(spptr)+6)
+}
+
+func tPop8() {
+	writel(spptr, readl(spptr)+8)
+}
+
+func tPop10() {
+	writel(spptr, readl(spptr)+10)
+}
+
+func tRetZero() {
+	writel(readl(spptr), 0)
+}
+
+func tPop2RetZero() {
+	sp := readl(spptr) + 2
+	writel(spptr, sp)
+	writel(sp, 0)
+}
+
+func tPop4RetZero() {
+	sp := readl(spptr) + 4
+	writel(spptr, sp)
+	writel(sp, 0)
+}
+
+func tPop6RetZero() {
+	sp := readl(spptr) + 6
+	writel(spptr, sp)
+	writel(sp, 0)
+}
+
+func tPop8RetZero() {
+	sp := readl(spptr) + 8
+	writel(spptr, sp)
+	writel(sp, 0)
+}
+
+func tPop10RetZero() {
+	sp := readl(spptr) + 10
+	writel(spptr, sp)
+	writel(sp, 0)
+}
+
+func tParamBlkNop() {
+	pb := readl(a0ptr)
+	writew(pb+16, 0)
+	writel(d0ptr, 0)
 }
