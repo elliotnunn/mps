@@ -65,6 +65,36 @@ escape
 			jmp		(a0)
 
 
+LineAppendX	PROC	EXPORT					; arg is a 2-byte int
+
+			move.w	4(sp),d0
+
+			move.l	sp,a1
+			subq	#4,sp
+			lea		hexdig,a0
+
+			move.w	#3,d1
+digloop		move.b	d0,d2
+			asr.w	#4,d0
+			and.w	#$f,d2
+			move.b	(a0,d2.w),-(a1)
+			dbra	d1,digloop
+
+			move.w	#4,-(sp)				; and place a length byte
+			pea		1(sp)
+			jsr		LineAppend
+			addq	#6,sp
+
+			move.l	(sp)+,a0
+			addq	#2,sp
+			jmp		(a0)
+
+			STRING	ASIS
+hexdig		dc.b	'0', '1', '2', '3', '4', '5', '6', '7'
+			dc.b	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+			STRING	PASCAL
+
+
 LineFlush	PROC	EXPORT
 			IMPORT	LineBuffer:data
 
@@ -184,6 +214,19 @@ fail		jsr		TestFail
 			bsr		LineAppend
 			bsr		LineFlush
 			bra.s	return
+
+
+TestFailMsg	PROC	EXPORT
+			IMPORT	LineAppend, LineFlush, TestFail
+			pea		#'# '
+			jsr		LineAppend
+			move.l	4(sp),-(sp)
+			jsr		LineAppend
+			jsr		LineFlush
+			jsr		TestFail
+			move.l	(sp)+,a0
+			addq	#4,sp
+			jmp		(a0)
 
 
 			PROC
