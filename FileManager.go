@@ -408,7 +408,9 @@ func tReadWrite(pb uint32) (result int) {
 			buf = append(buf, 0)
 		}
 
-		copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
+		if ioActCount > 0 {
+			copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
+		}
 	} else { // _Read
 		// if file is too short then shorten the read
 		if uint32(len(buf)) < mark+ioActCount {
@@ -416,7 +418,9 @@ func tReadWrite(pb uint32) (result int) {
 			result = -39 // eofErr
 		}
 
-		copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
+		if ioActCount > 0 {
+			copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
+		}
 	}
 
 	openForks[fkey] = buf
@@ -707,7 +711,6 @@ func tSetVol(pb uint32) int {
 
 func tGetFPos(pb uint32) int {
 	// Act like _Read with ioReqCount=0 and ioPosMode=fsAtMark
-	writel(pb+32, 0) // ioBuffer
 	writel(pb+36, 0) // ioReqCount
 	writew(pb+44, 0) // ioPosMode
 	return tReadWrite(pb)
@@ -715,7 +718,6 @@ func tGetFPos(pb uint32) int {
 
 func tSetFPos(pb uint32) int {
 	// Act like _Read with ioReqCount=0
-	writel(pb+32, 0) // ioBuffer
 	writel(pb+36, 0) // ioReqCount
 	return tReadWrite(pb)
 }
