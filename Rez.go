@@ -334,56 +334,48 @@ func deRez(fork []byte) []byte {
 	var bild strings.Builder
 
 	// Load the map into memory and use the Resource Manager to interpret it
-	// This hack saves code
-	resMap := uint32(len(mem))
-	mem = append(mem, fork[mapstart:][:maplen]...)
-	defer func() { mem = mem[:resMap] }()
+	resMap := dumpMap(fork[mapstart:][:maplen])
+	for _, res := range resMap.list {
+		bild.WriteString("data ")
+		type_ := string([]byte{byte(res.tType >> 24), byte(res.tType >> 16), byte(res.tType >> 8), byte(res.tType)})
+		bild.WriteString(rezQuote(type_, false))
+		bild.WriteString(" (")
+		bild.WriteString(fmt.Sprintf("%d", int16(res.rID)))
 
-	for _, entriesOfType := range resMapEntries(resMap) {
-		typeEntry := entriesOfType[0]
-		for _, idEntry := range entriesOfType[1:] {
-			bild.WriteString("data ")
-			bild.WriteString(rezQuote(string(mem[typeEntry:][:4]), false))
-			bild.WriteString(" (")
-			bild.WriteString(fmt.Sprintf("%d", int16(readw(idEntry))))
-
-			hasName, name := getResName(resMap, idEntry)
-			if hasName {
-				bild.WriteString(", ")
-				bild.WriteString(rezQuote(string(name), true))
-			}
-
-			flags := readb(idEntry + 4)
-			if flags&0x83 != 0 {
-				bild.WriteString(fmt.Sprintf(", $%02X", flags))
-			} else {
-				if flags&0x40 != 0 {
-					bild.WriteString(", sysheap")
-				}
-				if flags&0x20 != 0 {
-					bild.WriteString(", purgeable")
-				}
-				if flags&0x10 != 0 {
-					bild.WriteString(", locked")
-				}
-				if flags&8 != 0 {
-					bild.WriteString(", protected")
-				}
-				if flags&4 != 0 {
-					bild.WriteString(", preload")
-				}
-			}
-
-			dataStart := binary.BigEndian.Uint32(fork) // base of all data within fork
-			dataStart += readl(idEntry+4) & 0xffffff   // this res within fork
-			dataLen := binary.BigEndian.Uint32(fork[dataStart:])
-
-			data := fork[dataStart+4:][:dataLen]
-
-			bild.WriteString(") {\n")
-			bild.WriteString(fmtDataAsRezLines(data))
-			bild.WriteString("};\n\n")
+		if res.hasName {
+			bild.WriteString(", ")
+			bild.WriteString(rezQuote(string(res.name), true))
 		}
+
+		if res.rAttr&0x83 != 0 {
+			bild.WriteString(fmt.Sprintf(", $%02X", res.rAttr))
+		} else {
+			if res.rAttr&0x40 != 0 {
+				bild.WriteString(", sysheap")
+			}
+			if res.rAttr&0x20 != 0 {
+				bild.WriteString(", purgeable")
+			}
+			if res.rAttr&0x10 != 0 {
+				bild.WriteString(", locked")
+			}
+			if res.rAttr&8 != 0 {
+				bild.WriteString(", protected")
+			}
+			if res.rAttr&4 != 0 {
+				bild.WriteString(", preload")
+			}
+		}
+
+		dataStart := binary.BigEndian.Uint32(fork) // base of all data within fork
+		dataStart += res.rLocn & 0xffffff          // this res within fork
+		dataLen := binary.BigEndian.Uint32(fork[dataStart:])
+
+		data := fork[dataStart+4:][:dataLen]
+
+		bild.WriteString(") {\n")
+		bild.WriteString(fmtDataAsRezLines(data))
+		bild.WriteString("};\n\n")
 	}
 
 	return []byte(bild.String())
