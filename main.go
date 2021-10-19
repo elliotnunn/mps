@@ -45,6 +45,7 @@ const (
 	kPACKs          = 0xc0000
 	kFTrapTable     = 0xf0000  // 0x10000 above
 	kHeap           = 0x100000 // extends up
+	kMemSize        = 0x40000000
 )
 
 // Embedded 68k code, remove when possible
@@ -245,8 +246,6 @@ func main() {
 	systemFolder, _ = ioutil.TempDir("", "System Folder ")
 	defer os.RemoveAll(systemFolder)
 
-	mem = make([]byte, kHeap)
-
 	// Poison low memory
 	for i := uint32(0xc0); i < kStackBase; i += 2 {
 		writew(i, 0x68f1)
@@ -327,6 +326,8 @@ func main() {
 	write(10, 0xd92, 0)
 
 	// Misc globals
+	writel(0x108, kMemSize)                     // MemTop
+	writel(0x10c, kMemSize)                     // BufPtr
 	writeb(0x12f, 3)                            // CPUFlag = 68030
 	writeb(0x12c, 0)                            // DskVerify = don't care
 	writeb(0x12d, 0)                            // LoadTrap = off

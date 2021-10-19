@@ -19,7 +19,7 @@ import (
 // Emulator state: set to something better than this before running
 var pc uint32
 var x, n, z, v, c bool
-var mem []byte
+var mem [kMemSize]byte
 
 // Where in memory the registers are kept
 const (

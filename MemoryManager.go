@@ -1,5 +1,7 @@
 package main
 
+var bump uint32 = kHeap
+
 // Memory Manager OS traps
 
 func return_memerr_and_d0(result int) {
@@ -37,18 +39,16 @@ func tNewPtr() {
 	size := readl(d0ptr)
 	return_memerr_and_d0(0)
 
-	for i := 0; i < 16; i++ {
-		mem = append(mem, 0)
-	}
-	for len(mem)%0x1000 != 0 {
-		mem = append(mem, 0)
-	}
-	block := uint32(len(mem))
-	for uint32(len(mem)) < block+size || uint32(len(mem)) < block+256 {
-		mem = append(mem, 0)
-	}
-	block_sizes[block] = size
+	bump += 16
+	bump = (bump + 0xfff) & 0xfffff000
+	block := bump
+	bump += size
 
+	if bump > uint32(len(mem)) {
+		panic("OOM")
+	}
+
+	block_sizes[block] = size
 	writel(a0ptr, block)
 }
 
