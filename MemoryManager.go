@@ -1,8 +1,113 @@
 package main
 
-var bump uint32 = kHeap
+import (
+	"fmt"
+)
 
-// Memory Manager OS traps
+const maxBlock = 64 * 1024 * 1024
+
+var bump uint32 = kHeap
+var memFree uint32 = uint32(len(mem)) - kHeap
+var usedBlocks = make(map[uint32]*block)   // map[addr]*block
+var freeBlocks = make(map[uint32][]uint32) // map[size][]addr
+
+const (
+	masterPtrBlock = 1
+	pointerBlock   = 2
+	handleBlock    = 3
+)
+
+type block struct {
+	masterPtr uint32
+	total     uint32
+	size      uint32
+	original  uint32
+	max       uint32
+	kind      int8
+}
+
+func logbCeil(n uint32) int {
+	for i := 0; i < 32; i++ {
+		if uint32(1)<<i >= n {
+			return i
+		}
+	}
+	panic("too damn big")
+}
+
+func newBlock(size uint32, expandable bool) uint32 {
+	log := logbCeil(size)
+
+	block := block{
+		total:    1 << (log + 1),
+		max:      1 << log,
+		size:     size,
+		original: size,
+	}
+
+	if expandable && block.max < maxBlock {
+		block.total <<= 1
+		block.max <<= 1
+	}
+
+	var addr uint32
+	freeCnt := len(freeBlocks[block.total])
+	if freeCnt > 0 {
+		addr = freeBlocks[block.total][freeCnt-1]
+		freeBlocks[block.total] = freeBlocks[block.total][:freeCnt-1]
+	} else {
+		addr = bump
+		bump += block.total
+		if bump > uint32(len(mem)) {
+			panic("out of memory")
+		}
+	}
+
+	// Zero-init
+	for i := uint32(0); i < block.total; i++ {
+		writeb(addr+i, 0)
+	}
+
+	usedBlocks[addr] = &block
+	memFree -= block.total
+
+	return addr
+}
+
+func freeBlock(addr uint32) {
+	block, ok := usedBlocks[addr]
+	if !ok {
+		panic(fmt.Sprintf("double free %08x", addr))
+	}
+	delete(usedBlocks, addr)
+	memFree += block.total
+
+	freeBlocks[block.total] = append(freeBlocks[block.total], addr)
+}
+
+func verifyHandle(hand uint32) (ptr uint32) {
+	mpBlock, ok := usedBlocks[hand]
+	if !ok || mpBlock.kind != masterPtrBlock {
+		panic(fmt.Sprintf("bad handle %08x", hand))
+	}
+
+	ptr = readl(hand)
+	if ptr != 0 {
+		ptrBlock, ok := usedBlocks[ptr]
+		if !ok || ptrBlock.kind != handleBlock || ptrBlock.masterPtr != hand {
+			panic(fmt.Sprintf("bad master pointer %08x", hand))
+		}
+	}
+
+	return ptr
+}
+
+func verifyPtr(ptr uint32) {
+	ptrBlock, ok := usedBlocks[ptr]
+	if !ok || ptrBlock.kind != pointerBlock {
+		panic("bad pointer")
+	}
+}
 
 func memErrWrap(actualTrap func() int) func() {
 	return func() {
@@ -19,8 +124,7 @@ func memErrD0Wrap(actualTrap func() int) func() {
 	}
 }
 
-var block_sizes = make(map[uint32]uint32)
-var master_ptrs = make(map[uint32]uint32)
+// Memory Manager OS traps
 
 var tGetZone = memErrD0Wrap(func() int {
 	ApplZone := readl(0x2aa)
@@ -28,10 +132,29 @@ var tGetZone = memErrD0Wrap(func() int {
 	return 0
 })
 
-var tFreeMem = memErrWrap(func() int { // _FreeMem _MaxMem _CompactMem _PurgeSpace
-	writel(d0ptr, 0x7ffffffe) // free
-	writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
+var tFreeMem = memErrWrap(func() int {
+	writel(d0ptr, memFree)
 	return 0
+})
+
+var tMaxMem = memErrWrap(func() int {
+	writel(d0ptr, maxBlock)
+	writel(a0ptr, 0)
+	return 0
+})
+
+var tCompactMem = memErrWrap(func() int {
+	writel(d0ptr, maxBlock)
+	return 0
+})
+
+var tPurgeOrResrvMem = memErrD0Wrap(func() int {
+	cbNeeded := readl(d0ptr)
+	if cbNeeded <= maxBlock {
+		return 0
+	} else {
+		return -108 // memFullErr
+	}
 })
 
 var tStackSpace = memErrWrap(func() int {
@@ -39,119 +162,199 @@ var tStackSpace = memErrWrap(func() int {
 	return 0
 })
 
-// Final common pathway for making heap blocks
-// TODO: improve on this bump allocator
 var tNewPtr = memErrD0Wrap(func() int {
 	size := readl(d0ptr)
-
-	bump += 16
-	bump = (bump + 0xfff) & 0xfffff000
-	block := bump
-	bump += size
-
-	if bump > uint32(len(mem)) {
-		panic("OOM")
+	if size > maxBlock {
+		writel(a0ptr, 0)
+		return -108 // memFullErr
 	}
 
-	block_sizes[block] = size
-	writel(a0ptr, block)
+	ptr := newBlock(size, false)
+	usedBlocks[ptr].kind = pointerBlock
+
+	writel(a0ptr, ptr)
 	return 0
 })
 
 var tDisposPtr = memErrD0Wrap(func() int {
+	ptr := readl(a0ptr)
+
+	verifyPtr(ptr)
+
+	freeBlock(ptr)
 	return 0
 })
 
 var tSetPtrSize = memErrD0Wrap(func() int {
 	ptr := readl(a0ptr)
-	size := readl(d0ptr)
+	newSize := readl(d0ptr)
 
-	if block_sizes[ptr] >= size {
-		block_sizes[ptr] = size
+	verifyPtr(ptr)
+	block := usedBlocks[ptr]
+
+	// Expand anywhere up to its original size
+	if newSize <= block.original {
+		for i := block.size; i < newSize; i++ {
+			writeb(ptr+i, 0)
+		}
+		block.size = newSize
 		return 0
-	} else {
-		return -108 // memFullErr
 	}
+
+	return -108 // memFullErr
 })
 
 var tGetPtrSize = memErrWrap(func() int {
-	writel(d0ptr, block_sizes[readl(a0ptr)])
+	ptr := readl(a0ptr)
+	verifyPtr(ptr)
+	writel(d0ptr, usedBlocks[ptr].size)
 	return 0
 })
 
 var tNewHandle = memErrD0Wrap(func() int {
-	tNewPtr()
+	size := readl(d0ptr)
+	if size > maxBlock {
+		writel(a0ptr, 0)
+		return -108 // memFullErr
+	}
 
-	ptr := readl(a0ptr)
-	handle := ptr - 16
-	master_ptrs[ptr] = handle
-	writel(ptr-16, ptr) // stash the master pointer in the header
-	writel(a0ptr, handle)
+	hand := newBlock(5, false)
+	usedBlocks[hand].kind = masterPtrBlock
+
+	ptr := newBlock(size, true)
+	usedBlocks[ptr].kind = handleBlock
+
+	// Join the MP and storage blocks together
+	usedBlocks[ptr].masterPtr = hand
+	writel(hand, ptr)
+
+	writel(a0ptr, hand)
 	return 0
 })
 
 var tNewEmptyHandle = memErrD0Wrap(func() int {
-	writel(d0ptr, 0)
-	tNewHandle()
-	writel(readl(a0ptr), 0) // points nowhere!
+	hand := newBlock(5, false)
+	usedBlocks[hand].kind = masterPtrBlock
+
+	writel(a0ptr, hand)
 	return 0
 })
 
 var tDisposHandle = memErrD0Wrap(func() int {
-	ptr := readl(readl(a0ptr))
-	delete(master_ptrs, ptr)
-	writel(a0ptr, ptr)
-	tDisposPtr()
+	hand := readl(a0ptr)
+	ptr := verifyHandle(hand)
+
+	freeBlock(hand)
+	if ptr != 0 {
+		freeBlock(ptr)
+	}
+
 	return 0
 })
 
 var tSetHandleSize = memErrD0Wrap(func() int {
-	handle := readl(a0ptr)
-	size := readl(d0ptr)
-
-	ptr := readl(handle)
-	oldsize := block_sizes[ptr]
-	if oldsize >= size {
-		// can shrink the handle
-		block_sizes[ptr] = size
-	} else {
-		writel(d0ptr, size)
-		tNewPtr()
-		ptr2 := readl(a0ptr)
-		delete(master_ptrs, ptr)
-		master_ptrs[ptr2] = handle
-		copy(mem[ptr2:ptr2+size], mem[ptr:ptr+size])
-		writel(handle, ptr2)
+	hand := readl(a0ptr)
+	if hand == 0 {
+		return -109 // nilHandleErr
 	}
+
+	ptr := verifyHandle(hand)
+	if ptr == 0 {
+		return -109 // nilHandleErr
+	}
+
+	block := usedBlocks[ptr]
+
+	newSize := readl(d0ptr)
+
+	// Fit within existing block
+	if newSize <= block.max {
+		for i := block.size; i < newSize; i++ {
+			writeb(ptr+i, 0)
+		}
+		block.size = newSize
+
+		return 0
+	}
+
+	// Allocate new block, unless locked bit is set
+	if newSize <= maxBlock && readb(hand+4)&0x80 == 0 {
+		newPtr := newBlock(newSize, true)
+		usedBlocks[newPtr].kind = handleBlock
+		usedBlocks[newPtr].masterPtr = hand
+		writel(hand, newPtr)
+
+		copy(mem[newPtr:], mem[ptr:][:block.size])
+		freeBlock(ptr)
+
+		return 0
+	}
+
+	return -108 // memFullErr
+})
+
+var tReallocHandle = memErrD0Wrap(func() int {
+	hand := readl(a0ptr)
+	if hand == 0 {
+		return -109 // nilHandleErr
+	}
+	ptr := verifyHandle(hand)
+
+	newSize := readl(d0ptr)
+	if newSize > maxBlock {
+		return -108 // memFullErr
+	}
+
+	// "Normally h is an empty handle, but it need not be."
+	if ptr != 0 {
+		freeBlock(ptr)
+	}
+
+	ptr = newBlock(newSize, true)
+	usedBlocks[ptr].kind = handleBlock
+	usedBlocks[ptr].masterPtr = hand
+	writel(hand, ptr)
+
 	return 0
 })
 
 var tGetHandleSize = memErrWrap(func() int {
-	writel(d0ptr, block_sizes[readl(readl(a0ptr))]) // might die??
-	return 0
-})
+	hand := readl(a0ptr)
+	ptr := verifyHandle(hand)
+	if ptr == 0 {
+		writel(d0ptr, 0)
+		return -109 // nilHandleErr
+	}
 
-var tReallocHandle = memErrD0Wrap(func() int {
-	handle := readl(a0ptr)
-	size := readl(d0ptr)
-	tEmptyHandle()
-	writel(d0ptr, size)
-	tNewPtr()
-	writel(handle, readl(a0ptr))
-	writel(a0ptr, handle)
+	writel(d0ptr, usedBlocks[ptr].size)
 	return 0
 })
 
 var tRecoverHandle = memErrWrap(func() int {
-	writel(a0ptr, master_ptrs[readl(a0ptr)])
+	ptr := readl(a0ptr)
+
+	block, ok := usedBlocks[ptr]
+	if !ok || block.kind != handleBlock {
+		panic("bad argument to RecoverHandle")
+	}
+
+	writel(a0ptr, block.masterPtr)
 	return 0
 })
 
 var tEmptyHandle = memErrD0Wrap(func() int {
-	handle := readl(a0ptr)
-	writel(a0ptr, readl(handle))
-	tDisposPtr()
-	writel(handle, 0)
+	hand := readl(a0ptr)
+	ptr := verifyHandle(hand)
+
+	if readb(hand+4)&0x80 != 0 {
+		return -112 // memPurErr: Attempt to purge a locked block
+	}
+
+	if ptr != 0 {
+		freeBlock(ptr)
+		writel(hand, 0)
+	}
+
 	return 0
 })
 
@@ -164,6 +367,7 @@ func tBlockMove() {
 
 var tHGetState = memErrWrap(func() int {
 	handle := readl(a0ptr)
+	verifyHandle(handle)
 	flags := readb(handle + 4)
 	writel(d0ptr, uint32(flags))
 	return 0
@@ -171,27 +375,11 @@ var tHGetState = memErrWrap(func() int {
 
 var tHSetState = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
+	verifyHandle(handle)
 	flags := readb(d0ptr + 3)
 	writeb(handle+4, flags)
 	return 0
 })
-
-func getPtrBlock(ptr uint32) []byte {
-	size, ok := block_sizes[ptr]
-	if !ok {
-		panic("getPtrBlock on bad pointer")
-	}
-
-	return append(make([]byte, 0, size), mem[ptr:][:size]...)
-}
-
-func setHandleBlock(handle uint32, contents []byte) {
-	writel(a0ptr, handle)
-	writel(d0ptr, uint32(len(contents)))
-	tSetHandleSize()
-
-	copy(mem[readl(handle):], contents)
-}
 
 func mfMemRoutine(selector uint16) {
 	switch selector {
@@ -241,10 +429,21 @@ func newHandleFrom(data []byte) uint32 {
 	return handle
 }
 
-func newPtrFrom(data []byte) uint32 {
-	writel(d0ptr, uint32(len(data)))
-	call_m68k(executable_atrap(0xa11e))
-	ptr := readl(a0ptr)
-	copy(mem[ptr:], data)
-	return ptr
+func getBlock(ptr uint32) []byte {
+	block, ok := usedBlocks[ptr]
+	if !ok {
+		panic("bad argument to getBlock")
+	}
+
+	slice := make([]byte, block.size)
+	copy(slice, mem[ptr:])
+	return slice
+}
+
+func setHandleBlock(handle uint32, contents []byte) {
+	writel(a0ptr, handle)
+	writel(d0ptr, uint32(len(contents)))
+	tSetHandleSize()
+
+	copy(mem[readl(handle):], contents)
 }

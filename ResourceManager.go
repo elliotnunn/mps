@@ -209,7 +209,7 @@ func whichSegmentIs(pc uint32) string {
 			if entry.tType == 0x434f4445 {
 				if entry.rHndl != 0 {
 					curSegStart = readl(entry.rHndl)
-					curSegEnd = curSegStart + block_sizes[curSegStart]
+					curSegEnd = curSegStart + usedBlocks[curSegStart].size
 					if curSegStart <= pc && pc < curSegEnd {
 						fcb := fcbFromRefnum(resMap.mRefNum)
 						fname := macToUnicode(readPstring(fcb + 62))
@@ -645,7 +645,7 @@ func tWriteResource() {
 			buffer := openForks[forkKeyFromRefNum(refnum)]
 
 			ptr := readl(handle)
-			dataSize := block_sizes[ptr]
+			dataSize := usedBlocks[ptr].size
 			firstDataInFork := readl(resMap) // usually constant 256
 			dataFromFirstData := uint32(len(buffer)) - firstDataInFork
 
@@ -671,7 +671,7 @@ func tWriteResource() {
 // Squishes the existing on-disk resources together and appends the in-memory map
 // Does NOT write modified resources to disk
 func compactResFile(resMap uint32) {
-	rmap := dumpMap(getPtrBlock(resMap))
+	rmap := dumpMap(getBlock(resMap))
 	refnum := rmap.mRefNum // save this, because we clobber it
 
 	oldFork := openForks[forkKeyFromRefNum(refnum)]
@@ -762,7 +762,7 @@ func tCloseResFile() {
 		}
 
 		// Release the resource map
-		writel(a0ptr, master_ptrs[resMap])
+		writel(a0ptr, usedBlocks[resMap].masterPtr)
 		call_m68k(executable_atrap(0xa023)) // _DisposHandle
 
 		// Close the underlying fork
@@ -801,9 +801,9 @@ func tAddResource() {
 
 	setMapDirty(resMap, true)
 
-	deep := dumpMap(getPtrBlock(resMap))
+	deep := dumpMap(getBlock(resMap))
 	deep.list = append(deep.list, res)
-	setHandleBlock(master_ptrs[resMap], mkMap(deep))
+	setHandleBlock(usedBlocks[resMap].masterPtr, mkMap(deep))
 
 	setResError(0) // noErr
 }
@@ -813,7 +813,7 @@ func tRmveResource() {
 	if resMap, _, _, ok := lookupResHandle(handle); ok {
 		setMapDirty(resMap, true)
 
-		deep := dumpMap(getPtrBlock(resMap))
+		deep := dumpMap(getBlock(resMap))
 		for i, res := range deep.list {
 			if res.rHndl == handle {
 				if res.rAttr&0x20 != 0 { // not purgeable
@@ -822,7 +822,7 @@ func tRmveResource() {
 				} else {
 					writeb(handle+4, readb(handle+4)&^0x20) // orphan the handle
 					deep.list = append(deep.list[:i], deep.list[i+1:]...)
-					setHandleBlock(master_ptrs[resMap], mkMap(deep))
+					setHandleBlock(usedBlocks[resMap].masterPtr, mkMap(deep))
 					setResError(0)
 					return
 				}

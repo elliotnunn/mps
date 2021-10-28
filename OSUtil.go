@@ -93,38 +93,45 @@ var quadMonths = []uint16{
 
 // _NewHandle will set d0/MemErr
 func tHandToHand() { // duplicate handle
-	srcPtr := readl(readl(a0ptr))
-	size := block_sizes[srcPtr]
+	hand := readl(a0ptr)
+	ptr := verifyHandle(hand)
+
+	size := uint32(0)
+	if ptr != 0 {
+		size = usedBlocks[ptr].size
+	}
+
 	writel(d0ptr, size)
 	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
-	dstptr := readl(readl(a0ptr))
-	if dstptr != 0 {
-		copy(mem[dstptr:][:size], mem[srcPtr:][:size])
-	}
+	ptr2 := readl(readl(a0ptr))
+
+	copy(mem[ptr2:][:size], mem[ptr:][:size])
 }
 
 // _NewHandle will set d0/MemErr
 func tPtrToHand() { // copy to new handle
-	srcPtr := readl(a0ptr)
+	ptr := readl(a0ptr)
 	size := readl(d0ptr)
+
 	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
-	dstptr := readl(readl(a0ptr))
-	if dstptr != 0 {
-		copy(mem[dstptr:][:size], mem[srcPtr:][:size])
-	}
+	ptr2 := readl(readl(a0ptr))
+
+	copy(mem[ptr2:][:size], mem[ptr:][:size])
 }
 
 // _SetHandleSize will set d0/MemErr
 func tPtrToXHand() { // copy to existing handle
-	srcPtr := readl(a0ptr)
-	dstHndl := readl(a1ptr)
+	ptr := readl(a0ptr)
 	size := readl(d0ptr)
-	writel(a0ptr, dstHndl)
-	tSetHandleSize() // no need to go thru trap dispatcher
-	dstPtr := readl(dstHndl)
-	if readw(d0ptr+2) == 0 && dstPtr != 0 {
-		copy(mem[dstPtr:][:size], mem[srcPtr:][:size])
-		writel(a0ptr, dstHndl)
+
+	hand := readl(a1ptr)
+
+	writel(a0ptr, hand)
+	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
+
+	if readw(d0ptr+2) == 0 { // proceed if no error
+		ptr2 := readl(hand)
+		copy(mem[ptr2:][:size], mem[ptr:][:size])
 	}
 }
 
@@ -133,17 +140,18 @@ func tHandAndHand() { // copy to existing handle
 	aHndl := readl(a0ptr)
 	bHndl := readl(a1ptr)
 
-	aSize := block_sizes[readl(aHndl)]
-	bSize := block_sizes[readl(bHndl)]
+	aPtr := verifyHandle(aHndl)
+	bPtr := verifyHandle(bHndl)
+
+	aSize := usedBlocks[aPtr].size
+	bSize := usedBlocks[bPtr].size
 
 	writel(a0ptr, bHndl)
 	writel(d0ptr, aSize+bSize)
-	tSetHandleSize() // of the bHndl
+	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
 
-	aPtr := readl(aHndl)
-	bPtr := readl(bHndl)
-
-	if aPtr != 0 && bPtr != 0 {
+	if readw(d0ptr+2) == 0 { // proceed if no error
+		bPtr = readl(bHndl) // handle might have moved
 		copy(mem[bPtr+bSize:][:aSize], mem[aPtr:][:aSize])
 	}
 
@@ -152,19 +160,22 @@ func tHandAndHand() { // copy to existing handle
 
 // _SetHandleSize will set d0/MemErr
 func tPtrAndHand() {
-	ptr := readl(a0ptr)
-	hndl := readl(a1ptr)
-	addSize := readl(d0ptr)
+	aPtr := readl(a0ptr)
+	aSize := readl(d0ptr)
+	bHndl := readl(a1ptr)
 
-	writel(a0ptr, hndl)
-	tGetHandleSize()
-	oldSize := readl(d0ptr)
-	writel(d0ptr, oldSize+addSize)
-	writel(a0ptr, hndl)
-	tSetHandleSize()
+	bPtr := verifyHandle(bHndl)
 
-	if readl(hndl) != 0 {
-		copy(mem[readl(hndl)+oldSize:][:addSize], mem[ptr:][:addSize])
+	bSize := usedBlocks[bPtr].size
+
+	writel(a0ptr, bHndl)
+	writel(d0ptr, aSize+bSize)
+	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
+
+	if readw(d0ptr+2) == 0 { // proceed if no error
+		bPtr = readl(bHndl) // handle might have moved
+		copy(mem[bPtr+bSize:][:aSize], mem[aPtr:][:aSize])
 	}
-	writel(a0ptr, hndl)
+
+	writel(a0ptr, bHndl)
 }

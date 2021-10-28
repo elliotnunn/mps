@@ -73,7 +73,7 @@ func main() {
 		os_base + 0x1a:  tGetZone,             // _GetZone
 		os_base + 0x1b:  tClrD0A0,             // _SetZone
 		os_base + 0x1c:  tFreeMem,             // _FreeMem
-		os_base + 0x1d:  tFreeMem,             // _MaxMem
+		os_base + 0x1d:  tMaxMem,              // _MaxMem
 		os_base + 0x1e:  tNewPtr,              // _NewPtr
 		os_base + 0x1f:  tDisposPtr,           // _DisposPtr
 		os_base + 0x20:  tSetPtrSize,          // _SetPtrSize
@@ -96,7 +96,7 @@ func main() {
 		os_base + 0x32:  tClrD0A0,             // _FlushEvents
 		os_base + 0x36:  tClrD0A0,             // _MoreMasters
 		os_base + 0x3c:  tCmpString,           // _CmpString
-		os_base + 0x40:  tClrD0A0,             // _ResrvMem
+		os_base + 0x40:  tPurgeOrResrvMem,     // _ResrvMem
 		os_base + 0x44:  pbWrap(tSetFPos),     // _SetFPos
 		os_base + 0x46:  tGetTrapAddress,      // _GetTrapAddress
 		os_base + 0x47:  tSetTrapAddress,      // _SetTrapAddress
@@ -104,7 +104,7 @@ func main() {
 		os_base + 0x49:  tClrD0,               // _HPurge
 		os_base + 0x4a:  tClrD0,               // _HNoPurge
 		os_base + 0x4b:  tClrD0,               // _SetGrowZone
-		os_base + 0x4c:  tFreeMem,             // _CompactMem
+		os_base + 0x4c:  tCompactMem,          // _CompactMem
 		os_base + 0x4d:  tClrD0A0,             // _PurgeMem
 		os_base + 0x54:  tUprString,           // _UprString
 		os_base + 0x55:  tNop,                 // _StripAddress
@@ -112,7 +112,7 @@ func main() {
 		os_base + 0x59:  tClrD0,               // _RmvTime
 		os_base + 0x5a:  tClrD0,               // _PrimeTime
 		os_base + 0x60:  pbWrap(tFSDispatch),  // _FSDispatch
-		os_base + 0x62:  tFreeMem,             // _PurgeSpace
+		os_base + 0x62:  tPurgeOrResrvMem,     // _PurgeSpace
 		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
 		os_base + 0x64:  tClrD0,               // _MoveHHi
 		os_base + 0x65:  tStackSpace,          // _StackSpace
