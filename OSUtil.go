@@ -91,25 +91,30 @@ var quadMonths = []uint16{
 	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
 }
 
+// _NewHandle will set d0/MemErr
 func tHandToHand() { // duplicate handle
 	srcPtr := readl(readl(a0ptr))
 	size := block_sizes[srcPtr]
 	writel(d0ptr, size)
 	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
 	dstptr := readl(readl(a0ptr))
-	copy(mem[dstptr:][:size], mem[srcPtr:][:size])
-	return_memerr_and_d0(0)
+	if dstptr != 0 {
+		copy(mem[dstptr:][:size], mem[srcPtr:][:size])
+	}
 }
 
+// _NewHandle will set d0/MemErr
 func tPtrToHand() { // copy to new handle
 	srcPtr := readl(a0ptr)
 	size := readl(d0ptr)
 	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
 	dstptr := readl(readl(a0ptr))
-	copy(mem[dstptr:][:size], mem[srcPtr:][:size])
-	return_memerr_and_d0(0)
+	if dstptr != 0 {
+		copy(mem[dstptr:][:size], mem[srcPtr:][:size])
+	}
 }
 
+// _SetHandleSize will set d0/MemErr
 func tPtrToXHand() { // copy to existing handle
 	srcPtr := readl(a0ptr)
 	dstHndl := readl(a1ptr)
@@ -117,11 +122,13 @@ func tPtrToXHand() { // copy to existing handle
 	writel(a0ptr, dstHndl)
 	tSetHandleSize() // no need to go thru trap dispatcher
 	dstPtr := readl(dstHndl)
-	copy(mem[dstPtr:][:size], mem[srcPtr:][:size])
-	writel(a0ptr, dstHndl)
-	return_memerr_and_d0(0)
+	if readw(d0ptr+2) == 0 && dstPtr != 0 {
+		copy(mem[dstPtr:][:size], mem[srcPtr:][:size])
+		writel(a0ptr, dstHndl)
+	}
 }
 
+// _SetHandleSize will set d0/MemErr
 func tHandAndHand() { // copy to existing handle
 	aHndl := readl(a0ptr)
 	bHndl := readl(a1ptr)
@@ -136,12 +143,14 @@ func tHandAndHand() { // copy to existing handle
 	aPtr := readl(aHndl)
 	bPtr := readl(bHndl)
 
-	copy(mem[bPtr+bSize:][:aSize], mem[aPtr:][:aSize])
+	if aPtr != 0 && bPtr != 0 {
+		copy(mem[bPtr+bSize:][:aSize], mem[aPtr:][:aSize])
+	}
 
 	writel(a0ptr, bHndl)
-	return_memerr_and_d0(0)
 }
 
+// _SetHandleSize will set d0/MemErr
 func tPtrAndHand() {
 	ptr := readl(a0ptr)
 	hndl := readl(a1ptr)
@@ -154,7 +163,8 @@ func tPtrAndHand() {
 	writel(a0ptr, hndl)
 	tSetHandleSize()
 
-	copy(mem[readl(hndl)+oldSize:][:addSize], mem[ptr:][:addSize])
+	if readl(hndl) != 0 {
+		copy(mem[readl(hndl)+oldSize:][:addSize], mem[ptr:][:addSize])
+	}
 	writel(a0ptr, hndl)
-	return_memerr_and_d0(0)
 }

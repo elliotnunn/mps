@@ -4,40 +4,45 @@ var bump uint32 = kHeap
 
 // Memory Manager OS traps
 
-func return_memerr_and_d0(result int) {
-	writew(0x220, uint16(result))
-	writel(d0ptr, uint32(result))
+func memErrWrap(actualTrap func() int) func() {
+	return func() {
+		err := actualTrap()
+		writew(0x220, uint16(err)) // MemErr
+	}
 }
 
-func return_memerr(result int) {
-	writew(0x220, uint16(result))
+func memErrD0Wrap(actualTrap func() int) func() {
+	return func() {
+		err := actualTrap()
+		writew(0x220, uint16(err)) // MemErr
+		writel(d0ptr, uint32(err))
+	}
 }
 
 var block_sizes = make(map[uint32]uint32)
 var master_ptrs = make(map[uint32]uint32)
 
-func tGetZone() {
-	return_memerr_and_d0(0)
+var tGetZone = memErrD0Wrap(func() int {
 	ApplZone := readl(0x2aa)
 	writel(a0ptr, ApplZone) // ApplZone
-}
+	return 0
+})
 
-func tFreeMem() { // _FreeMem _MaxMem _CompactMem _PurgeSpace
-	return_memerr(0)
+var tFreeMem = memErrWrap(func() int { // _FreeMem _MaxMem _CompactMem _PurgeSpace
 	writel(d0ptr, 0x7ffffffe) // free
 	writel(a0ptr, 0x7ffffffe) // growable (MaxMem only)
-}
+	return 0
+})
 
-func tStackSpace() {
-	return_memerr(0)
+var tStackSpace = memErrWrap(func() int {
 	writel(d0ptr, (readl(spptr)-kStackLimit-200)&0xfffffffc)
-}
+	return 0
+})
 
 // Final common pathway for making heap blocks
 // TODO: improve on this bump allocator
-func tNewPtr() {
+var tNewPtr = memErrD0Wrap(func() int {
 	size := readl(d0ptr)
-	return_memerr_and_d0(0)
 
 	bump += 16
 	bump = (bump + 0xfff) & 0xfffff000
@@ -50,30 +55,31 @@ func tNewPtr() {
 
 	block_sizes[block] = size
 	writel(a0ptr, block)
-}
+	return 0
+})
 
-func tDisposPtr() {
-	return_memerr_and_d0(0)
-}
+var tDisposPtr = memErrD0Wrap(func() int {
+	return 0
+})
 
-func tSetPtrSize() {
+var tSetPtrSize = memErrD0Wrap(func() int {
 	ptr := readl(a0ptr)
 	size := readl(d0ptr)
 
 	if block_sizes[ptr] >= size {
 		block_sizes[ptr] = size
-		return_memerr_and_d0(0)
+		return 0
 	} else {
-		return_memerr_and_d0(-108) // memFullErr
+		return -108 // memFullErr
 	}
-}
+})
 
-func tGetPtrSize() {
-	return_memerr(0)
+var tGetPtrSize = memErrWrap(func() int {
 	writel(d0ptr, block_sizes[readl(a0ptr)])
-}
+	return 0
+})
 
-func tNewHandle() {
+var tNewHandle = memErrD0Wrap(func() int {
 	tNewPtr()
 
 	ptr := readl(a0ptr)
@@ -81,25 +87,27 @@ func tNewHandle() {
 	master_ptrs[ptr] = handle
 	writel(ptr-16, ptr) // stash the master pointer in the header
 	writel(a0ptr, handle)
-}
+	return 0
+})
 
-func tNewEmptyHandle() {
+var tNewEmptyHandle = memErrD0Wrap(func() int {
 	writel(d0ptr, 0)
 	tNewHandle()
 	writel(readl(a0ptr), 0) // points nowhere!
-}
+	return 0
+})
 
-func tDisposHandle() {
+var tDisposHandle = memErrD0Wrap(func() int {
 	ptr := readl(readl(a0ptr))
 	delete(master_ptrs, ptr)
 	writel(a0ptr, ptr)
 	tDisposPtr()
-}
+	return 0
+})
 
-func tSetHandleSize() {
+var tSetHandleSize = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
 	size := readl(d0ptr)
-	return_memerr_and_d0(0)
 
 	ptr := readl(handle)
 	oldsize := block_sizes[ptr]
@@ -115,14 +123,15 @@ func tSetHandleSize() {
 		copy(mem[ptr2:ptr2+size], mem[ptr:ptr+size])
 		writel(handle, ptr2)
 	}
-}
+	return 0
+})
 
-func tGetHandleSize() {
-	return_memerr(0)
+var tGetHandleSize = memErrWrap(func() int {
 	writel(d0ptr, block_sizes[readl(readl(a0ptr))]) // might die??
-}
+	return 0
+})
 
-func tReallocHandle() {
+var tReallocHandle = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
 	size := readl(d0ptr)
 	tEmptyHandle()
@@ -130,43 +139,42 @@ func tReallocHandle() {
 	tNewPtr()
 	writel(handle, readl(a0ptr))
 	writel(a0ptr, handle)
-	return_memerr_and_d0(0)
-}
+	return 0
+})
 
-func tRecoverHandle() {
-	return_memerr(0) // preserves d0, oddly
+var tRecoverHandle = memErrWrap(func() int {
 	writel(a0ptr, master_ptrs[readl(a0ptr)])
-}
+	return 0
+})
 
-func tEmptyHandle() {
+var tEmptyHandle = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
 	writel(a0ptr, readl(handle))
 	tDisposPtr()
 	writel(handle, 0)
-	return_memerr_and_d0(0)
-}
+	return 0
+})
 
 func tBlockMove() {
 	src := readl(a0ptr)
 	dest := readl(a1ptr)
 	size := readl(d0ptr)
 	copy(mem[dest:dest+size], mem[src:src+size])
-	return_memerr_and_d0(0)
 }
 
-func tHGetState() {
+var tHGetState = memErrWrap(func() int {
 	handle := readl(a0ptr)
 	flags := readb(handle + 4)
 	writel(d0ptr, uint32(flags))
-	return_memerr(0)
-}
+	return 0
+})
 
-func tHSetState() {
+var tHSetState = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
 	flags := readb(d0ptr + 3)
 	writeb(handle+4, flags)
-	return_memerr(0)
-}
+	return 0
+})
 
 func getPtrBlock(ptr uint32) []byte {
 	size, ok := block_sizes[ptr]
