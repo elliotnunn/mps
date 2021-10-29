@@ -242,6 +242,10 @@ var tNewEmptyHandle = memErrD0Wrap(func() int {
 
 var tDisposHandle = memErrD0Wrap(func() int {
 	hand := readl(a0ptr)
+	if hand == 0 {
+		return -109 // nilHandleErr
+	}
+
 	ptr := verifyHandle(hand)
 
 	freeBlock(hand)
@@ -298,6 +302,7 @@ var tReallocHandle = memErrD0Wrap(func() int {
 	if hand == 0 {
 		return -109 // nilHandleErr
 	}
+
 	ptr := verifyHandle(hand)
 
 	newSize := readl(d0ptr)
@@ -344,6 +349,10 @@ var tRecoverHandle = memErrWrap(func() int {
 
 var tEmptyHandle = memErrD0Wrap(func() int {
 	hand := readl(a0ptr)
+	if hand == 0 {
+		return -109 // nilHandleErr
+	}
+
 	ptr := verifyHandle(hand)
 
 	if readb(hand+4)&0x80 != 0 {
@@ -367,7 +376,11 @@ func tBlockMove() {
 
 var tHGetState = memErrWrap(func() int {
 	handle := readl(a0ptr)
-	verifyHandle(handle)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		writel(d0ptr, 0)
+		return -109 // nilHandleErr
+	}
+
 	flags := readb(handle + 4)
 	writel(d0ptr, uint32(flags))
 	return 0
@@ -375,7 +388,11 @@ var tHGetState = memErrWrap(func() int {
 
 var tHSetState = memErrD0Wrap(func() int {
 	handle := readl(a0ptr)
-	verifyHandle(handle)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		writel(d0ptr, 0)
+		return -109 // nilHandleErr
+	}
+
 	flags := readb(d0ptr + 3)
 	writeb(handle+4, flags)
 	return 0
