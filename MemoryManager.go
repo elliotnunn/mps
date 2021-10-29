@@ -447,6 +447,12 @@ var tHNoPurge = memErrD0Wrap(func() int {
 	return 0
 })
 
+func tMemMgrNop() {
+	writew(0x220, 0) // MemErr
+	writel(d0ptr, 0)
+	writel(a0ptr, 0)
+}
+
 func mfMemRoutine(selector uint16) {
 	switch selector {
 	case 0x15: // FUNCTION TempMaxMem (VAR grow: Size): Size;

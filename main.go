@@ -88,13 +88,13 @@ func main() {
 		os_base + 0x29:  tHLock,               // _HLock
 		os_base + 0x2a:  tHUnlock,             // _HUnlock
 		os_base + 0x2b:  tEmptyHandle,         // _EmptyHandle
-		os_base + 0x2c:  tClrD0A0,             // _InitApplZone
-		os_base + 0x2d:  tClrD0A0,             // _SetApplLimit
+		os_base + 0x2c:  tMemMgrNop,           // _InitApplZone
+		os_base + 0x2d:  tMemMgrNop,           // _SetApplLimit
 		os_base + 0x2e:  tBlockMove,           // _BlockMove
 		os_base + 0x30:  tGetOSEvent,          // _OSEventAvail
 		os_base + 0x31:  tGetOSEvent,          // _GetOSEvent
-		os_base + 0x32:  tClrD0A0,             // _FlushEvents
-		os_base + 0x36:  tClrD0A0,             // _MoreMasters
+		os_base + 0x32:  tMemMgrNop,           // _FlushEvents
+		os_base + 0x36:  tMemMgrNop,           // _MoreMasters
 		os_base + 0x3c:  tCmpString,           // _CmpString
 		os_base + 0x40:  tPurgeOrResrvMem,     // _ResrvMem
 		os_base + 0x44:  pbWrap(tSetFPos),     // _SetFPos
@@ -103,9 +103,9 @@ func main() {
 		os_base + 0x48:  tGetZone,             // _PtrZone
 		os_base + 0x49:  tHPurge,              // _HPurge
 		os_base + 0x4a:  tHNoPurge,            // _HNoPurge
-		os_base + 0x4b:  tClrD0,               // _SetGrowZone
+		os_base + 0x4b:  tMemMgrNop,           // _SetGrowZone
 		os_base + 0x4c:  tCompactMem,          // _CompactMem
-		os_base + 0x4d:  tClrD0A0,             // _PurgeMem
+		os_base + 0x4d:  tMemMgrNop,           // _PurgeMem
 		os_base + 0x54:  tUprString,           // _UprString
 		os_base + 0x55:  tNop,                 // _StripAddress
 		os_base + 0x58:  tClrD0,               // _InsTime
@@ -113,8 +113,8 @@ func main() {
 		os_base + 0x5a:  tClrD0,               // _PrimeTime
 		os_base + 0x60:  pbWrap(tFSDispatch),  // _FSDispatch
 		os_base + 0x62:  tPurgeOrResrvMem,     // _PurgeSpace
-		os_base + 0x63:  tClrD0A0,             // _MaxApplZone
-		os_base + 0x64:  tClrD0,               // _MoveHHi
+		os_base + 0x63:  tMemMgrNop,           // _MaxApplZone
+		os_base + 0x64:  tMemMgrNop,           // _MoveHHi
 		os_base + 0x65:  tStackSpace,          // _StackSpace
 		os_base + 0x66:  tNewEmptyHandle,      // _NewEmptyHandle
 		os_base + 0x69:  tHGetState,           // _HGetState
