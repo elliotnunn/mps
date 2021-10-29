@@ -71,7 +71,7 @@ func main() {
 		os_base + 0x15:  pbWrap(tSetVol),      // _SetVol
 		os_base + 0x18:  pbWrap(tGetFPos),     // _GetFPos
 		os_base + 0x1a:  tGetZone,             // _GetZone
-		os_base + 0x1b:  tClrD0A0,             // _SetZone
+		os_base + 0x1b:  tSetZone,             // _SetZone
 		os_base + 0x1c:  tFreeMem,             // _FreeMem
 		os_base + 0x1d:  tMaxMem,              // _MaxMem
 		os_base + 0x1e:  tNewPtr,              // _NewPtr
@@ -85,8 +85,8 @@ func main() {
 		os_base + 0x26:  tGetZone,             // _HandleZone
 		os_base + 0x27:  tReallocHandle,       // _ReallocHandle
 		os_base + 0x28:  tRecoverHandle,       // _RecoverHandle
-		os_base + 0x29:  tClrD0,               // _HLock
-		os_base + 0x2a:  tClrD0,               // _HUnlock
+		os_base + 0x29:  tHLock,               // _HLock
+		os_base + 0x2a:  tHUnlock,             // _HUnlock
 		os_base + 0x2b:  tEmptyHandle,         // _EmptyHandle
 		os_base + 0x2c:  tClrD0A0,             // _InitApplZone
 		os_base + 0x2d:  tClrD0A0,             // _SetApplLimit
@@ -101,8 +101,8 @@ func main() {
 		os_base + 0x46:  tGetTrapAddress,      // _GetTrapAddress
 		os_base + 0x47:  tSetTrapAddress,      // _SetTrapAddress
 		os_base + 0x48:  tGetZone,             // _PtrZone
-		os_base + 0x49:  tClrD0,               // _HPurge
-		os_base + 0x4a:  tClrD0,               // _HNoPurge
+		os_base + 0x49:  tHPurge,              // _HPurge
+		os_base + 0x4a:  tHNoPurge,            // _HNoPurge
 		os_base + 0x4b:  tClrD0,               // _SetGrowZone
 		os_base + 0x4c:  tCompactMem,          // _CompactMem
 		os_base + 0x4d:  tClrD0A0,             // _PurgeMem

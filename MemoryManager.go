@@ -132,6 +132,15 @@ var tGetZone = memErrD0Wrap(func() int {
 	return 0
 })
 
+var tSetZone = memErrD0Wrap(func() int {
+	to := readl(a0ptr)
+	if to != readl(0x2aa) {
+		panic("SetZone to something other than our fake zone")
+	}
+	writel(0x118, to) // TheZone
+	return 0
+})
+
 var tFreeMem = memErrWrap(func() int {
 	writel(d0ptr, memFree)
 	return 0
@@ -395,6 +404,46 @@ var tHSetState = memErrD0Wrap(func() int {
 
 	flags := readb(d0ptr + 3)
 	writeb(handle+4, flags)
+	return 0
+})
+
+var tHLock = memErrD0Wrap(func() int {
+	handle := readl(a0ptr)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		return -109 // nilHandleErr
+	}
+
+	mem[handle+4] |= 0x80
+	return 0
+})
+
+var tHUnlock = memErrD0Wrap(func() int {
+	handle := readl(a0ptr)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		return -109 // nilHandleErr
+	}
+
+	mem[handle+4] &= ^byte(0x80)
+	return 0
+})
+
+var tHPurge = memErrD0Wrap(func() int {
+	handle := readl(a0ptr)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		return -109 // nilHandleErr
+	}
+
+	mem[handle+4] |= 0x40
+	return 0
+})
+
+var tHNoPurge = memErrD0Wrap(func() int {
+	handle := readl(a0ptr)
+	if handle == 0 || verifyHandle(handle) == 0 {
+		return -109 // nilHandleErr
+	}
+
+	mem[handle+4] &= ^byte(0x40)
 	return 0
 })
 
