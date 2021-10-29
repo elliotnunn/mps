@@ -127,8 +127,8 @@ func memErrD0Wrap(actualTrap func() int) func() {
 // Memory Manager OS traps
 
 var tGetZone = memErrD0Wrap(func() int {
-	ApplZone := readl(0x2aa)
-	writel(a0ptr, ApplZone) // ApplZone
+	TheZone := readl(0x118)
+	writel(a0ptr, TheZone)
 	return 0
 })
 
