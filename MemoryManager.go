@@ -71,6 +71,10 @@ func newBlock(size uint32, expandable bool) uint32 {
 	usedBlocks[addr] = &block
 	memFree -= block.total
 
+	if gDebugMemoryMgr {
+		logf("   +%d b block (rounded from %d)\n", block.total, block.size)
+	}
+
 	return addr
 }
 
@@ -83,6 +87,10 @@ func freeBlock(addr uint32) {
 	memFree += block.total
 
 	freeBlocks[block.total] = append(freeBlocks[block.total], addr)
+
+	if gDebugMemoryMgr {
+		logf("   -%d b block\n", block.total)
+	}
 }
 
 func verifyHandle(hand uint32) (ptr uint32) {

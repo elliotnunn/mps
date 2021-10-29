@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const allBugFlags = "6=68k|t=stacktrace|f=FileMgr"
+const allBugFlags = "6=68k|t=stacktrace|f=FileMgr|m=MemMgr"
 
 var bugFlags = os.Getenv("MPSDEBUG")
 
@@ -15,6 +15,7 @@ var (
 	gDebugEveryInst  = strings.ContainsRune(bugFlags, '6')
 	gDebugStackTrace = strings.ContainsRune(bugFlags, 't')
 	gDebugFileMgr    = strings.ContainsRune(bugFlags, 'f')
+	gDebugMemoryMgr  = strings.ContainsRune(bugFlags, 'm')
 )
 
 // called before and after every trap when debugging is on
@@ -24,11 +25,18 @@ func logTrap(inst uint16, isPre bool) {
 		inst = readw(d1ptr + 2)
 	}
 
+	_, isMM := mmTraps[inst&0x8ff]
+
 	switch {
 	case inst&0x8ff <= 0x18 || inst&0x8ff == 0x44 || inst&0x8ff == 0x60:
 		// File Manager
 		if gDebugFileMgr {
 			logFileMgrTrap(inst, isPre)
+		}
+
+	case isMM:
+		if gDebugMemoryMgr {
+			logMemoryMgrTrap(inst, isPre)
 		}
 	}
 }
@@ -627,4 +635,112 @@ func dumpPBField(f string) {
 	default:
 		panic("uncoded paramblk field " + f)
 	}
+}
+
+// Memory Manager dumping
+var lastMemFree uint32
+
+func printRegs(flags int) {
+	slice := []string{}
+	for i := 0; i < 16; i++ {
+		if flags&(1<<i) != 0 {
+			addr := d0ptr + 4*uint32(i)
+			letter := "d"
+			if i >= 8 {
+				letter = "a"
+			}
+			slice = append(slice, fmt.Sprintf("%s%d=%08x", letter, i%8, readl(addr)))
+		}
+	}
+
+	if len(slice) > 0 {
+		logln("    " + strings.Join(slice, ", "))
+	}
+}
+
+func logMemoryMgrTrap(num uint16, isPre bool) {
+	info := mmTraps[num&0x8ff]
+	if isPre {
+		logf("%04X=%s (\n", num, info.name)
+		printRegs(info.arg)
+		lastMemFree = memFree
+	} else {
+		logln(") returns (")
+
+		printRegs(info.ret)
+
+		if memFree != lastMemFree {
+			logf("   %+d b total heap\n", int32(lastMemFree-memFree))
+		}
+
+		if memErr := uint16(readw(0x220)); memErr != 0 {
+			logf("    memErr=%d\n", memErr)
+		}
+
+		logln(")")
+	}
+}
+
+type mmTrapSig struct {
+	name string
+	arg  int
+	ret  int
+}
+
+const (
+	flagD0 = 1 << iota
+	flagD1
+	flagD2
+	flagD3
+	flagD4
+	flagD5
+	flagD6
+	flagD7
+	flagA0
+	flagA1
+	flagA2
+	flagA3
+	flagA4
+	flagA5
+	flagA6
+	flagA7
+)
+
+var mmTraps = map[uint16]mmTrapSig{
+	0x1a: {"_GetZone", 0, flagD0 + flagA0},
+	0x1b: {"_SetZone", flagA0, flagD0},
+	0x1c: {"_FreeMem", 0, flagD0},
+	0x1d: {"_MaxMem", 0, flagD0 + flagA0},
+	0x1e: {"_NewPtr", flagD0, flagD0 + flagA0},
+	0x1f: {"_DisposPtr", flagA0, flagD0},
+	0x20: {"_SetPtrSize", flagD0 + flagA0, flagD0},
+	0x21: {"_GetPtrSize", flagA0, flagD0},
+	0x22: {"_NewHandle", flagD0, flagD0 + flagA0},
+	0x23: {"_DisposHandle", flagA0, flagD0},
+	0x24: {"_SetHandleSize", flagD0 + flagA0, flagD0},
+	0x25: {"_GetHandleSize", flagA0, flagD0},
+	0x26: {"_HandleZone", flagA0, flagD0 + flagA0},
+	0x27: {"_ReallocHandle", flagD0 + flagA0, flagD0},
+	0x28: {"_RecoverHandle", flagA0, flagD0 + flagA0},
+	0x29: {"_HLock", flagA0, flagD0},
+	0x2a: {"_HUnlock", flagA0, flagD0},
+	0x2b: {"_EmptyHandle", flagA0, flagD0 + flagA0},
+	0x2c: {"_InitApplZone", 0, flagD0},
+	0x2d: {"_SetApplLimit", flagA0, flagD0},
+	0x36: {"_MoreMasters", 0, 0},
+	0x40: {"_ResrvMem", flagD0, flagD0},
+	0x48: {"_PtrZone", flagA0, flagD0 + flagA0},
+	0x49: {"_HPurge", flagA0, flagD0},
+	0x4a: {"_HNoPurge", flagA0, flagD0},
+	0x4b: {"_SetGrowZone", flagA0, flagD0},
+	0x4c: {"_CompactMem", flagD0, flagD0},
+	0x4d: {"_PurgeMem", flagD0, flagD0},
+	0x55: {"_StripAddress", flagD0, flagD0},
+	0x62: {"_PurgeSpace", flagA0, flagD0},
+	0x63: {"_MaxApplZone", 0, flagD0},
+	0x64: {"_MoveHHi", flagA0, flagD0},
+	0x65: {"_StackSpace", 0, flagD0},
+	0x66: {"_NewEmptyHandle", flagA0, flagD0},
+	0x69: {"_HGetState", flagA0, flagD0},
+	0x6a: {"_HSetState", flagD0 + flagA0, flagD0},
 }
