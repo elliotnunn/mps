@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const allBugFlags = "6=68k|t=stacktrace|f=FileMgr|m=MemMgr"
+const allBugFlags = "6=68k|t=stacktrace|f=FileMgr|m=MemMgr|p=hoard+poison old MM blocks"
 
 var bugFlags = os.Getenv("MPSDEBUG")
 
@@ -16,6 +16,7 @@ var (
 	gDebugStackTrace = strings.ContainsRune(bugFlags, 't')
 	gDebugFileMgr    = strings.ContainsRune(bugFlags, 'f')
 	gDebugMemoryMgr  = strings.ContainsRune(bugFlags, 'm')
+	gPoisonOldBlocks = strings.ContainsRune(bugFlags, 'p')
 )
 
 // called before and after every trap when debugging is on

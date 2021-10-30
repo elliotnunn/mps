@@ -52,7 +52,7 @@ func newBlock(size uint32, expandable bool) uint32 {
 
 	var addr uint32
 	freeCnt := len(freeBlocks[block.total])
-	if freeCnt > 0 {
+	if freeCnt > 0 && !gPoisonOldBlocks {
 		addr = freeBlocks[block.total][freeCnt-1]
 		freeBlocks[block.total] = freeBlocks[block.total][:freeCnt-1]
 	} else {
@@ -87,6 +87,12 @@ func freeBlock(addr uint32) {
 	memFree += block.total
 
 	freeBlocks[block.total] = append(freeBlocks[block.total], addr)
+
+	if gPoisonOldBlocks {
+		for i := uint32(0); i < block.total; i += 2 {
+			writew(addr+i, 0x68f1)
+		}
+	}
 
 	if gDebugMemoryMgr {
 		logf("   -%d b block\n", block.total)
