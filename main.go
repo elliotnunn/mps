@@ -606,12 +606,12 @@ func tSysError() {
 // TODO: should match the SysEnvirons routine in the MPW libraries
 func tSysEnvirons() {
 	block := readl(a0ptr)
-	write(16, block, 0)     // wipe
-	writew(block, 2)        // environsVersion = 2
-	writew(block+2, 3)      // machineType = SE
-	writew(block+4, 0x0700) // systemVersion = seven
-	writew(block+6, 3)      // processor = 68020
-	writel(d0ptr, 0)        // noErr
+	write(16, block, 0)                   // wipe
+	writew(block, 2)                      // environsVersion = 2
+	writew(block+2, 4)                    // machineType = II
+	writew(block+4, readw(0x15a))         // systemVersion
+	writew(block+6, uint16(readb(0x12f))) // processor = 68020
+	writel(d0ptr, 0)                      // noErr
 }
 
 // Key-value storage to test for presence of OS features
@@ -625,14 +625,22 @@ func tGestalt() {
 		switch selector {
 		case "sysv":
 			reply = uint32(readw(0x15a)) // SysVersion
+		case "ostt":
+			reply = kOSTable
+		case "tbtt":
+			reply = kToolTable
+		case "ram ":
+			reply = kMemSize
 		case "fs  ":
 			reply = 2 // FSSpec calls, not much else
 		case "fold":
 			reply = 1 // Folder Manager present
 		case "mach":
-			reply = 10 // Mac II
+			reply = 6 // Mac II
 		case "proc":
 			reply = uint32(readb(0x12f)) + 1 // CPUFlag
+		case "addr":
+			reply = 7 // all the 32-bit flags
 		default:
 			err = -5551 // gestaltUndefSelectorErr
 		}
