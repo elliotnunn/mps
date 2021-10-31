@@ -106,6 +106,8 @@ func main() {
 		os_base + 0x4b:  tMemMgrNop,           // _SetGrowZone
 		os_base + 0x4c:  tCompactMem,          // _CompactMem
 		os_base + 0x4d:  tMemMgrNop,           // _PurgeMem
+		os_base + 0x51:  tReadXPram,           // _ReadXPram
+		os_base + 0x52:  tClrD0,               // _WriteXPram
 		os_base + 0x54:  tUprString,           // _UprString
 		os_base + 0x55:  tNop,                 // _StripAddress
 		os_base + 0x58:  tClrD0,               // _InsTime
