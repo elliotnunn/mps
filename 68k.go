@@ -1552,7 +1552,7 @@ func printCallStack() {
 
 	if callStack[len(callStack)-1] > sp {
 		callStack = append(callStack, sp)
-		callStackNames = append(callStackNames, curFunc())
+		callStackNames = append(callStackNames, curFunc(pc))
 	}
 
 	var toPrint []string
@@ -1574,7 +1574,7 @@ func printCallStack() {
 var curFuncStart, curFuncEnd uint32
 var curFuncName string
 
-func curFunc() string {
+func curFunc(pc uint32) string {
 	if pc < 0x100000 {
 		return ""
 	}
@@ -1606,7 +1606,7 @@ func curFunc() string {
 }
 
 func printState() {
-	printName := curFunc()
+	printName := curFunc(pc)
 
 	if printName == "p2cstr" {
 		if readw(pc) == 0x202f {

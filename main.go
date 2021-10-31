@@ -446,13 +446,20 @@ const tb_base = 0x100
 var my_traps [0x500]func()
 
 func lineA(inst uint16) {
+	unimp := readl(kToolTable + 4*0x9f)
+
 	if inst&0x800 != 0 { // Toolbox trap
 		// Push a return address unless autoPop is used
 		if inst&0x400 == 0 {
 			pushl(pc)
 		}
 
-		pc = readl(kToolTable + 4*(uint32(inst)&0x3ff))
+		imp := readl(kToolTable + 4*(uint32(inst)&0x3ff))
+		if imp == unimp {
+			dieBadTrap(pc - 2)
+		}
+
+		pc = imp
 	} else { // OS trap
 		pushl(readl(a2ptr))
 		pushl(readl(d2ptr))
@@ -464,7 +471,12 @@ func lineA(inst uint16) {
 
 		writew(d1ptr+2, inst)
 
-		call_m68k(readl(kOSTable + 4*(uint32(inst)&0xff)))
+		imp := readl(kOSTable + 4*(uint32(inst)&0xff))
+		if imp == unimp {
+			dieBadTrap(pc - 2)
+		}
+
+		call_m68k(imp)
 
 		if inst&0x100 == 0 {
 			writel(a0ptr, popl())
@@ -787,8 +799,13 @@ func tGetFNum() {
 
 // Trivial do-nothing traps
 
+func dieBadTrap(pc uint32) {
+	logf("Unimplemented trap: %x in %s %s\n", readw(pc), whichSegmentIs(pc), curFunc(pc))
+	os.Exit(1)
+}
+
 func tUnimplemented() {
-	fmt.Fprintf(os.Stderr, "Unimplemented trap %04x\n", 0xa000|(readw(pc-2)&0xfff))
+	logln("Unimplemented trap handler called directly (not via an A-trap)")
 	os.Exit(1)
 }
 
