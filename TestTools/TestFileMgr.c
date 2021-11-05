@@ -70,6 +70,16 @@
 #define ioFlParID		0x64			// File's parent directory ID
 #define ioFlClpSiz		0x68			// File's clump size, in bytes
 
+#define fsAtMark		0
+#define fsFromStart		1
+#define fsFromLEOF		2
+#define fsFromMark		3
+
+#define fsCurPerm		0
+#define fsRdPerm		1
+#define fsWrPerm		2
+#define fsRdWrPerm		3
+
 #pragma parameter __D0 Open(__A0)
 short Open(char *pb) = {0xa000};
 #pragma parameter __D0 HOpen(__A0)
@@ -194,7 +204,7 @@ char pb[128], oldpb[128];
 void pbClear() {
 	int i;
 	for (i = 0; i < sizeof pb; i++) {
-		oldpb[i] = pb[i] = 0xff;
+		oldpb[i] = pb[i] = 0x61;
 	}
 }
 
@@ -214,19 +224,19 @@ void pbSetPtr(int ofs, void *val) {
 	*(void **)(oldpb + ofs) = *(void **)(pb + ofs) = val;
 }
 
-void pbCanDifferB(int ofs) {
-	*(oldpb + ofs) = *(pb + ofs);
+char pbCanDifferB(int ofs) {
+	return *(oldpb + ofs) = *(pb + ofs);
 }
 
-void pbCanDifferW(int ofs) {
-	*(short *)(oldpb + ofs) = *(short *)(pb + ofs);
+short pbCanDifferW(int ofs) {
+	return *(short *)(oldpb + ofs) = *(short *)(pb + ofs);
 }
 
-void pbCanDifferL(int ofs) {
-	*(long *)(oldpb + ofs) = *(long *)(pb + ofs);
+long pbCanDifferL(int ofs) {
+	return *(long *)(oldpb + ofs) = *(long *)(pb + ofs);
 }
 
-void pbMustDifferB(int ofs) {
+char pbMustDifferB(int ofs) {
 	if (*(oldpb + ofs) == *(pb + ofs)) {
 		LineAppend("\p# bad: PB byte unchanged at $");
 		LineAppendX((unsigned char)ofs);
@@ -234,10 +244,10 @@ void pbMustDifferB(int ofs) {
 		TestFail();
 	}
 
-	*(oldpb + ofs) = *(pb + ofs);
+	return *(oldpb + ofs) = *(pb + ofs);
 }
 
-void pbMustDifferW(int ofs) {
+short pbMustDifferW(int ofs) {
 	if (*(short *)(oldpb + ofs) == *(short *)(pb + ofs)) {
 		LineAppend("\p# bad: PB word unchanged at $");
 		LineAppendX((unsigned char)ofs);
@@ -245,10 +255,10 @@ void pbMustDifferW(int ofs) {
 		TestFail();
 	}
 
-	*(short *)(oldpb + ofs) = *(short *)(pb + ofs);
+	return *(short *)(oldpb + ofs) = *(short *)(pb + ofs);
 }
 
-void pbMustDifferL(int ofs) {
+long pbMustDifferL(int ofs) {
 	if (*(long *)(oldpb + ofs) == *(long *)(pb + ofs)) {
 		LineAppend("\p# bad: PB long unchanged at $");
 		LineAppendX((unsigned char)ofs);
@@ -256,7 +266,7 @@ void pbMustDifferL(int ofs) {
 		TestFail();
 	}
 
-	*(long *)(oldpb + ofs) = *(long *)(pb + ofs);
+	return *(long *)(oldpb + ofs) = *(long *)(pb + ofs);
 }
 
 void pbCheck() {
@@ -272,8 +282,6 @@ void pbCheck() {
 }
 
 void main(void) {
-	short result;
-
 	{
 		TestOpen("\pOpen NonExistentFile");
 		pbClear();
@@ -284,6 +292,7 @@ void main(void) {
 		pbSetL(ioMisc, 0);
 
 		if (Open(pb) != -43) {TestFailMsg("\punexpected return value");}
+		if (pbCanDifferW(ioRefNum) != 0) {TestFailMsg("\pnonzero ioRefNum");}
 
 		pbCheck(pb);
 		TestClose();
@@ -299,6 +308,7 @@ void main(void) {
 		pbSetL(ioMisc, 0);
 
 		if (OpenRF(pb) != -43) {TestFailMsg("\punexpected return value");}
+		if (pbCanDifferW(ioRefNum) != 0) {TestFailMsg("\pnonzero ioRefNum");}
 
 		pbCheck(pb);
 		TestClose();
@@ -315,6 +325,7 @@ void main(void) {
 		pbSetL(ioMisc, 0);
 
 		if (HOpen(pb) != -43) {TestFailMsg("\punexpected return value");}
+		if (pbCanDifferW(ioRefNum) != 0) {TestFailMsg("\pnonzero ioRefNum");}
 
 		pbCheck(pb);
 		TestClose();
@@ -331,8 +342,263 @@ void main(void) {
 		pbSetL(ioMisc, 0);
 
 		if (HOpenRF(pb) != -43) {TestFailMsg("\punexpected return value");}
+		if (pbCanDifferW(ioRefNum) != 0) {TestFailMsg("\pnonzero ioRefNum");}
 
 		pbCheck(pb);
 		TestClose();
 	}
+
+	// Do some tests on a small four-byte file...
+	{
+		unsigned char buf[4];
+		short refnum;
+
+		// Create a toy file
+		pbClear();
+		pbSetPtr(ioNamePtr, "\pFileMgrTest");
+		pbSetW(ioVRefNum, 0);
+		pbSetB(ioVersNum, 0);
+		pbSetB(ioPermssn, fsRdWrPerm);
+		pbSetL(ioMisc, 0);
+		Open(pb);
+		pbSetW(ioPosMode, fsAtMark);
+		pbSetPtr(ioBuffer, "\pabc");
+		pbSetL(ioReqCount, 4);
+		Write(pb);
+		pbSetL(ioMisc, 4);
+		SetEOF(pb);
+		Close(pb);
+
+		TestOpen("\pReopen created file");
+		pbClear();
+		pbSetPtr(ioNamePtr, "\pFileMgrTest");
+		pbSetW(ioVRefNum, 0);
+		pbSetB(ioVersNum, 0);
+		pbSetB(ioPermssn, fsRdPerm);
+		pbSetL(ioMisc, 0);
+		if (Open(pb)) TestFailMsg("\pnonzero error code");
+		refnum = pbMustDifferW(ioRefNum);
+		if ((refnum < 0) || (refnum & 1)) TestFailMsg("\punreasonable refnum");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pGetEOF");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		GetEOF(pb);
+		if (pbCanDifferL(ioMisc) != 4) TestFail();
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pRead to end and check content");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 0);
+		pbSetL(ioReqCount, 4);
+		pbSetPtr(ioBuffer, buf);
+		if (Read(pb)) TestFailMsg("\pnonzero error code");
+		TestStrCmp(buf, "\pabc");
+		if (pbCanDifferL(ioActCount) != 4) TestFailMsg("\pioActCount");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCheck();
+		TestClose();
+
+		buf[0] = 0;
+
+		TestOpen("\pRead PAST end and check content");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 0);
+		pbSetL(ioReqCount, 5);
+		pbSetPtr(ioBuffer, buf);
+		if (Read(pb) != -39) TestFailMsg("\pnon-eofErr error code");
+		TestStrCmp(buf, "\pabc");
+		if (pbCanDifferL(ioActCount) != 4) TestFailMsg("\pioActCount");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCheck();
+		TestClose();
+
+		buf[0] = 0;
+
+		TestOpen("\pRead BEFORE start and check content");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, -2);
+		pbSetL(ioReqCount, 4);
+		pbSetPtr(ioBuffer, buf);
+		if (Read(pb) != -40) TestFailMsg("\pnon-posErr error code");
+		if (pbCanDifferL(ioActCount) != 0) TestFailMsg("\pioActCount");
+		if (pbCanDifferL(ioPosOffset) != -2) TestFailMsg("\pioPosOffset");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart-3 = -3, posErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, -3);
+		if (SetFPos(pb) != -40) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != -3) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromMark+2 = -1, posErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromMark);
+		pbSetL(ioPosOffset, 2);
+		if (SetFPos(pb) != -40) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != -1) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart+0 = 0, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 0);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 0) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart+1 = 1, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 1);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 1) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart+5 = 4, eofErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 5);
+		if (SetFPos(pb) != -39) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart+3 = 3, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 3);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 3) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromStart+4 = 4, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 4);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsAtMark+100 = 4, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsAtMark);
+		pbSetL(ioPosOffset, 100);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromMark-1 = 3, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromMark);
+		pbSetL(ioPosOffset, -1);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 3) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromLEOF-1 = 3, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromLEOF);
+		pbSetL(ioPosOffset, -1);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 3) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromLEOF+0 = 4, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromLEOF);
+		pbSetL(ioPosOffset, 0);
+		if (SetFPos(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pSetFPos fsFromLEOF+1 = 4, eofErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromLEOF);
+		pbSetL(ioPosOffset, 1);
+		if (SetFPos(pb) != -39) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 4) TestFailMsg("\pioPosOffset");
+		pbCanDifferL(ioReqCount); pbCanDifferL(ioActCount);
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pClose, noErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		if (Close(pb) != 0) TestFailMsg("\pwrong error code");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pClose again, fnOpnErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		if (Close(pb) != -38) TestFailMsg("\pwrong error code");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pDelete, noErr");
+		pbClear();
+		pbSetPtr(ioNamePtr, "\pFileMgrTest");
+		pbSetW(ioVRefNum, 0);
+		pbSetB(ioVersNum, 0);
+		if (Delete(pb) != 0) TestFailMsg("\pwrong error code");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pDelete again, fnfErr");
+		pbClear();
+		pbSetPtr(ioNamePtr, "\pFileMgrTest");
+		pbSetW(ioVRefNum, 0);
+		pbSetB(ioVersNum, 0);
+		if (Delete(pb) != -43) TestFailMsg("\pwrong error code");
+		pbCheck();
+		TestClose();
+	}
+
+	TestPlan();
 }
