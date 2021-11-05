@@ -246,6 +246,8 @@ func fsspec_to_pb(fsspec uint32, pb uint32) {
 }
 
 func tOpen(pb uint32) int {
+	writew(pb+24, 0) // clear ioRefNum
+
 	// Find a free FCB
 	var ioRefNum uint16
 	var fcbPtr uint32
