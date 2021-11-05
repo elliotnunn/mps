@@ -362,6 +362,8 @@ func tClose(pb uint32) int {
 }
 
 func tReadWrite(pb uint32) (result int) {
+	isWrite := readb(d1ptr+3) == 3
+
 	ioRefNum := readw(pb + 24)
 	fcb := fcbFromRefnum(ioRefNum)
 	if fcb == 0 || readl(fcb) == 0 {
@@ -369,69 +371,62 @@ func tReadWrite(pb uint32) (result int) {
 	}
 
 	fkey := forkKeyFromRefNum(ioRefNum)
-	buf := openForks[fkey]
+	fileBuf := openForks[fkey]
+	eof := int32(len(fileBuf))
 
 	ioBuffer := readl(pb + 32)
-	ioReqCount := readl(pb + 36)
+	ioReqCount := int32(readl(pb + 36))
 	ioPosMode := readw(pb + 44)
-	ioPosOffset := readl(pb + 46)
-	fcbCrPs := readl(fcb + 16) // the mark
+	ioPosOffset := int32(readl(pb + 46))
+	fcbCrPs := int32(readl(fcb + 16)) // the mark
 
-	var trymark int64
 	switch ioPosMode % 4 {
 	case 0: // fsAtMark
-		trymark = int64(fcbCrPs)
+		// ignore ioPosOffset
 	case 1: // fsFromStart
-		trymark = int64(ioPosOffset)
+		fcbCrPs = ioPosOffset
 	case 2: // fsFromLEOF
-		trymark = int64(len(buf)) + int64(int32(ioPosOffset))
+		fcbCrPs = eof + ioPosOffset
 	case 3: // fsFromMark
-		trymark = int64(fcbCrPs) + int64(int32(ioPosOffset))
-	}
-
-	// assume that mark is inside the file
-	mark := uint32(trymark)
-
-	// handle mark outside file and continue
-	if trymark > int64(len(buf)) {
-		mark = uint32(len(buf))
-		ioReqCount = 0
-		result = -39 // eofErr
-	} else if trymark < 0 {
-		mark = 0
-		ioReqCount = 0
-		result = -40 // posErr
+		fcbCrPs += ioPosOffset
 	}
 
 	ioActCount := ioReqCount
-	if readl(d1ptr)&0xff == 3 { // _Write
-		// if file is too short then lengthen the file
-		for uint32(len(buf)) < mark+ioActCount {
-			buf = append(buf, 0)
-		}
-
-		if ioActCount > 0 {
-			copy(buf[mark:mark+ioActCount], mem[ioBuffer:ioBuffer+ioActCount])
-		}
-	} else { // _Read
-		// if file is too short then shorten the read
-		if uint32(len(buf)) < mark+ioActCount {
-			ioActCount = uint32(len(buf)) - mark
-			result = -39 // eofErr
-		}
-
-		if ioActCount > 0 {
-			copy(mem[ioBuffer:ioBuffer+ioActCount], buf[mark:mark+ioActCount])
-		}
+	if fcbCrPs > eof {
+		fcbCrPs = eof // don't go past end
+		result = -39  // eofErr
+		ioActCount = 0
+	} else if fcbCrPs+ioActCount > eof && !isWrite {
+		result = -39 // eofErr
+		ioActCount = eof - fcbCrPs
+	} else if fcbCrPs < 0 {
+		result = -40 // posErr
+		ioActCount = 0
 	}
 
-	openForks[fkey] = buf
+	writel(pb+40, uint32(ioActCount))          // ioActCount
+	writel(pb+46, uint32(fcbCrPs+ioActCount))  // ioPosOffset
+	writel(fcb+16, uint32(fcbCrPs+ioActCount)) // fcbCrPs
 
-	writel(pb+40, ioActCount)
-	writel(pb+46, mark+ioActCount)  // ioPosOffset
-	writel(fcb+16, mark+ioActCount) // fcbCrPs
+	// Early return to prevent memory access panic from nonsense ioBuffer
+	if ioActCount == 0 {
+		return
+	}
 
-	return // noErr, eofErr or posErr
+	memBuf := mem[ioBuffer:][:ioActCount]
+
+	if readl(d1ptr)&0xff == 3 { // _Write
+		if fcbCrPs+ioActCount > eof {
+			fileBuf = append(fileBuf[:fcbCrPs], memBuf...)
+		} else {
+			copy(fileBuf[fcbCrPs:], memBuf)
+		}
+	} else { // _Read
+		copy(memBuf, fileBuf[fcbCrPs:])
+	}
+
+	openForks[fkey] = fileBuf
+	return
 }
 
 func tGetVInfo(pb uint32) int {
