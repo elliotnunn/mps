@@ -415,7 +415,7 @@ func tReadWrite(pb uint32) (result int) {
 
 	memBuf := mem[ioBuffer:][:ioActCount]
 
-	if readl(d1ptr)&0xff == 3 { // _Write
+	if isWrite { // _Write
 		if fcbCrPs+ioActCount > eof {
 			fileBuf = append(fileBuf[:fcbCrPs], memBuf...)
 		} else {
