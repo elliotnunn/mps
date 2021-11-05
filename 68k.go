@@ -412,7 +412,7 @@ func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by b
 	} else if mode == 59 { // d8(PC,Xn)
 		ptr = extensionWord(pc)
 	} else if mode == 56 { // abs.W
-		ptr = uint32(readw(pc))
+		ptr = extwl(readw(pc))
 		pc += 2
 	} else if mode == 57 { // abs.L
 		ptr = readl(pc)
