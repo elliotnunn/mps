@@ -567,6 +567,33 @@ void main(void) {
 		pbCheck();
 		TestClose();
 
+		TestOpen("\pWrite past end");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromLEOF);
+		pbSetL(ioPosOffset, -1);
+		pbSetPtr(ioBuffer, "\pxyz");
+		pbSetL(ioReqCount, 4);
+		if (Write(pb) != 0) TestFailMsg("\pwrong error code");
+		if (pbCanDifferL(ioPosOffset) != 7) TestFailMsg("\pioPosOffset");
+		if (pbCanDifferL(ioActCount) != 4) TestFailMsg("\pioActCount");
+		pbCheck();
+		TestClose();
+
+		TestOpen("\pCheck what we wrote, accept eofErr");
+		pbClear();
+		pbSetW(ioRefNum, refnum);
+		pbSetW(ioPosMode, fsFromStart);
+		pbSetL(ioPosOffset, 3);
+		pbSetL(ioReqCount, 4);
+		pbSetPtr(ioBuffer, buf);
+		if (Read(pb)) TestFailMsg("\pnonzero error code");
+		TestStrCmp(buf, "\pxyz");
+		if (pbCanDifferL(ioActCount) != 4) TestFailMsg("\pioActCount");
+		if (pbCanDifferL(ioPosOffset) != 7) TestFailMsg("\pioPosOffset");
+		pbCheck();
+		TestClose();
+
 		TestOpen("\pClose, noErr");
 		pbClear();
 		pbSetW(ioRefNum, refnum);
