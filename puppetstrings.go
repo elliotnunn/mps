@@ -188,12 +188,7 @@ func tPack3() {
 		number = 2 // root
 		name = macstring(puppetPrefix)
 	} else {
-		os.Stdout.Write([]byte("Enter path for GetFile dialog: "))
-		stdinNonBlock(false) // insist on a full string
-		path, _ := bufin.ReadString('\n')
-		path = strings.TrimRight(path, "\n")
-		path, _ = get_host_path(0, unicodeToMacOrPanic(path), false)
-		number, name = quickFile(path)
+		panic("GetFile unimplemented")
 	}
 
 	ftype := "TEXT" // finderInfo(path)[:4] // TODO: real type

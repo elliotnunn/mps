@@ -90,42 +90,51 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 	}
 
 	errno := 0
-	for i, component := range components {
-		if len(component) == 0 { // treat :: like ..
+	for i, mac := range components {
+		if len(mac) == 0 { // treat :: like ..
 			path = filepath.Dir(path)
-		} else {
-			// Fake out the pipe
-			if path == mpwFolder && strings.HasPrefix(string(component), "MPW.MinPipe") {
-				path = filepath.Join(systemFolder, "Temporary Items")
+			continue
+		}
+
+		// Fake out the pipe
+		if path == mpwFolder && strings.HasPrefix(string(mac), "MPW.MinPipe") {
+			path = filepath.Join(systemFolder, "Temporary Items")
+		}
+
+		// Return a special recognisable (non-slash-prefixed) path for "puppet string" scripts
+		if i == len(components)-1 && isPuppetFile(string(mac)) {
+			return string(mac), 0
+		}
+
+		// List the directory to find the matching unix name
+		listing, _ := readDir(path)
+
+		host, ok := hostName(mac)
+		if !ok {
+			return "", -37 // bdNamErr
+		}
+		name := namePair{mac, host}
+
+		exists := false
+		for _, existingName := range listing {
+			if relString(name.mac, existingName.mac, false, true) == 0 {
+				name = existingName // use the correct case in the path
+				exists = true
+				break
 			}
+		}
 
-			// Return a special recognisable (non-slash-prefixed) path for "puppet string" scripts
-			if i == len(components)-1 && isPuppetFile(string(component)) {
-				return string(component), 0
-			}
+		// If matching file exists, use the unicode name supplied by the OS
+		// Otherwise, use the unicode name that we made up
+		path = filepath.Join(path, name.host)
 
-			// ignore the error because we trust however we got "path"
-			listing, _ := listdir(path)
-
-			exists := false
-			for _, el := range listing {
-				if macUpper(el) == macUpper(component) {
-					component = el // use the correct case in the path
-					exists = true
-					break
+		if !exists && errno == 0 { // can tolerate a nonexistent leaf file if instructed
+			if i == len(components)-1 {
+				if leafMustExist {
+					errno = -43 // fnfErr
 				}
-			}
-
-			path = filepath.Join(path, macToUnicode(component))
-
-			if !exists && errno == 0 { // can tolerate a nonexistent leaf file if instructed
-				if i == len(components)-1 {
-					if leafMustExist {
-						errno = -43 // fnfErr
-					}
-				} else {
-					errno = -120 // dirNFErr
-				}
+			} else {
+				errno = -120 // dirNFErr
 			}
 		}
 	}
@@ -133,67 +142,121 @@ func get_host_path(number uint16, name macstring, leafMustExist bool) (string, i
 	return path, errno
 }
 
-func quickFile(path string) (number uint16, name macstring) {
-	return get_macos_dnum(filepath.Dir(path)), unicodeToMacOrPanic(filepath.Base(path))
+func hostName(mac macstring) (string, bool) {
+	host := macToUnicode(mac)
+
+	// We interconvert between : and /
+	// but this means we cannot allow Windows \
+	for _, char := range []byte(host) {
+		if char != '/' && os.IsPathSeparator(char) {
+			return "", false
+		}
+	}
+
+	// Mac "and/or" appears as Unix "and:or"
+	host = strings.ReplaceAll(host, "/", ":")
+
+	// Also run the tests for length etc in our sister function below
+	_, ok := macName(host)
+	if !ok {
+		return "", false
+	}
+
+	return host, true
 }
 
-func listdir(path string) ([]macstring, int) {
-	dirents, err := os.ReadDir(path)
+// "hostName" must *also* run the tests in this function
+func macName(host string) (macstring, bool) {
+	// Disallow nulls, newlines, other control characters
+	for _, char := range []byte(host) {
+		if char < 0x20 || char == 0x7f {
+			return "", false
+		}
+	}
+
+	for _, char := range []byte(host) {
+		if os.IsPathSeparator(char) {
+			panic("path separator passed to macName")
+		}
+	}
+
+	// Unix "and:or" appears as Mac "and/or"
+	host = strings.ReplaceAll(host, ":", "/")
+
+	// This test more to prevent a Mac app from creating one of these names
+	if host == "." || host == ".." {
+		return "", false
+	}
+	// ... could also test for WinNT forbidden names?
+
+	// These special files belong to my "Rez" system
+	if strings.HasSuffix(host, ".idump") || strings.HasSuffix(host, ".rdump") {
+		return "", false
+	}
+
+	// These special folders belong to the File Exchange system
+	if host == "RESOURCE.FRK" || host == "FINDER.DAT" {
+		return "", false
+	}
+
+	// Convert as late as possible, to allow use of strings package
+	mac, ok := unicodeToMac(host)
+	if !ok {
+		return "", false
+	}
+
+	// Max length of 63 (HFS says 31, but MFS says 63)
+	if len(mac) == 0 || len(mac) > 63 {
+		return "", false
+	}
+
+	return mac, true
+}
+
+type namePair struct {
+	mac  macstring
+	host string
+}
+
+func readDir(path string) ([]namePair, int) {
+	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, -43 // fnfErr
-		} else if strings.HasSuffix(err.Error(), "not a directory") {
+		} else {
+			panic(err)
+		}
+	}
+
+	dirents, err := f.ReadDir(-1)
+	if err != nil {
+		if err.(*os.PathError).Err.Error() == "not a directory" {
 			return nil, -120 // dirNFErr
 		} else {
 			panic(err)
 		}
 	}
 
-	var macfiles []macstring
+	slice := make([]namePair, 0, len(dirents))
 	for _, d := range dirents {
-		if macname, ok := unicodeToMac(d.Name()); ok {
-			macfiles = append(macfiles, macstring(macname))
+		host := d.Name()
+		mac, ok := macName(host)
+		if ok {
+			slice = append(slice, namePair{mac, host})
 		}
 	}
 
 	// HFS sorts files by RelString order
-	sort.Slice(macfiles, func(i, j int) bool { return relString(macfiles[i], macfiles[j], false, true) > 1 })
+	sort.Slice(slice, func(i, j int) bool { return relString(slice[i].mac, slice[j].mac, false, true) > 1 })
 
-	// Filter out ambiguous or too-long names
-	macfiles2 := macfiles
-	macfiles = make([]macstring, 0, len(macfiles))
-	already := make(map[macstring]int)
-	for _, mf := range macfiles2 {
-		already[macUpper(mf)]++
-	}
-	for _, mf := range macfiles2 {
-		if already[macUpper(mf)] > 1 {
-			continue
+	for i := 0; i < len(slice)-1; i++ {
+		if relString(slice[i].mac, slice[i+1].mac, false, true) == 0 {
+			logf("Indistinguishably named files in %s:\n  %s\n  %s\n", path, slice[i].host, slice[i+1].host)
+			os.Exit(1)
 		}
-
-		if len(mf) > 31 {
-			continue
-		}
-
-		if mf[0] == '.' {
-			continue
-		}
-
-		mfstr := string(mf)
-		if strings.HasSuffix(mfstr, ".idump") || strings.HasSuffix(mfstr, ".rdump") {
-			continue
-		}
-
-		if mfstr == "RESOURCE.FRK" || mfstr == "FINDER.DAT" {
-			continue
-		}
-
-		macfiles = append(macfiles, mf)
 	}
 
-	// what do do about colons in filenames?
-
-	return macfiles, 0
+	return slice, 0
 }
 
 func get_macos_dnum(path string) uint16 {
@@ -283,9 +346,11 @@ func tOpen(pb uint32) int {
 		return errno
 	}
 
-	dirID, name := quickFile(path)
+	// Canonical dirID and name
+	number = get_macos_dnum(filepath.Dir(path))
+	ioName, _ = macName(filepath.Base(path))
 
-	fkey := forkKey{dirID: dirID, name: name, isRsrc: forkIsRsrc}
+	fkey := forkKey{dirID: number, name: ioName, isRsrc: forkIsRsrc}
 
 	if openForkRefCounts[fkey] == 0 {
 		var buf []byte
@@ -309,11 +374,11 @@ func tOpen(pb uint32) int {
 		flags |= 2
 	}
 
-	writel(fcbPtr+0, 1)              // fake non-zero fcbFlNum
-	writeb(fcbPtr+4, flags)          // fcbMdRByt
-	writel(fcbPtr+20, kVCB)          // fcbVPtr
-	writel(fcbPtr+58, uint32(dirID)) // fcbDirID
-	writePstring(fcbPtr+62, name)    // fcbCName
+	writel(fcbPtr+0, 1)               // fake non-zero fcbFlNum
+	writeb(fcbPtr+4, flags)           // fcbMdRByt
+	writel(fcbPtr+20, kVCB)           // fcbVPtr
+	writel(fcbPtr+58, uint32(number)) // fcbDirID
+	writePstring(fcbPtr+62, ioName)   // fcbCName
 
 	writew(pb+24, ioRefNum)
 	return 0
@@ -513,43 +578,40 @@ func tGetFInfo(pb uint32) int { // also implements GetCatInfo
 
 	// removed "weird case for _HGetFInfo"
 
-	var fname macstring
-	return_fname := false
+	returnIOName := false
+	path := ""
 
 	if trap&0xff == 0x60 && ioFDirIndex < 0 {
-		// info about dir specified by ioDirID, ignore ioNamePtr
-		return_fname = true
+		// folder "dirID" alone
+		path = dnums[dirid]
+		returnIOName = true
 	} else if ioFDirIndex > 0 {
-		// info about file specified by ioVRefNum and ioFDirIndex
-		return_fname = true
+		// file number "ioFDirIndex" within "dirID"
+		returnIOName = true
 
-		path, errno := get_host_path(dirid, macstring(""), true)
-		if errno != 0 {
-			return errno
-		}
+		path = dnums[dirid]
 
-		listing, errno := listdir(path)
+		listing, errno := readDir(path)
 		if errno != 0 {
-			return errno
+			panic("readDir failed on a safe path")
 		}
 
 		if int(ioFDirIndex) > len(listing) {
 			return -43 // fnfErr
 		}
 
-		fname = listing[ioFDirIndex-1]
+		path = filepath.Join(path, listing[ioFDirIndex-1].host)
 	} else { // zero or (if GetFInfo) negative
-		// info about file specified by ioVRefnum and ioNamePtr
-		fname = readPstring(ioNamePtr)
-	}
-
-	path, errno := get_host_path(dirid, fname, true)
-	if errno != 0 {
-		return errno
+		// file named "ioNamePtr" within "dirID"
+		subPath, errno := get_host_path(dirid, readPstring(ioNamePtr), true)
+		if errno != 0 { // could be nonexistent
+			return errno
+		}
+		path = subPath
 	}
 
 	// at this point, we know that the file exists. let's try listing
-	listing, listErr := listdir(path)
+	listing, listErr := readDir(path)
 
 	// clear our block of return values, which is longer for GetCatInfo
 	endOfReturnValues := 80
@@ -560,15 +622,13 @@ func tGetFInfo(pb uint32) int { // also implements GetCatInfo
 		writeb(pb+uint32(i), 0)
 	}
 
-	if return_fname && ioNamePtr != 0 {
-		unicodeName := filepath.Base(path)
-		if unicodeName == "/" {
-			fname = onlyvolname
-		} else {
-			fname, _ = unicodeToMac(filepath.Base(path))
+	if returnIOName && ioNamePtr != 0 {
+		host := filepath.Base(path)
+		mac := onlyvolname
+		if host != "/" {
+			mac, _ = macName(host)
 		}
-		writePstring(ioNamePtr, fname)
-		// missing logic to switch file separator
+		writePstring(ioNamePtr, mac)
 	}
 
 	if listErr == 0 { // folder
@@ -674,8 +734,11 @@ func tGetVol(pb uint32) int {
 
 	ioVNPtr := readl(pb + 18)
 	if ioVNPtr != 0 {
-		macstr, _ := unicodeToMac(filepath.Base(dnums[0]))
-		writePstring(ioVNPtr, macstr)
+		mac, ok := macName(filepath.Base(dnums[0]))
+		if !ok {
+			panic("macName failed on a path in dnums")
+		}
+		writePstring(ioVNPtr, mac)
 	}
 
 	return 0
