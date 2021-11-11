@@ -511,7 +511,7 @@ func dumpPBField(f string) {
 		logField(f, readw(pb+16), int16(readw(pb+16)))
 	case "ioVRefNum":
 		vrefnum := readw(pb + 22)
-		logField(f, vrefnum, dnums[vrefnum])
+		logField(f, vrefnum, dirIDs[vrefnum])
 	case "ioRefNum", "ioFRefNum":
 		refnum := readw(pb + 24)
 		logField(f, refnum, readPstring(fcbFromRefnum(refnum)+62))
@@ -580,7 +580,7 @@ func dumpPBField(f string) {
 		}
 	case "ioDirID", "ioWDDirID":
 		dirid := readl(pb + 48)
-		logField(f, dirid, dnums[dirid])
+		logField(f, dirid, dirIDs[dirid])
 	case "ioFlNum", "ioVAlBlkSiz", "ioFCBCrPs":
 		logField(f, readl(pb+48))
 	case "ioFlStBlk", "ioFCBVRefNum":
@@ -595,7 +595,7 @@ func dumpPBField(f string) {
 		logField(f, readl(pb+58))
 	case "ioFCBParID":
 		dirid := readl(pb + 58)
-		logField(f, dirid, dnums[dirid])
+		logField(f, dirid, dirIDs[dirid])
 	case "ioVFrBlk", "ioFlRStBlk":
 		logField(f, readw(pb+62))
 	case "ioFlRLgLen":
@@ -630,7 +630,7 @@ func dumpPBField(f string) {
 		logField(f, fmt.Sprintf("%X", mem[pb+90:][:32]))
 	case "ioFlParID", "ioDrParID":
 		dirid := readl(pb + 100)
-		logField(f, dirid, dnums[dirid])
+		logField(f, dirid, dirIDs[dirid])
 	case "ioFlClpSiz":
 		logField(f, readl(pb+104))
 	default:

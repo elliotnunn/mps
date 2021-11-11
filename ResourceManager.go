@@ -1003,7 +1003,7 @@ func tHCreateResFile() {
 		dirID = vRefNum
 	}
 
-	path, errno := get_host_path(dirID, readPstring(namePtr), true)
+	path, errno := hostPath(dirID, readPstring(namePtr), true)
 
 	// Treat a file with no valid resource fork as nonexistent
 	if errno == 0 && len(resourceFork(path)) <= 256 {

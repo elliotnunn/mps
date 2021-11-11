@@ -20,7 +20,7 @@ func isAccessibleDir(path string) (goodpath string, ok bool) {
 	}
 	macpath := macstring(slice) // relative to root
 
-	path, errno := get_host_path(2, macpath, true)
+	path, errno := hostPath(2, macpath, true)
 	if errno != 0 {
 		return "", false
 	}

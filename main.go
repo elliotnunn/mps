@@ -241,8 +241,8 @@ func main() {
 
 	// Set CurVol to the MPW distribution
 	mpwFolder = mpwSearch()
-	get_macos_dnum(mpwFolder)
-	dnums[0] = mpwFolder
+	dirID(mpwFolder)
+	dirIDs[0] = mpwFolder
 
 	// System Folder is ephemeral, containing temp stuff mainly
 	systemFolder, _ = ioutil.TempDir("", "System Folder ")
@@ -309,7 +309,7 @@ func main() {
 	}
 	writew(kVCB+8, 0x4244)             // vcbSigWord
 	writew(kVCB+78, 2)                 // vcbVRefNum
-	writePstring(kVCB+44, onlyvolname) // vcbVName
+	writePstring(kVCB+44, onlyVolName) // vcbVName
 
 	// VCB header...
 	writew(0x356, 0)
@@ -328,16 +328,16 @@ func main() {
 	write(10, 0xd92, 0)
 
 	// Misc globals
-	writel(0x108, kMemSize)                     // MemTop
-	writel(0x10c, kMemSize)                     // BufPtr
-	writeb(0x12f, 3)                            // CPUFlag = 68030
-	writeb(0x12c, 0)                            // DskVerify = don't care
-	writeb(0x12d, 0)                            // LoadTrap = off
-	writew(0x15a, 0x0755)                       // SysVersion
-	writel(0x16a, 1)                            // Ticks
-	writel(0x20c, 0xb492f400)                   // Time = 2000-01-01 00:00:00
-	writew(0x210, get_macos_dnum(systemFolder)) // BootDrive
-	writew(0x28e, 0x3fff)                       // ROM85
+	writel(0x108, kMemSize)            // MemTop
+	writel(0x10c, kMemSize)            // BufPtr
+	writeb(0x12f, 3)                   // CPUFlag = 68030
+	writeb(0x12c, 0)                   // DskVerify = don't care
+	writeb(0x12d, 0)                   // LoadTrap = off
+	writew(0x15a, 0x0755)              // SysVersion
+	writel(0x16a, 1)                   // Ticks
+	writel(0x20c, 0xb492f400)          // Time = 2000-01-01 00:00:00
+	writew(0x210, dirID(systemFolder)) // BootDrive
+	writew(0x28e, 0x3fff)              // ROM85
 	writel(0x2b6, kExpandMem)
 	writel(0x282, 0)            // SwitchVars, not sure, same as Sys7
 	writel(0x2f4, 0)            // CaretTime = 0 ticks
@@ -410,7 +410,7 @@ func main() {
 	writew(0x900, appRefNum) // CurApRefNum
 
 	if appRefNum == 0xffff {
-		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dnums[0])
+		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dirIDs[0])
 		os.Exit(1)
 	}
 
@@ -698,7 +698,7 @@ func tAliasDispatch() {
 		}
 
 		writew(foundVRefNum, 2)
-		writel(foundDirID, uint32(get_macos_dnum(path)))
+		writel(foundDirID, uint32(dirID(path)))
 		writew(readl(spptr), 0) // noErr
 	} else {
 		panic("Unimplemented _AliasDispatch selector")
