@@ -384,6 +384,7 @@ func main() {
 	writew(0xa58, 2)            // SysMap = first possible FCB
 	writew(0xa5a, readw(0xa58)) // CurMap = SysMap
 	writel(fcbFromRefnum(readw(0xa58)), 1)
+	openBuffers[2] = &[]byte{}
 
 	// With resources
 	writel(0xa50, newHandleFrom(mkMap(mapStruct{ // TopMapHndl

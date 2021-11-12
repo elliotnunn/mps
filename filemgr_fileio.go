@@ -24,27 +24,21 @@ import (
 )
 
 // the contents of every open fork
-var openForks = make(map[forkKey][]byte)
-var openForkRefCounts = make(map[forkKey]int)
+var openBuffers = make(map[uint16]*[]byte)
+var openPaths = make(map[uint16]forkPath)
 
-// Uniquely identifies an open fork, allowing its buffer to be found
-type forkKey struct {
-	dirID  uint16
-	name   macstring
-	isRsrc bool
+func forkRefNum(f forkPath) (uint16, bool) {
+	for refNum := uint16(2); refNum < 0x8000; refNum += 94 {
+		if openPaths[refNum] == f {
+			return refNum, true
+		}
+	}
+	return 0, false
 }
 
-func forkKeyFromRefNum(refNum uint16) forkKey {
-	fcb := fcbFromRefnum(refNum)
-	if fcb == 0 {
-		panic("invalid fcb")
-	}
-
-	return forkKey{
-		dirID:  readw(fcb + 60),
-		name:   readPstring(fcb + 62),
-		isRsrc: readb(fcb+4)&2 != 0,
-	}
+type forkPath struct {
+	hostpath string
+	isRsrc   bool
 }
 
 // return 0 if invalid
@@ -101,9 +95,11 @@ func tOpen(pb uint32) int {
 	number = dirID(filepath.Dir(path))
 	ioName, _ = macName(filepath.Base(path))
 
-	fkey := forkKey{dirID: number, name: ioName, isRsrc: forkIsRsrc}
-
-	if openForkRefCounts[fkey] == 0 {
+	forkPath := forkPath{hostpath: path, isRsrc: forkIsRsrc}
+	oldRefNum, ok := forkRefNum(forkPath)
+	if ok {
+		openBuffers[ioRefNum] = openBuffers[oldRefNum]
+	} else {
 		var buf []byte
 		if isPuppetFile(path) { // special name
 			buf = puppetFile(path)
@@ -112,10 +108,10 @@ func tOpen(pb uint32) int {
 		} else {
 			buf = dataFork(path)
 		}
-		openForks[fkey] = buf
+		openBuffers[ioRefNum] = &buf
 	}
 
-	openForkRefCounts[fkey]++
+	openPaths[ioRefNum] = forkPath
 
 	flags := byte(0)
 	if ioPermssn != 1 {
@@ -142,32 +138,23 @@ func tClose(pb uint32) int {
 		return -38 // fnOpnErr
 	}
 
-	number := readw(fcb + 58 + 2)
-	string := readPstring(fcb + 62)
-	path, errno := hostPath(number, string, false)
-	if errno != 0 {
-		return errno
-	}
-
 	// Write out
 	fcbMdRByt := readb(fcb + 4)
 
-	fkey := forkKeyFromRefNum(ioRefNum)
-
 	// When the refcount reaches zero, write out
-	openForkRefCounts[fkey]--
-	if openForkRefCounts[fkey] == 0 {
-		buf := openForks[fkey]
+	path := openPaths[ioRefNum]
+	buf := openBuffers[ioRefNum]
+	delete(openPaths, ioRefNum)
+	delete(openBuffers, ioRefNum)
 
+	if _, stillOpen := forkRefNum(path); !stillOpen {
 		if fcbMdRByt&1 != 0 {
-			if fcbMdRByt&2 == 0 {
-				writeDataFork(path, buf)
+			if path.isRsrc {
+				writeResourceFork(path.hostpath, *buf)
 			} else {
-				writeResourceFork(path, buf)
+				writeDataFork(path.hostpath, *buf)
 			}
 		}
-
-		delete(openForks, fkey)
 	}
 
 	// Free FCB
@@ -186,9 +173,8 @@ func tReadWrite(pb uint32) (result int) {
 		return -38 // fnOpnErr
 	}
 
-	fkey := forkKeyFromRefNum(ioRefNum)
-	fileBuf := openForks[fkey]
-	eof := int32(len(fileBuf))
+	fileBuf := openBuffers[ioRefNum]
+	eof := int32(len(*fileBuf))
 
 	ioBuffer := readl(pb + 32)
 	ioReqCount := int32(readl(pb + 36))
@@ -233,15 +219,14 @@ func tReadWrite(pb uint32) (result int) {
 
 	if isWrite { // _Write
 		if fcbCrPs+ioActCount > eof {
-			fileBuf = append(fileBuf[:fcbCrPs], memBuf...)
+			*fileBuf = append((*fileBuf)[:fcbCrPs], memBuf...)
 		} else {
-			copy(fileBuf[fcbCrPs:], memBuf)
+			copy((*fileBuf)[fcbCrPs:], memBuf)
 		}
 	} else { // _Read
-		copy(memBuf, fileBuf[fcbCrPs:])
+		copy(memBuf, (*fileBuf)[fcbCrPs:])
 	}
 
-	openForks[fkey] = fileBuf
 	return
 }
 
@@ -253,9 +238,7 @@ func tGetEOF(pb uint32) int {
 		return -38 // fnOpnErr
 	}
 
-	fkey := forkKeyFromRefNum(ioRefNum)
-
-	writel(pb+28, uint32(len(openForks[fkey]))) // ioMisc
+	writel(pb+28, uint32(len(*(openBuffers[ioRefNum])))) // ioMisc
 	return 0
 }
 
@@ -268,18 +251,15 @@ func tSetEOF(pb uint32) int {
 		return -38 // fnOpnErr
 	}
 
-	fkey := forkKeyFromRefNum(ioRefNum)
-	buf := openForks[fkey]
+	buf := openBuffers[ioRefNum]
 
-	for uint32(len(buf)) < ioMisc {
-		buf = append(buf, 0)
+	for uint32(len(*buf)) < ioMisc {
+		*buf = append(*buf, 0)
 	}
 
-	if uint32(len(buf)) > ioMisc {
-		buf = buf[:ioMisc]
+	if uint32(len(*buf)) > ioMisc {
+		*buf = (*buf)[:ioMisc]
 	}
-
-	openForks[fkey] = buf
 
 	if ioMisc < readl(fcb+16) { // can't have mark beyond eof
 		writel(fcb+16, ioMisc)

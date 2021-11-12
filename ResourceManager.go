@@ -138,7 +138,7 @@ func uniqueIdsInMaps(the_type uint32, maps []uint32) (ids []uint16) {
 // Use the resource map to find the data
 func resData(resMap, type_entry, id_entry uint32) []byte {
 	refnum := readw(resMap + 20)
-	filedata := openForks[forkKeyFromRefNum(refnum)]
+	filedata := *(openBuffers[refnum])
 
 	data_ofs := binary.BigEndian.Uint32(filedata) + (readl(id_entry+4) & 0xffffff) + 4
 	data_len := binary.BigEndian.Uint32(filedata[data_ofs-4:])
@@ -353,7 +353,7 @@ func tHOpenResFile() {
 	}
 
 	ioRefNum := readw(pb + 24)
-	forkdata := openForks[forkKeyFromRefNum(ioRefNum)] // access buffer directly, not _Read trap
+	forkdata := *(openBuffers[ioRefNum]) // access buffer directly, not _Read trap
 	if len(forkdata) < 256 {
 		setResError(-39) // eofErr
 		return
@@ -642,18 +642,17 @@ func tWriteResource() {
 			writeb(idEntry+4, attr&^resChanged)
 
 			refnum := readw(resMap + 20)
-			buffer := openForks[forkKeyFromRefNum(refnum)]
+			buffer := openBuffers[refnum]
 
 			ptr := readl(handle)
 			dataSize := usedBlocks[ptr].size
 			firstDataInFork := readl(resMap) // usually constant 256
-			dataFromFirstData := uint32(len(buffer)) - firstDataInFork
+			dataFromFirstData := uint32(len(*buffer)) - firstDataInFork
 
 			// Directly editing a buffer is simpler than using _Write
-			buffer = append(buffer, 0, 0, 0, 0)
-			bigEndian.PutUint32(buffer[len(buffer)-4:], dataSize) // awkward
-			buffer = append(buffer, mem[ptr:][:dataSize]...)
-			openForks[forkKeyFromRefNum(refnum)] = buffer
+			*buffer = append(*buffer, 0, 0, 0, 0)
+			bigEndian.PutUint32((*buffer)[len(*buffer)-4:], dataSize) // awkward
+			*buffer = append(*buffer, mem[ptr:][:dataSize]...)
 
 			// Awkward 3-byte value in the resource map
 			if dataFromFirstData > 0xffffff {
@@ -674,13 +673,13 @@ func compactResFile(resMap uint32) {
 	rmap := dumpMap(getBlock(resMap))
 	refnum := rmap.mRefNum // save this, because we clobber it
 
-	oldFork := openForks[forkKeyFromRefNum(refnum)]
+	fork := openBuffers[refnum]
 	newFork := make([]byte, 256)
 
 	// Copy each resource to the fork
 	for i := range rmap.list {
-		// get the resource data from oldFork, including 4b length
-		dataOnDisk := oldFork[rmap.resDataOffset+rmap.list[i].rLocn:]
+		// get the resource data from fork, including 4b length
+		dataOnDisk := (*fork)[rmap.resDataOffset+rmap.list[i].rLocn:]
 		dataOnDisk = dataOnDisk[:4+binary.BigEndian.Uint32(dataOnDisk)]
 
 		rmap.list[i].rLocn = uint32(len(newFork) - 256)
@@ -702,7 +701,7 @@ func compactResFile(resMap uint32) {
 	binary.BigEndian.PutUint32(newFork[8:], midpoint-256)       // dataSize
 	binary.BigEndian.PutUint32(newFork[12:], endpoint-midpoint) // mapSize
 
-	openForks[forkKeyFromRefNum(refnum)] = newFork
+	*fork = newFork
 }
 
 func tUpdateResFile() {
