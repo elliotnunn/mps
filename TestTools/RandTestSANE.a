@@ -1,0 +1,759 @@
+; TestSANE...
+; - stress-tests the 68k Standard Apple Numeric Environment
+; - runs as an MPW Tool, forever, printing only test failures
+; - compares system SANE against SANE loaded from "sane" file (e.g. a ROM image)
+; - iterates over a table of opwords
+; - generates operands pseudo-randomly
+; - tests numeric result, environment bits, and whether trap was taken
+
+FPState		EQU		$a4a					; See Numerics Manual p162
+
+; Operation code masks.
+FOADD		EQU		$0000					; add
+FOSUB		EQU		$0002					; subtract
+FOMUL		EQU		$0004					; multiply
+FODIV		EQU		$0006					; divide
+FOCMP		EQU		$0008					; compare, no exception from unordered
+FOCPX		EQU		$000A					; compare, signal invalid if unordered
+FOREM		EQU		$000C					; remainder
+FOZ2X		EQU		$000E					; convert to extended
+FOX2Z		EQU		$0010					; convert from extended
+FOSQRT		EQU		$0012					; square root
+FORTI		EQU		$0014					; round to integral value
+FOTTI		EQU		$0016					; truncate to integral value
+FOSCALB		EQU		$0018					; binary scale
+FOLOGB		EQU		$001A					; binary log
+FOCLASS		EQU		$001C					; classify
+; UNDEFINED EQU $001E
+FOSETENV	EQU		$0001					; set environment
+FOGETENV	EQU		$0003					; get environment
+FOSETHV		EQU		$0005					; set halt vector
+FOGETHV		EQU		$0007					; get halt vector
+FOD2B		EQU		$0009					; convert decimal to binary
+FOB2D		EQU		$000B					; convert binary to decimal
+FONEG		EQU		$000D					; negate
+FOABS		EQU		$000F					; absolute
+FOCPYSGN	EQU		$0011					; copy sign
+FONEXT		EQU		$0013					; next-after
+FOSETXCP	EQU		$0015					; set exception
+FOPROCENTRY	EQU		$0017					; procedure entry
+FOPROCEXIT	EQU		$0019					; procedure exit
+FOTESTXCP	EQU		$001B					; test exception
+; UNDEFINED EQU $001D
+; UNDEFINED EQU $001F
+
+; Operand format masks.
+FFEXT		EQU		$0000					; extended -- 80-bit float
+FFEXT96		EQU		$0020					; extended -- 96-bit float
+FFDBL		EQU		$0800					; double -- 64-bit float
+FFSGL		EQU		$1000					; single -- 32-bit float
+FFINT		EQU		$2000					; integer -- 16-bit integer
+FFLNG		EQU		$2800					; long int -- 32-bit integer
+FFCOMP		EQU		$3000					; comp -- 64-bit integer
+
+
+; Our record of SANE args, result etc
+ScrSrc2		EQU		0
+ScrSrc1		EQU		12
+ScrDst		EQU		24
+ScrFPState	EQU		36
+ScrHaltArgs	EQU		38						; don't randomise after this point
+ScrHaltMisc	EQU		52
+ScrPopped	EQU		60
+ScrCCR		EQU		64
+ScrD0		EQU		68
+ScrSize		EQU		72
+
+
+			MAIN
+			IMPORT	LineAppend, LineAppendX, LineFlush
+			IMPORT	Rand, EditRandomCommand
+
+			; Get installed SANE
+			move.w	#$1eb,d0
+			dc.w	$a746 ; _GetToolTrapAddress
+			lea		SanePackTable,a1
+			move.l	a0,(a1)
+
+			; Load alternative SANE from a file
+			moveq	#64/4-1,d0
+@clrLoop	clr.l	-(sp)
+			move.l	sp,a0
+			dbra	d0,@clrLoop
+			pea		#'sane'
+			move.l	(sp)+,18(a0)		; ioNamePtr
+			dc.w	$a000				; _Open
+			bne.s	@notFound
+			dc.w	$a011				; _GetEOF
+
+			move.l	28(a0),d3			; get ioMisc
+			move.l	d3,36(a0)			; set ioReqCount
+			move.l	d3,a0
+			dc.w	$a11e				; _NewPtr
+			bne.s	@notFound
+			move.l	a0,a3
+			move.l	sp,a0				; restore pb ptr
+			move.l	a3,32(a0)			; ioBuffer
+
+			move.w	#1,44(a0)			; ioPosMode = fsFromStart
+			dc.w	$a002				; _Read
+			bne.s	@notFound
+
+			; Search for PACK 4 header
+			moveq	#-2,d0
+@findLoop	addq.l	#2,d0
+			cmp.l	d0,d3
+			ble.s	@notFound
+			cmp.w	#$600a,0(a3,d0.l)
+			bne.s	@findLoop
+			cmp.l	#'PACK',4(a3,d0.l)
+			bne.s	@findLoop
+			cmp.w	#4,8(a3,d0.l)
+			bne.s	@findLoop
+
+			lea		SanePackTable+4,a0
+			add.l	d0,a3
+			move.l	a3,(a0)
+			bra.s	@found
+
+@notFound	add		#64,sp
+			pea		#'"sane" not found'
+			jsr		LineAppend
+			jmp		LineFlush
+
+@found
+			add		#64,sp
+
+			lea		OpcodeTable,a4
+BigLoop
+
+			; Choose an opcode
+			move.w	(a4)+,d7
+			cmp.w	#-1,d7
+			bne.s	@notFirstOpcode
+			lea		OpcodeTable,a4
+			move.w	(a4)+,d7
+@notFirstOpcode
+
+			; Get some random data
+			lea		RandArea,a2
+			move	#ScrHaltArgs/2-1,d3
+@randLoop	jsr		Rand
+			move.w	d0,(a2)+
+			dbra	d3,@randLoop
+
+			; Clear unused bits of FPState
+			lea		RandArea+ScrFPState,a0
+			and.w	#$7f7f,(a0)		; clear unused bits 15 and 7
+
+			; Elaborate code to target edge-cases in SANE
+			movem.l	a0-a4/d0-d7,-(sp)
+			lea		RandArea,a0
+			move.w	d7,d0
+			jsr		EditRandomCommand
+			movem.l	(sp)+,a0-a4/d0-d7
+
+			; For each SANE implementation (of only two)
+			moveq	#1,d6
+			lea		SanePackTable,a3
+SmallLoop
+			; Copy the random data to our own scratch area
+			lea		RandArea,a0
+			lea		ScratchArea,a1
+			move.l	#ScrSize,d0
+			dc.w	$a22e				; _BlockMove
+
+			; Set environment word
+			move.w	RandArea+ScrFPState,FPState
+
+			; Set FPState trap
+			lea		MyTrap,a0
+			move.l	a0,FPState+2
+
+			; Make the call
+			link	a6,#0
+			pea		ScratchArea+ScrSrc2
+			pea		ScratchArea+ScrSrc1
+			pea		ScratchArea+ScrDst
+			move.w	d7,-(sp)			; push opcode
+			move.l	sp,d3
+			lea		EntrySP,a0
+			move.l	sp,(a0)				; save stack ptr so we know reentrancy
+			move.l	(a3)+,a0			; get function address
+
+			move.l	#$c0ffeeee,d0		; "unchanged"
+			move.l	a0,$a78				; ApplScratch = SANE base address
+			jsr		(a0)				; call it
+
+			move	sr,d1
+			lea		ScratchArea+ScrCCR,a0
+
+			btst	#0,d1
+			beq.s	@C0
+			or.l	#$00000001,(a0)
+@C0
+
+			btst	#1,d1
+			beq.s	@V0
+			or.l	#$00000010,(a0)
+@V0
+
+			btst	#2,d1
+			beq.s	@Z0
+			or.l	#$00000100,(a0)
+@Z0
+
+			btst	#3,d1
+			beq.s	@N0
+			or.l	#$00001000,(a0)
+@N0
+
+			btst	#4,d1
+			beq.s	@X0
+			or.l	#$00010000,(a0)
+@X0
+
+			; But if operand is neither FCMP/FCPX, then discard CCR because it is hopelessly undefined!
+			move.w	d7,d1
+			and.b	#$1f,d1
+			cmp.b	#FOCMP,d1
+			beq.s	@keep
+			cmp.b	#FOCPX,d1
+			beq.s	@keep
+			move.l	#$baaaaaad,(a0)
+@keep
+
+			lea		ScratchArea+ScrD0,a0
+			move.l	d0,(a0)
+
+			; Restore stack ptr, and count the bytes popped from stack
+			move.l	sp,d0
+			sub.l	d3,d0
+			lea		ScratchArea+ScrPopped,a0
+			move.l	d0,(a0)
+			unlk	a6
+
+			; Copy back environment
+			lea		ScratchArea+ScrFPState,a0
+			move.w	FPState,(a0)
+			and.w	#%1111111101111111,(a0)
+			;            IDOUV      inexact/div0/oflow/uflow/invalid exception
+			;                 !     mantissa went up
+			;          DD      PP   rounding direction, precision
+
+			; Compare the result with the canonical one
+			tst.w	d6
+			bne.s	@notLast
+
+;			bra		@printMismatch		; Uncomment to force output
+
+			lea		ScratchArea,a0
+			lea		SaveArea,a1
+			moveq	#ScrSize-1,d0
+@cmpLoop	cmp.b	(a0)+,(a1)+
+			bne.s	@printMismatch
+			dbra	d0,@cmpLoop
+			bra.s	@notLast
+
+@printMismatch
+			move.w	d7,-(sp)
+			jsr		LineAppendX
+			pea			#' OPCODE TEST FAILED:                                                                       [        Halt stack frame        ] [Halt misc struct ] [         On return         ]'
+			jsr		LineAppend
+			jsr		LineFlush
+			pea		#'Src2                          Src1                          Dst                           Env  Opcod DstAddr  SrcAddr   Src2Addr  Halt CCR  D0        NumPopped    X NZVC D0'
+			jsr		LineAppend
+			jsr		LineFlush
+
+			lea		RandArea,a0
+			jsr		DumpScratch
+			pea		#' before'
+			jsr		LineAppend
+			jsr		LineFlush
+
+			lea		SaveArea,a0
+			jsr		DumpScratch
+			pea		#' after system'
+			jsr		LineAppend
+			jsr		LineFlush
+
+			lea		ScratchArea,a0
+			jsr		DumpScratch
+			pea		#' after test'
+			jsr		LineAppend
+			jsr		LineFlush
+			jsr		LineFlush
+
+@notLast
+
+			; Save the result of this call, to compare with the next one
+			lea		ScratchArea,a0
+			lea		SaveArea,a1
+			move.l	#ScrSize,d0
+			dc.w	$a22e				; _BlockMove
+
+			dbra	d6,SmallLoop
+			bra		BigLoop
+
+
+OpcodeTable
+			dc.w	FOADD+FFEXT
+			dc.w	FOADD+FFDBL
+			dc.w	FOADD+FFSGL
+			dc.w	FOADD+FFINT
+			dc.w	FOADD+FFLNG
+			dc.w	FOADD+FFCOMP
+
+			dc.w	FOSUB+FFEXT
+			dc.w	FOSUB+FFDBL
+			dc.w	FOSUB+FFSGL
+			dc.w	FOSUB+FFINT
+			dc.w	FOSUB+FFLNG
+			dc.w	FOSUB+FFCOMP
+
+			dc.w	FOMUL+FFEXT
+			dc.w	FOMUL+FFDBL
+			dc.w	FOMUL+FFSGL
+			dc.w	FOMUL+FFINT
+			dc.w	FOMUL+FFLNG
+			dc.w	FOMUL+FFCOMP
+
+			dc.w	FODIV+FFEXT
+			dc.w	FODIV+FFDBL
+			dc.w	FODIV+FFSGL
+			dc.w	FODIV+FFINT
+			dc.w	FODIV+FFLNG
+			dc.w	FODIV+FFCOMP
+
+			dc.w	FOCMP+FFEXT
+			dc.w	FOCMP+FFDBL
+			dc.w	FOCMP+FFSGL
+			dc.w	FOCMP+FFINT
+			dc.w	FOCMP+FFLNG
+			dc.w	FOCMP+FFCOMP
+
+			dc.w	FOCPX+FFEXT
+			dc.w	FOCPX+FFDBL
+			dc.w	FOCPX+FFSGL
+			dc.w	FOCPX+FFINT
+			dc.w	FOCPX+FFLNG
+			dc.w	FOCPX+FFCOMP
+
+			dc.w	FOREM+FFEXT
+			dc.w	FOREM+FFDBL
+			dc.w	FOREM+FFSGL
+			dc.w	FOREM+FFINT
+			dc.w	FOREM+FFLNG
+			dc.w	FOREM+FFCOMP
+
+			dc.w	FOZ2X+FFEXT
+			dc.w	FOZ2X+FFDBL
+			dc.w	FOZ2X+FFSGL
+			dc.w	FOZ2X+FFINT
+			dc.w	FOZ2X+FFLNG
+			dc.w	FOZ2X+FFCOMP
+
+			dc.w	FOX2Z+FFEXT
+			dc.w	FOX2Z+FFDBL
+			dc.w	FOX2Z+FFSGL
+			dc.w	FOX2Z+FFINT
+			dc.w	FOX2Z+FFLNG
+			dc.w	FOX2Z+FFCOMP
+
+			dc.w	FOSQRT+FFEXT
+			dc.w	FOSQRT+FFDBL
+			dc.w	FOSQRT+FFSGL
+			dc.w	FOSQRT+FFINT
+			dc.w	FOSQRT+FFLNG
+			dc.w	FOSQRT+FFCOMP
+
+			dc.w	FORTI+FFEXT
+			dc.w	FORTI+FFDBL
+			dc.w	FORTI+FFSGL
+			dc.w	FORTI+FFINT
+			dc.w	FORTI+FFLNG
+			dc.w	FORTI+FFCOMP
+
+			dc.w	FOTTI+FFEXT
+			dc.w	FOTTI+FFDBL
+			dc.w	FOTTI+FFSGL
+			dc.w	FOTTI+FFINT
+			dc.w	FOTTI+FFLNG
+			dc.w	FOTTI+FFCOMP
+
+			dc.w	FOSCALB+FFEXT
+			dc.w	FOSCALB+FFDBL
+			dc.w	FOSCALB+FFSGL
+			dc.w	FOSCALB+FFINT
+			dc.w	FOSCALB+FFLNG
+			dc.w	FOSCALB+FFCOMP
+
+			dc.w	FOLOGB+FFEXT
+			dc.w	FOLOGB+FFDBL
+			dc.w	FOLOGB+FFSGL
+			dc.w	FOLOGB+FFINT
+			dc.w	FOLOGB+FFLNG
+			dc.w	FOLOGB+FFCOMP
+
+			dc.w	FOCLASS+FFEXT
+			dc.w	FOCLASS+FFDBL
+			dc.w	FOCLASS+FFSGL
+			dc.w	FOCLASS+FFINT
+			dc.w	FOCLASS+FFLNG
+			dc.w	FOCLASS+FFCOMP
+
+
+			dc.w	FONEG+FFEXT
+			dc.w	FONEG+FFDBL
+			dc.w	FONEG+FFSGL
+			dc.w	FONEG+FFINT
+			dc.w	FONEG+FFLNG
+			dc.w	FONEG+FFCOMP
+
+			dc.w	FOABS+FFEXT
+			dc.w	FOABS+FFDBL
+			dc.w	FOABS+FFSGL
+			dc.w	FOABS+FFINT
+			dc.w	FOABS+FFLNG
+			dc.w	FOABS+FFCOMP
+
+			dc.w	FOCPYSGN+FFEXT
+			dc.w	FOCPYSGN+FFDBL
+			dc.w	FOCPYSGN+FFSGL
+			dc.w	FOCPYSGN+FFINT
+			dc.w	FOCPYSGN+FFLNG
+			dc.w	FOCPYSGN+FFCOMP
+
+			dc.w	FONEXT+FFEXT
+			dc.w	FONEXT+FFDBL
+			dc.w	FONEXT+FFSGL
+
+			dc.w	FOSETENV
+			dc.w	FOGETENV
+			dc.w	FOSETHV
+			dc.w	FOGETHV
+			dc.w	FOSETXCP
+			dc.w	FOPROCENTRY
+			dc.w	FOPROCEXIT
+			dc.w	FOTESTXCP
+
+			dc.w	-1				; end marker
+
+
+SanePackTable
+			dc.l	0, 0
+
+
+RandArea	dcb.b	ScrSize, 0
+ScratchArea	dcb.b	ScrSize, 0
+SaveArea	dcb.b	ScrSize, 0
+
+EntrySP		dc.l	0
+
+DumpScratch ; takes a0 pointing to area
+			movem.l	a0-a4/d0-d7,-(sp)
+			move.l	a0,a4
+			moveq	#ScrSize/2-1,d7
+@loop		move.w	(a4)+,-(sp)
+			jsr		LineAppendX
+			pea		#' '
+			jsr		LineAppend
+			dbra	d7,@loop
+			movem.l	(sp)+,a0-a4/d0-d7
+			rts
+
+
+MyTrap		lea		ScratchArea+ScrHaltArgs,a1
+			lea		4(sp),a0
+
+			move.w	(a0)+,(a1)+		; opcode
+			move.l	(a0)+,(a1)+		; dst
+			move.l	(a0)+,(a1)+		; src
+			move.l	(a0)+,(a1)+		; src2
+
+			; Actually, Src2 is only used by B2D, which never directly traps, so ignore it
+			move.l	#$dcdcdcdc,-4(a1)
+
+			move.l	(a0)+,a0		; follow the misc record ptr
+			move.l	(a0)+,(a1)+		; halt exceptions, pending ccr
+			move.l	(a0)+,(a1)+		; pending d0
+
+			; Check for reentrant calls: their pointers will be weird
+			move.l	EntrySP,d0		; stack ptr on entry
+			sub.l	ScratchArea+ScrHaltArgs+2,d0	; ptr to "dst" arg
+			cmp.l	#1024,d0
+			bhi.s	@notReentrant
+			lea		ScratchArea+ScrHaltArgs,a1
+			move.l	#$baaaad0d,2(a1)			; dst ptr
+			move.l	#$baaaad51,6(a1)			; src ptr
+			move.l	#$baaaad52,10(a1)			; src2 ptr
+			move.l	#$baaaadd0,18(a1)			; pending d0
+@notReentrant
+
+			move.l	(sp)+,a0	; see Numerics Manual p170
+			add		#18,sp
+			jmp		(a0)
+
+
+Rand		PROC	EXPORT ; random long in d0, Margaslia's "xorshift"
+			lea		state,a0
+			move.l	(a0),d0
+
+			move.l	d0,d1		; d0 = d0 xor d0<<13
+			lsl.l	#8,d1
+			lsl.l	#5,d1
+			eor.l	d1,d0
+
+			move.l	d0,d1		; d0 = d0 xor d0>>1713
+			swap	d1
+			lsr.w	#1,d1
+			eor.w	d1,d0
+
+			move.l	d0,d1		; d0 = d0 xor d0<<5
+			lsl.l	#5,d1
+			eor.l	d1,d0
+
+			move.l	d0,(a0)
+			rts
+
+state		dc.l	$20121993
+
+
+EditRandomCommand	PROC	EXPORT ; take opcode in d0, randArea ptr in a0
+			IMPORT	Rand
+
+			move.w	d0,d7
+			move.l	a0,a4
+
+; FOSETXCP will cause stack corruption if its argument exceeds 4. D'oh!
+			cmp.b	#FOSETXCP,d7
+			bne.s	@notFOSETXCP
+@reRand		jsr		Rand
+			and.w	#7,d0
+			cmp.b	#4,d0
+			bhi		@reRand
+			move.w	d0,ScrDst(a4)
+			rts
+@notFOSETXCP
+
+; Comp argument
+			move.w	d7,d0
+			and.w	#$ff00,d0
+			cmp.w	#FFCOMP,d0
+			bne.s	@notCompArg
+			move.w	d7,d0
+			cmp.b	#FOX2Z,d0	; convert TO comp does not count
+			beq.s	@notCompArg
+			jsr		EditComp
+@notCompArg
+
+; Extended float argument
+			move.w	d7,d0			; not the rare case of FOZ2X without FFEXT
+			cmp.b	#FOZ2X,d0
+			bne.s	@notFOZ2X
+			and.w	#$ff00,d0
+			cmp.w	#FFEXT,d0
+			bne.s	@notExtArg
+@notFOZ2X
+			jsr		EditExtended
+@notExtArg
+
+; Double argument
+			move.w	d7,d0
+			cmp.b	#FOX2Z,d0
+			beq.s	@notDoubleArg
+			and.w	#$ff00,d0
+			cmp.w	#FFDBL,d0
+			bne.s	@notDoubleArg
+			jsr		EditDouble
+@notDoubleArg
+
+; Single argument
+			move.w	d7,d0
+			cmp.b	#FOX2Z,d0
+			beq.s	@notSingleArg
+			and.w	#$ff00,d0
+			cmp.w	#FFSGL,d0
+			bne.s	@notSingleArg
+			jsr		EditSingle
+@notSingleArg
+
+; Sometimes copy src to dest wholesale
+			jsr		Rand
+			and.b	#$1f,d0
+			bne.s	@noRandomCopy
+			lea		ScrSrc1(a4),a0
+			lea		ScrDst(a4),a1
+			move.l	(a0)+,(a1)+
+			move.l	(a0)+,(a1)+
+			move.l	(a0)+,(a1)+
+			jsr		Rand
+			bpl.s	@noRandomCopy
+			bchg	#7,ScrSrc1(a4)
+@noRandomCopy
+
+; Decimal pstring argument
+			cmp.b	#FOD2B,d7
+			bne.s	@notDecimalArg
+			jsr		EditDecimal
+@notDecimalArg
+
+			rts
+
+
+EditComp
+; 1/8 probability of NaN
+			jsr		Rand
+			and.b	#7,d0
+			bne.s	@noNaN
+			lea		ScrSrc1(a4),a0
+			move.l	#$80000000,(a0)+	; comp NaN
+			move.l	#$00000000,(a0)+
+@noNaN
+			rts
+
+
+EditExtended
+			move.l	#16,d6			; d6.l = first mantissa bit
+			move.l	#64,d5			; d5.l = number of mantissa bits
+			move.w	#$7fff,d4		; d4.w = exponent mask
+			jsr		EditFloat
+
+			rts
+
+
+EditDouble
+			move.l	#12,d6			; d6.l = first mantissa bit
+			move.l	#52,d5			; d5.l = number of mantissa bits
+			move.w	#$7ff0,d4		; d4.w = exponent mask
+			jsr		EditFloat
+
+			rts
+
+
+EditSingle
+			move.l	#9,d6			; d6.l = first mantissa bit
+			move.l	#23,d5			; d5.l = number of mantissa bits
+			move.w	#$7f80,d4		; d4.w = exponent mask
+			jsr		EditFloat
+
+			rts
+
+
+EditFloat
+; 1/8 probability to set the exponent field to all ones (i.e. NaN or inf)
+			jsr		Rand
+			and.b	#3,d0
+			bne.s	@noNaN
+			lea		ScrSrc1(a4),a0
+			or.w	d4,(a0)
+@noNaN
+; 1/8 probability to set the exponent field to zero (i.e. zero or subnormal)
+			cmp.b	#1,d0
+			bne.s	@noSubnormal
+			lea		ScrSrc1(a4),a0
+			move.w	d4,d0
+			not.w	d0
+			and.w	d0,(a0)
+@noSubnormal
+
+; Cut off a random number of bits from the right of the mantissa
+@rptRand
+			jsr		Rand
+			and.l	#127,d0
+			cmp.b	d5,d0
+			bgt.s	@rptRand
+
+			move.l	d6,d1
+			add.l	d5,d1
+			subq.l	#1,d1			; index of rightmost bit
+@loop
+			tst.l	d0
+			beq.s	@doneClearing
+
+			MACHINE	MC68020
+			bfclr	ScrSrc1(a4){d1:1}
+			subq.l	#1,d1
+			subq.l	#1,d0
+			bra.s	@loop
+@doneClearing
+
+			rts
+
+EditDecimal
+			lea		ScrSrc1+1(a4),a2	; max 11 chars
+
+			jsr		Rand		; 0..1
+			and.l	#$18,d0
+			move.l	#'+-',d1
+			asr.l	d0,d1
+			beq.s	@noSign
+			move.b	d1,(a2)+
+@noSign
+
+			jsr		Rand		; 0..1
+			and.l	#$18,d0
+			move.l	#'IN',d1
+			asr.l	d0,d1
+			beq.s	@noLetter
+			move.b	d1,(a2)+
+@noLetter
+
+			jsr		Rand		; 0..3 digits
+			move.w	d0,d3
+			and.w	#3,d3
+@loop1		beq.s	@exit1
+			jsr		Rand
+			and.b	#7,d0
+			add.b	#'0',d0
+			move.b	d0,(a2)+
+			sub.w	#1,d3
+			bra.s	@loop1
+@exit1
+
+			jsr		Rand		; Consider appending a decimal point
+			and.b	#3,d0
+			beq.s	@noFrac
+			move.b	#'.',(a2)+	; 0..1
+
+			jsr		Rand			; 1..2 (assuming decimal point used)
+			move.w	d0,d3
+			and.w	#1,d3
+			add.w	#1,d3
+@loopFr		beq.s	@exitFr
+			jsr		Rand
+			and.b	#7,d0
+			add.b	#'0',d0
+			move.b	d0,(a2)+
+			sub.w	#1,d3
+			bra.s	@loopFr
+@exitFr
+@noFrac
+
+			jsr		Rand		; 0..1 Consider appending an E
+			and.b	#3,d0
+			beq.s	@noE
+			move.b	#'E',(a2)+
+
+			jsr		Rand			; 0..1 Perhaps with +/-
+			and.l	#$18,d0
+			move.l	#'+-',d1
+			asr.l	d0,d1
+			beq.s	@noESign
+			move.b	d1,(a2)+
+@noESign
+
+			jsr		Rand			; 1 And one digit of exponent
+			and.b	#7,d0
+			add.b	#'0',d0
+			move.b	d0,(a2)+
+@noE
+
+			move.l	a2,d0		; Pascal length byte
+			lea		ScrSrc1+1(a4),a0
+			sub.l	a0,d0
+			move.b	d0,-(a0)
+
+			rts
+
+			END

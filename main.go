@@ -231,6 +231,7 @@ func main() {
 		tb_base + 0x1e5: tPop2,                // _InitPack
 		tb_base + 0x1e6: tNop,                 // _InitAllPacks
 		tb_base + 0x1ea: tPack3,               // _Pack3
+		tb_base + 0x1eb: tFP68K,               // _FP68K
 		tb_base + 0x1ed: tPack6,               // _Pack6
 		tb_base + 0x1ef: tPtrAndHand,          // _PtrAndHand
 		tb_base + 0x1f0: tLoadSeg,             // _LoadSeg

@@ -166,6 +166,16 @@ func popb() uint8 {
 	return readb(ptr)
 }
 
+func pushzero(n uint32) (newsp, oldsp uint32) {
+	oldsp = readl(spptr)
+	newsp = oldsp - n
+	writel(spptr, newsp)
+	for i := uint32(0); i < n; i++ {
+		mem[newsp+i] = 0
+	}
+	return newsp, oldsp
+}
+
 func regAddr(reg uint16) uint32 {
 	return regs + uint32(reg&0xf)*4
 }
