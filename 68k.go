@@ -702,7 +702,7 @@ func line4(inst uint16) { // very,crowded,line
 			v = datum&signbit != 0 && neg&signbit != 0
 			c = neg64>>(size*8)&1 != 0
 			x = c
-			set_nz(datum, size)
+			set_nz(neg, size)
 			datum = neg
 		} else if inst>>8&15 == 4 { // neg
 			datum = sub_then_set_vc(0, datum, size)
