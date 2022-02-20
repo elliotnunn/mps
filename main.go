@@ -652,6 +652,9 @@ func tGestalt() {
 			reply = kMemSize
 		case "fs  ":
 			reply = 2 // FSSpec calls, not much else
+		case "alis":
+			reply = 1 // Alias Manager present
+			// Enables MPWLibs' more capable path processing
 		case "fold":
 			reply = 1 // Folder Manager present
 		case "mach":
