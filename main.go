@@ -36,6 +36,7 @@ const (
 	kStackBase      = 0x40000 // extends down, note that registers are here too!
 	kA5World        = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
 	kFakeHeapHeader = 0x90000 // very short
+	kQDPort         = 0x98000
 	kATrapTable     = 0xa0000 // 0x10000 above
 	kFCBTable       = 0xb0000 // 0x8000 above
 	kDQE            = 0xb9000 // 0x4 below and 0x10 above
@@ -157,12 +158,15 @@ func main() {
 		tb_base + 0x06f: tPop4,                // _OpenPort
 		tb_base + 0x073: tSetPort,             // _SetPort
 		tb_base + 0x074: tGetPort,             // _GetPort
+		tb_base + 0x08d: tCharWidth,           // _CharWidth
 		tb_base + 0x08f: tOSDispatch,          // _OSDispatch
 		tb_base + 0x09f: tUnimplemented,       // _Unimplemented
 		tb_base + 0x0a7: tSetRect,             // _SetRect
 		tb_base + 0x0a8: tOffsetRect,          // _OffsetRect
+		tb_base + 0x0a9: tInsetRect,           // _InsetRect
 		tb_base + 0x0d8: tRetZero,             // _NewRgn
 		tb_base + 0x0fe: tNop,                 // _InitFonts
+		tb_base + 0x0ff: tGetFName,            // _GetFName
 		tb_base + 0x100: tGetFNum,             // _GetFNum
 		tb_base + 0x106: tNewString,           // _NewString
 		tb_base + 0x112: tNop,                 // _InitWindows
@@ -791,13 +795,6 @@ func tOSDispatch() {
 	default:
 		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
 	}
-}
-
-// Get font number: outside the scope of mps!
-func tGetFNum() {
-	numPtr := popl()
-	popl() // discard name ptr
-	writed(numPtr, 0)
 }
 
 // Trivial do-nothing traps

@@ -80,7 +80,7 @@ func tInitGraf() {
 	a5 := readl(a5ptr)
 	qd := popl()
 	writel(a5, qd)
-	writel(qd, 0xf8f8f8f8) // illegal thePort address
+	writel(qd, kQDPort)
 }
 
 func tSetPort() {
@@ -115,4 +115,32 @@ func tOffsetRect() {
 	writew(rectPtr+2, readw(rectPtr+2)+dh) // left
 	writew(rectPtr+4, readw(rectPtr+4)+dv) // bottom
 	writew(rectPtr+6, readw(rectPtr+6)+dh) // right
+}
+
+func tInsetRect() {
+	dv := popw()
+	dh := popw()
+	rectPtr := popl()
+
+	writew(rectPtr+0, readw(rectPtr+0)+dv) // top
+	writew(rectPtr+2, readw(rectPtr+2)+dh) // left
+	writew(rectPtr+4, readw(rectPtr+4)-dv) // bottom
+	writew(rectPtr+6, readw(rectPtr+6)-dh) // right
+}
+
+func tCharWidth() {
+	popw()
+	writew(readl(spptr), 10) // ?????
+}
+
+func tGetFNum() {
+	numPtr := popl()
+	popl() // discard name ptr
+	writew(numPtr, 0)
+}
+
+func tGetFName() {
+	namePtr := popl()
+	popw() // discard num
+	writePstring(namePtr, macstring("Monaco"))
 }
