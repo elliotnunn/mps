@@ -61,6 +61,51 @@ func tHighLevelFSDispatch() {
 		writew(refNumPtr, ioRefNum)
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
+	case 4, 14: // pascal OSErr FSpCreate[ResFile](const FSSpec *spec, OSType creator, OSType fileType, ScriptCode scriptTag)
+		isResFile := readb(d0ptr+3) == 14
+		popw() // discard scriptTag
+		tCode := popl()
+		cCode := popl()
+		specPtr := popl()
+
+		push(128, 0)
+		pb := readl(spptr)
+
+		if isResFile {
+			pushw(readw(specPtr))               // vRefNum
+			pushl(readl(specPtr + 2))           // dirID
+			pushl(specPtr + 6)                  // namePtr
+			call_m68k(executable_atrap(0xac1b)) // _HCreateResFile ,autoPop
+			writew(d0ptr+2, readw(0xa60))       // d0.w = ResErr (checked below)
+		} else {
+			writel(a0ptr, pb)
+			writew(pb+22, readw(specPtr))       // ioVRefNum
+			writel(pb+48, readl(specPtr+2))     // ioDirID
+			writel(pb+18, specPtr+6)            // ioNamePtr
+			call_m68k(executable_atrap(0xa208)) // _HCreate
+		}
+
+		if readw(d0ptr+2) == 0 {
+			writel(a0ptr, pb)
+			writew(pb+22, readw(specPtr))       // ioVRefNum
+			writel(pb+48, readl(specPtr+2))     // ioDirID
+			writel(pb+18, specPtr+6)            // ioNamePtr
+			call_m68k(executable_atrap(0xa20c)) // _HGetFInfo
+
+			if readw(d0ptr+2) == 0 {
+				writel(a0ptr, pb)
+				writew(pb+22, readw(specPtr))       // ioVRefNum
+				writel(pb+48, readl(specPtr+2))     // ioDirID
+				writel(pb+18, specPtr+6)            // ioNamePtr
+				writel(pb+32, cCode)                // fdType
+				writel(pb+36, tCode)                // fdCreator
+				call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
+			}
+		}
+
+		pop(128)
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
+
 	case 5: // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
 		idPtr := popl()
 		popw() // discard scriptTag
@@ -81,6 +126,21 @@ func tHighLevelFSDispatch() {
 		if readw(d0ptr+2) == 0 {
 			writel(idPtr, ioDirID)
 		}
+		writew(readl(spptr), readw(d0ptr+2)) // return osErr
+
+	case 6: // pascal OSErr FSpDelete(const FSSpec *spec)
+		specPtr := popl()
+
+		push(128, 0)
+		pb := readl(spptr)
+		writel(a0ptr, pb)
+		writew(pb+22, readw(specPtr))   // ioVRefNum
+		writel(pb+48, readl(specPtr+2)) // ioDirID
+		writel(pb+18, specPtr+6)        // ioNamePtr
+
+		call_m68k(executable_atrap(0xa209)) // _HDelete
+		pop(128)
+
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 7: // pascal OSErr FSpGetFInfo(const FSSpec *spec, FInfo *fndrInfo)
