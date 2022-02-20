@@ -691,13 +691,19 @@ func line4(inst uint16) { // very,crowded,line
 		datum := read(size, dest)
 
 		if inst>>8&15 == 0 { // negx
-			xdatum := datum
+			var signbit uint32 = 1 << ((size * 8) - 1)
+
+			neg64 := -uint64(datum)
 			if x {
-				xdatum += 1
+				neg64 -= 1
 			}
-			datum = sub_then_set_vc(0, xdatum, size)
+			neg := uint32(neg64)
+
+			v = datum&signbit != 0 && neg&signbit != 0
+			c = neg64>>(size*8)&1 != 0
 			x = c
 			set_nz(datum, size)
+			datum = neg
 		} else if inst>>8&15 == 4 { // neg
 			datum = sub_then_set_vc(0, datum, size)
 			x = c
@@ -1163,29 +1169,41 @@ func line9D(inst uint16) { // sub,subx,suba/add,addx,adda: very compactly encode
 	} else if inst&0x130 == 0x100 { // subx,addx: only two addressing modes allowed
 		size := readsize(inst >> 6 & 3)
 
+		var signbit uint64 = 1 << ((size * 8) - 1)
+
 		mode := uint16(0) // Dx,Dy
 		if inst&8 != 0 {
 			mode = 32 // -(Ax),-(Ay)
 		}
 
-		src := address_by_mode(mode|(inst&7), size)
-		dest := address_by_mode(mode|(inst>>9&7), size)
+		srcPtr := address_by_mode(mode|(inst&7), size)
+		dstPtr := address_by_mode(mode|(inst>>9&7), size)
 
-		result := read(size, dest)
-		addOrSub := read(size, src)
-		if x {
-			addOrSub += 1
-		}
+		src := uint64(read(size, srcPtr))
+		dst := uint64(read(size, dstPtr))
+
+		var result uint64
 		if isAdd {
-			result = add_then_set_vc(result, addOrSub, size)
-		} else {
-			result = sub_then_set_vc(result, addOrSub, size)
-		}
+			result = dst + src
+			if x {
+				result += 1
+			}
 
-		write(size, dest, result)
+			v = result&signbit != src&signbit && result&signbit != dst&signbit
+		} else {
+			result = dst - src
+			if x {
+				result -= 1
+			}
+
+			v = dst&signbit != src&signbit && dst&signbit != result&signbit
+		}
+		c = result&(signbit<<1) != 0
+
+		write(size, dstPtr, uint32(result))
 		x = c
 		old_z := z
-		set_nz(result, size)
+		set_nz(uint32(result), size)
 		z = z && old_z
 	} else { // sub,add
 		size := readsize(inst >> 6 & 3)
