@@ -678,38 +678,6 @@ func tGestalt() {
 	}
 }
 
-// Alias Manager: only implemented enough to find "special" disk locations
-func tAliasDispatch() {
-	if readl(d0ptr) == 0 { // FindFolder
-		foundDirID := popl()
-		foundVRefNum := popl()
-		popb() // ignore createFolder
-		folderType := string(mem[readl(spptr):][:4])
-		popl()
-		popw() // ignore vRefNum
-
-		var path string
-		switch folderType {
-		case "pref", "sprf":
-			path = filepath.Join(systemFolder, "Preferences")
-		case "desk", "sdsk":
-			path = filepath.Join(systemFolder, "Desktop Folder")
-		case "trsh", "strs", "empt":
-			path = filepath.Join(systemFolder, "Trash")
-		case "temp":
-			path = filepath.Join(systemFolder, "Temporary Items")
-		default:
-			path = systemFolder
-		}
-
-		writew(foundVRefNum, 2)
-		writel(foundDirID, uint32(dirID(path)))
-		writew(readl(spptr), 0) // noErr
-	} else {
-		panic("Unimplemented _AliasDispatch selector")
-	}
-}
-
 func tGetOSEvent() {
 	write(16, readl(a0ptr), 0) // null event
 	writel(d0ptr, 0xffffffff)
