@@ -551,7 +551,18 @@ func dumpPBField(f string) {
 		logField(f, fmt.Sprintf("%X", mem[pb+32:][:16]), macToUnicode(macstring(mem[pb+32:][:8])))
 	case "ioNamePtr":
 		nameptr := readl(pb + 18)
-		logField(f, nameptr, macToUnicode(readPstring(nameptr)))
+		s := "\""
+		suspicious := ""
+		for _, char := range readPstring(nameptr) {
+			if char < 32 || char > 127 {
+				s += fmt.Sprintf("[%02x]", byte(char))
+				suspicious = " (suspected junk)"
+			} else {
+				s += string(char)
+			}
+		}
+		s += "\""
+		logField(f, nameptr, s+suspicious)
 	case "ioVLsBkUp":
 		logField(f, readl(pb+34))
 	case "ioReqCount":
