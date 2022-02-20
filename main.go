@@ -52,6 +52,9 @@ const (
 //go:embed "PACKs"
 var embedPACKs embed.FS
 
+//go:embed System.r
+var embedSystemFile []byte
+
 func main() {
 	my_traps = [...]func(){
 		os_base + 0x00:  pbWrap(tOpen),        // _Open
@@ -380,26 +383,23 @@ func main() {
 	os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
 	os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
 
-	// Reserve fcb 2 for the System resource map
-	writew(0xa58, 2)            // SysMap = first possible FCB
-	writew(0xa5a, readw(0xa58)) // CurMap = SysMap
-	writel(fcbFromRefnum(readw(0xa58)), 1)
-	openBuffers[2] = &[]byte{}
+	// Create and open System file
+	os.Create(filepath.Join(systemFolder, "System"))
+	os.WriteFile(filepath.Join(systemFolder, "System.rdump"), embedSystemFile, 0o644)
 
-	// With resources
-	writel(0xa50, newHandleFrom(mkMap(mapStruct{ // TopMapHndl
-		mRefNum: readw(0xa58), mAttr: 0x2000, // mAttr and rAttr indicate dirty map and resources
-		list: []resourceStruct{
-			{tType: 0x494e544c, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: resChanged}, // INTL (old style)
-			{tType: 0x494e544c, rID: 1, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: resChanged}, // INTL (old style)
-			{tType: 0x69746c30, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl0), rAttr: resChanged}, // itl0 (new style)
-			{tType: 0x69746c31, rID: 0, hasName: true, name: "U.S.", rHndl: newHandleFrom(itl1), rAttr: resChanged}, // itl1 (new style)
-		},
-	})))
+	writePstring(0xad8, "System") // SysResName
+	pushw(0)                      // space to return refnum
+	pushw(dirID(systemFolder))    // vol ID
+	pushl(0)                      // dir ID (zero means just do vol ID)
+	pushl(0xad8)                  // filename ptr
+	pushw(0)                      // permissions
+	tHOpenResFile()
+	if popw() != 2 {
+		panic("Failed to open own System file")
+	}
 
-	// Serialise the resource file so that resources can be recovered after being detached
-	pushw(readw(0xa58))
-	tUpdateResFile()
+	writel(0xa54, readl(0xa50)) // SysMapHndl = TopMapHndl
+	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
 	push(32, 0)
 	fileNamePtr := readl(spptr)
