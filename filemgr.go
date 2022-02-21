@@ -33,6 +33,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -230,20 +231,22 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 func readDir(path string) ([]existingNamePair, int) {
 	f, err := os.Open(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, -43 // fnfErr
-		} else {
-			panic(err)
-		}
+		return nil, macErrCode(err)
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, macErrCode(err)
+	}
+
+	if !stat.Mode().IsDir() {
+		return nil, -120 // dirNFErr
 	}
 
 	dirents, err := f.ReadDir(-1)
 	if err != nil {
-		if err.(*os.PathError).Err.Error() == "not a directory" {
-			return nil, -120 // dirNFErr
-		} else {
-			panic(err)
-		}
+		return nil, macErrCode(err)
 	}
 
 	slice := make([]existingNamePair, 0, len(dirents))
@@ -271,6 +274,21 @@ func readDir(path string) ([]existingNamePair, int) {
 type existingNamePair struct {
 	mac  macstring
 	host string
+}
+
+// Convert some filesystem errors to MacOS error codes
+func macErrCode(err error) int {
+	if err == nil {
+		return 0 // noErr
+	} else if errors.Is(err, fs.ErrExist) {
+		return -48 // dupFNErr
+	} else if errors.Is(err, fs.ErrNotExist) {
+		return -43 // fnfErr
+	} else if errors.Is(err, fs.ErrPermission) {
+		return -54 // permErr
+	} else {
+		panic(err)
+	}
 }
 
 // Let the funcs in this file accept a pb pointer and return an osErr
