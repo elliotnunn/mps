@@ -579,6 +579,89 @@ func tFSDispatch(pb uint32) int {
 	case 2: // CloseWD
 		// do nothing
 
+	case 5: // CatMove
+		file, errno := hostPath(paramBlkDirID(), readPstring(readl(pb+18)), true)
+		if errno != 0 {
+			return errno
+		}
+
+		dir, errno := hostPath(uint16(readl(pb+36)), readPstring(readl(pb+28)), true)
+		if errno != 0 {
+			return errno
+		}
+
+		// File must not contain dir
+		if sameOrChildOf(dir, file) {
+			return -122 // badMovErr
+		}
+
+		// Dir must be a directory
+		dirStat, err := os.Stat(dir)
+		if err != nil {
+			return -43 // fnfErr
+		}
+		if !dirStat.Mode().IsDir() {
+			return -37 // bdNamErr, attempt to move into a file
+		}
+
+		// Dest must not already exist
+		newFile := filepath.Join(dir, filepath.Base(file))
+		if _, err := os.Stat(newFile); err == nil || !os.IsNotExist(err) {
+			return -37 // bdNamErr, dest already exists
+		}
+
+		// Test what we are moving (need to tweak our data structures later)
+		fileStat, err := os.Stat(file)
+		if err != nil {
+			return -43 // fnfErr
+		}
+		isDir := fileStat.Mode().IsDir()
+
+		// Do the move!
+		err = os.Rename(file, newFile)
+		if err != nil {
+			if os.IsPermission(err) {
+				return -46 // vLckdErr
+			} else {
+				panic(err)
+			}
+		}
+
+		// And resource fork, finder info
+		if !isDir {
+			os.Rename(file+".rdump", newFile+".rdump") // ignore error
+			os.Rename(file+".idump", newFile+".idump") // ignore error
+
+			res := filepath.Join(filepath.Dir(file), "RESOURCE.FRK", filepath.Base(file))
+			newRes := filepath.Join(filepath.Dir(newFile), "RESOURCE.FRK", filepath.Base(file))
+			if _, err := os.Stat(res); err == nil || !os.IsNotExist(err) {
+				os.Mkdir(filepath.Dir(newRes), 0o755)
+				os.Rename(res, newRes)
+			}
+
+			inf := filepath.Join(filepath.Dir(file), "FINDER.DAT", filepath.Base(file))
+			newInf := filepath.Join(filepath.Dir(newFile), "FINDER.DAT", filepath.Base(file))
+			if _, err := os.Stat(inf); err == nil || !os.IsNotExist(err) {
+				os.Mkdir(filepath.Dir(newInf), 0o755)
+				os.Rename(inf, newInf)
+			}
+		}
+
+		if isDir {
+			for k, v := range openPaths {
+				if sameOrChildOf(v.hostpath, file) {
+					v.hostpath = newFile + v.hostpath[len(file):]
+					openPaths[k] = v
+				}
+			}
+		} else {
+			for i, p := range dirIDs {
+				if sameOrChildOf(p, file) {
+					dirIDs[i] = newFile + p[len(file):]
+				}
+			}
+		}
+
 	case 6: // DirCreate
 		return tCreate(pb)
 
@@ -630,4 +713,8 @@ func tFSDispatch(pb uint32) int {
 	}
 
 	return 0
+}
+
+func sameOrChildOf(inner, outer string) bool {
+	return inner == outer || strings.HasPrefix(inner, outer+string(os.PathSeparator))
 }
