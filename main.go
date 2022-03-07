@@ -48,6 +48,7 @@ const (
 	kHeapLimit      = 0x3f000000
 	kStackLimit     = 0x3f000000
 	kStackBase      = 0x3ffffff0
+	kReturnAddr     = 0x3ffffff8
 	kMemSize        = 0x40000000
 )
 
@@ -692,7 +693,7 @@ func tGetOSEvent() {
 
 // Will cause the topmost invocation of call_m68k to return -- not enough?
 func tExitToShell() {
-	pc = 0
+	pc = kReturnAddr
 }
 
 // MultiFinder/ProcessManager routines

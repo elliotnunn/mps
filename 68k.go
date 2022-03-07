@@ -6,16 +6,6 @@ import (
 	"strings"
 )
 
-//#######################################################################
-// 68000 interpreter: minimal user-mode implementation
-//
-// Notes {
-// - all "sizes" are in bytes
-// - mem is a bytearray, which must be populated from outside the block
-// - minimise direct access to the mem bytearray, preferring read()/write()
-// - define lineA(), lineF(), check_for_lurkers() somewhere outside this block
-//#######################################################################
-
 // Emulator state: set to something better than this before running
 var pc uint32
 var x, n, z, v, c bool
@@ -41,6 +31,950 @@ const (
 	a6ptr = regs + 56
 	spptr = regs + 60
 )
+
+func call_m68k(addr uint32) {
+	save_pc := pc
+	pushl(kReturnAddr) // the function we call will pop this value
+	pc = addr
+
+	for pc < kReturnAddr {
+		// Update Ticks
+		instCount++
+		if instCount == 0 {
+			writel(0x16a, readl(0x16a)+1)
+		}
+
+		if gDebugStackTrace {
+			printCallStack()
+		}
+
+		if gDebugEveryInst {
+			printState()
+		}
+
+		inst := readw(pc)
+		pc += 2
+		switch inst >> 12 {
+		case 0:
+			if inst&256 != 0 || inst>>9 == 4 { // btst,bchg,bclr,bset (or movep)
+				var bit uint32
+				if inst&256 != 0 { // bit numbered by data register
+					if inst>>3&7 == 1 {
+						panic("movep")
+					}
+					dn := inst >> 9
+					bit = readl(regAddr(dn))
+				} else { // bit numbered by immediate
+					bit = uint32(readw(pc))
+					pc += 2
+				}
+
+				mode := inst & 63
+				var size uint32
+				if mode>>3 <= 1 {
+					size = 4 // applies to register
+				} else {
+					size = 1 // applies to memory address
+				}
+				bit %= size * 8
+				mask := uint32(1) << bit
+
+				ptr := address_by_mode(mode, size)
+				val := read(size, ptr)
+				z = val&mask == 0
+
+				if inst>>6&3 == 1 { // bchg
+					val ^= mask
+				} else if inst>>6&3 == 2 { // bclr
+					val &= ^mask
+				} else if inst>>6&3 == 3 { // bset
+					val |= mask
+				}
+				// ^^ the btst case is already handled by setting z
+
+				write(size, ptr, val)
+
+			} else if inst>>6&0b100111 == 0b000011 { // cmp2/chk2
+				word2 := readw(pc)
+				pc += 2
+				size := readsize(inst >> 9 & 3)
+				mask := (uint32(1) << (size * 4)) - 1
+				rangeEA := address_by_mode(inst&0x3f, size)
+				whichReg := word2 >> 12
+				data := read(size, regs+4*uint32(whichReg)+4-size)
+
+				lower := read(size, rangeEA)
+				upper := read(size, rangeEA+size)
+
+				data = (data - lower) & mask
+				upper = (upper - lower) & mask
+
+				z = data == 0 || data == upper
+				c = data > upper
+
+				if c && word2&(1<<11) != 0 { // chk
+					panic("chk failed")
+				}
+
+			} else { //ori,andi,subi,addi,eori -- including to SR/CCR
+				size := readsize(inst >> 6 & 3)
+
+				src_ptr := address_by_mode(60, size) // '#imm' mode, advances pc
+				imm := read(size, src_ptr)
+
+				// now, are we operating on a special mode?
+				dest_mode := inst & 63
+				var val, dest_ptr uint32
+				if dest_mode == 60 { // '#imm' actually means CCR/SR
+					// for addi/subi this would simply be invalid
+					val = uint32(get_ccr())
+				} else {
+					dest_ptr = address_by_mode(dest_mode, size)
+					val = read(size, dest_ptr)
+				}
+
+				if inst>>9 == 0 { // ori
+					val |= imm
+					v = false
+					c = false
+					set_nz(val, size)
+				} else if inst>>9 == 1 { // andi
+					val &= imm
+					v = false
+					c = false
+					set_nz(val, size)
+				} else if inst>>9 == 2 { // subi
+					val = sub_then_set_vc(val, imm, size)
+					x = c
+					set_nz(val, size)
+				} else if inst>>9 == 3 { // addi
+					val = add_then_set_vc(val, imm, size)
+					x = c
+					set_nz(val, size)
+				} else if inst>>9 == 5 { // eori
+					val ^= imm
+					v = false
+					c = false
+					set_nz(val, size)
+				} else if inst>>9 == 6 { // cmpi: same as subi, but don't set
+					fake_val := sub_then_set_vc(val, imm, size)
+					set_nz(fake_val, size)
+				}
+
+				if dest_mode == 60 {
+					set_ccr(uint16(val))
+				} else {
+					write(size, dest_ptr, val)
+				}
+			}
+
+		case 1, 2, 3:
+			// move, and movea which is a special-ish case
+			size := readsizeForMove(inst >> 12 & 3)
+			dest_mode := (inst >> 3 & 0x38) | (inst >> 9 & 7)
+			src_mode := inst & 63
+
+			src := address_by_mode(src_mode, size)
+			datum := read(size, src)
+
+			if dest_mode>>3 == 1 { // movea: sign extend to 32 bits
+				datum = signextend(size, datum)
+				size = 4
+			} else { // non-movea: set condition codes
+				v = false
+				c = false
+				set_nz(datum, size)
+			}
+
+			dest := address_by_mode(dest_mode, size)
+			write(size, dest, datum)
+
+		case 4:
+			// very,crowded,line
+			if inst>>6&63 == 3 { // move from sr
+				dest := address_by_mode(inst&63, 2) // sr is 2 bytes
+				writew(dest, get_ccr())
+			} else if inst>>6&63 == 19 || inst>>6&63 == 27 { // move to sr/ccr
+				var size uint32
+				if inst>>6&8 != 0 {
+					size = 1 // ccr
+				} else {
+					size = 2 // sr
+				}
+				src := address_by_mode(inst&63, size)
+				set_ccr(uint16(read(size, src)))
+			} else if inst>>8&15 == 0 || inst>>8&15 == 4 || inst>>8&15 == 6 { // negx,neg,not
+				size := readsize(inst >> 6 & 3)
+				dest := address_by_mode(inst&63, size)
+				datum := read(size, dest)
+
+				if inst>>8&15 == 0 { // negx
+					var signbit uint32 = 1 << ((size * 8) - 1)
+
+					neg64 := -uint64(datum)
+					if x {
+						neg64 -= 1
+					}
+					neg := uint32(neg64)
+
+					v = datum&signbit != 0 && neg&signbit != 0
+					c = neg64>>(size*8)&1 != 0
+					x = c
+					set_nz(neg, size)
+					datum = neg
+				} else if inst>>8&15 == 4 { // neg
+					datum = sub_then_set_vc(0, datum, size)
+					x = c
+					set_nz(datum, size)
+				} else { // not
+					datum = ^datum
+					v = false
+					c = false
+					set_nz(datum, size)
+				}
+				write(size, dest, datum)
+
+			} else if inst>>8&15 == 2 { // clr
+				size := readsize(inst >> 6 & 3)
+				dest := address_by_mode(inst&63, size)
+
+				n = false
+				z = true
+				v = false
+				c = false
+
+				write(size, dest, 0)
+			} else if inst&0xFB8 == 0x880 { // ext
+				dn := inst & 7
+				if inst&64 != 0 { // ext.l
+					val := extwl(readw(regAddr(dn) + 2))
+					set_nz(val, 4)
+					v = false
+					c = false
+					writel(regAddr(dn), val)
+				} else { // ext.w
+					val := extbw(readb(regAddr(dn) + 3))
+					set_nz(uint32(val), 2)
+					v = false
+					c = false
+					writew(regAddr(dn)+2, val)
+				}
+			} else if inst&0xFF8 == 0x9C0 { // 68020 extb.l
+				dn := inst & 7
+				val := extbl(readb(regAddr(dn) + 3))
+				set_nz(val, 4)
+				v = false
+				c = false
+				writel(regAddr(dn), val)
+			} else if inst&0xFC0 == 0x800 && inst>>3&7 != 1 { // nbcd
+				// the hack to check bits 5..3 allows fallthru to link.l
+				bcdInst(inst)
+			} else if inst&0xFF8 == 0x840 { // swap.w
+				dest := regAddr(inst & 7)
+				datum := readl(dest)
+				datum = (datum >> 16 & 0xffff) | (datum << 16 & 0xffff0000)
+				set_nz(datum, 4)
+				v = false
+				c = false
+				writel(dest, datum)
+			} else if inst&0xFC0 == 0x840 { // pea -- notice similarity to swap.w
+				ea := address_by_mode(inst&63, 4) // size doesn't matter here
+				pushl(ea)
+			} else if inst&0xF00 == 0xA00 { // tst,tas
+				size := []uint32{1, 2, 4, 1}[inst>>6&3]
+				dest := address_by_mode(inst&63, size)
+				datum := read(size, dest)
+				set_nz(datum, size)
+				v = false
+				c = false
+				if inst>>6&3 == 3 { // tas
+					writeb(dest, uint8(datum)|0x80)
+				}
+			} else if inst&0xFC0 == 0xC00 { // mulu/muls.l
+				word2 := readw(pc)
+				pc += 2
+				src := address_by_mode(inst&63, 4)
+				dest := regAddr(word2 >> 12 & 7)
+
+				m1 := readl(src)
+				m2 := readl(dest)
+
+				var result uint64
+				if word2&(1<<11) != 0 { // signed
+					result = uint64(int64(int32(m1)) * int64(int32(m2)))
+					v = result != uint64(int64(int32(result))) // signed overflow
+				} else {
+					result = uint64(m1) * uint64(m2)
+					v = result>>32 != 0 // unsigned overflow
+				}
+
+				n = result&(1<<31) != 0
+				z = uint32(result) == 0
+				c = false
+
+				writel(dest, uint32(result))
+
+				// 64-bit product with a "high" register
+				if word2&(1<<10) != 0 {
+					n = result&(1<<63) != 0
+					z = result == 0
+					v = false // cancel overflow
+					writel(regAddr(word2&7), uint32(result>>32))
+				}
+			} else if inst&0xFC0 == 0xC40 { // [t]divu/divs.l
+				word2 := readw(pc)
+				pc += 2
+				isSigned := word2&(1<<11) != 0
+
+				ea := address_by_mode(inst&63, 4) // divisor
+				qa := regAddr(word2 >> 12 & 7)    // dividend, quotient
+				ra := regAddr(word2 & 7)          // remainder, high dividend, high quotient
+
+				if word2&(1<<10) != 0 { // 64-bit dividend
+					dividend := uint64(readl(ra))<<32 | uint64(readl(qa))
+					divisor := uint32(readl(ea))
+
+					var quotient, remainder uint32
+					if isSigned {
+						dblq := int64(dividend) / int64(int32(divisor))
+						dblr := int64(dividend) % int64(int32(divisor))
+						v = dblq != int64(int32(dblq))
+						quotient = uint32(dblq)
+						remainder = uint32(dblr)
+					} else {
+						dblq := dividend / uint64(divisor)
+						dblr := dividend % uint64(divisor)
+						v = dblq>>32 != 0
+						quotient = uint32(dblq)
+						remainder = uint32(dblr)
+					}
+
+					if !v {
+						writel(qa, quotient)
+						writel(ra, remainder)
+						set_nz(quotient, 4)
+					}
+					c = false
+				} else { // 32-bit dividend
+					dividend := readl(qa)
+					divisor := readl(ea)
+					var quotient, remainder uint32
+					if isSigned {
+						quotient = uint32(int32(dividend) / int32(divisor))
+						remainder = uint32(int32(dividend) % int32(divisor))
+					} else {
+						quotient = dividend / divisor
+						remainder = dividend % divisor
+					}
+
+					writel(qa, quotient)
+					if ra != qa {
+						writel(ra, remainder)
+					}
+
+					set_nz(quotient, 4)
+					v = false // overflow can't occur?
+					c = false
+				}
+			} else if inst&0xFF8 == 0xE50 { // link
+				ea := aregAddr(inst & 7)
+				imm := extwl(readw(pc))
+				pc += 2
+
+				pushl(readl(ea)) // move.l a6,-(sp)
+				sp := readl(spptr)
+				writel(ea, sp)        // move.l sp,a6
+				writel(spptr, sp+imm) // add.w #imm,sp
+
+			} else if inst&0xFF8 == 0x808 { // 68020 link.l
+				ea := aregAddr(inst & 7)
+				imm := readl(pc)
+				pc += 4
+
+				pushl(readl(ea)) // move.l a6,-(sp)
+				sp := readl(spptr)
+				writel(ea, sp)        // move.l sp,a6
+				writel(spptr, sp+imm) // add.l #imm,sp
+
+			} else if inst&0xFF8 == 0xE58 { // unlk
+				ea := aregAddr(inst & 7)
+
+				writel(spptr, readl(ea)) // move.l a6,sp
+				writel(ea, popl())       // move.l (sp)+,a6
+			} else if inst&0xFFF == 0xE71 { // nop
+			} else if inst&0xFFF == 0xE74 { // rtd
+				check_for_lurkers()
+				imm := extwl(readw(pc))
+				pc = popl()
+				writel(spptr, readl(spptr)+imm)
+			} else if inst&0xFFF == 0xE75 { // rts
+				check_for_lurkers()
+				pc = popl()
+			} else if inst&0xFFF == 0xE77 { // rtr
+				set_ccr(popw())
+				pc = popl()
+			} else if inst&0xF80 == 0xE80 { // jsr/jmp
+				targ := address_by_mode(inst&63, 4) // any size
+				if inst&0x40 == 0 {
+					check_for_lurkers() // don't slow down jmp's, we do them a lot
+					pushl(pc)
+				}
+				pc = targ
+			} else if inst&0xF80 == 0x880 { // movem registers,ea
+				size := uint32(2)
+				if inst&64 != 0 {
+					size = 4
+				}
+
+				which := readw(pc)
+				pc += 2
+				totalsize := uint32(bits.OnesCount16(which)) * size
+
+				mode := inst & 63
+				ptr := address_by_mode(mode, totalsize)
+
+				if mode>>3 == 4 { // reverse the bits if predecrementing
+					which = bits.Reverse16(which)
+				}
+
+				for reg := uint16(0); reg < 16; reg++ {
+					if which&(1<<reg) != 0 {
+						regptr := regAddr(reg) + 4 - size
+						write(size, ptr, read(size, regptr))
+						ptr += size
+					}
+				}
+			} else if inst&0xF80 == 0xC80 { // movem ea,registers
+				size := uint32(2)
+				if inst&64 != 0 {
+					size = 4
+				}
+
+				which := readw(pc)
+				pc += 2
+				totalsize := uint32(bits.OnesCount16(which)) * size
+
+				mode := inst & 63
+				ptr := address_by_mode(mode, totalsize)
+
+				for reg := uint16(0); reg < 16; reg++ {
+					if which&(1<<reg) != 0 {
+						if !(reg >= 8 && mode>>3 == 3 && reg&7 == mode&7) {
+							regptr := regAddr(reg)
+							writel(regptr, signextend(size, read(size, ptr)))
+						}
+						ptr += size
+					}
+				}
+			} else if inst&0x1C0 == 0x1C0 { // lea
+				an := inst >> 9 & 7
+				ea := address_by_mode(inst&63, 4) // any size
+				writel(aregAddr(an), ea)
+			} else if inst&0x140 == 0x100 { // chk
+				size := uint32(2)
+				if inst&0x80 == 0 {
+					size = 4 // chk.l seems to be a 68020 innovation
+				}
+
+				dn := inst >> 9 & 7
+				testee := read(regAddr(dn)+4-size, size)
+				ea := address_by_mode(inst&63, size)
+				ubound := read(ea, size)
+				if testee > ubound {
+					panic("chk failed")
+				}
+			}
+
+		case 5:
+			// addq,subq,scc,dbcc
+			if inst>>6&3 != 3 { // addq,subq
+				size := readsize(inst >> 6 & 3)
+				if size == 2 && inst>>3&7 == 1 {
+					size = 4 // An.w is really An.l
+				}
+
+				imm := uint32(inst >> 9 & 7)
+				if imm == 0 {
+					imm = 8
+				}
+
+				dest := address_by_mode(inst&63, size)
+				datum := read(size, dest)
+				save_ccr := get_ccr()
+				if inst&256 != 0 { // subq
+					datum = sub_then_set_vc(datum, imm, size)
+				} else { // addq
+					datum = add_then_set_vc(datum, imm, size)
+				}
+				x = c
+				set_nz(datum, size)
+				if inst>>3&7 == 1 {
+					set_ccr(save_ccr) // touch not ccr if dest is An
+				}
+				write(size, dest, datum)
+
+			} else if inst>>3&7 == 1 { // dbcc
+				check_for_lurkers()
+
+				disp := extwl(readw(pc)) - 2
+				pc += 2
+
+				cond := inst >> 8 & 15 // if cond satisfied then DO NOT take loop
+				if test_condition(cond) {
+					continue
+				}
+				// decrement the counter (dn)
+				dn := inst & 7
+				dest := regAddr(dn) + 2
+				counter := readw(dest) - 1
+				writew(dest, counter)
+				if counter == 0xFFFF { // do not take the branch
+					continue
+				}
+
+				pc += disp
+			} else { // scc
+				dest := address_by_mode(inst&63, 1)
+				cond := inst >> 8 & 15
+				if test_condition(cond) {
+					writeb(dest, 0xff)
+				} else {
+					writeb(dest, 0)
+				}
+			}
+
+		case 6:
+			// bra,bsr,bcc
+			check_for_lurkers()
+
+			var disp uint32
+			if uint8(inst) == 0 { // word displacement
+				disp = extwl(readw(pc)) - 2
+				pc += 2
+			} else if uint8(inst) == 0xff { // long displacement
+				disp = readl(pc) - 4
+				pc += 4
+			} else { // byte displacement
+				disp = extbl(uint8(inst))
+			}
+
+			cond := inst >> 8 & 15
+			if cond > 1 && !test_condition(cond) { // not taken
+				continue
+			}
+			if cond == 1 { // is bsr
+				pushl(pc)
+			}
+
+			pc += disp
+
+		case 7:
+			// moveq
+			dn := inst >> 9 & 7
+			val := extbl(uint8(inst))
+
+			set_nz(val, 4)
+			v = false
+			c = false
+
+			writel(regAddr(dn), val)
+
+		case 8:
+			// divu,divs,sbcd,or
+			if inst&0x1F0 == 0x100 { // sbcd
+				bcdInst(inst)
+			} else if inst&0x1F0 == 0x140 { // pack
+				adjust := readw(pc)
+				pc += 2
+
+				var src, dest uint32
+				if inst&8 == 0 { // reg to reg
+					src = regAddr(inst&7) + 2
+					dest = regAddr(inst>>9&7) + 3
+				} else {
+					src = address_by_mode(0x20|(inst&7), 2)     // predecrement
+					dest = address_by_mode(0x20|(inst>>9&7), 1) // predecrement
+				}
+
+				wide := readw(src)
+				wide += adjust
+				thin := uint8((wide >> 4 & 0xf0) | (wide & 0xf))
+
+				writeb(dest, thin)
+
+			} else if inst&0x1F0 == 0x180 { // unpk
+				adjust := readw(pc)
+				pc += 2
+
+				var src, dest uint32
+				if inst&8 == 0 { // reg to reg
+					src = regAddr(inst&7) + 3
+					dest = regAddr(inst>>9&7) + 2
+				} else {
+					src = address_by_mode(0x20|(inst&7), 1)     // predecrement
+					dest = address_by_mode(0x20|(inst>>9&7), 2) // predecrement
+				}
+
+				thin := readb(src)
+				wide := (uint16(thin) << 4 & 0xf00) | (uint16(thin) & 0xf)
+				wide += adjust
+
+				writew(dest, wide)
+
+			} else if inst&0x0C0 == 0x0C0 { // divu,divs
+				ea := address_by_mode(inst&63, 2)
+				divisor := readw(ea)
+				dn := inst >> 9 & 7
+				dividend := readl(regAddr(dn))
+
+				var quotient uint32 // keep upper bits for setting the v bit
+				var remainder uint16
+				if inst&0x100 != 0 { // signed
+					sdivisor := int32(int16(divisor))
+					sdividend := int32(dividend)
+					squotient := sdividend / sdivisor
+					sremainder := sdividend % sdivisor
+					quotient = uint32(squotient)
+					remainder = uint16(sremainder)
+				} else { // unsigned
+					quotient = dividend / uint32(divisor)
+					remainder = uint16(dividend % uint32(divisor))
+				}
+
+				if quotient>>16 != 0 {
+					v = true
+				}
+
+				v = false
+				set_nz(quotient, 2)
+				writel(regAddr(dn), (uint32(remainder)<<16)|(quotient&0xFFFF))
+
+			} else { // or
+				size := readsize(inst >> 6 & 3)
+				src := address_by_mode(inst&63, size)
+				dn := inst >> 9 & 7
+				dest := regAddr(dn) + 4 - size
+
+				if inst&0x100 != 0 {
+					src, dest = dest, src
+				}
+
+				datum := read(size, src) | read(size, dest)
+				write(size, dest, datum)
+				set_nz(datum, size)
+				v = false
+				c = false
+			}
+
+		case 9, 0xd:
+			// sub,subx,suba/add,addx,adda: very compactly encoded
+			isAdd := inst&0x4000 != 0
+
+			if inst&0x0C0 == 0x0C0 { // suba,adda
+				size := uint32(2)
+				if inst&0x100 != 0 {
+					size = 4
+				}
+
+				ea := address_by_mode(inst&63, size)
+				an := inst >> 9 & 7
+
+				result := signextend(4, readl(aregAddr(an)))
+				addOrSub := signextend(size, read(size, ea))
+				if isAdd {
+					result += addOrSub
+				} else {
+					result -= addOrSub
+				}
+
+				writel(aregAddr(an), result)
+			} else if inst&0x130 == 0x100 { // subx,addx: only two addressing modes allowed
+				size := readsize(inst >> 6 & 3)
+
+				var signbit uint64 = 1 << ((size * 8) - 1)
+
+				mode := uint16(0) // Dx,Dy
+				if inst&8 != 0 {
+					mode = 32 // -(Ax),-(Ay)
+				}
+
+				srcPtr := address_by_mode(mode|(inst&7), size)
+				dstPtr := address_by_mode(mode|(inst>>9&7), size)
+
+				src := uint64(read(size, srcPtr))
+				dst := uint64(read(size, dstPtr))
+
+				var result uint64
+				if isAdd {
+					result = dst + src
+					if x {
+						result += 1
+					}
+
+					v = result&signbit != src&signbit && result&signbit != dst&signbit
+				} else {
+					result = dst - src
+					if x {
+						result -= 1
+					}
+
+					v = dst&signbit != src&signbit && dst&signbit != result&signbit
+				}
+				c = result&(signbit<<1) != 0
+
+				write(size, dstPtr, uint32(result))
+				x = c
+				old_z := z
+				set_nz(uint32(result), size)
+				z = z && old_z
+			} else { // sub,add
+				size := readsize(inst >> 6 & 3)
+				src := address_by_mode(inst&63, size)
+				dn := inst >> 9 & 7
+				dest := regAddr(dn) + 4 - size
+
+				if inst&0x100 != 0 {
+					src, dest = dest, src
+				}
+
+				result := read(size, dest)
+				addOrSub := read(size, src)
+				if isAdd {
+					result = add_then_set_vc(result, addOrSub, size)
+				} else {
+					result = sub_then_set_vc(result, addOrSub, size)
+				}
+
+				x = c
+				set_nz(result, size)
+				write(size, dest, result)
+			}
+
+		case 0xa:
+			lineA(inst)
+
+		case 0xb:
+			// cmpa,cmp,cmpm,eor
+			if inst&0x0C0 == 0x0C0 { // cmpa
+				size := uint32(2)
+				if inst&0x100 != 0 {
+					size = 4
+				}
+
+				ea := address_by_mode(inst&63, size)
+				an := inst >> 9 & 7 // ea may be .w/.l but an is always .l
+				result := sub_then_set_vc(readl(aregAddr(an)), signextend(size, read(size, ea)), 4)
+				set_nz(result, 4)
+			} else if inst&0x100 == 0x000 { // cmp
+				size := readsize(inst >> 6 & 3)
+				dn := inst >> 9 & 7
+				dest := regAddr(dn) + 4 - size
+				src := address_by_mode(inst&63, size)
+				result := sub_then_set_vc(read(size, dest), read(size, src), size)
+				set_nz(result, size)
+			} else if inst&0x38 == 0x08 { // cmpm (Ay)+,(Ax)+
+				size := readsize(inst >> 6 & 3)
+				src := address_by_mode(24|(inst&7), size) // (An)+ mode
+				dest := address_by_mode(24|(inst>>9&7), size)
+				result := sub_then_set_vc(read(size, dest), read(size, src), size)
+				set_nz(result, size)
+			} else { // eor
+				size := readsize(inst >> 6 & 3)
+				dn := inst >> 9 & 7
+				src := regAddr(dn) + 4 - size
+				dest := address_by_mode(inst&63, size)
+				result := read(size, dest) ^ read(size, src)
+				v = false
+				c = false
+				set_nz(result, size)
+				write(size, dest, result)
+			}
+
+		case 0xc:
+			if inst&0xC0 == 0xC0 { // mulu,muls
+				src := address_by_mode(inst&63, 2) // ea.w
+				dest := regAddr(inst >> 9 & 7)     // dn.l
+
+				m1 := readw(dest + 2)
+				m2 := readw(src)
+
+				var result uint32
+				if inst&0x100 != 0 { // signed
+					result = uint32(int32(int16(m1)) * int32(int16(m2)))
+				} else {
+					result = uint32(m1) * uint32(m2)
+				}
+
+				set_nz(result, 4)
+				v = false
+				c = false
+				writel(dest, result) // write dn.l
+			} else if inst&0x1F0 == 0x100 { // abcd
+				bcdInst(inst)
+			} else if inst&0x1F8 == 0x140 || inst&0x1F8 == 0x148 || inst&0x1F8 == 0x188 { // exg
+				rx := inst >> 9 & 7
+				ry := inst & 7
+				if inst&0x1F8 == 0x148 { // Ax,Ay
+					rx |= 8
+					ry |= 8 // bump the addressing mode from Dn to An
+				} else if inst&0x1F8 == 0x188 { // Dx,Ay
+					ry |= 8
+				}
+
+				ptrx := address_by_mode(rx, 4)
+				ptry := address_by_mode(ry, 4)
+
+				x := readl(ptrx)
+				y := readl(ptry)
+				writel(ptrx, y)
+				writel(ptry, x)
+
+			} else { // and
+				size := readsize(inst >> 6 & 3)
+				dn := inst >> 9 & 7
+				dest := address_by_mode(dn, size)
+				src := address_by_mode(inst&63, size)
+
+				if inst&0x100 != 0 { // direction bit
+					src, dest = dest, src
+				}
+
+				result := read(size, src) & read(size, dest)
+				set_nz(result, size)
+				v = false
+				c = false
+				write(size, dest, result)
+			}
+
+		case 0xe:
+			if inst&0b100_0_11_000000 == 0b100_0_11_000000 {
+				bitFieldInst(inst)
+				continue
+			}
+
+			var size uint32
+			var kind uint16
+			var dest uint32
+			var by uint16
+
+			isLeft := inst&0x100 != 0
+
+			if inst>>6&3 == 3 { // single-bit shift on a memory address
+				size = 2
+				kind = inst >> 9 & 3
+				dest = address_by_mode(inst&63, size)
+				by = 1
+			} else {
+				size = readsize(inst >> 6 & 3)
+				kind = inst >> 3 & 3
+				dest = regAddr(inst&7) + 4 - size // dn
+				if inst&0x20 != 0 {
+					by = uint16(readb(regAddr(inst>>9&7)+3)) % 64
+				} else {
+					by = inst >> 9 & 7
+					if by == 0 {
+						by = 8
+					}
+				}
+			}
+
+			v = false // clear V if msb never changes
+			c = false // clear C if shift count is zero
+
+			result := read(size, dest)
+			numbits := size * 8
+			mask := (uint32(1) << numbits) - 1
+			msb := uint32(1) << (numbits - 1)
+			if kind == 0 { // asl/asr
+				if isLeft {
+					for i := uint16(0); i < by; i++ {
+						newresult := (result << 1) & mask
+						c = result&msb != 0 // shifted-out bit
+						x = c
+						if newresult&msb != result&msb { // set V if sign ever changes
+							v = true
+						}
+						result = newresult
+					}
+				} else {
+					for i := uint16(0); i < by; i++ {
+						newresult := result >> 1
+						c = result&1 != 0 // shifted-out bit
+						x = c
+						newresult |= result & msb // replicate sign bit
+						result = newresult
+					}
+				}
+			} else if kind == 1 { // lsl/lsr
+				v = false
+				if isLeft {
+					for i := uint16(0); i < by; i++ {
+						newresult := (result << 1) & mask
+						c = result&msb != 0 // shifted-out bit
+						x = c
+						result = newresult
+					}
+				} else {
+					for i := uint16(0); i < by; i++ {
+						newresult := result >> 1
+						c = result&1 != 0 // shifted-out bit
+						x = c
+						result = newresult
+					}
+				}
+			} else if kind == 2 { // roxl/roxr
+				v = false
+				if isLeft {
+					for i := uint16(0); i < by; i++ {
+						newresult := (result << 1)
+						if x {
+							newresult += 1
+						}
+						c = newresult>>numbits != 0
+						x = c
+						result = newresult & mask
+					}
+				} else {
+					for i := uint16(0); i < by; i++ {
+						newresult := result >> 1
+						if x {
+							newresult += msb
+						}
+						c = result&1 != 0
+						x = c
+						result = newresult & mask
+					}
+				}
+			} else if kind == 3 { // rol/ror
+				v = false
+				if isLeft {
+					for i := uint16(0); i < by; i++ {
+						result = (result << 1) | (result >> (numbits - 1))
+						c = result&1 != 0
+					}
+				} else {
+					for i := uint16(0); i < by; i++ {
+						c = result&1 != 0
+						result = (result << (numbits - 1)) | (result >> 1)
+
+					}
+				}
+			}
+			set_nz(result, size)
+
+			write(size, dest, result)
+
+		case 0xf:
+			lineF(inst)
+		}
+	}
+
+	if pc != kReturnAddr {
+		panic("did not magically return")
+	}
+
+	pc = save_pc
+}
 
 const memcheck = false
 
@@ -547,916 +1481,6 @@ func test_condition(cond uint16) bool {
 	panic("Unknown condition code")
 }
 
-func line0(inst uint16) {
-	if inst&256 != 0 || inst>>9 == 4 { // btst,bchg,bclr,bset (or movep)
-		var bit uint32
-		if inst&256 != 0 { // bit numbered by data register
-			if inst>>3&7 == 1 {
-				panic("movep")
-			}
-			dn := inst >> 9
-			bit = readl(regAddr(dn))
-		} else { // bit numbered by immediate
-			bit = uint32(readw(pc))
-			pc += 2
-		}
-
-		mode := inst & 63
-		var size uint32
-		if mode>>3 <= 1 {
-			size = 4 // applies to register
-		} else {
-			size = 1 // applies to memory address
-		}
-		bit %= size * 8
-		mask := uint32(1) << bit
-
-		ptr := address_by_mode(mode, size)
-		val := read(size, ptr)
-		z = val&mask == 0
-
-		if inst>>6&3 == 1 { // bchg
-			val ^= mask
-		} else if inst>>6&3 == 2 { // bclr
-			val &= ^mask
-		} else if inst>>6&3 == 3 { // bset
-			val |= mask
-		}
-		// ^^ the btst case is already handled by setting z
-
-		write(size, ptr, val)
-
-	} else if inst>>6&0b100111 == 0b000011 { // cmp2/chk2
-		word2 := readw(pc)
-		pc += 2
-		size := readsize(inst >> 9 & 3)
-		mask := (uint32(1) << (size * 4)) - 1
-		rangeEA := address_by_mode(inst&0x3f, size)
-		whichReg := word2 >> 12
-		data := read(size, regs+4*uint32(whichReg)+4-size)
-
-		lower := read(size, rangeEA)
-		upper := read(size, rangeEA+size)
-
-		data = (data - lower) & mask
-		upper = (upper - lower) & mask
-
-		z = data == 0 || data == upper
-		c = data > upper
-
-		if c && word2&(1<<11) != 0 { // chk
-			panic("chk failed")
-		}
-
-	} else { //ori,andi,subi,addi,eori -- including to SR/CCR
-		size := readsize(inst >> 6 & 3)
-
-		src_ptr := address_by_mode(60, size) // '#imm' mode, advances pc
-		imm := read(size, src_ptr)
-
-		// now, are we operating on a special mode?
-		dest_mode := inst & 63
-		var val, dest_ptr uint32
-		if dest_mode == 60 { // '#imm' actually means CCR/SR
-			// for addi/subi this would simply be invalid
-			val = uint32(get_ccr())
-		} else {
-			dest_ptr = address_by_mode(dest_mode, size)
-			val = read(size, dest_ptr)
-		}
-
-		if inst>>9 == 0 { // ori
-			val |= imm
-			v = false
-			c = false
-			set_nz(val, size)
-		} else if inst>>9 == 1 { // andi
-			val &= imm
-			v = false
-			c = false
-			set_nz(val, size)
-		} else if inst>>9 == 2 { // subi
-			val = sub_then_set_vc(val, imm, size)
-			x = c
-			set_nz(val, size)
-		} else if inst>>9 == 3 { // addi
-			val = add_then_set_vc(val, imm, size)
-			x = c
-			set_nz(val, size)
-		} else if inst>>9 == 5 { // eori
-			val ^= imm
-			v = false
-			c = false
-			set_nz(val, size)
-		} else if inst>>9 == 6 { // cmpi: same as subi, but don't set
-			fake_val := sub_then_set_vc(val, imm, size)
-			set_nz(fake_val, size)
-		}
-
-		if dest_mode == 60 {
-			set_ccr(uint16(val))
-		} else {
-			write(size, dest_ptr, val)
-		}
-	}
-}
-
-func line123(inst uint16) { // move, and movea which is a special-ish case
-	size := readsizeForMove(inst >> 12 & 3)
-	dest_mode := (inst >> 3 & 0x38) | (inst >> 9 & 7)
-	src_mode := inst & 63
-
-	src := address_by_mode(src_mode, size)
-	datum := read(size, src)
-
-	if dest_mode>>3 == 1 { // movea: sign extend to 32 bits
-		datum = signextend(size, datum)
-		size = 4
-	} else { // non-movea: set condition codes
-		v = false
-		c = false
-		set_nz(datum, size)
-	}
-
-	dest := address_by_mode(dest_mode, size)
-	write(size, dest, datum)
-}
-
-func line4(inst uint16) { // very,crowded,line
-	if inst>>6&63 == 3 { // move from sr
-		dest := address_by_mode(inst&63, 2) // sr is 2 bytes
-		writew(dest, get_ccr())
-	} else if inst>>6&63 == 19 || inst>>6&63 == 27 { // move to sr/ccr
-		var size uint32
-		if inst>>6&8 != 0 {
-			size = 1 // ccr
-		} else {
-			size = 2 // sr
-		}
-		src := address_by_mode(inst&63, size)
-		set_ccr(uint16(read(size, src)))
-	} else if inst>>8&15 == 0 || inst>>8&15 == 4 || inst>>8&15 == 6 { // negx,neg,not
-		size := readsize(inst >> 6 & 3)
-		dest := address_by_mode(inst&63, size)
-		datum := read(size, dest)
-
-		if inst>>8&15 == 0 { // negx
-			var signbit uint32 = 1 << ((size * 8) - 1)
-
-			neg64 := -uint64(datum)
-			if x {
-				neg64 -= 1
-			}
-			neg := uint32(neg64)
-
-			v = datum&signbit != 0 && neg&signbit != 0
-			c = neg64>>(size*8)&1 != 0
-			x = c
-			set_nz(neg, size)
-			datum = neg
-		} else if inst>>8&15 == 4 { // neg
-			datum = sub_then_set_vc(0, datum, size)
-			x = c
-			set_nz(datum, size)
-		} else { // not
-			datum = ^datum
-			v = false
-			c = false
-			set_nz(datum, size)
-		}
-		write(size, dest, datum)
-
-	} else if inst>>8&15 == 2 { // clr
-		size := readsize(inst >> 6 & 3)
-		dest := address_by_mode(inst&63, size)
-
-		n = false
-		z = true
-		v = false
-		c = false
-
-		write(size, dest, 0)
-	} else if inst&0xFB8 == 0x880 { // ext
-		dn := inst & 7
-		if inst&64 != 0 { // ext.l
-			val := extwl(readw(regAddr(dn) + 2))
-			set_nz(val, 4)
-			v = false
-			c = false
-			writel(regAddr(dn), val)
-		} else { // ext.w
-			val := extbw(readb(regAddr(dn) + 3))
-			set_nz(uint32(val), 2)
-			v = false
-			c = false
-			writew(regAddr(dn)+2, val)
-		}
-	} else if inst&0xFF8 == 0x9C0 { // 68020 extb.l
-		dn := inst & 7
-		val := extbl(readb(regAddr(dn) + 3))
-		set_nz(val, 4)
-		v = false
-		c = false
-		writel(regAddr(dn), val)
-	} else if inst&0xFC0 == 0x800 && inst>>3&7 != 1 { // nbcd
-		// the hack to check bits 5..3 allows fallthru to link.l
-		bcdInst(inst)
-	} else if inst&0xFF8 == 0x840 { // swap.w
-		dest := regAddr(inst & 7)
-		datum := readl(dest)
-		datum = (datum >> 16 & 0xffff) | (datum << 16 & 0xffff0000)
-		set_nz(datum, 4)
-		v = false
-		c = false
-		writel(dest, datum)
-	} else if inst&0xFC0 == 0x840 { // pea -- notice similarity to swap.w
-		ea := address_by_mode(inst&63, 4) // size doesn't matter here
-		pushl(ea)
-	} else if inst&0xF00 == 0xA00 { // tst,tas
-		size := []uint32{1, 2, 4, 1}[inst>>6&3]
-		dest := address_by_mode(inst&63, size)
-		datum := read(size, dest)
-		set_nz(datum, size)
-		v = false
-		c = false
-		if inst>>6&3 == 3 { // tas
-			writeb(dest, uint8(datum)|0x80)
-		}
-	} else if inst&0xFC0 == 0xC00 { // mulu/muls.l
-		word2 := readw(pc)
-		pc += 2
-		src := address_by_mode(inst&63, 4)
-		dest := regAddr(word2 >> 12 & 7)
-
-		m1 := readl(src)
-		m2 := readl(dest)
-
-		var result uint64
-		if word2&(1<<11) != 0 { // signed
-			result = uint64(int64(int32(m1)) * int64(int32(m2)))
-			v = result != uint64(int64(int32(result))) // signed overflow
-		} else {
-			result = uint64(m1) * uint64(m2)
-			v = result>>32 != 0 // unsigned overflow
-		}
-
-		n = result&(1<<31) != 0
-		z = uint32(result) == 0
-		c = false
-
-		writel(dest, uint32(result))
-
-		// 64-bit product with a "high" register
-		if word2&(1<<10) != 0 {
-			n = result&(1<<63) != 0
-			z = result == 0
-			v = false // cancel overflow
-			writel(regAddr(word2&7), uint32(result>>32))
-		}
-	} else if inst&0xFC0 == 0xC40 { // [t]divu/divs.l
-		word2 := readw(pc)
-		pc += 2
-		isSigned := word2&(1<<11) != 0
-
-		ea := address_by_mode(inst&63, 4) // divisor
-		qa := regAddr(word2 >> 12 & 7)    // dividend, quotient
-		ra := regAddr(word2 & 7)          // remainder, high dividend, high quotient
-
-		if word2&(1<<10) != 0 { // 64-bit dividend
-			dividend := uint64(readl(ra))<<32 | uint64(readl(qa))
-			divisor := uint32(readl(ea))
-
-			var quotient, remainder uint32
-			if isSigned {
-				dblq := int64(dividend) / int64(int32(divisor))
-				dblr := int64(dividend) % int64(int32(divisor))
-				v = dblq != int64(int32(dblq))
-				quotient = uint32(dblq)
-				remainder = uint32(dblr)
-			} else {
-				dblq := dividend / uint64(divisor)
-				dblr := dividend % uint64(divisor)
-				v = dblq>>32 != 0
-				quotient = uint32(dblq)
-				remainder = uint32(dblr)
-			}
-
-			if !v {
-				writel(qa, quotient)
-				writel(ra, remainder)
-				set_nz(quotient, 4)
-			}
-			c = false
-		} else { // 32-bit dividend
-			dividend := readl(qa)
-			divisor := readl(ea)
-			var quotient, remainder uint32
-			if isSigned {
-				quotient = uint32(int32(dividend) / int32(divisor))
-				remainder = uint32(int32(dividend) % int32(divisor))
-			} else {
-				quotient = dividend / divisor
-				remainder = dividend % divisor
-			}
-
-			writel(qa, quotient)
-			if ra != qa {
-				writel(ra, remainder)
-			}
-
-			set_nz(quotient, 4)
-			v = false // overflow can't occur?
-			c = false
-		}
-	} else if inst&0xFF8 == 0xE50 { // link
-		ea := aregAddr(inst & 7)
-		imm := extwl(readw(pc))
-		pc += 2
-
-		pushl(readl(ea)) // move.l a6,-(sp)
-		sp := readl(spptr)
-		writel(ea, sp)        // move.l sp,a6
-		writel(spptr, sp+imm) // add.w #imm,sp
-
-	} else if inst&0xFF8 == 0x808 { // 68020 link.l
-		ea := aregAddr(inst & 7)
-		imm := readl(pc)
-		pc += 4
-
-		pushl(readl(ea)) // move.l a6,-(sp)
-		sp := readl(spptr)
-		writel(ea, sp)        // move.l sp,a6
-		writel(spptr, sp+imm) // add.l #imm,sp
-
-	} else if inst&0xFF8 == 0xE58 { // unlk
-		ea := aregAddr(inst & 7)
-
-		writel(spptr, readl(ea)) // move.l a6,sp
-		writel(ea, popl())       // move.l (sp)+,a6
-	} else if inst&0xFFF == 0xE71 { // nop
-	} else if inst&0xFFF == 0xE74 { // rtd
-		check_for_lurkers()
-		imm := extwl(readw(pc))
-		pc = popl()
-		writel(spptr, readl(spptr)+imm)
-	} else if inst&0xFFF == 0xE75 { // rts
-		check_for_lurkers()
-		pc = popl()
-	} else if inst&0xFFF == 0xE77 { // rtr
-		set_ccr(popw())
-		pc = popl()
-	} else if inst&0xF80 == 0xE80 { // jsr/jmp
-		targ := address_by_mode(inst&63, 4) // any size
-		if inst&0x40 == 0 {
-			check_for_lurkers() // don't slow down jmp's, we do them a lot
-			pushl(pc)
-		}
-		pc = targ
-	} else if inst&0xF80 == 0x880 { // movem registers,ea
-		size := uint32(2)
-		if inst&64 != 0 {
-			size = 4
-		}
-
-		which := readw(pc)
-		pc += 2
-		totalsize := uint32(bits.OnesCount16(which)) * size
-
-		mode := inst & 63
-		ptr := address_by_mode(mode, totalsize)
-
-		if mode>>3 == 4 { // reverse the bits if predecrementing
-			which = bits.Reverse16(which)
-		}
-
-		for reg := uint16(0); reg < 16; reg++ {
-			if which&(1<<reg) != 0 {
-				regptr := regAddr(reg) + 4 - size
-				write(size, ptr, read(size, regptr))
-				ptr += size
-			}
-		}
-	} else if inst&0xF80 == 0xC80 { // movem ea,registers
-		size := uint32(2)
-		if inst&64 != 0 {
-			size = 4
-		}
-
-		which := readw(pc)
-		pc += 2
-		totalsize := uint32(bits.OnesCount16(which)) * size
-
-		mode := inst & 63
-		ptr := address_by_mode(mode, totalsize)
-
-		for reg := uint16(0); reg < 16; reg++ {
-			if which&(1<<reg) != 0 {
-				if !(reg >= 8 && mode>>3 == 3 && reg&7 == mode&7) {
-					regptr := regAddr(reg)
-					writel(regptr, signextend(size, read(size, ptr)))
-				}
-				ptr += size
-			}
-		}
-	} else if inst&0x1C0 == 0x1C0 { // lea
-		an := inst >> 9 & 7
-		ea := address_by_mode(inst&63, 4) // any size
-		writel(aregAddr(an), ea)
-	} else if inst&0x140 == 0x100 { // chk
-		size := uint32(2)
-		if inst&0x80 == 0 {
-			size = 4 // chk.l seems to be a 68020 innovation
-		}
-
-		dn := inst >> 9 & 7
-		testee := read(regAddr(dn)+4-size, size)
-		ea := address_by_mode(inst&63, size)
-		ubound := read(ea, size)
-		if testee > ubound {
-			panic("chk failed")
-		}
-	}
-}
-
-func line5(inst uint16) { // addq,subq,scc,dbcc
-	if inst>>6&3 != 3 { // addq,subq
-		size := readsize(inst >> 6 & 3)
-		if size == 2 && inst>>3&7 == 1 {
-			size = 4 // An.w is really An.l
-		}
-
-		imm := uint32(inst >> 9 & 7)
-		if imm == 0 {
-			imm = 8
-		}
-
-		dest := address_by_mode(inst&63, size)
-		datum := read(size, dest)
-		save_ccr := get_ccr()
-		if inst&256 != 0 { // subq
-			datum = sub_then_set_vc(datum, imm, size)
-		} else { // addq
-			datum = add_then_set_vc(datum, imm, size)
-		}
-		x = c
-		set_nz(datum, size)
-		if inst>>3&7 == 1 {
-			set_ccr(save_ccr) // touch not ccr if dest is An
-		}
-		write(size, dest, datum)
-
-	} else if inst>>3&7 == 1 { // dbcc
-		check_for_lurkers()
-
-		disp := extwl(readw(pc)) - 2
-		pc += 2
-
-		cond := inst >> 8 & 15 // if cond satisfied then DO NOT take loop
-		if test_condition(cond) {
-			return
-		}
-		// decrement the counter (dn)
-		dn := inst & 7
-		dest := regAddr(dn) + 2
-		counter := readw(dest) - 1
-		writew(dest, counter)
-		if counter == 0xFFFF { // do not take the branch
-			return
-		}
-
-		pc += disp
-	} else { // scc
-		dest := address_by_mode(inst&63, 1)
-		cond := inst >> 8 & 15
-		if test_condition(cond) {
-			writeb(dest, 0xff)
-		} else {
-			writeb(dest, 0)
-		}
-	}
-}
-
-func line6(inst uint16) { // bra,bsr,bcc
-	check_for_lurkers()
-
-	var disp uint32
-	if uint8(inst) == 0 { // word displacement
-		disp = extwl(readw(pc)) - 2
-		pc += 2
-	} else if uint8(inst) == 0xff { // long displacement
-		disp = readl(pc) - 4
-		pc += 4
-	} else { // byte displacement
-		disp = extbl(uint8(inst))
-	}
-
-	cond := inst >> 8 & 15
-	if cond > 1 && !test_condition(cond) { // not taken
-		return
-	}
-	if cond == 1 { // is bsr
-		pushl(pc)
-	}
-
-	pc += disp
-}
-
-func line7(inst uint16) { // moveq
-	dn := inst >> 9 & 7
-	val := extbl(uint8(inst))
-
-	set_nz(val, 4)
-	v = false
-	c = false
-
-	writel(regAddr(dn), val)
-}
-
-func line8(inst uint16) { // divu,divs,sbcd,or
-	//    global n, z, v, c
-	if inst&0x1F0 == 0x100 { // sbcd
-		bcdInst(inst)
-	} else if inst&0x1F0 == 0x140 { // pack
-		adjust := readw(pc)
-		pc += 2
-
-		var src, dest uint32
-		if inst&8 == 0 { // reg to reg
-			src = regAddr(inst&7) + 2
-			dest = regAddr(inst>>9&7) + 3
-		} else {
-			src = address_by_mode(0x20|(inst&7), 2)     // predecrement
-			dest = address_by_mode(0x20|(inst>>9&7), 1) // predecrement
-		}
-
-		wide := readw(src)
-		wide += adjust
-		thin := uint8((wide >> 4 & 0xf0) | (wide & 0xf))
-
-		writeb(dest, thin)
-
-	} else if inst&0x1F0 == 0x180 { // unpk
-		adjust := readw(pc)
-		pc += 2
-
-		var src, dest uint32
-		if inst&8 == 0 { // reg to reg
-			src = regAddr(inst&7) + 3
-			dest = regAddr(inst>>9&7) + 2
-		} else {
-			src = address_by_mode(0x20|(inst&7), 1)     // predecrement
-			dest = address_by_mode(0x20|(inst>>9&7), 2) // predecrement
-		}
-
-		thin := readb(src)
-		wide := (uint16(thin) << 4 & 0xf00) | (uint16(thin) & 0xf)
-		wide += adjust
-
-		writew(dest, wide)
-
-	} else if inst&0x0C0 == 0x0C0 { // divu,divs
-		ea := address_by_mode(inst&63, 2)
-		divisor := readw(ea)
-		dn := inst >> 9 & 7
-		dividend := readl(regAddr(dn))
-
-		var quotient uint32 // keep upper bits for setting the v bit
-		var remainder uint16
-		if inst&0x100 != 0 { // signed
-			sdivisor := int32(int16(divisor))
-			sdividend := int32(dividend)
-			squotient := sdividend / sdivisor
-			sremainder := sdividend % sdivisor
-			quotient = uint32(squotient)
-			remainder = uint16(sremainder)
-		} else { // unsigned
-			quotient = dividend / uint32(divisor)
-			remainder = uint16(dividend % uint32(divisor))
-		}
-
-		if quotient>>16 != 0 {
-			v = true
-		}
-
-		v = false
-		set_nz(quotient, 2)
-		writel(regAddr(dn), (uint32(remainder)<<16)|(quotient&0xFFFF))
-
-	} else { // or
-		size := readsize(inst >> 6 & 3)
-		src := address_by_mode(inst&63, size)
-		dn := inst >> 9 & 7
-		dest := regAddr(dn) + 4 - size
-
-		if inst&0x100 != 0 {
-			src, dest = dest, src
-		}
-
-		datum := read(size, src) | read(size, dest)
-		write(size, dest, datum)
-		set_nz(datum, size)
-		v = false
-		c = false
-	}
-}
-
-func line9D(inst uint16) { // sub,subx,suba/add,addx,adda: very compactly encoded
-	isAdd := inst&0x4000 != 0
-
-	if inst&0x0C0 == 0x0C0 { // suba,adda
-		size := uint32(2)
-		if inst&0x100 != 0 {
-			size = 4
-		}
-
-		ea := address_by_mode(inst&63, size)
-		an := inst >> 9 & 7
-
-		result := signextend(4, readl(aregAddr(an)))
-		addOrSub := signextend(size, read(size, ea))
-		if isAdd {
-			result += addOrSub
-		} else {
-			result -= addOrSub
-		}
-
-		writel(aregAddr(an), result)
-	} else if inst&0x130 == 0x100 { // subx,addx: only two addressing modes allowed
-		size := readsize(inst >> 6 & 3)
-
-		var signbit uint64 = 1 << ((size * 8) - 1)
-
-		mode := uint16(0) // Dx,Dy
-		if inst&8 != 0 {
-			mode = 32 // -(Ax),-(Ay)
-		}
-
-		srcPtr := address_by_mode(mode|(inst&7), size)
-		dstPtr := address_by_mode(mode|(inst>>9&7), size)
-
-		src := uint64(read(size, srcPtr))
-		dst := uint64(read(size, dstPtr))
-
-		var result uint64
-		if isAdd {
-			result = dst + src
-			if x {
-				result += 1
-			}
-
-			v = result&signbit != src&signbit && result&signbit != dst&signbit
-		} else {
-			result = dst - src
-			if x {
-				result -= 1
-			}
-
-			v = dst&signbit != src&signbit && dst&signbit != result&signbit
-		}
-		c = result&(signbit<<1) != 0
-
-		write(size, dstPtr, uint32(result))
-		x = c
-		old_z := z
-		set_nz(uint32(result), size)
-		z = z && old_z
-	} else { // sub,add
-		size := readsize(inst >> 6 & 3)
-		src := address_by_mode(inst&63, size)
-		dn := inst >> 9 & 7
-		dest := regAddr(dn) + 4 - size
-
-		if inst&0x100 != 0 {
-			src, dest = dest, src
-		}
-
-		result := read(size, dest)
-		addOrSub := read(size, src)
-		if isAdd {
-			result = add_then_set_vc(result, addOrSub, size)
-		} else {
-			result = sub_then_set_vc(result, addOrSub, size)
-		}
-
-		x = c
-		set_nz(result, size)
-		write(size, dest, result)
-	}
-}
-
-func lineB(inst uint16) { // cmpa,cmp,cmpm,eor
-	if inst&0x0C0 == 0x0C0 { // cmpa
-		size := uint32(2)
-		if inst&0x100 != 0 {
-			size = 4
-		}
-
-		ea := address_by_mode(inst&63, size)
-		an := inst >> 9 & 7 // ea may be .w/.l but an is always .l
-		result := sub_then_set_vc(readl(aregAddr(an)), signextend(size, read(size, ea)), 4)
-		set_nz(result, 4)
-	} else if inst&0x100 == 0x000 { // cmp
-		size := readsize(inst >> 6 & 3)
-		dn := inst >> 9 & 7
-		dest := regAddr(dn) + 4 - size
-		src := address_by_mode(inst&63, size)
-		result := sub_then_set_vc(read(size, dest), read(size, src), size)
-		set_nz(result, size)
-	} else if inst&0x38 == 0x08 { // cmpm (Ay)+,(Ax)+
-		size := readsize(inst >> 6 & 3)
-		src := address_by_mode(24|(inst&7), size) // (An)+ mode
-		dest := address_by_mode(24|(inst>>9&7), size)
-		result := sub_then_set_vc(read(size, dest), read(size, src), size)
-		set_nz(result, size)
-	} else { // eor
-		size := readsize(inst >> 6 & 3)
-		dn := inst >> 9 & 7
-		src := regAddr(dn) + 4 - size
-		dest := address_by_mode(inst&63, size)
-		result := read(size, dest) ^ read(size, src)
-		v = false
-		c = false
-		set_nz(result, size)
-		write(size, dest, result)
-	}
-}
-
-func lineC(inst uint16) {
-	if inst&0xC0 == 0xC0 { // mulu,muls
-		src := address_by_mode(inst&63, 2) // ea.w
-		dest := regAddr(inst >> 9 & 7)     // dn.l
-
-		m1 := readw(dest + 2)
-		m2 := readw(src)
-
-		var result uint32
-		if inst&0x100 != 0 { // signed
-			result = uint32(int32(int16(m1)) * int32(int16(m2)))
-		} else {
-			result = uint32(m1) * uint32(m2)
-		}
-
-		set_nz(result, 4)
-		v = false
-		c = false
-		writel(dest, result) // write dn.l
-	} else if inst&0x1F0 == 0x100 { // abcd
-		bcdInst(inst)
-	} else if inst&0x1F8 == 0x140 || inst&0x1F8 == 0x148 || inst&0x1F8 == 0x188 { // exg
-		rx := inst >> 9 & 7
-		ry := inst & 7
-		if inst&0x1F8 == 0x148 { // Ax,Ay
-			rx |= 8
-			ry |= 8 // bump the addressing mode from Dn to An
-		} else if inst&0x1F8 == 0x188 { // Dx,Ay
-			ry |= 8
-		}
-
-		ptrx := address_by_mode(rx, 4)
-		ptry := address_by_mode(ry, 4)
-
-		x := readl(ptrx)
-		y := readl(ptry)
-		writel(ptrx, y)
-		writel(ptry, x)
-
-	} else { // and
-		size := readsize(inst >> 6 & 3)
-		dn := inst >> 9 & 7
-		dest := address_by_mode(dn, size)
-		src := address_by_mode(inst&63, size)
-
-		if inst&0x100 != 0 { // direction bit
-			src, dest = dest, src
-		}
-
-		result := read(size, src) & read(size, dest)
-		set_nz(result, size)
-		v = false
-		c = false
-		write(size, dest, result)
-	}
-}
-
-func lineE(inst uint16) {
-	if inst&0b100_0_11_000000 == 0b100_0_11_000000 {
-		bitFieldInst(inst)
-		return
-	}
-
-	var size uint32
-	var kind uint16
-	var dest uint32
-	var by uint16
-
-	isLeft := inst&0x100 != 0
-
-	if inst>>6&3 == 3 { // single-bit shift on a memory address
-		size = 2
-		kind = inst >> 9 & 3
-		dest = address_by_mode(inst&63, size)
-		by = 1
-	} else {
-		size = readsize(inst >> 6 & 3)
-		kind = inst >> 3 & 3
-		dest = regAddr(inst&7) + 4 - size // dn
-		if inst&0x20 != 0 {
-			by = uint16(readb(regAddr(inst>>9&7)+3)) % 64
-		} else {
-			by = inst >> 9 & 7
-			if by == 0 {
-				by = 8
-			}
-		}
-	}
-
-	v = false // clear V if msb never changes
-	c = false // clear C if shift count is zero
-
-	result := read(size, dest)
-	numbits := size * 8
-	mask := (uint32(1) << numbits) - 1
-	msb := uint32(1) << (numbits - 1)
-	if kind == 0 { // asl/asr
-		if isLeft {
-			for i := uint16(0); i < by; i++ {
-				newresult := (result << 1) & mask
-				c = result&msb != 0 // shifted-out bit
-				x = c
-				if newresult&msb != result&msb { // set V if sign ever changes
-					v = true
-				}
-				result = newresult
-			}
-		} else {
-			for i := uint16(0); i < by; i++ {
-				newresult := result >> 1
-				c = result&1 != 0 // shifted-out bit
-				x = c
-				newresult |= result & msb // replicate sign bit
-				result = newresult
-			}
-		}
-	} else if kind == 1 { // lsl/lsr
-		v = false
-		if isLeft {
-			for i := uint16(0); i < by; i++ {
-				newresult := (result << 1) & mask
-				c = result&msb != 0 // shifted-out bit
-				x = c
-				result = newresult
-			}
-		} else {
-			for i := uint16(0); i < by; i++ {
-				newresult := result >> 1
-				c = result&1 != 0 // shifted-out bit
-				x = c
-				result = newresult
-			}
-		}
-	} else if kind == 2 { // roxl/roxr
-		v = false
-		if isLeft {
-			for i := uint16(0); i < by; i++ {
-				newresult := (result << 1)
-				if x {
-					newresult += 1
-				}
-				c = newresult>>numbits != 0
-				x = c
-				result = newresult & mask
-			}
-		} else {
-			for i := uint16(0); i < by; i++ {
-				newresult := result >> 1
-				if x {
-					newresult += msb
-				}
-				c = result&1 != 0
-				x = c
-				result = newresult & mask
-			}
-		}
-	} else if kind == 3 { // rol/ror
-		v = false
-		if isLeft {
-			for i := uint16(0); i < by; i++ {
-				result = (result << 1) | (result >> (numbits - 1))
-				c = result&1 != 0
-			}
-		} else {
-			for i := uint16(0); i < by; i++ {
-				c = result&1 != 0
-				result = (result << (numbits - 1)) | (result >> 1)
-
-			}
-		}
-	}
-	set_nz(result, size)
-
-	write(size, dest, result)
-}
-
 func readBitField(addr uint32, wrap32 bool, bitOffset int, bitWidth int) uint32 {
 	var dblVal uint64
 	if wrap32 {
@@ -1713,60 +1737,3 @@ func printState() {
 }
 
 var instCount uint16 = 0
-
-func call_m68k(addr uint32) {
-	const magic_return = 0
-
-	save_pc := pc
-	pushl(magic_return) // the function we call will pop this value
-	pc = addr
-
-	for pc != magic_return {
-		// Update Ticks
-		instCount++
-		if instCount == 0 {
-			writel(0x16a, readl(0x16a)+1)
-		}
-
-		if gDebugStackTrace {
-			printCallStack()
-		}
-
-		if gDebugEveryInst {
-			printState()
-		}
-
-		inst := readw(pc)
-		pc += 2
-		switch inst >> 12 {
-		case 0:
-			line0(inst)
-		case 1, 2, 3:
-			line123(inst)
-		case 4:
-			line4(inst)
-		case 5:
-			line5(inst)
-		case 6:
-			line6(inst)
-		case 7:
-			line7(inst)
-		case 8:
-			line8(inst)
-		case 9, 0xd:
-			line9D(inst)
-		case 0xa:
-			lineA(inst)
-		case 0xb:
-			lineB(inst)
-		case 0xc:
-			lineC(inst)
-		case 0xe:
-			lineE(inst)
-		case 0xf:
-			lineF(inst)
-		}
-	}
-
-	pc = save_pc
-}
