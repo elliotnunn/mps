@@ -614,6 +614,17 @@ func tFSDispatch(pb uint32) int {
 		writel(ioMisc+2, uint32(dirID(filepath.Dir(path))))
 		writePstring(ioMisc+6, ioName)
 
+	case 48: // GetVolParms
+		// Don't care which volume, because there is only one
+		ioBuffer := readl(pb + 32)
+		ioReqCount := readl(pb + 36)
+
+		var buf = [20]byte{0, 2} // version 2
+		// In future, consider flagging support for MoveRename and CopyFile
+
+		ioActCount := copy(mem[ioBuffer:][:ioReqCount], buf[:])
+		writel(pb+40, uint32(ioActCount))
+
 	default:
 		panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr+2)))
 	}
