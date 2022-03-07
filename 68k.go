@@ -962,11 +962,16 @@ func line4(inst uint16) { // very,crowded,line
 		an := inst >> 9 & 7
 		ea := address_by_mode(inst&63, 4) // any size
 		writel(aregAddr(an), ea)
-	} else if inst&0x1C0 == 0x180 { // chk
+	} else if inst&0x140 == 0x100 { // chk
+		size := uint32(2)
+		if inst&0x80 == 0 {
+			size = 4 // chk.l seems to be a 68020 innovation
+		}
+
 		dn := inst >> 9 & 7
-		testee := readw(regAddr(dn) + 2)
-		ea := address_by_mode(inst&63, 2)
-		ubound := readw(ea)
+		testee := read(regAddr(dn)+4-size, size)
+		ea := address_by_mode(inst&63, size)
+		ubound := read(ea, size)
 		if testee > ubound {
 			panic("chk failed")
 		}
