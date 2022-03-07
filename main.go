@@ -32,9 +32,8 @@ Environment variables:
 const (
 	kOSTable        = 0x400
 	kToolTable      = 0xe00   // up to 0x1e00
-	kStackLimit     = 0x2000  // for _StackSpace
-	kStackBase      = 0x40000 // extends down, note that registers are here too!
 	kA5World        = 0x58000 // 0x8000 below and 0x8000 above, so 5xxxx is in A5 world
+	kPoison         = 0x60000
 	kFakeHeapHeader = 0x90000 // very short
 	kQDPort         = 0x98000
 	kATrapTable     = 0xa0000 // 0x10000 above
@@ -46,6 +45,9 @@ const (
 	kPACKs          = 0xc0000
 	kFTrapTable     = 0xf0000  // 0x10000 above
 	kHeap           = 0x100000 // extends up
+	kHeapLimit      = 0x3f000000
+	kStackLimit     = 0x3f000000
+	kStackBase      = 0x3ffffff0
 	kMemSize        = 0x40000000
 )
 
@@ -257,7 +259,7 @@ func main() {
 	defer os.RemoveAll(systemFolder)
 
 	// Poison low memory
-	for i := uint32(0xc0); i < kStackBase; i += 2 {
+	for i := uint32(0xc0); i < kPoison; i += 2 {
 		writew(i, 0x68f1)
 	}
 
@@ -297,11 +299,11 @@ func main() {
 	writel(a5ptr, kA5World)
 
 	// Single fake heap zone, enough to pass validation
-	writel(0x118, kFakeHeapHeader)     // TheZone
-	writel(0x2a6, kFakeHeapHeader)     // SysZone
-	writel(0x2aa, kFakeHeapHeader)     // ApplZone
-	writel(kFakeHeapHeader, 0xffffffe) // bkLim
-	writel(0x130, 0xffffffe)           // ApplLimit
+	writel(0x118, kFakeHeapHeader)      // TheZone
+	writel(0x2a6, kFakeHeapHeader)      // SysZone
+	writel(0x2aa, kFakeHeapHeader)      // ApplZone
+	writel(kFakeHeapHeader, kHeapLimit) // bkLim
+	writel(0x130, kHeapLimit)           // ApplLimit
 
 	// 1 Drive Queue Element
 	writew(0x308, 0)      // DrvQHdr.QFlags
@@ -338,6 +340,7 @@ func main() {
 	// Misc globals
 	writel(0x108, kMemSize)            // MemTop
 	writel(0x10c, kMemSize)            // BufPtr
+	writel(0x114, kHeapLimit)          // HeapEnd
 	writeb(0x12f, 3)                   // CPUFlag = 68030
 	writeb(0x12c, 0)                   // DskVerify = don't care
 	writeb(0x12d, 0)                   // LoadTrap = off
