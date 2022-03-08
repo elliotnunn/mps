@@ -47,9 +47,10 @@ const (
 	kHeap           = 0x100000 // extends up
 	kHeapLimit      = 0x3f000000
 	kStackLimit     = 0x3f000000
-	kStackBase      = 0x3ffffff0
-	kReturnAddr     = 0x3ffffff8
-	kMemSize        = 0x40000000
+	kStackBase      = 0x3fffffe0
+	kReturnAddr     = 0x3fffffea // unlikely to be found elsewhere
+	kLowestIllegal  = 0x40000000
+	kMemSize        = 0x40000008
 )
 
 // Embedded 68k code, remove when possible
@@ -60,6 +61,16 @@ var embedPACKs embed.FS
 var embedSystemFile []byte
 
 func main() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			if addr, ok := err.(uint32); ok {
+				printState()
+				panic(fmt.Sprintf("Memory access %08x", addr))
+			}
+		}
+	}()
+
 	my_traps = [...]func(){
 		os_base + 0x00:  pbWrap(tOpen),        // _Open
 		os_base + 0x01:  pbWrap(tClose),       // _Close
@@ -343,8 +354,8 @@ func main() {
 	}
 
 	// Misc globals
-	writel(0x108, kMemSize)            // MemTop
-	writel(0x10c, kMemSize)            // BufPtr
+	writel(0x108, kLowestIllegal)      // MemTop
+	writel(0x10c, kLowestIllegal)      // BufPtr
 	writel(0x114, kHeapLimit)          // HeapEnd
 	writeb(0x12f, 3)                   // CPUFlag = 68030
 	writeb(0x12c, 0)                   // DskVerify = don't care
@@ -664,7 +675,7 @@ func tGestalt() {
 		case "tbtt":
 			reply = kToolTable
 		case "ram ":
-			reply = kMemSize
+			reply = kLowestIllegal
 		case "fs  ":
 			reply = 2 // FSSpec calls, not much else
 		case "alis":

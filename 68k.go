@@ -983,11 +983,12 @@ func mempanic(addr uint32) {
 
 //go:inline
 func read(numbytes uint32, addr uint32) (val uint32) {
-	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
-		mempanic(addr)
+	if addr >= kLowestIllegal {
+		panic(addr)
 	}
-	if addr > 0x3ffffffc {
-		panic("ohshit")
+
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		panic(addr)
 	}
 
 	switch numbytes {
@@ -998,38 +999,57 @@ func read(numbytes uint32, addr uint32) (val uint32) {
 	case 4:
 		return (uint32(mem[addr]) << 24) | (uint32(mem[addr+1]) << 16) | (uint32(mem[addr+2]) << 8) | uint32(mem[addr+3])
 	default:
-		panic(numbytes)
+		panic("unexpected access size")
 	}
 }
 
 func readd(addr uint32) (val uint64) {
+	if addr >= kLowestIllegal {
+		panic(addr)
+	}
+
 	return (uint64(mem[addr]) << 56) | (uint64(mem[addr+1]) << 48) | (uint64(mem[addr+2]) << 40) | (uint64(mem[addr+3]) << 32) | (uint64(mem[addr+4]) << 24) | (uint64(mem[addr+5]) << 16) | (uint64(mem[addr+6]) << 8) | uint64(mem[addr+7])
 }
 
 func readl(addr uint32) (val uint32) {
-	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
-		mempanic(addr)
+	if addr >= kLowestIllegal {
+		panic(addr)
 	}
+
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		panic(addr)
+	}
+
 	return (uint32(mem[addr]) << 24) | (uint32(mem[addr+1]) << 16) | (uint32(mem[addr+2]) << 8) | uint32(mem[addr+3])
 }
 
 func readw(addr uint32) (val uint16) {
-	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
-		mempanic(addr)
+	if addr >= kLowestIllegal {
+		panic(addr)
 	}
+
+	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
+		panic(addr)
+	}
+
 	return (uint16(mem[addr]) << 8) | uint16(mem[addr+1])
 }
 
 func readb(addr uint32) (val uint8) {
-	if memcheck && mem[addr&^1] == 0x68 && mem[(addr&^1)+1] == 0xf1 {
-		mempanic(addr)
+	if addr >= kLowestIllegal {
+		panic(addr)
 	}
+
+	if memcheck && mem[addr&^1] == 0x68 && mem[(addr&^1)+1] == 0xf1 {
+		panic(addr)
+	}
+
 	return uint8(mem[addr])
 }
 
 func write(numbytes uint32, addr uint32, val uint32) {
-	if addr > 0x3ffffffc {
-		panic("ohshit")
+	if addr >= kLowestIllegal {
+		panic(addr)
 	}
 
 	switch numbytes {
@@ -1044,11 +1064,15 @@ func write(numbytes uint32, addr uint32, val uint32) {
 		mem[addr+2] = byte(val >> 8)
 		mem[addr+3] = byte(val)
 	default:
-		panic(numbytes)
+		panic("unexpected access size")
 	}
 }
 
 func writed(addr uint32, val uint64) {
+	if addr >= kLowestIllegal {
+		panic(addr)
+	}
+
 	mem[addr] = byte(val >> 56)
 	mem[addr+1] = byte(val >> 48)
 	mem[addr+2] = byte(val >> 40)
@@ -1060,6 +1084,10 @@ func writed(addr uint32, val uint64) {
 }
 
 func writel(addr uint32, val uint32) {
+	if addr >= kLowestIllegal {
+		panic(addr)
+	}
+
 	mem[addr] = byte(val >> 24)
 	mem[addr+1] = byte(val >> 16)
 	mem[addr+2] = byte(val >> 8)
@@ -1067,11 +1095,19 @@ func writel(addr uint32, val uint32) {
 }
 
 func writew(addr uint32, val uint16) {
+	if addr >= kLowestIllegal {
+		panic(addr)
+	}
+
 	mem[addr] = byte(val >> 8)
 	mem[addr+1] = byte(val)
 }
 
 func writeb(addr uint32, val uint8) {
+	if addr >= kLowestIllegal {
+		panic(addr)
+	}
+
 	mem[addr] = byte(val)
 }
 
@@ -1126,7 +1162,7 @@ func pushzero(n uint32) (newsp, oldsp uint32) {
 	newsp = oldsp - n
 	writel(spptr, newsp)
 	for i := uint32(0); i < n; i++ {
-		mem[newsp+i] = 0
+		writeb(newsp+i, 0)
 	}
 	return newsp, oldsp
 }
