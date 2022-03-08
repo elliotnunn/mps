@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 )
@@ -61,6 +62,15 @@ var embedPACKs embed.FS
 var embedSystemFile []byte
 
 func main() {
+	if gProfile {
+		f, err := os.Create("mps.pprof")
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	defer func() {
 		err := recover()
 		if err != nil {
