@@ -1378,61 +1378,83 @@ func bcdInst(inst uint16) {
 	}
 }
 
-func address_by_mode(mode uint16, size uint32) (ptr uint32) { // mode given by bottom 6 bits
+// This is a frequently called largish function
+// nosplit actually speeds it up!
+//go:nosplit
+func address_by_mode(mode uint16, size uint32) uint32 { // mode given by bottom 6 bits
 	// side effects: predecrement/postincrement, advance pc to get extension word
 
-	if mode < 16 { // Dn or An -- optimise common case slightly
-		ptr = regAddr(mode&0xf) + 4 - size
-	} else if mode>>3 == 2 { // (An)
-		ptr = readl(aregAddr(mode & 7))
-	} else if mode>>3 == 3 { // (An)+
+	switch mode >> 3 {
+	case 0, 1: // Dn or An
+		return regAddr(mode&0xf) + 4 - size
+
+	case 2: // (An)
+		return readl(aregAddr(mode & 7))
+
+	case 3: // (An)+
 		regptr := aregAddr(mode & 7)
-		ptr = readl(regptr)
+		ptr := readl(regptr)
 		newptr := ptr + size
 		if mode&7 == 7 && size == 1 {
 			newptr += 1
 		}
 		writel(regptr, newptr)
-	} else if mode>>3 == 4 { // -(An)
+		return ptr
+
+	case 4: // -(An)
 		regptr := aregAddr(mode & 7)
-		ptr = readl(regptr)
+		ptr := readl(regptr)
 		ptr -= size
 		if mode&7 == 7 && size == 1 {
 			ptr--
 		}
 		writel(regptr, ptr)
-	} else if mode>>3 == 5 { // d16(An)
+		return ptr
+
+	case 5: // d16(An)
 		regptr := aregAddr(mode & 7)
-		ptr = readl(regptr) + extwl(readw(pc))
+		ptr := readl(regptr) + extwl(readw(pc))
 		pc += 2
-	} else if mode>>3 == 6 { // d8(An,Xn)
-		ptr = extensionWord(readl(aregAddr(mode & 7))) // contents of An
-	} else if mode == 58 { // d16(PC)
-		ptr = pc + extwl(readw(pc))
-		pc += 2
-	} else if mode == 59 { // d8(PC,Xn)
-		ptr = extensionWord(pc)
-	} else if mode == 56 { // abs.W
-		ptr = extwl(readw(pc))
-		pc += 2
-	} else if mode == 57 { // abs.L
-		ptr = readl(pc)
-		pc += 4
-	} else if mode == 60 { // #imm
-		if size == 1 {
-			ptr = pc + 1
+		return ptr
+
+	case 6: // d8(An,Xn)
+		return extensionWord(readl(aregAddr(mode & 7))) // contents of An
+
+	default: // 7, by exhaustion
+		switch mode & 7 {
+		case 0: // abs.W
+			ptr := extwl(readw(pc))
 			pc += 2
-		} else if size == 2 {
-			ptr = pc
-			pc += 2
-		} else if size == 4 {
-			ptr = pc
+			return ptr
+		case 1: // abs.L
+			ptr := readl(pc)
 			pc += 4
+			return ptr
+		case 2: // d16(PC)
+			ptr := pc + extwl(readw(pc))
+			pc += 2
+			return ptr
+		case 3: // d8(PC,Xn)
+			return extensionWord(pc)
+		case 4: // #imm
+			switch size {
+			case 1:
+				ptr := pc + 1
+				pc += 2
+				return ptr
+			case 2:
+				ptr := pc
+				pc += 2
+				return ptr
+			case 4:
+				ptr := pc
+				pc += 4
+				return ptr
+			}
 		}
-	} else {
-		panic("reserved addressing mode")
 	}
-	return
+
+	panic("reserved addressing mode")
 }
 
 func extensionWord(base uint32) uint32 {
