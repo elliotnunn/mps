@@ -52,6 +52,8 @@ func call_m68k(addr uint32) {
 			printState()
 		}
 
+		// The speed penalty of the above things in the main loop seems to be negligible
+
 		inst := readw(pc)
 		pc += 2
 		switch inst >> 12 {
@@ -477,9 +479,9 @@ func call_m68k(addr uint32) {
 				}
 
 				dn := inst >> 9 & 7
-				testee := read(regAddr(dn)+4-size, size)
+				testee := read(size, regAddr(dn)+4-size)
 				ea := address_by_mode(inst&63, size)
-				ubound := read(ea, size)
+				ubound := read(size, ea)
 				if testee > ubound {
 					panic("chk failed")
 				}
@@ -514,8 +516,6 @@ func call_m68k(addr uint32) {
 				write(size, dest, datum)
 
 			} else if inst>>3&7 == 1 { // dbcc
-				check_for_lurkers()
-
 				disp := extwl(readw(pc)) - 2
 				pc += 2
 
@@ -545,8 +545,6 @@ func call_m68k(addr uint32) {
 
 		case 6:
 			// bra,bsr,bcc
-			check_for_lurkers()
-
 			var disp uint32
 			if uint8(inst) == 0 { // word displacement
 				disp = extwl(readw(pc)) - 2
@@ -563,6 +561,7 @@ func call_m68k(addr uint32) {
 				continue
 			}
 			if cond == 1 { // is bsr
+				check_for_lurkers()
 				pushl(pc)
 			}
 
@@ -982,15 +981,25 @@ func mempanic(addr uint32) {
 	panic(fmt.Sprintf("bad memory access at %x", addr))
 }
 
+//go:inline
 func read(numbytes uint32, addr uint32) (val uint32) {
 	if memcheck && mem[addr] == 0x68 && mem[addr+1] == 0xf1 {
 		mempanic(addr)
 	}
-	for i := uint32(0); i < numbytes; i++ {
-		val <<= 8
-		val += uint32(mem[addr+i])
+	if addr > 0x3ffffffc {
+		panic("ohshit")
 	}
-	return
+
+	switch numbytes {
+	case 1:
+		return uint32(mem[addr])
+	case 2:
+		return (uint32(mem[addr]) << 8) | uint32(mem[addr+1])
+	case 4:
+		return (uint32(mem[addr]) << 24) | (uint32(mem[addr+1]) << 16) | (uint32(mem[addr+2]) << 8) | uint32(mem[addr+3])
+	default:
+		panic(numbytes)
+	}
 }
 
 func readd(addr uint32) (val uint64) {
@@ -1019,11 +1028,24 @@ func readb(addr uint32) (val uint8) {
 }
 
 func write(numbytes uint32, addr uint32, val uint32) {
-	for i := numbytes; i > 0; i-- {
-		mem[addr+i-1] = byte(val)
-		val >>= 8
+	if addr > 0x3ffffffc {
+		panic("ohshit")
 	}
-	return
+
+	switch numbytes {
+	case 1:
+		mem[addr] = uint8(val)
+	case 2:
+		mem[addr] = byte(val >> 8)
+		mem[addr+1] = byte(val)
+	case 4:
+		mem[addr] = byte(val >> 24)
+		mem[addr+1] = byte(val >> 16)
+		mem[addr+2] = byte(val >> 8)
+		mem[addr+3] = byte(val)
+	default:
+		panic(numbytes)
+	}
 }
 
 func writed(addr uint32, val uint64) {
@@ -1077,9 +1099,8 @@ func pushb(val uint8) {
 	writeb(ptr, val)
 }
 
-func pop(size uint32) uint32 {
-	ptr := address_by_mode(31, size) // (A7)+
-	return read(size, ptr)
+func pop(size uint32) {
+	writel(spptr, readl(spptr)+size)
 }
 
 func popl() uint32 {

@@ -121,8 +121,11 @@ func initPuppetStrings(args []string) {
 
 func tGetNextEvent() {
 	eventrecord := popl()
-	write(16, eventrecord, 0)
 	mask := popw()
+
+	for i := uint32(0); i < 16; i++ {
+		writeb(eventrecord+i, 0)
+	}
 
 	// Tell the top-level event loop about a command-keystroke
 	if mask&0x400 != 0 { // check for high-level events

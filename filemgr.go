@@ -540,21 +540,25 @@ func tGetVInfo(pb uint32) int {
 	writew(pb+46, 0xffff) // ioVNmAlBlks
 	writel(pb+48, 0x200)  // ioVAlBlkSiz
 	if readw(d1ptr+2)&0x200 != 0 {
-		writel(pb+52, 0x200)                       // ioVClpSiz
-		writew(pb+56, 0x1000)                      // ioAlBlSt
-		writel(pb+58, 0)                           // ioVNxtFNum
-		writew(pb+62, 0xfff0)                      // ioVFrBlk
-		writew(pb+64, 0)                           // ioVSig2
-		writew(pb+66, 0)                           // ioVDrvInfo
-		writew(pb+68, 2)                           // ioVDRefNum
-		writew(pb+70, 0)                           // ioVFSID
-		writel(pb+72, 0)                           // ioVBkUp
-		writew(pb+76, 0)                           // ioVSeqNum
-		writel(pb+78, 0)                           // ioVWrCnt
-		writel(pb+82, 0)                           // ioVFilCnt
-		writel(pb+86, 0)                           // ioVDirCnt
-		write(32, pb+90, 0)                        // ioVFndrInfo
-		writel(pb+90, uint32(dirID(systemFolder))) // must match BootDrive
+		for i := uint32(52); i < 122; i++ {
+			writeb(pb+i, 0)
+		}
+
+		writel(pb+52, 0x200)  // ioVClpSiz
+		writew(pb+56, 0x1000) // ioAlBlSt
+		//writel(pb+58, 0) // ioVNxtFNum
+		writew(pb+62, 0xfff0) // ioVFrBlk
+		//writew(pb+64, 0) // ioVSig2
+		//writew(pb+66, 0) // ioVDrvInfo
+		writew(pb+68, 2) // ioVDRefNum
+		//writew(pb+70, 0) // ioVFSID
+		//writel(pb+72, 0) // ioVBkUp
+		//writew(pb+76, 0) // ioVSeqNum
+		//writel(pb+78, 0) // ioVWrCnt
+		//writel(pb+82, 0) // ioVFilCnt
+		//writel(pb+86, 0) // ioVDirCnt
+		writel(pb+90, uint32(dirID(systemFolder))) // ioVFndrInfo... must match BootDrive
+		// ioVFndrInfo goes to 122
 	}
 
 	return 0

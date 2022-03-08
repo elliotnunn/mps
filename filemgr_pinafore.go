@@ -22,8 +22,7 @@ func tHighLevelFSDispatch() {
 		ioDirID := popl()
 		ioVRefNum := popw()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, ioVRefNum)
 		writel(pb+48, ioDirID)
@@ -32,7 +31,7 @@ func tHighLevelFSDispatch() {
 
 		writel(d0ptr, 0x1b)                 // MakeFSSpec selector...
 		call_m68k(executable_atrap(0xa260)) // FSDispatch
-		pop(128)
+		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
@@ -41,8 +40,7 @@ func tHighLevelFSDispatch() {
 		ioPermssn := popb()
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, readw(specPtr))   // ioVRefNum
 		writel(pb+48, readl(specPtr+2)) // ioDirID
@@ -56,7 +54,7 @@ func tHighLevelFSDispatch() {
 			call_m68k(executable_atrap(0xa20a)) // OpenRF
 		}
 		ioRefNum := readw(pb + 24)
-		pop(128)
+		writel(spptr, oldsp)
 
 		writew(refNumPtr, ioRefNum)
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
@@ -68,8 +66,7 @@ func tHighLevelFSDispatch() {
 		cCode := popl()
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 
 		if isResFile {
 			pushw(readw(specPtr))               // vRefNum
@@ -103,7 +100,7 @@ func tHighLevelFSDispatch() {
 			}
 		}
 
-		pop(128)
+		writel(spptr, oldsp)
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
 	case 5: // pascal OSErr FSpDirCreate(const FSSpec *spec, ScriptCode scriptTag, long *createdDirID)
@@ -111,8 +108,7 @@ func tHighLevelFSDispatch() {
 		popw() // discard scriptTag
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, readw(specPtr))   // ioVRefNum
 		writel(pb+48, readl(specPtr+2)) // ioDirID
@@ -121,7 +117,7 @@ func tHighLevelFSDispatch() {
 		writel(d0ptr, 6)                    // DirCreate selector
 		call_m68k(executable_atrap(0xa260)) // FSDispatch
 		ioDirID := readl(pb + 48)
-		pop(128)
+		writel(spptr, oldsp)
 
 		if readw(d0ptr+2) == 0 {
 			writel(idPtr, ioDirID)
@@ -131,15 +127,14 @@ func tHighLevelFSDispatch() {
 	case 6: // pascal OSErr FSpDelete(const FSSpec *spec)
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, readw(specPtr))   // ioVRefNum
 		writel(pb+48, readl(specPtr+2)) // ioDirID
 		writel(pb+18, specPtr+6)        // ioNamePtr
 
 		call_m68k(executable_atrap(0xa209)) // _HDelete
-		pop(128)
+		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
@@ -147,8 +142,7 @@ func tHighLevelFSDispatch() {
 		fInfoPtr := popl()
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, readw(specPtr))   // ioVRefNum
 		writel(pb+48, readl(specPtr+2)) // ioDirID
@@ -157,7 +151,7 @@ func tHighLevelFSDispatch() {
 		call_m68k(executable_atrap(0xa20c)) // _HGetFInfo
 
 		copy(mem[fInfoPtr:][:16], mem[pb+32:][:16]) // ioFlFndrInfo
-		pop(128)
+		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 
@@ -165,8 +159,7 @@ func tHighLevelFSDispatch() {
 		fInfoPtr := popl()
 		specPtr := popl()
 
-		push(128, 0)
-		pb := readl(spptr)
+		pb, oldsp := pushzero(128)
 		writel(a0ptr, pb)
 		writew(pb+22, readw(specPtr))               // ioVRefNum
 		writel(pb+48, readl(specPtr+2))             // ioDirID
@@ -174,7 +167,7 @@ func tHighLevelFSDispatch() {
 		copy(mem[pb+32:][:16], mem[fInfoPtr:][:16]) // ioFlFndrInfo
 
 		call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
-		pop(128)
+		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
 

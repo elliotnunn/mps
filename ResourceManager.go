@@ -245,10 +245,10 @@ func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
 }
 
 func tGetResInfo() {
-	namePtr := pop(4)
-	typePtr := pop(4)
-	idPtr := pop(4)
-	handle := pop(4)
+	namePtr := popl()
+	typePtr := popl()
+	idPtr := popl()
+	handle := popl()
 
 	if resMap, typeEntry, idEntry, ok := lookupResHandle(handle); ok {
 		if namePtr != 0 {
@@ -337,14 +337,13 @@ func tHOpenResFile() {
 	writew(readl(spptr), 0xffff) // return "failed" refnum
 
 	// Call _HOpenRF with a parameter block
-	push(128, 0)
-	pb := readl(spptr)
+	pb, oldsp := pushzero(128)
 	writel(a0ptr, pb) // a0 = pb
 	writew(pb+22, ioVRefNum)
 	writel(pb+48, ioDirID)
 	writel(pb+18, ioNamePtr)
 	call_m68k(executable_atrap(0xa20a)) // _HOpenRF
-	pop(128)
+	writel(spptr, oldsp)
 
 	ioResult := readw(pb + 16)
 	if ioResult != 0 {
@@ -767,12 +766,11 @@ func tCloseResFile() {
 		call_m68k(executable_atrap(0xa023)) // _DisposHandle
 
 		// Close the underlying fork
-		push(128, 0)
-		paramBlk := readl(spptr)
+		paramBlk, oldsp := pushzero(128)
 		writew(paramBlk+24, refnum) // ioRefNum
 		writel(a0ptr, paramBlk)
 		call_m68k(executable_atrap(0xa001)) // _Close
-		pop(128)
+		writel(spptr, oldsp)
 
 		setResError(0) // noErr
 	} else {

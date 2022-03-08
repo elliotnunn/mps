@@ -333,10 +333,14 @@ func main() {
 	writew(kFCBTable, 2+94*348) // size of FCB table
 
 	// VBL queue: empty
-	write(10, 0x160, 0)
+	for i := uint32(0); i < 10; i++ {
+		writeb(0x160+i, 0)
+	}
 
 	// DT queue: empty
-	write(10, 0xd92, 0)
+	for i := uint32(0); i < 10; i++ {
+		writeb(0xd92+i, 0)
+	}
 
 	// Misc globals
 	writel(0x108, kMemSize)            // MemTop
@@ -410,7 +414,7 @@ func main() {
 	writel(0xa54, readl(0xa50)) // SysMapHndl = TopMapHndl
 	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
-	push(32, 0)
+	pushzero(32)
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
 	writePstring(fileNamePtr, "ToolServer")
@@ -428,7 +432,7 @@ func main() {
 	pushl(0x434f4445)                   // CODE
 	pushw(0)                            // ID 0
 	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
-	code0 := pop(4)
+	code0 := popl()
 	code0 = readl(code0) // handle to pointer
 
 	jtsize := readl(code0 + 8)
@@ -578,7 +582,9 @@ func executable_ftrap(trap uint16) (addr uint32) {
 // Expensive cleanup on function call (JSR), return (RTS) and A-trap
 func check_for_lurkers() {
 	// we might do more involved things here, like check for heap corruption
-	write(64, 0, 0)
+	for i := uint32(0); i < 64; i++ {
+		mem[i] = 0
+	}
 }
 
 // Placeholder trap in the A5-based dispatch table
@@ -630,7 +636,11 @@ func tSysError() {
 // TODO: should match the SysEnvirons routine in the MPW libraries
 func tSysEnvirons() {
 	block := readl(a0ptr)
-	write(16, block, 0)                   // wipe
+
+	for i := uint32(0); i < 16; i++ {
+		writeb(block+i, 0)
+	}
+
 	writew(block, 2)                      // environsVersion = 2
 	writew(block+2, 4)                    // machineType = II
 	writew(block+4, readw(0x15a))         // systemVersion
@@ -687,7 +697,10 @@ func tGestalt() {
 }
 
 func tGetOSEvent() {
-	write(16, readl(a0ptr), 0) // null event
+	evt := readl(a0ptr)
+	for i := uint32(0); i < 16; i++ { // null event
+		writeb(evt+i, 0)
+	}
 	writel(d0ptr, 0xffffffff)
 }
 
