@@ -7,7 +7,7 @@ import (
 const maxBlock = 64 * 1024 * 1024
 
 var bump uint32 = kHeap
-var memFree uint32 = uint32(len(mem)) - kHeap
+var memFree uint32 = kHeapLimit - kHeap
 var usedBlocks = make(map[uint32]*block)   // map[addr]*block
 var freeBlocks = make(map[uint32][]uint32) // map[size][]addr
 
@@ -58,7 +58,7 @@ func newBlock(size uint32, expandable bool) uint32 {
 	} else {
 		addr = bump
 		bump += block.total
-		if bump > uint32(len(mem)) {
+		if bump > kHeapLimit {
 			panic("out of memory")
 		}
 	}
