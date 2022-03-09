@@ -77,6 +77,8 @@ func main() {
 			if addr, ok := err.(uint32); ok {
 				printState()
 				panic(fmt.Sprintf("Memory access %08x", addr))
+			} else {
+				panic(err)
 			}
 		}
 	}()
