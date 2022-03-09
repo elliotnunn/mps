@@ -958,7 +958,7 @@ func mkMap(deep mapStruct) (flat []byte) {
 				nameList = append(nameList, byte(len(res.name)))
 				nameList = append(nameList, res.name...)
 			} else {
-				binary.BigEndian.PutUint16(flat[idEntry:+2], 0xffff)
+				binary.BigEndian.PutUint16(flat[idEntry+2:], 0xffff)
 			}
 		}
 	}
