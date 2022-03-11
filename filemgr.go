@@ -252,10 +252,17 @@ func readDir(path string) ([]existingNamePair, int) {
 	slice := make([]existingNamePair, 0, len(dirents))
 	for _, d := range dirents {
 		host := d.Name()
-		mac, ok := macName(host)
-		if ok {
-			slice = append(slice, existingNamePair{mac, host})
+
+		if host[0] == '.' {
+			continue
 		}
+
+		mac, ok := macName(host)
+		if !ok {
+			continue
+		}
+
+		slice = append(slice, existingNamePair{mac, host})
 	}
 
 	// HFS sorts files by RelString order
