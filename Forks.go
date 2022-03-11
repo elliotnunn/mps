@@ -56,10 +56,23 @@ func existsAsFile(path string) bool {
 
 // Assume the existence of the file
 func finderInfo(path string) [16]byte {
-	return finderInfoTextHack(path, true)
+	finfo := finderInfoWithoutTextHack(path)
+
+	// Present as text file if persuaded that it is one
+	if string(finfo[:4]) == "????" {
+		if data, err := os.ReadFile(path); err == nil {
+			if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
+				if _, ok := unicodeToMac(string(data)); ok {
+					copy(finfo[:], "TEXTMPS ")
+				}
+			}
+		}
+	}
+
+	return finfo
 }
 
-func finderInfoTextHack(path string, textHack bool) [16]byte {
+func finderInfoWithoutTextHack(path string) [16]byte {
 	finfo := [16]byte{'?', '?', '?', '?', '?', '?', '?', '?', 0}
 
 	switch whichFormat(path) {
@@ -83,17 +96,6 @@ func finderInfoTextHack(path string, textHack bool) [16]byte {
 		}
 		if finfo[4] == 0 && finfo[5] == 0 && finfo[6] == 0 && finfo[7] == 0 {
 			copy(finfo[4:], "????")
-		}
-	}
-
-	// Present as text file if persuaded that it is one
-	if textHack && string(finfo[:4]) == "????" {
-		if data, err := os.ReadFile(path); err == nil {
-			if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
-				if _, ok := unicodeToMac(string(data)); ok {
-					copy(finfo[:], "TEXTMPS ")
-				}
-			}
 		}
 	}
 
@@ -136,7 +138,7 @@ func dataFork(path string) []byte {
 	data, _ := os.ReadFile(path)
 
 	// Convert the data fork if persuaded it is a text file
-	finfo := finderInfoTextHack(path, false)
+	finfo := finderInfoWithoutTextHack(path)
 	ftype := string(finfo[:4])
 	if ftype == "TEXT" || ftype == "????" {
 		if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
