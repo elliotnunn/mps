@@ -94,6 +94,7 @@ func main() {
 		os_base + 0x0a:  pbWrap(tOpen),        // _OpenRF
 		os_base + 0x0c:  pbWrap(tGetFInfo),    // _GetFInfo
 		os_base + 0x0d:  pbWrap(tSetFInfo),    // _SetFInfo
+		os_base + 0x10:  pbWrap(tAllocate),    // _Allocate
 		os_base + 0x11:  pbWrap(tGetEOF),      // _GetEOF
 		os_base + 0x12:  pbWrap(tSetEOF),      // _SetEOF
 		os_base + 0x13:  tParamBlkNop,         // _FlushVol

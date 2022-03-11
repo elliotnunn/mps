@@ -230,6 +230,24 @@ func tReadWrite(pb uint32) (result int) {
 	return
 }
 
+func tAllocate(pb uint32) (result int) {
+	ioRefNum := readw(pb + 24)
+	ioReqCount := readl(pb + 36)
+
+	ioActCount := (ioReqCount + 0x1ff) &^ 0x1ff // round up to multiple 512
+
+	fcb := fcbFromRefnum(ioRefNum)
+	if fcb == 0 || readl(fcb) == 0 {
+		return -38 // fnOpnErr
+	}
+
+	fileBuf := openBuffers[ioRefNum]
+	*fileBuf = append(*fileBuf, make([]byte, ioActCount)...)
+
+	writel(pb+40, ioActCount)
+	return 0
+}
+
 func tGetEOF(pb uint32) int {
 	ioRefNum := readw(pb + 24)
 
