@@ -719,6 +719,12 @@ func tFSDispatch(pb uint32) int {
 		ioActCount := copy(mem[ioBuffer:][:ioReqCount], buf[:])
 		writel(pb+40, uint32(ioActCount))
 
+	case 56: // OpenDeny
+		return tOpenDF(pb)
+
+	case 57: // OpenRFDeny
+		return tOpenRF(pb)
+
 	default:
 		panic(fmt.Sprintf("Not implemented: _FSDispatch d0=0x%x", readw(d0ptr+2)))
 	}
