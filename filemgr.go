@@ -692,7 +692,7 @@ func tFSDispatch(pb uint32) int {
 		return tSetFInfo(pb)
 
 	case 26: // OpenDF
-		return tOpen(pb)
+		return tOpenDF(pb)
 
 	case 27: // MakeFSSpec
 		ioDirID := readw(pb + 48 + 2)

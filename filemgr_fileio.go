@@ -53,7 +53,15 @@ func fcbFromRefnum(refnum uint16) uint32 {
 	return FCBSPtr + uint32(refnum)
 }
 
-func tOpen(pb uint32) int {
+func tOpenDF(pb uint32) int {
+	return tOpenFork(pb, false)
+}
+
+func tOpenRF(pb uint32) int {
+	return tOpenFork(pb, true)
+}
+
+func tOpenFork(pb uint32, forkIsRsrc bool) int {
 	writew(pb+24, 0) // clear ioRefNum
 
 	// Find a free FCB
@@ -69,8 +77,6 @@ func tOpen(pb uint32) int {
 	if readl(fcbPtr) != 0 {
 		panic("FCB table exhausted by 348 open files")
 	}
-
-	forkIsRsrc := readl(d1ptr)&0xff == 0xa
 
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)

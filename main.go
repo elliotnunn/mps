@@ -84,14 +84,14 @@ func main() {
 	}()
 
 	my_traps = [...]func(){
-		os_base + 0x00:  pbWrap(tOpen),        // _Open
+		os_base + 0x00:  pbWrap(tOpenDF),      // _Open
 		os_base + 0x01:  pbWrap(tClose),       // _Close
 		os_base + 0x02:  pbWrap(tReadWrite),   // _Read
 		os_base + 0x03:  pbWrap(tReadWrite),   // _Write
 		os_base + 0x07:  pbWrap(tGetVInfo),    // _GetVInfo
 		os_base + 0x08:  pbWrap(tCreate),      // _Create
 		os_base + 0x09:  pbWrap(tDelete),      // _Delete
-		os_base + 0x0a:  pbWrap(tOpen),        // _OpenRF
+		os_base + 0x0a:  pbWrap(tOpenRF),      // _OpenRF
 		os_base + 0x0c:  pbWrap(tGetFInfo),    // _GetFInfo
 		os_base + 0x0d:  pbWrap(tSetFInfo),    // _SetFInfo
 		os_base + 0x10:  pbWrap(tAllocate),    // _Allocate
