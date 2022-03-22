@@ -516,7 +516,12 @@ func lineA(inst uint16) {
 			dieBadTrap(pc - 2)
 		}
 
-		call_m68k(imp)
+		defaultImp := executable_ftrap(0xf000 | (inst & 0xff))
+		if imp == defaultImp { // direct Go call
+			my_traps[os_base+(inst&0xff)]()
+		} else {
+			call_m68k(imp)
+		}
 
 		if inst&0x100 == 0 {
 			writel(a0ptr, popl())
