@@ -74,12 +74,14 @@ func main() {
 	defer func() {
 		err := recover()
 		if err != nil {
+			var msg string
 			if addr, ok := err.(uint32); ok {
-				printState()
-				panic(fmt.Sprintf("Memory access %08x", addr))
+				msg = fmt.Sprintf("Memory access %08x", addr)
 			} else {
-				panic(err)
+				msg = fmt.Sprintf("%v", err)
 			}
+			logf("%s\nMixed Go-68k stack trace:\n%s", msg, stacktrace())
+			os.Exit(1)
 		}
 	}()
 

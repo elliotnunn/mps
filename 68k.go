@@ -33,6 +33,8 @@ const (
 )
 
 func call_m68k(addr uint32) {
+	entered68k() // for stack tracing
+
 	save_pc := pc
 	pushl(kReturnAddr) // the function we call will pop this value
 	pc = addr
@@ -412,14 +414,19 @@ func call_m68k(addr uint32) {
 			} else if inst&0xFFF == 0xE75 { // rts
 				check_for_lurkers()
 				pc = popl()
+				poppedReturnAddr() // after pop
 			} else if inst&0xFFF == 0xE77 { // rtr
 				set_ccr(popw())
 				pc = popl()
+				poppedReturnAddr() // after pop
 			} else if inst&0xF80 == 0xE80 { // jsr/jmp
 				targ := address_by_mode(inst&63, 4) // any size
 				if inst&0x40 == 0 {
 					check_for_lurkers() // don't slow down jmp's, we do them a lot
 					pushl(pc)
+					pushedReturnAddr() // after push
+				} else {
+					poppedReturnAddr() // speculative, cleans up the stack
 				}
 				pc = targ
 			} else if inst&0xF80 == 0x880 { // movem registers,ea
@@ -563,6 +570,7 @@ func call_m68k(addr uint32) {
 			if cond == 1 { // is bsr
 				check_for_lurkers()
 				pushl(pc)
+				pushedReturnAddr() // after push
 			}
 
 			pc += disp
@@ -973,6 +981,7 @@ func call_m68k(addr uint32) {
 	}
 
 	pc = save_pc
+	exited68k() // for stack tracing
 }
 
 const memcheck = false
