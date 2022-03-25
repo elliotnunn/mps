@@ -80,7 +80,14 @@ func main() {
 			} else {
 				msg = fmt.Sprintf("%v", err)
 			}
-			logf("%s\nMixed Go-68k stack trace:\n%s", msg, stacktrace())
+
+			trace := stacktrace()
+
+			// Remove this closure and the original panic() from the trace
+			trace = strings.SplitAfterN(trace, "\n", 5)[4]
+			trace = strings.ReplaceAll(trace, "\t", "    ")
+
+			logf("%s\nMixed Go-68k stack trace:\n%s", msg, trace)
 			os.Exit(1)
 		}
 	}()

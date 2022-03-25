@@ -44,17 +44,11 @@ func exited68k() {
 	traceEmu = traceEmu[:len(traceEmu)-1]
 }
 
-// Must have panic() in the stack trace
 // Re-panics will show up in the stack trace, but the last is clipped.
 func stacktrace() string {
 	s := string(debug.Stack())
-	s = strings.ReplaceAll(s, "\t", "    ")
-
-	// Delete up to the panic call
-	s = s[strings.Index(s, "\npanic(")+1:]
-
 	lines := strings.SplitAfter(s, "\n")
-	lines = lines[2:] // Also delete the panic() call itself
+	lines = lines[5:] // Delete first line, debug.Stack(), stacktrace()
 
 	var bild strings.Builder
 
@@ -66,7 +60,7 @@ func stacktrace() string {
 		if strings.HasPrefix(line, "main.call_m68k(") {
 			what, where := describePC(pc)
 			bild.WriteString(what)
-			bild.WriteString("\n    ")
+			bild.WriteString("\n\t")
 			bild.WriteString(where)
 			bild.WriteByte('\n')
 
@@ -82,7 +76,7 @@ func stacktrace() string {
 
 				what, where := describePC(trace[index].pc)
 				bild.WriteString(what)
-				bild.WriteString("\n    ")
+				bild.WriteString("\n\t")
 				bild.WriteString(where)
 				bild.WriteByte('\n')
 			}
