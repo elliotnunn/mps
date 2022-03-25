@@ -59,34 +59,36 @@ func stacktrace() string {
 	index := len(trace) - 1
 	emuLastAddr := pc
 	for _, line := range lines {
-		if strings.HasPrefix(line, "main.call_m68k(") {
-			what, where := describePC(emuLastAddr)
+		if !strings.HasPrefix(line, "main.call_m68k(") {
+			bild.WriteString(line)
+			continue
+		}
+
+		what, where := describePC(emuLastAddr)
+		bild.WriteString(what)
+		bild.WriteString("\n\t")
+		bild.WriteString(where)
+		bild.WriteByte('\n')
+
+		for ; index >= 0; index-- {
+			if trace[index].sp >= traceEmu[indexEmu].sp {
+				break
+			}
+
+			// This area of stack has been overwritten
+			if trace[index].pc != readl(trace[index].sp) {
+				continue
+			}
+
+			what, where := describePC(trace[index].pc)
 			bild.WriteString(what)
 			bild.WriteString("\n\t")
 			bild.WriteString(where)
 			bild.WriteByte('\n')
-
-			for ; index >= 0; index-- {
-				if trace[index].sp >= traceEmu[indexEmu].sp {
-					break
-				}
-
-				// This area of stack has been overwritten
-				if trace[index].pc != readl(trace[index].sp) {
-					continue
-				}
-
-				what, where := describePC(trace[index].pc)
-				bild.WriteString(what)
-				bild.WriteString("\n\t")
-				bild.WriteString(where)
-				bild.WriteByte('\n')
-			}
-			emuLastAddr = traceEmu[indexEmu].pc
-			indexEmu--
 		}
-
-		bild.WriteString(line)
+		emuLastAddr = traceEmu[indexEmu].pc
+		indexEmu--
+		bild.WriteString(line) // main.call_m68k
 	}
 
 	return bild.String()
