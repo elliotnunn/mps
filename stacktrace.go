@@ -14,7 +14,7 @@ type traceEntry struct {
 
 // Functions for the 68k emulator to call
 var trace []traceEntry
-var traceEmu []uint32 // stack addresses
+var traceEmu []traceEntry
 
 // Call after pushing a return address
 // (but not the fake return address that call_m68k uses)
@@ -37,7 +37,7 @@ func poppedReturnAddr() {
 
 // Keep a stack of call_m68k invocations and their respective 68k stack pointers
 func entered68k() {
-	traceEmu = append(traceEmu, readl(spptr))
+	traceEmu = append(traceEmu, traceEntry{sp: readl(spptr), pc: pc})
 }
 
 func exited68k() {
@@ -56,16 +56,17 @@ func stacktrace() string {
 
 	indexEmu := len(traceEmu) - 1
 	index := len(trace) - 1
+	emuLastAddr := pc
 	for _, line := range lines {
 		if strings.HasPrefix(line, "main.call_m68k(") {
-			what, where := describePC(pc)
+			what, where := describePC(emuLastAddr)
 			bild.WriteString(what)
 			bild.WriteString("\n\t")
 			bild.WriteString(where)
 			bild.WriteByte('\n')
 
 			for ; index >= 0; index-- {
-				if trace[index].sp >= traceEmu[indexEmu] {
+				if trace[index].sp >= traceEmu[indexEmu].sp {
 					break
 				}
 
@@ -80,6 +81,7 @@ func stacktrace() string {
 				bild.WriteString(where)
 				bild.WriteByte('\n')
 			}
+			emuLastAddr = traceEmu[indexEmu].pc
 			indexEmu--
 		}
 
