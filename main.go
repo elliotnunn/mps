@@ -501,6 +501,7 @@ func lineA(inst uint16) {
 		// Push a return address unless autoPop is used
 		if inst&0x400 == 0 {
 			pushl(pc)
+			pushedReturnAddr()
 		}
 
 		imp := readl(kToolTable + 4*(uint32(inst)&0x3ff))
