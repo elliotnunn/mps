@@ -42,6 +42,7 @@ func entered68k() {
 
 func exited68k() {
 	traceEmu = traceEmu[:len(traceEmu)-1]
+	poppedReturnAddr() // all subroutines of this call_m68k have returned
 }
 
 // Re-panics will show up in the stack trace, but the last is clipped.
