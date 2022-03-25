@@ -127,6 +127,10 @@ func describePC(pc uint32) (what, where string) {
 			}
 
 			curSegStart = readl(entry.rHndl)
+			if curSegStart == 0 { // empty handle
+				continue
+			}
+
 			curSegEnd = curSegStart + usedBlocks[curSegStart].size
 			if !(curSegStart <= pc && pc < curSegEnd) {
 				continue
