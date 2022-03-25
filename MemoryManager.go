@@ -140,52 +140,52 @@ func memErrD0Wrap(actualTrap func() int) func() {
 
 // Memory Manager OS traps
 
-var tGetZone = memErrD0Wrap(func() int {
+func tGetZone() int {
 	TheZone := readl(0x118)
 	writel(a0ptr, TheZone)
 	return 0
-})
+}
 
-var tSetZone = memErrD0Wrap(func() int {
+func tSetZone() int {
 	to := readl(a0ptr)
 	if to != readl(0x2aa) {
 		panic("SetZone to something other than our fake zone")
 	}
 	writel(0x118, to) // TheZone
 	return 0
-})
+}
 
-var tFreeMem = memErrWrap(func() int {
+func tFreeMem() int {
 	writel(d0ptr, memFree)
 	return 0
-})
+}
 
-var tMaxMem = memErrWrap(func() int {
+func tMaxMem() int {
 	writel(d0ptr, maxBlock)
 	writel(a0ptr, 0)
 	return 0
-})
+}
 
-var tCompactMem = memErrWrap(func() int {
+func tCompactMem() int {
 	writel(d0ptr, maxBlock)
 	return 0
-})
+}
 
-var tPurgeOrResrvMem = memErrD0Wrap(func() int {
+func tPurgeOrResrvMem() int {
 	cbNeeded := readl(d0ptr)
 	if cbNeeded <= maxBlock {
 		return 0
 	} else {
 		return -108 // memFullErr
 	}
-})
+}
 
-var tStackSpace = memErrWrap(func() int {
+func tStackSpace() int {
 	writel(d0ptr, (readl(spptr)-kStackLimit-200)&0xfffffffc)
 	return 0
-})
+}
 
-var tNewPtr = memErrD0Wrap(func() int {
+func tNewPtr() int {
 	size := readl(d0ptr)
 	if size > maxBlock {
 		writel(a0ptr, 0)
@@ -197,18 +197,18 @@ var tNewPtr = memErrD0Wrap(func() int {
 
 	writel(a0ptr, ptr)
 	return 0
-})
+}
 
-var tDisposPtr = memErrD0Wrap(func() int {
+func tDisposPtr() int {
 	ptr := readl(a0ptr)
 
 	verifyPtr(ptr)
 
 	freeBlock(ptr)
 	return 0
-})
+}
 
-var tSetPtrSize = memErrD0Wrap(func() int {
+func tSetPtrSize() int {
 	ptr := readl(a0ptr)
 	newSize := readl(d0ptr)
 
@@ -225,16 +225,16 @@ var tSetPtrSize = memErrD0Wrap(func() int {
 	}
 
 	return -108 // memFullErr
-})
+}
 
-var tGetPtrSize = memErrWrap(func() int {
+func tGetPtrSize() int {
 	ptr := readl(a0ptr)
 	verifyPtr(ptr)
 	writel(d0ptr, usedBlocks[ptr].size)
 	return 0
-})
+}
 
-var tNewHandle = memErrD0Wrap(func() int {
+func tNewHandle() int {
 	size := readl(d0ptr)
 	if size > maxBlock {
 		writel(a0ptr, 0)
@@ -253,17 +253,17 @@ var tNewHandle = memErrD0Wrap(func() int {
 
 	writel(a0ptr, hand)
 	return 0
-})
+}
 
-var tNewEmptyHandle = memErrD0Wrap(func() int {
+func tNewEmptyHandle() int {
 	hand := newBlock(5, false)
 	usedBlocks[hand].kind = masterPtrBlock
 
 	writel(a0ptr, hand)
 	return 0
-})
+}
 
-var tDisposHandle = memErrD0Wrap(func() int {
+func tDisposHandle() int {
 	hand := readl(a0ptr)
 	if hand == 0 {
 		return -109 // nilHandleErr
@@ -277,9 +277,9 @@ var tDisposHandle = memErrD0Wrap(func() int {
 	}
 
 	return 0
-})
+}
 
-var tSetHandleSize = memErrD0Wrap(func() int {
+func tSetHandleSize() int {
 	hand := readl(a0ptr)
 	if hand == 0 {
 		return -109 // nilHandleErr
@@ -318,9 +318,9 @@ var tSetHandleSize = memErrD0Wrap(func() int {
 	}
 
 	return -108 // memFullErr
-})
+}
 
-var tReallocHandle = memErrD0Wrap(func() int {
+func tReallocHandle() int {
 	hand := readl(a0ptr)
 	if hand == 0 {
 		return -109 // nilHandleErr
@@ -344,9 +344,9 @@ var tReallocHandle = memErrD0Wrap(func() int {
 	writel(hand, ptr)
 
 	return 0
-})
+}
 
-var tGetHandleSize = memErrWrap(func() int {
+func tGetHandleSize() int {
 	hand := readl(a0ptr)
 	ptr := verifyHandle(hand)
 	if ptr == 0 {
@@ -356,9 +356,9 @@ var tGetHandleSize = memErrWrap(func() int {
 
 	writel(d0ptr, usedBlocks[ptr].size)
 	return 0
-})
+}
 
-var tRecoverHandle = memErrWrap(func() int {
+func tRecoverHandle() int {
 	ptr := readl(a0ptr)
 
 	block, ok := usedBlocks[ptr]
@@ -368,9 +368,9 @@ var tRecoverHandle = memErrWrap(func() int {
 
 	writel(a0ptr, block.masterPtr)
 	return 0
-})
+}
 
-var tEmptyHandle = memErrD0Wrap(func() int {
+func tEmptyHandle() int {
 	hand := readl(a0ptr)
 	if hand == 0 {
 		return -109 // nilHandleErr
@@ -388,7 +388,7 @@ var tEmptyHandle = memErrD0Wrap(func() int {
 	}
 
 	return 0
-})
+}
 
 func tBlockMove() {
 	src := readl(a0ptr)
@@ -397,7 +397,7 @@ func tBlockMove() {
 	copy(mem[dest:dest+size], mem[src:src+size])
 }
 
-var tHGetState = memErrWrap(func() int {
+func tHGetState() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		writel(d0ptr, 0)
@@ -407,9 +407,9 @@ var tHGetState = memErrWrap(func() int {
 	flags := readb(handle + 4)
 	writel(d0ptr, uint32(flags))
 	return 0
-})
+}
 
-var tHSetState = memErrD0Wrap(func() int {
+func tHSetState() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		writel(d0ptr, 0)
@@ -419,9 +419,9 @@ var tHSetState = memErrD0Wrap(func() int {
 	flags := readb(d0ptr + 3)
 	writeb(handle+4, flags)
 	return 0
-})
+}
 
-var tHLock = memErrD0Wrap(func() int {
+func tHLock() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		return -109 // nilHandleErr
@@ -429,9 +429,9 @@ var tHLock = memErrD0Wrap(func() int {
 
 	mem[handle+4] |= 0x80
 	return 0
-})
+}
 
-var tHUnlock = memErrD0Wrap(func() int {
+func tHUnlock() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		return -109 // nilHandleErr
@@ -439,9 +439,9 @@ var tHUnlock = memErrD0Wrap(func() int {
 
 	mem[handle+4] &= ^byte(0x80)
 	return 0
-})
+}
 
-var tHPurge = memErrD0Wrap(func() int {
+func tHPurge() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		return -109 // nilHandleErr
@@ -449,9 +449,9 @@ var tHPurge = memErrD0Wrap(func() int {
 
 	mem[handle+4] |= 0x40
 	return 0
-})
+}
 
-var tHNoPurge = memErrD0Wrap(func() int {
+func tHNoPurge() int {
 	handle := readl(a0ptr)
 	if handle == 0 || verifyHandle(handle) == 0 {
 		return -109 // nilHandleErr
@@ -459,7 +459,7 @@ var tHNoPurge = memErrD0Wrap(func() int {
 
 	mem[handle+4] &= ^byte(0x40)
 	return 0
-})
+}
 
 func tMemMgrNop() {
 	writew(0x220, 0) // MemErr
