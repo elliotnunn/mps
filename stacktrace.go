@@ -141,9 +141,6 @@ func describePC(pc uint32) (what, where string) {
 				continue
 			}
 
-			fcb := fcbFromRefnum(resMap.mRefNum)
-			fname := macToUnicode(readPstring(fcb + 62))
-
 			var fourcc [4]byte
 			binary.BigEndian.PutUint32(fourcc[:], entry.tType)
 
@@ -154,8 +151,8 @@ func describePC(pc uint32) (what, where string) {
 				what += "()"
 			}
 
-			where = fmt.Sprintf("%s/'%s' (%d,\"%s\") +%#x",
-				fname,
+			where = fmt.Sprintf("%s//%s/%d/%q +%#x",
+				openPaths[resMap.mRefNum].hostpath,
 				string(fourcc[:]),
 				entry.rID,
 				macToUnicode(entry.name),
