@@ -96,30 +96,25 @@ func stacktrace() string {
 
 func describePC(pc uint32) (what, where string) {
 	defer func() {
-		what = "68k:" + what
-		where = fmt.Sprintf("%#08x %s", pc, where)
+		where = "68k " + where
 	}()
 
+	what = "<???>"
 	switch {
 	case kA5World-0x8000 <= pc && pc < kA5World:
-		what = "<code in A5 world>"
 		where = fmt.Sprintf("A5-%#x", kA5World-pc)
 		return
 	case kATrapTable <= pc && pc < kATrapTable+0x10000:
-		what = "<internal A-trap>"
 		where = fmt.Sprintf("A-trap table %#x", pc>>4)
 		return
 	case kFTrapTable <= pc && pc < kFTrapTable+0x10000:
-		what = "<internal F-trap>"
 		where = fmt.Sprintf("F-trap table %#x", pc>>4)
 		return
 	case pc >= kHeapLimit:
-		what = "<code on stack>"
-		where = "stack"
+		where = fmt.Sprintf("stack %#08x", pc)
 		return
 	case pc < kHeap:
-		what = "<???>"
-		where = "low memory"
+		where = fmt.Sprintf("lowmem %#08x", pc)
 		return
 	}
 
