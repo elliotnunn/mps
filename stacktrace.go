@@ -45,7 +45,6 @@ func exited68k() {
 	poppedReturnAddr() // all subroutines of this call_m68k have returned
 }
 
-// Re-panics will show up in the stack trace, but the last is clipped.
 func stacktrace() string {
 	s := string(debug.Stack())
 	lines := strings.SplitAfter(s, "\n")
