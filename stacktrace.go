@@ -142,6 +142,8 @@ func describePC(pc uint32) (what, where string) {
 			what = macsbugName(mem[pc:curSegEnd])
 			if what == "" {
 				what = "<no MacsBug name>"
+			} else if unmangled, ok := unmangle(what); ok {
+				what = unmangled
 			} else {
 				what += "()"
 			}
