@@ -489,7 +489,7 @@ func mfMemRoutine(selector uint16) {
 		size := popl()
 
 		writel(d0ptr, size)
-		tNewHandle()
+		call_m68k(executable_atrap(0xa122)) // _NewHandle
 		handle := readl(a0ptr)
 
 		writel(readl(spptr), handle)
@@ -503,7 +503,7 @@ func mfMemRoutine(selector uint16) {
 		handle := popl()
 
 		writel(a0ptr, handle)
-		tDisposHandle()
+		call_m68k(executable_atrap(0xa023)) // _DisposHandle
 
 	default:
 		panic("mfMemRoutine: unknown MF temp mem selector")
