@@ -92,6 +92,8 @@ func main() {
 		}
 	}()
 
+	defer writeOutDebugInfo()
+
 	my_traps = [...]func(){
 		os_base + 0x00:  pbWrap(tOpenDF),                // _Open
 		os_base + 0x01:  pbWrap(tClose),                 // _Close
