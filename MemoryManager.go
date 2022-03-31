@@ -348,6 +348,11 @@ func tReallocHandle() int {
 
 func tGetHandleSize() int {
 	hand := readl(a0ptr)
+	if hand == 0 {
+		writel(d0ptr, 0)
+		return -109 // nilHandleErr
+	}
+
 	ptr := verifyHandle(hand)
 	if ptr == 0 {
 		writel(d0ptr, 0)
