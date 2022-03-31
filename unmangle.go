@@ -102,7 +102,7 @@ func unmangleType(r *strings.Reader, name string) string {
 	}
 
 	switch peekByte(r) {
-	case 'F':
+	case 'F', 'D':
 		readByte(r) // waste 'F'
 
 		var bild strings.Builder
@@ -114,7 +114,14 @@ func unmangleType(r *strings.Reader, name string) string {
 		// Need to read arg list, but don't use it yet
 		var args []string
 		for r.Len() != 0 && peekByte(r) != '_' {
-			args = append(args, unmangleType(r, ""))
+			type_ := unmangleType(r, "")
+
+			// Recall type
+			if len(type_) == 1 && '1' <= type_[0] && type_[0] <= '9' {
+				type_ = args[type_[0]-'1']
+			}
+
+			args = append(args, type_)
 		}
 
 		// Return type
@@ -220,8 +227,16 @@ func unmangleType(r *strings.Reader, name string) string {
 
 		return str
 
+	case 'T':
+		readByte(r) // waste 'F'
+		num := readByte(r)
+		if !('1' <= num && num <= '9') {
+			panic("expected 1-9")
+		}
+		return string(num)
+
 	default:
-		panic("unknown char")
+		panic("unknown char " + string(peekByte(r)))
 	}
 }
 
