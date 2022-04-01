@@ -410,6 +410,7 @@ func call_m68k(addr uint32) {
 				imm := extwl(readw(pc))
 				pc = popl()
 				writel(spptr, readl(spptr)+imm)
+				poppedReturnAddr()
 			} else if inst&0xFFF == 0xE75 { // rts
 				check_for_lurkers()
 				pc = popl()
