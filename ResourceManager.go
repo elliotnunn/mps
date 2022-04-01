@@ -194,43 +194,53 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 var (
 	curSegStart = uint32(1)
 	curSegEnd   = uint32(0)
-	curSegName  = ""
+	curRes      = uint64(0)
 )
 
-func whichSegmentIs(pc uint32) string {
+// Returns 0xA000BBBBCCCCCCCC: A=(0=ToolServer/1=other), B=segment, C=offset
+// Useful for checking for a specific instruction inside the emulator loop
+func codeResource(pc uint32) (ret uint64) {
 	if curSegStart <= pc && pc < curSegEnd {
-		goto got
+		goto win
 	}
 
 	// Search every loaded resource
 	for _, resMapAddr := range allResMaps() {
 		resMap := dumpMap(mem[resMapAddr:])
 		for _, entry := range resMap.list {
-			if entry.tType == 0x434f4445 {
-				if entry.rHndl != 0 {
-					curSegStart = readl(entry.rHndl)
-					curSegEnd = curSegStart + usedBlocks[curSegStart].size
-					if curSegStart <= pc && pc < curSegEnd {
-						fcb := fcbFromRefnum(resMap.mRefNum)
-						fname := macToUnicode(readPstring(fcb + 62))
-
-						curSegName = fmt.Sprintf("%s %s(%x)", fname, macToUnicode(entry.name), entry.rID)
-
-						goto got
-					}
-				}
+			if entry.tType != 0x434f4445 || entry.rHndl == 0 {
+				continue
 			}
+
+			start := readl(entry.rHndl)
+			if start == 0 {
+				continue
+
+			}
+
+			end := start + usedBlocks[start].size
+			if pc < start || pc >= end {
+				continue
+			}
+
+			curSegStart = start
+			curSegEnd = end
+			curRes = uint64(entry.rID) << 32
+			if resMap.mRefNum != readw(0x900) { // CurApRefNum
+				curRes |= 0x1000000000000000
+			}
+
+			goto win
 		}
 	}
 
-	// We lose
+	// lose
 	curSegStart = 1
 	curSegEnd = 0
-	return ""
+	return 0
 
-	// We win
-got:
-	return fmt.Sprintf("%s+%x", curSegName, pc-curSegStart)
+win:
+	return curRes | uint64(pc-curSegStart)
 }
 
 func getResName(resMap, idEntry uint32) (hasName bool, theName macstring) {
