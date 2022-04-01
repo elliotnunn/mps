@@ -62,22 +62,16 @@ var embedPACKs embed.FS
 var embedSystemFile []byte
 
 func main() {
-	if gProfile {
-		f, err := os.Create("mps.pprof")
-		if err != nil {
-			panic(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
+	// This must be the last defer to run, because it sets the exit status
 	defer func() {
-		err := recover()
-		if err != nil {
+		if err := recover(); err != nil {
 			var msg string
-			if addr, ok := err.(uint32); ok {
-				msg = fmt.Sprintf("Memory access %08x", addr)
-			} else {
+			switch err := err.(type) {
+			case exitToShell:
+				return // exit code 0
+			case uint32:
+				msg = fmt.Sprintf("Memory access %08x", err)
+			default:
 				msg = fmt.Sprintf("%v", err)
 			}
 
@@ -91,6 +85,15 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	if gProfile {
+		f, err := os.Create("mps.pprof")
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	defer writeOutDebugInfo()
 
@@ -743,8 +746,10 @@ func tGetOSEvent() {
 }
 
 // Will cause the topmost invocation of call_m68k to return -- not enough?
+type exitToShell struct{}
+
 func tExitToShell() {
-	pc = kReturnAddr
+	panic(exitToShell{})
 }
 
 // MultiFinder/ProcessManager routines
