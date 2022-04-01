@@ -165,14 +165,14 @@ func main() {
 		os_base + 0x6a:  memErrD0Wrap(tHSetState),       // _HSetState
 		os_base + 0x90:  tSysEnvirons,                   // _SysEnvirons
 		os_base + 0xad:  tGestalt,                       // _Gestalt
-		tb_base + 0x00d: tCountResources,                // _Count1Resources
-		tb_base + 0x00e: tGetIndResource,                // _Get1IndResource
-		tb_base + 0x00f: tGetIndType,                    // _Get1IndType
+		tb_base + 0x00d: tCount1Resources,               // _Count1Resources
+		tb_base + 0x00e: tGet1IndResource,               // _Get1IndResource
+		tb_base + 0x00f: tGet1IndType,                   // _Get1IndType
 		tb_base + 0x01a: tHOpenResFile,                  // _HOpenResFile
 		tb_base + 0x01b: tHCreateResFile,                // _HCreateResFile
-		tb_base + 0x01c: tCountTypes,                    // _Count1Types
-		tb_base + 0x01f: tGetResource,                   // _Get1Resource
-		tb_base + 0x020: tGetNamedResource,              // _Get1NamedResource
+		tb_base + 0x01c: tCount1Types,                   // _Count1Types
+		tb_base + 0x01f: tGet1Resource,                  // _Get1Resource
+		tb_base + 0x020: tGet1NamedResource,             // _Get1NamedResource
 		tb_base + 0x023: tAliasDispatch,                 // _AliasDispatch
 		tb_base + 0x034: tPop2,                          // _SetFScaleDisable
 		tb_base + 0x050: tNop,                           // _InitCursor
@@ -550,8 +550,6 @@ func lineA(inst uint16) {
 	}
 }
 
-var gCurToolTrapNum int
-
 func lineF(inst uint16) {
 	pc = popl()
 	check_for_lurkers()
@@ -561,7 +559,6 @@ func lineF(inst uint16) {
 	}
 
 	if inst&0x800 != 0 { // Go implementation of Toolbox trap
-		gCurToolTrapNum = int(inst & 0x3ff)
 		my_traps[tb_base+(inst&0x3ff)]()
 	} else { // Go implementation of OS trap
 		my_traps[os_base+(inst&0xff)]()

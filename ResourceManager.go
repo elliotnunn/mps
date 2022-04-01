@@ -389,21 +389,42 @@ func tHOpenResFile() {
 	setResError(0)
 }
 
+func tCount1Types() {
+	tCountTypesCommon(true)
+}
+
 func tCountTypes() {
-	only1Please := gCurToolTrapNum&0x3ff == 0x1c
+	tCountTypesCommon(false)
+}
+
+func tCountTypesCommon(only1Please bool) {
 	answer := len(uniqueTypesInMaps(currentResMaps(only1Please)))
 	writew(readl(spptr), uint16(answer))
 }
 
+func tCount1Resources() {
+	tCountResourcesCommon(true)
+}
+
 func tCountResources() {
-	only1Please := gCurToolTrapNum&0x3ff == 0xd
+	tCountResourcesCommon(false)
+}
+
+func tCountResourcesCommon(only1Please bool) {
 	the_type := popl()
 	answer := len(uniqueIdsInMaps(the_type, currentResMaps(only1Please)))
 	writew(readl(spptr), uint16(answer))
 }
 
+func tGet1IndType() {
+	tGetIndTypeCommon(true)
+}
+
 func tGetIndType() {
-	only1Please := gCurToolTrapNum&0x3ff == 0xf
+	tGetIndTypeCommon(false)
+}
+
+func tGetIndTypeCommon(only1Please bool) {
 	index := int(popw() - 1)
 	theTypePtr := popl()
 
@@ -416,8 +437,15 @@ func tGetIndType() {
 	writel(theTypePtr, theType)
 }
 
+func tGet1Resource() {
+	tGetResourceCommon(true)
+}
+
 func tGetResource() {
-	only1Please := gCurToolTrapNum&0x3ff == 0x1f
+	tGetResourceCommon(false)
+}
+
+func tGetResourceCommon(only1Please bool) {
 	loadPlease := readb(0xa5e) != 0
 	rid := popw()
 	rtype := popl()
@@ -476,8 +504,15 @@ func tDetachResource() {
 	}
 }
 
+func tGet1NamedResource() {
+	tGetNamedResourceCommon(true)
+}
+
 func tGetNamedResource() {
-	only1Please := gCurToolTrapNum&0x3ff == 0x20
+	tGetNamedResourceCommon(false)
+}
+
+func tGetNamedResourceCommon(only1Please bool) {
 	loadPlease := readb(0xa5e) != 0
 	rname := readPstring(popl())
 	rtype := popl()
@@ -505,8 +540,15 @@ found:
 	}
 }
 
+func tGet1IndResource() {
+	tGetIndResourceCommon(true)
+}
+
 func tGetIndResource() {
-	only1Please := gCurToolTrapNum&0x3ff == 0xe
+	tGetIndResourceCommon(false)
+}
+
+func tGetIndResourceCommon(only1Please bool) {
 	loadPlease := readb(0xa5e) != 0
 	rindex := popw()
 	rtype := popl()
