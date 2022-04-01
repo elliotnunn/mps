@@ -23,11 +23,6 @@ var (
 
 // called before and after every trap when debugging is on
 func logTrap(inst uint16, isPre bool) {
-	// For OS traps, use the more informative number in d1
-	if inst&0x800 == 0 {
-		inst = readw(d1ptr + 2)
-	}
-
 	_, isMM := mmTraps[inst&0x8ff]
 
 	switch {
@@ -82,6 +77,7 @@ var gLastFSDispatchSelector uint16 // because d0 gets clobbered
 
 func logFileMgrTrap(num uint16, isPre bool) {
 	pb := readl(a0ptr)
+	hierarchical := num&0x200 != 0
 
 	trapName := func(s string) {
 		if isPre {
@@ -100,7 +96,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioPermssn")
 		} else {
 			dumpPBField("ioRefNum")
@@ -168,7 +166,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioVolIndex")
 		} else {
 			dumpPBField("ioVCrDate")
@@ -202,7 +202,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 		}
 
 	case 0x09:
@@ -210,7 +212,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 		}
 
 	case 0x0a:
@@ -218,7 +222,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioPermssn")
 		} else {
 			dumpPBField("ioRefNum")
@@ -229,7 +235,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioPermssn")
 		} else {
 			dumpPBField("ioRefNum")
@@ -244,7 +252,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 				logln("    (no ioNamePtr because of ioFDirIndex)")
 			}
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioFDirIndex")
 		} else {
 			dumpPBField("ioFlAttrib")
@@ -265,7 +275,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		if isPre {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			dumpPBField("ioFlFndrInfo")
 			dumpPBField("ioFlCrDat")
 			dumpPBField("ioFlMdDat")
@@ -308,7 +320,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		} else {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 			if num&0x200 != 0 {
 				dumpPBField("ioWDProcID")
 				dumpPBField("ioWDVRefNum")
@@ -322,7 +336,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 		} else {
 			dumpPBField("ioNamePtr")
 			dumpPBField("ioVRefNum")
-			dumpPBField("ioDirID?")
+			if hierarchical {
+				dumpPBField("ioDirID")
+			}
 		}
 
 	case 0x18:
@@ -415,7 +431,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 					logln("    (no ioNamePtr because of ioFDirIndex)")
 				}
 				dumpPBField("ioVRefNum")
-				dumpPBField("ioDirID?")
+				if hierarchical {
+					dumpPBField("ioDirID")
+				}
 				dumpPBField("ioFDirIndex")
 			} else {
 				isDir := readb(pb+30)&0x10 != 0
@@ -469,7 +487,9 @@ func logFileMgrTrap(num uint16, isPre bool) {
 			if isPre {
 				dumpPBField("ioNamePtr")
 				dumpPBField("ioVRefNum")
-				dumpPBField("ioDirID?")
+				if hierarchical {
+					dumpPBField("ioDirID")
+				}
 				dumpPBField("ioPermssn")
 			} else {
 				dumpPBField("ioRefNum")
@@ -600,10 +620,6 @@ func dumpPBField(f string) {
 		logField(f, readl(pb+46))
 	case "ioVNmAlBlks":
 		logField(f, readw(pb+46))
-	case "ioDirID?":
-		if readw(d1ptr+2)&0x200 != 0 {
-			dumpPBField("ioDirID")
-		}
 	case "ioDirID", "ioWDDirID":
 		dirid := readl(pb + 48)
 		logField(f, dirid, dirIDs[dirid])

@@ -500,21 +500,41 @@ const tb_base = 0x100
 var my_traps [0x500]func()
 
 func lineA(inst uint16) {
+	if gDebugAny {
+		logTrap(inst, true)
+		defer logTrap(inst, false)
+	}
+
+	check_for_lurkers()
+
 	unimp := readl(kToolTable + 4*0x9f)
 
 	if inst&0x800 != 0 { // Toolbox trap
-		// Push a return address unless autoPop is used
-		if inst&0x400 == 0 {
-			pushl(pc)
-			pushedReturnAddr()
+		num := uint32(inst & 0x3ff)
+
+		// If autoPop then discard pc and use return address on stack
+		if inst&0x400 != 0 {
+			pc = popl()
 		}
 
-		imp := readl(kToolTable + 4*(uint32(inst)&0x3ff))
+		imp := readl(kToolTable + 4*num)
 		if imp == unimp {
 			panic("unimplemented trap")
 		}
 
-		pc = imp
+		defaultImp := executable_ftrap(0xf800 | uint16(inst))
+
+		if num == 0x1f0 {
+			// LoadSeg does arithmetic on the return address
+			// We must therefore give it the real return address
+			// Never call lineA(LoadSeg) outside of the emulator!
+			pushl(pc)
+			pc = imp // and let the emulator run...
+		} else if imp == defaultImp { // direct Go call
+			my_traps[tb_base+(inst&0x3ff)]()
+		} else {
+			call_m68k(imp)
+		}
 	} else { // OS trap
 		pushl(readl(a2ptr))
 		pushl(readl(d2ptr))
@@ -553,24 +573,19 @@ func lineA(inst uint16) {
 	}
 }
 
+// To run the default implementation of a trap,
+// execute Fxxx with the return address already on the stack.
+// Only used when the app uses the result of GetTrapAddress(),
+// or when the quirky LoadSeg trap runs.
 func lineF(inst uint16) {
 	pc = popl()
 	check_for_lurkers()
-
-	if gDebugAny {
-		logTrap(inst, true)
-	}
 
 	if inst&0x800 != 0 { // Go implementation of Toolbox trap
 		my_traps[tb_base+(inst&0x3ff)]()
 	} else { // Go implementation of OS trap
 		my_traps[os_base+(inst&0xff)]()
 	}
-
-	if gDebugAny {
-		logTrap(inst, false)
-	}
-
 }
 
 // For historical reasons, unflagged Get/SetTrapAddress need to guess between OS/TB traps
