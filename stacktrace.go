@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"runtime/debug"
 	"strings"
@@ -81,6 +82,17 @@ func stacktrace() string {
 				what, where := describePC(tempTrace[i].pc)
 
 				bild.WriteString(what)
+				bild.WriteByte('\n')
+
+				bild.WriteByte('\t')
+				bild.WriteString("stack(")
+				for j := 0; j < len(tempTrace[i].stackArgs); j += 2 {
+					if j != 0 {
+						bild.WriteByte(' ')
+					}
+					bild.WriteString(hex.EncodeToString(tempTrace[i].stackArgs[j : j+2]))
+				}
+				bild.WriteByte(')')
 				bild.WriteByte('\n')
 
 				bild.WriteByte('\t')
