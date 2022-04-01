@@ -508,7 +508,7 @@ func lineA(inst uint16) {
 
 		imp := readl(kToolTable + 4*(uint32(inst)&0x3ff))
 		if imp == unimp {
-			dieBadTrap(pc - 2)
+			panic("unimplemented trap")
 		}
 
 		pc = imp
@@ -525,7 +525,7 @@ func lineA(inst uint16) {
 
 		imp := readl(kOSTable + 4*(uint32(inst)&0xff))
 		if imp == unimp {
-			dieBadTrap(pc - 2)
+			panic("unimplemented trap")
 		}
 
 		defaultImp := executable_ftrap(0xf000 | (inst & 0xff))
@@ -829,14 +829,8 @@ func tOSDispatch() {
 
 // Trivial do-nothing traps
 
-func dieBadTrap(pc uint32) {
-	logf("Unimplemented trap: %x in %s %s\n", readw(pc), whichSegmentIs(pc), curFunc(pc))
-	os.Exit(1)
-}
-
 func tUnimplemented() {
-	logln("Unimplemented trap handler called directly (not via an A-trap)")
-	os.Exit(1)
+	panic("unimplemented trap")
 }
 
 func tNop() {

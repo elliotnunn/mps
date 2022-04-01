@@ -740,7 +740,7 @@ func tCloseResFile() {
 		for _, entryList := range resMapEntries(resMap) {
 			for _, idEntry := range entryList[1:] {
 				resHand := readl(idEntry + 8)
-				// zero rHndl because nonexistent handles crash whichSegmentIs
+				// zero rHndl because nonexistent handles crash codeResource()
 				writel(idEntry+8, 0)
 				if resHand != 0 {
 					writel(a0ptr, resHand)

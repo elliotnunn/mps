@@ -1821,7 +1821,7 @@ func printState() {
 	fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
 	fmt.Println("")
 
-	fmt.Printf("%x: %s %s %04x\n\n", pc, whichSegmentIs(pc), printName, readw(pc))
+	fmt.Printf("%x: %s %04x\n\n", pc, printName, readw(pc))
 }
 
 var instCount uint16 = 0
