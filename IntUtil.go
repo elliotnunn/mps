@@ -35,7 +35,7 @@ func tPack6() {
 		// now stack points at space for handle return
 		pushl(0x69746c30 + uint32(id)) // itl0
 		pushw(0)
-		call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+		lineA(0xa9a0) // _GetResource
 
 	case 8: // PROCEDURE IUSetIntl(refNum: INTEGER; theID: INTEGER; intlHandle: Handle);
 		handle := popl()
@@ -51,25 +51,25 @@ func tPack6() {
 		defer writew(0xa5e, prevResLoad)
 
 		writel(a0ptr, handle)
-		call_m68k(executable_atrap(0xa9e4)) // _HandAndHand
+		lineA(0xa9e4) // _HandAndHand
 		handle = readl(a0ptr)
 
 		// Remove existing resource
 		pushl(0)          // room for existHandle
 		pushl(0x494e544c) // INTL
 		pushw(id)
-		call_m68k(executable_atrap(0xac1f)) // _Get1Resource ,autoPop
+		lineA(0xa81f) // _Get1Resource
 		existHandle := popl()
 		if existHandle != 0 {
 			pushl(existHandle)
-			call_m68k(executable_atrap(0xadad)) // _RmveResource ,autoPop
+			lineA(0xa9ad) // _RmveResource
 		}
 
 		pushl(handle)
-		pushl(0x494e544c)                   // INTL
-		pushw(id)                           // resource id
-		pushl(0)                            // no name
-		call_m68k(executable_atrap(0xadab)) // _AddResource ,autoPop
+		pushl(0x494e544c) // INTL
+		pushw(id)         // resource id
+		pushl(0)          // no name
+		lineA(0xa9ab)     // _AddResource
 
 		// should make it purgeable too...
 
@@ -100,7 +100,7 @@ func dateString(secs uint32, form uint8, resultPtr uint32, intl uint32) {
 			pushl(0x69746c31) // itl1
 		}
 		pushw(0)
-		call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+		lineA(0xa9a0) // _GetResource
 		intl = popl()
 
 		if intl == 0 {
@@ -110,7 +110,7 @@ func dateString(secs uint32, form uint8, resultPtr uint32, intl uint32) {
 
 	if readl(intl) == 0 {
 		pushl(intl)
-		call_m68k(executable_atrap(0xada2)) // _LoadResource ,autoPop
+		lineA(0xa9a2) // _LoadResource
 	}
 
 	intl = readl(intl) // handle to pointer
@@ -220,7 +220,7 @@ func timeString(secs uint32, wantSeconds bool, resultPtr uint32, intl uint32) {
 		pushl(0)          // for handle
 		pushl(0x69746c30) // itl0
 		pushw(0)
-		call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+		lineA(0xa9a0) // _GetResource
 		intl = popl()
 
 		if intl == 0 {
@@ -230,7 +230,7 @@ func timeString(secs uint32, wantSeconds bool, resultPtr uint32, intl uint32) {
 
 	if readl(intl) == 0 {
 		pushl(intl)
-		call_m68k(executable_atrap(0xada2)) // _LoadResource ,autoPop
+		lineA(0xa9a2) // _LoadResource
 	}
 
 	intl = readl(intl) // handle to pointer

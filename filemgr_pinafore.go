@@ -29,8 +29,8 @@ func tHighLevelFSDispatch() {
 		writel(pb+18, ioNamePtr)
 		writel(pb+28, specPtr) // ioMisc
 
-		writel(d0ptr, 0x1b)                 // MakeFSSpec selector...
-		call_m68k(executable_atrap(0xa260)) // FSDispatch
+		writel(d0ptr, 0x1b) // MakeFSSpec selector...
+		lineA(0xa260)       // FSDispatch
 		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
@@ -48,10 +48,10 @@ func tHighLevelFSDispatch() {
 		writeb(pb+27, ioPermssn)
 
 		if selector == 2 { // FSpOpenDF
-			writel(d0ptr, 0x1a)                 // OpenDF selector...
-			call_m68k(executable_atrap(0xa260)) // FSDispatch
+			writel(d0ptr, 0x1a) // OpenDF selector...
+			lineA(0xa260)       // FSDispatch
 		} else { // FSpOpenRF
-			call_m68k(executable_atrap(0xa20a)) // OpenRF
+			lineA(0xa20a) // OpenRF
 		}
 		ioRefNum := readw(pb + 24)
 		writel(spptr, oldsp)
@@ -69,34 +69,34 @@ func tHighLevelFSDispatch() {
 		pb, oldsp := pushzero(128)
 
 		if isResFile {
-			pushw(readw(specPtr))               // vRefNum
-			pushl(readl(specPtr + 2))           // dirID
-			pushl(specPtr + 6)                  // namePtr
-			call_m68k(executable_atrap(0xac1b)) // _HCreateResFile ,autoPop
-			writew(d0ptr+2, readw(0xa60))       // d0.w = ResErr (checked below)
+			pushw(readw(specPtr))         // vRefNum
+			pushl(readl(specPtr + 2))     // dirID
+			pushl(specPtr + 6)            // namePtr
+			lineA(0xa81b)                 // _HCreateResFile
+			writew(d0ptr+2, readw(0xa60)) // d0.w = ResErr (checked below)
 		} else {
 			writel(a0ptr, pb)
-			writew(pb+22, readw(specPtr))       // ioVRefNum
-			writel(pb+48, readl(specPtr+2))     // ioDirID
-			writel(pb+18, specPtr+6)            // ioNamePtr
-			call_m68k(executable_atrap(0xa208)) // _HCreate
+			writew(pb+22, readw(specPtr))   // ioVRefNum
+			writel(pb+48, readl(specPtr+2)) // ioDirID
+			writel(pb+18, specPtr+6)        // ioNamePtr
+			lineA(0xa208)                   // _HCreate
 		}
 
 		if readw(d0ptr+2) == 0 {
 			writel(a0ptr, pb)
-			writew(pb+22, readw(specPtr))       // ioVRefNum
-			writel(pb+48, readl(specPtr+2))     // ioDirID
-			writel(pb+18, specPtr+6)            // ioNamePtr
-			call_m68k(executable_atrap(0xa20c)) // _HGetFInfo
+			writew(pb+22, readw(specPtr))   // ioVRefNum
+			writel(pb+48, readl(specPtr+2)) // ioDirID
+			writel(pb+18, specPtr+6)        // ioNamePtr
+			lineA(0xa20c)                   // _HGetFInfo
 
 			if readw(d0ptr+2) == 0 {
 				writel(a0ptr, pb)
-				writew(pb+22, readw(specPtr))       // ioVRefNum
-				writel(pb+48, readl(specPtr+2))     // ioDirID
-				writel(pb+18, specPtr+6)            // ioNamePtr
-				writel(pb+32, cCode)                // fdType
-				writel(pb+36, tCode)                // fdCreator
-				call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
+				writew(pb+22, readw(specPtr))   // ioVRefNum
+				writel(pb+48, readl(specPtr+2)) // ioDirID
+				writel(pb+18, specPtr+6)        // ioNamePtr
+				writel(pb+32, cCode)            // fdType
+				writel(pb+36, tCode)            // fdCreator
+				lineA(0xa20d)                   // _HSetFInfo
 			}
 		}
 
@@ -114,8 +114,8 @@ func tHighLevelFSDispatch() {
 		writel(pb+48, readl(specPtr+2)) // ioDirID
 		writel(pb+18, specPtr+6)        // ioNamePtr
 
-		writel(d0ptr, 6)                    // DirCreate selector
-		call_m68k(executable_atrap(0xa260)) // FSDispatch
+		writel(d0ptr, 6) // DirCreate selector
+		lineA(0xa260)    // FSDispatch
 		ioDirID := readl(pb + 48)
 		writel(spptr, oldsp)
 
@@ -133,7 +133,7 @@ func tHighLevelFSDispatch() {
 		writel(pb+48, readl(specPtr+2)) // ioDirID
 		writel(pb+18, specPtr+6)        // ioNamePtr
 
-		call_m68k(executable_atrap(0xa209)) // _HDelete
+		lineA(0xa209) // _HDelete
 		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
@@ -148,7 +148,7 @@ func tHighLevelFSDispatch() {
 		writel(pb+48, readl(specPtr+2)) // ioDirID
 		writel(pb+18, specPtr+6)        // ioNamePtr
 
-		call_m68k(executable_atrap(0xa20c)) // _HGetFInfo
+		lineA(0xa20c) // _HGetFInfo
 
 		copy(mem[fInfoPtr:][:16], mem[pb+32:][:16]) // ioFlFndrInfo
 		writel(spptr, oldsp)
@@ -166,7 +166,7 @@ func tHighLevelFSDispatch() {
 		writel(pb+18, specPtr+6)                    // ioNamePtr
 		copy(mem[pb+32:][:16], mem[fInfoPtr:][:16]) // ioFlFndrInfo
 
-		call_m68k(executable_atrap(0xa20d)) // _HSetFInfo
+		lineA(0xa20d) // _HSetFInfo
 		writel(spptr, oldsp)
 
 		writew(readl(spptr), readw(d0ptr+2)) // return osErr
@@ -180,7 +180,7 @@ func tHighLevelFSDispatch() {
 		pushl(specPtr + 6)        // namePtr
 		pushb(perm)
 
-		call_m68k(executable_atrap(0xac1a)) // _HOpenResFile ,autoPop
+		lineA(0xa81a) // _HOpenResFile
 		// and the result will be left on the stack for us
 
 	default:

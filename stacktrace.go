@@ -103,9 +103,6 @@ func describePC(pc uint32) (what, where string) {
 	case kA5World-0x8000 <= pc && pc < kA5World:
 		where = fmt.Sprintf("A5-%#x", kA5World-pc)
 		return
-	case kATrapTable <= pc && pc < kATrapTable+0x10000:
-		where = fmt.Sprintf("A-trap table %#x", pc>>4)
-		return
 	case kFTrapTable <= pc && pc < kFTrapTable+0x10000:
 		where = fmt.Sprintf("F-trap table %#x", pc>>4)
 		return

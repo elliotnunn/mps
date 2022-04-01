@@ -102,7 +102,7 @@ func tHandToHand() { // duplicate handle
 	}
 
 	writel(d0ptr, size)
-	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
+	lineA(0xa122) // _NewHandle takes d0 and return a0
 	ptr2 := readl(readl(a0ptr))
 
 	copy(mem[ptr2:][:size], mem[ptr:][:size])
@@ -113,7 +113,7 @@ func tPtrToHand() { // copy to new handle
 	ptr := readl(a0ptr)
 	size := readl(d0ptr)
 
-	call_m68k(executable_atrap(0xa122)) // _NewHandle takes d0 and return a0
+	lineA(0xa122) // _NewHandle takes d0 and return a0
 	ptr2 := readl(readl(a0ptr))
 
 	copy(mem[ptr2:][:size], mem[ptr:][:size])
@@ -127,7 +127,7 @@ func tPtrToXHand() { // copy to existing handle
 	hand := readl(a1ptr)
 
 	writel(a0ptr, hand)
-	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
+	lineA(0xa024) // _SetHandleSize takes a0/d0, return err in d0
 
 	if readw(d0ptr+2) == 0 { // proceed if no error
 		ptr2 := readl(hand)
@@ -148,7 +148,7 @@ func tHandAndHand() { // copy to existing handle
 
 	writel(a0ptr, bHndl)
 	writel(d0ptr, aSize+bSize)
-	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
+	lineA(0xa024) // _SetHandleSize takes a0/d0, return err in d0
 
 	if readw(d0ptr+2) == 0 { // proceed if no error
 		bPtr = readl(bHndl) // handle might have moved
@@ -170,7 +170,7 @@ func tPtrAndHand() {
 
 	writel(a0ptr, bHndl)
 	writel(d0ptr, aSize+bSize)
-	call_m68k(executable_atrap(0xa024)) // _SetHandleSize takes a0/d0, return err in d0
+	lineA(0xa024) // _SetHandleSize takes a0/d0, return err in d0
 
 	if readw(d0ptr+2) == 0 { // proceed if no error
 		bPtr = readl(bHndl) // handle might have moved

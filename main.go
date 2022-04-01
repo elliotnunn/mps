@@ -37,7 +37,6 @@ const (
 	kPoison         = 0x60000
 	kFakeHeapHeader = 0x90000 // very short
 	kQDPort         = 0x98000
-	kATrapTable     = 0xa0000 // 0x10000 above
 	kFCBTable       = 0xb0000 // 0x8000 above
 	kDQE            = 0xb9000 // 0x4 below and 0x10 above
 	kVCB            = 0xba000 // ????
@@ -420,7 +419,7 @@ func main() {
 
 	// Empty app parameters
 	writel(d0ptr, 128)
-	call_m68k(executable_atrap(0xa122)) // _NewHandle
+	lineA(0xa122) // _NewHandle
 	appParms := readl(a0ptr)
 	writel(0xaec, appParms)                  // handle in low memory
 	writel(readl(a5ptr)+16, readl(appParms)) // pointer in a5 world
@@ -456,8 +455,8 @@ func main() {
 	fileNamePtr := readl(spptr)
 	pushw(0) // refnum return
 	writePstring(fileNamePtr, "ToolServer")
-	pushl(fileNamePtr)                  // pointer to the file string
-	call_m68k(executable_atrap(0xad97)) // _OpenResFile ,autoPop
+	pushl(fileNamePtr) // pointer to the file string
+	lineA(0xa997)      // _OpenResFile
 	appRefNum := popw()
 	writew(0x900, appRefNum) // CurApRefNum
 
@@ -466,10 +465,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	pushl(0)                            // handle return
-	pushl(0x434f4445)                   // CODE
-	pushw(0)                            // ID 0
-	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+	pushl(0)          // handle return
+	pushl(0x434f4445) // CODE
+	pushw(0)          // ID 0
+	lineA(0xa9a0)     // _GetResource
 	code0 := popl()
 	code0 = readl(code0) // handle to pointer
 
@@ -616,16 +615,6 @@ func tSetTrapAddress() {
 	writel(tableEntry, readl(a0ptr))
 }
 
-// Get a reserved address, containing an A-trap, that can be run as code
-func executable_atrap(trap uint16) (addr uint32) {
-	addr = kATrapTable + (uint32(trap)&0xfff)*16
-
-	writew(addr, trap)     // consider using autoPop instead?
-	writew(addr+2, 0x4e75) // RTS
-
-	return
-}
-
 // Get a reserved address, containing an F-trap, that can be run as code
 func executable_ftrap(trap uint16) (addr uint32) {
 	addr = kFTrapTable + (uint32(trap)&0xfff)*16
@@ -652,7 +641,7 @@ func tLoadSeg() {
 	pushl(0)
 	pushl(0x434f4445) // CODE
 	pushw(segNum)
-	call_m68k(executable_atrap(0xada0)) // _GetResource ,autoPop
+	lineA(0xa9a0) // _GetResource
 	segPtr := readl(popl())
 
 	offset := uint32(readw(segPtr))    // offset of first entry within jump table

@@ -161,14 +161,14 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 
 	if loadPlease == false && handle == 0 {
 		// Create empty handle
-		call_m68k(executable_atrap(0xa166)) // _NewEmptyHandle
+		lineA(0xa166) // _NewEmptyHandle
 		handle = readl(a0ptr)
 	} else if loadPlease == true && handle == 0 {
 		// Create full handle
 		data := resData(resMap, typeEntry, idEntry)
 
 		writel(d0ptr, uint32(len(data)))
-		call_m68k(executable_atrap(0xa122)) // _NewHandle
+		lineA(0xa122) // _NewHandle
 		handle = readl(a0ptr)
 
 		copy(mem[readl(handle):], data)
@@ -178,7 +178,7 @@ func resToHand(resMap, typeEntry, idEntry uint32, loadPlease bool) uint32 {
 
 		writel(d0ptr, uint32(len(data)))
 		writel(a0ptr, handle)
-		call_m68k(executable_atrap(0xa027)) // _ReallocHandle
+		lineA(0xa027) // _ReallocHandle
 
 		copy(mem[readl(handle):], data)
 	}
@@ -342,7 +342,7 @@ func tHOpenResFile() {
 	writew(pb+22, ioVRefNum)
 	writel(pb+48, ioDirID)
 	writel(pb+18, ioNamePtr)
-	call_m68k(executable_atrap(0xa20a)) // _HOpenRF
+	lineA(0xa20a) // _HOpenRF
 	writel(spptr, oldsp)
 
 	ioResult := readw(pb + 16)
@@ -364,7 +364,7 @@ func tHOpenResFile() {
 
 	// Create a handle to hold it
 	writel(d0ptr, maplen)
-	call_m68k(executable_atrap(0xa122)) // _NewHandle for map
+	lineA(0xa122) // _NewHandle for map
 	maphdl := readl(a0ptr)
 	mapptr := readl(maphdl)
 
@@ -480,7 +480,7 @@ func tReleaseResource() {
 			writel(idEntry+8, 0) // zero the handle record
 
 			writel(a0ptr, handle)
-			call_m68k(executable_atrap(0xa023)) // _DisposHandle
+			lineA(0xa023) // _DisposHandle
 		}
 
 		setResError(0) // noErr
@@ -786,7 +786,7 @@ func tCloseResFile() {
 				writel(idEntry+8, 0)
 				if resHand != 0 {
 					writel(a0ptr, resHand)
-					call_m68k(executable_atrap(0xa023)) // _DisposHandle
+					lineA(0xa023) // _DisposHandle
 				}
 			}
 		}
@@ -805,13 +805,13 @@ func tCloseResFile() {
 
 		// Release the resource map
 		writel(a0ptr, usedBlocks[resMap].masterPtr)
-		call_m68k(executable_atrap(0xa023)) // _DisposHandle
+		lineA(0xa023) // _DisposHandle
 
 		// Close the underlying fork
 		paramBlk, oldsp := pushzero(128)
 		writew(paramBlk+24, refnum) // ioRefNum
 		writel(a0ptr, paramBlk)
-		call_m68k(executable_atrap(0xa001)) // _Close
+		lineA(0xa001) // _Close
 		writel(spptr, oldsp)
 
 		setResError(0) // noErr
