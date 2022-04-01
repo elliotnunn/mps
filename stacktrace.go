@@ -195,8 +195,13 @@ func macsbugName(slice []byte) (ret string) {
 			// RTD #<word>
 			slice = slice[try+4:]
 			goto foundFuncEnd
-		} else if slice[try] == 0x4e && (slice[try+1] == 0x75 || slice[try+1] == 0xd0) {
-			// RTS or JMP(A0)
+		} else if slice[try] == 0x4e && slice[try+1] == 0x75 {
+			// RTS
+			slice = slice[try+2:]
+			goto foundFuncEnd
+		} else if slice[try] == 0x4e && 0xd0 <= slice[try+1] && slice[try+1] <= 0xd1 {
+			// JMP (A0||A1)
+			// More permissive because JMP (A1) is common in glue libraries
 			slice = slice[try+2:]
 			goto foundFuncEnd
 		}
