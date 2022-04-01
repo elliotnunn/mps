@@ -9,85 +9,92 @@ import (
 )
 
 type traceEntry struct {
-	sp, pc uint32
+	stackReturn    uint32   // stack address where caller return address was pushed
+	stackArgs      [20]byte // args, not including the return address
+	pc             uint32   // pc of the caller
+	isEmulatorCall bool     // created on entry to call_m68k?
 }
 
-// Functions for the 68k emulator to call
+// "Out of band" view of the 68k call stack
+// The 68k emulator must cooperate by telling us about JSR/RTS-like instructions
 var trace []traceEntry
-var traceEmu []traceEntry
 
 // Call after pushing a return address
-// (but not the fake return address that call_m68k uses)
-func pushedReturnAddr() {
-	// Pop entry records up to and including this one
-	for len(trace) > 0 && trace[len(trace)-1].sp <= readl(spptr) {
-		trace = trace[:len(trace)-1]
-	}
+func pushedReturnAddr(enteringEmulator bool) {
+	// Clean up stray routines on the stack
+	steal := popl()
+	poppedReturnAddr()
+	pushl(steal)
 
-	trace = append(trace, traceEntry{sp: readl(spptr), pc: pc})
+	entry := traceEntry{
+		stackReturn:    readl(spptr),
+		pc:             pc,
+		isEmulatorCall: enteringEmulator,
+	}
+	copy(entry.stackArgs[:], mem[readl(spptr)+4:])
+
+	trace = append(trace, entry)
 }
 
-// Call after popping a return address,
-// or to clean up when the stack might have shrunk
+// Call after popping a return address
+// Harmless if called more often
 func poppedReturnAddr() {
-	for len(trace) > 0 && trace[len(trace)-1].sp < readl(spptr) {
-		trace = trace[:len(trace)-1]
+	// Trim returned stack entries
+	for i := len(trace) - 1; i >= 0; i-- {
+		if readl(spptr) <= trace[i].stackReturn {
+			break // no need to delete
+		}
+
+		trace = trace[:i] // delete the entry
 	}
-}
-
-// Keep a stack of call_m68k invocations and their respective 68k stack pointers
-func entered68k() {
-	traceEmu = append(traceEmu, traceEntry{sp: readl(spptr), pc: pc})
-}
-
-func exited68k() {
-	traceEmu = traceEmu[:len(traceEmu)-1]
-	poppedReturnAddr() // all subroutines of this call_m68k have returned
 }
 
 func stacktrace() string {
+	poppedReturnAddr() // pop returned routines from stack
+
+	// Working copy of stack trace
+	tempTrace := append(make([]traceEntry, 0, len(trace)), trace...)
+
+	// Convert pc field from "caller pc" to "callee pc"
+	for i := range tempTrace {
+		if i < len(tempTrace)-1 {
+			tempTrace[i].pc = tempTrace[i+1].pc
+		} else {
+			tempTrace[i].pc = pc
+		}
+	}
+
+	i := len(tempTrace)
+
 	s := string(debug.Stack())
 	lines := strings.SplitAfter(s, "\n")
 	lines = lines[5:] // Delete first line, debug.Stack(), stacktrace()
 
 	var bild strings.Builder
 
-	poppedReturnAddr() // pop returned routines from stack
-
-	indexEmu := len(traceEmu) - 1
-	index := len(trace) - 1
-	emuLastAddr := pc
 	for _, line := range lines {
-		if !strings.HasPrefix(line, "main.call_m68k(") {
-			bild.WriteString(line)
-			continue
+		// Write 68k lines (if the Go line is call_m68k)
+		if strings.HasPrefix(line, "main.call_m68k(") {
+			for {
+				i-- // No range checking... if wrong, we're in big trouble
+
+				what, where := describePC(tempTrace[i].pc)
+
+				bild.WriteString(what)
+				bild.WriteByte('\n')
+
+				bild.WriteByte('\t')
+				bild.WriteString(where)
+				bild.WriteByte('\n')
+
+				if tempTrace[i].isEmulatorCall {
+					break
+				}
+			}
 		}
 
-		what, where := describePC(emuLastAddr)
-		bild.WriteString(what)
-		bild.WriteString("\n\t")
-		bild.WriteString(where)
-		bild.WriteByte('\n')
-
-		for ; index >= 0; index-- {
-			if trace[index].sp >= traceEmu[indexEmu].sp {
-				break
-			}
-
-			// This area of stack has been overwritten
-			if trace[index].pc != readl(trace[index].sp) {
-				continue
-			}
-
-			what, where := describePC(trace[index].pc)
-			bild.WriteString(what)
-			bild.WriteString("\n\t")
-			bild.WriteString(where)
-			bild.WriteByte('\n')
-		}
-		emuLastAddr = traceEmu[indexEmu].pc
-		indexEmu--
-		bild.WriteString(line) // main.call_m68k
+		// And write the Go line
+		bild.WriteString(line)
 	}
 
 	return bild.String()
