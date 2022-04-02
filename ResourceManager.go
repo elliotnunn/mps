@@ -364,6 +364,13 @@ func tHOpenResFile() {
 	ioRefNum := readw(pb + 24)
 	forkdata := *(openBuffers[ioRefNum]) // access buffer directly, not _Read trap
 	if len(forkdata) < 256 {
+		// Close the truncated fork
+		pb, oldsp := pushzero(128)
+		writel(a0ptr, pb)
+		writew(pb+24, ioRefNum)
+		lineA(0xa001) // _Close
+		writel(spptr, oldsp)
+
 		setResError(-39) // eofErr
 		return
 	}
