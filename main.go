@@ -490,8 +490,8 @@ func printUsageAndQuit() {
 
 // Trap Dispatcher
 // - my_traps function list is set up in main() above
-// - A-trap handler calls the 68k routine in the dispatch table
-// - F-trap handler calls the Go routine
+// - A-trap handler dispatches according to the trap table
+// - F-trap handler calls the Go routine directly
 
 const os_base = 0
 const tb_base = 0x100
@@ -749,7 +749,6 @@ func tGetOSEvent() {
 	writel(d0ptr, 0xffffffff)
 }
 
-// Will cause the topmost invocation of call_m68k to return -- not enough?
 type exitToShell struct{}
 
 func tExitToShell() {
