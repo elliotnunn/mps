@@ -39,6 +39,8 @@ func pushedReturnAddr(enteringEmulator bool) {
 
 // Call after popping a return address
 // Harmless if called more often
+// But don't call while panicking, because deferred code popping the stack
+// will cause us to pop/drop our record of what went wrong!
 func poppedReturnAddr() {
 	// Trim returned stack entries
 	for i := len(trace) - 1; i >= 0; i-- {
@@ -51,8 +53,6 @@ func poppedReturnAddr() {
 }
 
 func stacktrace() string {
-	poppedReturnAddr() // pop returned routines from stack
-
 	// Working copy of stack trace
 	tempTrace := append(make([]traceEntry, 0, len(trace)), trace...)
 

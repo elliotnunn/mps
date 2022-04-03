@@ -166,6 +166,7 @@ func main() {
 		os_base + 0x69:  memErrWrap(tHGetState),         // _HGetState
 		os_base + 0x6a:  memErrD0Wrap(tHSetState),       // _HSetState
 		os_base + 0x90:  tSysEnvirons,                   // _SysEnvirons
+		os_base + 0x93:  tMicroseconds,                  // _Microseconds
 		os_base + 0xad:  tGestalt,                       // _Gestalt
 		tb_base + 0x00d: tCount1Resources,               // _Count1Resources
 		tb_base + 0x00e: tGet1IndResource,               // _Get1IndResource
@@ -221,7 +222,7 @@ func main() {
 		tb_base + 0x149: tPop2RetZero,                   // _GetMenuHandle
 		tb_base + 0x14d: tPop8,                          // _AppendResMenu
 		tb_base + 0x170: tGetNextEvent,                  // _GetNextEvent
-		tb_base + 0x175: tRetZero,                       // _TickCount
+		tb_base + 0x175: tTickCount,                     // _TickCount
 		tb_base + 0x179: tPop2,                          // _CouldDialog
 		tb_base + 0x17b: tNop,                           // _InitDialogs
 		tb_base + 0x17c: tPop10RetZero,                  // _GetNewDialog
@@ -830,6 +831,17 @@ func tOSDispatch() {
 	default:
 		panic(fmt.Sprintf("OSDispatch 0x%x unimplemented", selector))
 	}
+}
+
+func tTickCount() {
+	writel(readl(spptr), readl(0x16a))
+}
+
+func tMicroseconds() {
+	ticks := readl(0x16a)
+	usec := uint64(ticks) * 1000000 / 60
+	writel(a0ptr, uint32(usec>>32))
+	writel(d0ptr, uint32(usec))
 }
 
 // Trivial do-nothing traps
