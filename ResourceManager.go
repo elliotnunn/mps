@@ -280,22 +280,6 @@ func tGetResInfo() {
 	}
 }
 
-// func set_resource_name(map_handle, res_entry_ptr, name) {
-//     if name == nil {
-//         writew(res_entry_ptr + 2, 0xffff)
-//
-//     } else {
-//         name_list_offset := readw(readl(map_handle) + 26) // from start of map
-//         name_offset = gethandlesize(map_handle) // from start of map
-//         writew(res_entry_ptr + 2, name_offset - name_list_offset)
-//
-//         // after set_handle_size, all pointers into the map are invalid
-//         set_handle_size(map_handle, gethandlesize(map_handle) + 1 + len(name))
-//         write_pstring(readl(map_handle) + name_offset, name)
-//
-//     }
-// }
-
 func setResError(err int16) {
 	writew(0xa60, uint16(err))
 }
