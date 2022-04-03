@@ -405,6 +405,8 @@ func main() {
 	writel(0x9d6, 0)          // WindowList empty
 	writel(0xa02, 0x00010001) // OneOne
 	writel(0xa06, 0xffffffff) // MinusOne
+	writew(0xa4a, 0)          // FPState
+	writel(0xa4c, 0)          // FPHaltVector
 	writel(0xaa0, 0)          // DAStrings 0
 	writel(0xaa4, 0)          // DAStrings 1
 	writel(0xaa8, 0)          // DAStrings 2
