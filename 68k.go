@@ -977,7 +977,7 @@ func call_m68k(addr uint32) {
 	}
 
 	if pc != kReturnAddr {
-		panic("did not magically return")
+		panic(pc) // The recover routine in main() treats this as a memory access
 	}
 
 	pc = save_pc
@@ -985,10 +985,6 @@ func call_m68k(addr uint32) {
 }
 
 const memcheck = false
-
-func mempanic(addr uint32) {
-	panic(fmt.Sprintf("bad memory access at %x", addr))
-}
 
 //go:inline
 func read(numbytes uint32, addr uint32) (val uint32) {
