@@ -114,23 +114,22 @@ func stacktrace() string {
 
 func describePC(pc uint32) (what, where string) {
 	defer func() {
-		where = "68k " + where
+		what = "68k " + what
 	}()
 
-	what = "<???>"
 	switch {
 	case kA5World-0x8000 <= pc && pc < kA5World:
-		where = fmt.Sprintf("A5-%#x", kA5World-pc)
-		return
+		return "<???>", fmt.Sprintf("<A5-%#x>", kA5World-pc)
 	case kFTrapTable <= pc && pc < kFTrapTable+0x10000:
-		where = fmt.Sprintf("F-trap table %#x", pc>>4)
-		return
-	case pc >= kHeapLimit:
-		where = fmt.Sprintf("stack %#08x", pc)
-		return
+		return "<???>", fmt.Sprintf("<F-trap table %#x>", pc>>4)
+	case pc >= kHeapLimit && pc < kReturnAddr:
+		return "<???>", fmt.Sprintf("<stack %#08x>", pc)
+	case pc == kReturnAddr:
+		return "<???>", fmt.Sprintf("<call_m68k return address %#08x>", pc)
+	case pc >= kLowestIllegal:
+		return "<???>", fmt.Sprintf("<illegal address %#08x>", pc)
 	case pc < kHeap:
-		where = fmt.Sprintf("lowmem %#08x", pc)
-		return
+		return "<???>", fmt.Sprintf("<lowmem %#08x>", pc)
 	}
 
 	// Somewhere in the heap... walk all heap blocks
@@ -174,7 +173,7 @@ func describePC(pc uint32) (what, where string) {
 		}
 	}
 
-	return "???", "in heap but not resource"
+	return "<???>", fmt.Sprintf("<heap but not resource %#08x>", pc)
 }
 
 /*
