@@ -53,63 +53,82 @@ func poppedReturnAddr() {
 }
 
 func stacktrace() string {
-	// Working copy of stack trace
-	tempTrace := append(make([]traceEntry, 0, len(trace)), trace...)
+	stackGo := strings.TrimSpace(string(debug.Stack()))
 
-	// Convert pc field from "caller pc" to "callee pc"
-	for i := range tempTrace {
-		if i < len(tempTrace)-1 {
-			tempTrace[i].pc = tempTrace[i+1].pc
-		} else {
-			tempTrace[i].pc = pc
-		}
-	}
+	// Cut away debug.Stack() and stacktrace()
+	stackGo = strings.SplitN(stackGo, "stacktrace(", 2)[1]
+	stackGo = strings.SplitN(stackGo, "\n", 3)[2]
 
-	i := len(tempTrace)
+	// Delimit chunks with a blank line, same as stack68()
+	stackGo = strings.ReplaceAll(stackGo, "\nmain.call_m68k(", "\n\nmain.call_m68k(")
 
-	s := string(debug.Stack())
-	lines := strings.SplitAfter(s, "\n")
-	lines = lines[5:] // Delete first line, debug.Stack(), stacktrace()
+	// Split Go and 68k stacks into chunks so we can interleave them
+	stackGoSplit := strings.Split(stackGo, "\n\n")
+	stack68Split := strings.Split(stack68(), "\n\n")
 
 	var bild strings.Builder
 
-	for _, line := range lines {
-		// Write 68k lines (if the Go line is call_m68k)
-		if strings.HasPrefix(line, "main.call_m68k(") {
-			for {
-				i-- // No range checking... if wrong, we're in big trouble
+	// Interleave the chunks like so: (Go )*(68k Go )*
+	for iGo := range stackGoSplit {
+		i68 := iGo - len(stackGoSplit) + len(stack68Split)
 
-				what, where := describePC(tempTrace[i].pc)
-
-				bild.WriteString(what)
-				bild.WriteByte('\n')
-
-				bild.WriteByte('\t')
-				bild.WriteString("stack(")
-				for j := 0; j < len(tempTrace[i].stackArgs); j += 2 {
-					if j != 0 {
-						bild.WriteByte(' ')
-					}
-					bild.WriteString(hex.EncodeToString(tempTrace[i].stackArgs[j : j+2]))
-				}
-				bild.WriteByte(')')
-				bild.WriteByte('\n')
-
-				bild.WriteByte('\t')
-				bild.WriteString(where)
-				bild.WriteByte('\n')
-
-				if tempTrace[i].isEmulatorCall {
-					break
-				}
-			}
+		if i68 >= 0 {
+			bild.WriteString(stack68Split[i68])
+			bild.WriteByte('\n')
 		}
 
-		// And write the Go line
-		bild.WriteString(line)
+		bild.WriteString(stackGoSplit[iGo])
+		bild.WriteByte('\n')
 	}
 
-	return bild.String()
+	return strings.TrimSpace(bild.String())
+}
+
+// 68k call stack, formatted quite like runtime.Stack(),
+// with a blank line separating invocations of call_m68k()
+func stack68() string {
+	var bild strings.Builder
+
+	calleePC := pc
+
+	// Iterate entry records from the most recent
+	for i := len(trace) - 1; i >= 0; i-- {
+		// trace[i].stackArgs/isEmulatorCall refers to callee (printing now)
+		// trace[i].pc refers to the caller (will print next iteration)
+
+		what, where := describePC(calleePC)
+
+		// Function name
+		bild.WriteString(what)
+		bild.WriteByte('\n')
+
+		// Function arguments scraped the from stack
+		bild.WriteByte('\t')
+		bild.WriteString("stack(")
+		for j := 0; j < len(trace[i].stackArgs); j += 2 {
+			if j != 0 {
+				bild.WriteByte(' ')
+			}
+			bild.WriteString(hex.EncodeToString(trace[i].stackArgs[j : j+2]))
+		}
+		bild.WriteByte(')')
+		bild.WriteByte('\n')
+
+		// Function location
+		bild.WriteByte('\t')
+		bild.WriteString(where)
+		bild.WriteByte('\n')
+
+		// Print a blank line to separate call_m68k() invocations
+		if trace[i].isEmulatorCall {
+			bild.WriteByte('\n')
+		}
+
+		// The next iteration will be the caller of this function
+		calleePC = trace[i].pc
+	}
+
+	return strings.TrimSpace(bild.String())
 }
 
 func describePC(pc uint32) (what, where string) {
