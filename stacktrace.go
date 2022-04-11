@@ -13,7 +13,7 @@ type traceEntry struct {
 	stackReturn    uint32   // stack address where caller return address was pushed
 	stackArgs      [20]byte // args, not including the return address
 	pc             uint32   // pc of the caller
-	isEmulatorCall bool     // created on entry to call_m68k?
+	isEmulatorCall bool     // created on entry to run68?
 }
 
 // "Out of band" view of the 68k call stack
@@ -60,7 +60,7 @@ func stacktrace() string {
 	stackGo = strings.SplitN(stackGo, "\n", 3)[2]
 
 	// Delimit chunks with a blank line, same as stack68()
-	stackGo = strings.ReplaceAll(stackGo, "\nmain.call_m68k(", "\n\nmain.call_m68k(")
+	stackGo = strings.ReplaceAll(stackGo, "\nmain.run68(", "\n\nmain.run68(")
 
 	// Split Go and 68k stacks into chunks so we can interleave them
 	stackGoSplit := strings.Split(stackGo, "\n\n")
@@ -85,7 +85,7 @@ func stacktrace() string {
 }
 
 // 68k call stack, formatted quite like runtime.Stack(),
-// with a blank line separating invocations of call_m68k()
+// with a blank line separating invocations of run68()
 func stack68() string {
 	var bild strings.Builder
 
@@ -119,7 +119,7 @@ func stack68() string {
 		bild.WriteString(where)
 		bild.WriteByte('\n')
 
-		// Print a blank line to separate call_m68k() invocations
+		// Print a blank line to separate run68() invocations
 		if trace[i].isEmulatorCall {
 			bild.WriteByte('\n')
 		}
@@ -144,7 +144,7 @@ func describePC(pc uint32) (what, where string) {
 	case pc >= kHeapLimit && pc < kReturnAddr:
 		return "<???>", fmt.Sprintf("<stack %#08x>", pc)
 	case pc == kReturnAddr:
-		return "<???>", fmt.Sprintf("<call_m68k return address %#08x>", pc)
+		return "<???>", fmt.Sprintf("<run68 return address %#08x>", pc)
 	case pc >= kLowestIllegal:
 		return "<???>", fmt.Sprintf("<illegal address %#08x>", pc)
 	case pc < kHeap:

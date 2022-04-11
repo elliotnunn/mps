@@ -32,7 +32,7 @@ const (
 	spptr = regs + 60
 )
 
-func call_m68k(addr uint32) {
+func run68(addr uint32) {
 	save_pc := pc
 	pushl(kReturnAddr)     // the function we call will pop this value
 	pushedReturnAddr(true) // for stack tracing

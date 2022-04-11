@@ -86,7 +86,7 @@ func testCoerce(t *testing.T, addr uint32, sign bool, exp int32, mant uint64, st
 	writel(d7ptr, uint32(sticky))
 	writel(a0ptr, 0xa4a)    // global pointer
 	writel(spptr, 0xf00000) // safe place for stack
-	call_m68k(addr)
+	run68(addr)
 	theird6 := readl(d6ptr) & 0xffffff00 // discard sign bits
 	theirfpstate := readw(0xa4a)
 	theirsign := readl(d6ptr)&0x80 != 0

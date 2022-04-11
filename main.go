@@ -483,7 +483,7 @@ func main() {
 
 	initPuppetStrings(os.Args[1:])
 
-	call_m68k(kA5World + jtoffset + 2)
+	run68(kA5World + jtoffset + 2)
 }
 
 func printUsageAndQuit() {
@@ -535,7 +535,7 @@ func lineA(inst uint16) {
 		} else if imp == defaultImp { // direct Go call
 			my_traps[tb_base+(inst&0x3ff)]()
 		} else {
-			call_m68k(imp)
+			run68(imp)
 		}
 	} else { // OS trap
 		pushl(readl(a2ptr))
@@ -557,7 +557,7 @@ func lineA(inst uint16) {
 		if imp == defaultImp { // direct Go call
 			my_traps[os_base+(inst&0xff)]()
 		} else {
-			call_m68k(imp)
+			run68(imp)
 		}
 
 		if inst&0x100 == 0 {

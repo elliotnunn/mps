@@ -429,7 +429,7 @@ func tFP68K() {
 		if callback == 0 {
 			panic("About to call SANE halt vector (0xA4C), but it is zero")
 		}
-		call_m68k(callback)
+		run68(callback)
 
 		if readl(spptr) != postCallStack {
 			panic("SANE halt routine garbled the stack pointer")
