@@ -1,0 +1,300 @@
+			MACHINE	MC68000
+
+			MAIN
+			IMPORT	TestStr2Dec
+			IMPORT	TestPlan
+
+; The format is <inputString>=<validBool=00ff|01ff>,<index=nnnn>,<sgn=0000|0100>,<exp=nnnn>,<sig=string>'
+
+			pea		#'=01,0001,0000,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#' =01,0001,0000,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#'+=01,0001,0000,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#'-=01,0001,0100,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#'X=00,0001,0000,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#'0=01,0002,0000,0000,0'
+			jsr		TestStr2Dec
+
+			pea		#'00=01,0003,0000,0000,0'
+			jsr		TestStr2Dec
+
+			pea		#'10=01,0003,0000,0001,1'
+			jsr		TestStr2Dec
+
+			pea		#'19=01,0003,0000,0000,19'
+			jsr		TestStr2Dec
+
+			pea		#'019=01,0004,0000,0000,19'
+			jsr		TestStr2Dec
+
+			pea		#'190=01,0004,0000,0001,19'
+			jsr		TestStr2Dec
+
+			pea		#'.0=01,0003,0000,0000,0'
+			jsr		TestStr2Dec
+
+			pea		#'.00=01,0004,0000,0000,0'
+			jsr		TestStr2Dec
+
+			pea		#'.01=01,0004,0000,fffe,1'
+			jsr		TestStr2Dec
+
+			pea		#'0.01=01,0005,0000,fffe,1'
+			jsr		TestStr2Dec
+
+			pea		#'1.01=01,0005,0000,fffe,101'
+			jsr		TestStr2Dec
+
+			pea		#'11.=01,0004,0000,0000,11'
+			jsr		TestStr2Dec
+
+			pea		#'123e=01,0004,0000,0000,123'
+			jsr		TestStr2Dec
+
+			pea		#'123e-=01,0004,0000,0000,123'
+			jsr		TestStr2Dec
+
+			pea		#'123e+0=01,0007,0000,0000,123'
+			jsr		TestStr2Dec
+
+			pea		#'123e+1=01,0007,0000,0001,123'
+			jsr		TestStr2Dec
+
+			pea		#'123e-6000=01,000a,0000,e890,123'
+			jsr		TestStr2Dec
+
+			pea		#'In=01,0001,0000,0000,N0011'
+			jsr		TestStr2Dec
+
+			pea		#'Inf=01,0004,0000,0000,I'
+			jsr		TestStr2Dec
+
+			pea		#'iNF=01,0004,0000,0000,I'
+			jsr		TestStr2Dec
+
+			pea		#'inf=01,0004,0000,0000,I'
+			jsr		TestStr2Dec
+
+			pea		#'-Inf=01,0005,0100,0000,I'
+			jsr		TestStr2Dec
+
+			pea		#'Inf0=00,0004,0000,0000,I'
+			jsr		TestStr2Dec
+
+			pea		#'Nan=01,0004,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'nAN=01,0004,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN(=01,0004,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN(1=01,0004,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN()=01,0006,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN()x=00,0006,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN(0)=01,0007,0000,0000,N4000'
+			jsr		TestStr2Dec
+
+			pea		#'NaN(123456)=01,000c,0000,0000,N4040'
+			jsr		TestStr2Dec
+
+			jsr		TestPlan
+			rts
+
+
+; Clobbers registers, who cares
+TestStr2Dec	PROC	EXPORT
+			IMPORT	TestOpen, TestClose, TestStrCmp
+			IMPORT	AppendHex, StrCat
+
+			; corrupt scratch area
+			lea		ScratchArea,a0
+			move.w	#264/4-1,d0
+@clrLoop	move.l	#$ffffffff,(a0)+
+			dbra	d0,@clrLoop
+			lea		ScrDecStr,a0
+			move.w	#$0121,(a0)			; string = single ! sign
+			lea		ScrIndex,a0
+			move.w	#1,(a0)				; start at first char of pascal string
+
+			move.l	4(sp),a3			; pascal string pointer
+			move.l	a3,-(sp)
+			jsr		TestOpen
+
+			; d3 = number of characters before = sign
+			moveq.l	#0,d3
+@eqLoop		cmp.b	#'=',1(a3,d3.w)
+			beq.s	@exitEq
+			addq.l	#1,d3
+			bra.s	@eqLoop
+@exitEq
+
+			; a4 = address of equals sign
+			lea		1(a3,d3.w),a4
+
+			; d4 = number of characters after = sign
+			moveq.l	#0,d4
+			move.b	(a3),d4
+			subq.l	#1,d4
+			sub.l	d3,d4
+
+			; Now we have (ptr,len) pairs in (a3,d3) and (a4,d4):
+			move.b	(a3),-(sp)
+			move.b	d3,(a3)
+			move.b	(a4),-(sp)
+			move.b	d4,(a4)
+			; We will restore them later to un-ruin the original string
+
+			; Do It
+			move.l	a3,-(sp)			; push input string
+			pea		ScrIndex			; return number of good chars
+			pea		ScrDecSign			; return decimal record
+			pea		ScrValid			; return whether ok
+			move.w	#2,-(sp)			; FOPSTR2DEC
+			dc.w	$a9ee				; _DecStr68K pops everything from the stack
+
+			; Now create a string describing what we saw...
+			lea		String,a2
+			clr.b	(a2)
+
+			move.l	a2,-(sp)
+			pea		ScrValid
+			move.w	#1,-(sp)
+			jsr		AppendHex
+
+			move.l	a2,-(sp)
+			pea		#','
+			jsr		StrCat
+
+			move.l	a2,-(sp)
+			pea		ScrIndex
+			move.w	#2,-(sp)
+			jsr		AppendHex
+
+			move.l	a2,-(sp)
+			pea		#','
+			jsr		StrCat
+
+			move.l	a2,-(sp)
+			pea		ScrDecSign
+			move.w	#2,-(sp)
+			jsr		AppendHex
+
+			move.l	a2,-(sp)
+			pea		#','
+			jsr		StrCat
+
+			move.l	a2,-(sp)
+			pea		ScrDecExp
+			move.w	#2,-(sp)
+			jsr		AppendHex
+
+			move.l	a2,-(sp)
+			pea		#','
+			jsr		StrCat
+
+			move.l	a2,-(sp)
+			pea		ScrDecStr
+			jsr		StrCat
+
+			move.l	a2,-(sp)			; string describing actual output
+			move.l	a4,-(sp)			; string expected
+			jsr		TestStrCmp
+
+			move.b	(sp)+,(a4)			; Un-ruin the original string, as promised
+			move.b	(sp)+,(a3)
+			jsr		TestClose
+
+			move.l	(sp)+,a0
+			addq	#4,sp				; begone argument
+			jmp		(a0)
+
+
+ScratchArea
+ScrValid	dc.w	0					; "validprefix" bool
+ScrIndex	dc.w	0					; "index" short
+ScrDecSign	dc.w	0					; decimal record "sign" bool
+ScrDecExp	dc.w	0					; decimal record "exp" short
+ScrDecStr	dcb.b	256,0				; decimal record pascal string
+ScratchAreaEnd
+
+String		dcb.b	256,0
+
+; PEA PStringToWhichToAppend
+; PEA DataPtr
+; MOVE.W DataLength,-(SP)
+; JSR AppendHex
+AppendHex	PROC	EXPORT
+
+			move.l	(sp)+,d0			; return addr
+			move.w	(sp)+,d1			; data length
+			move.l	(sp)+,a0			; data ptr
+			move.l	(sp)+,a1			; pstring ptr
+			move.l	d0,-(sp)			; re-push return addr so we can rts
+
+			; get the tail of the string in a1, and also increment the string length
+			moveq.l	#0,d2
+			move.b	(a1),d2
+			add.b	d1,(a1)				; strlen += 2*datalen
+			add.b	d1,(a1)
+			lea		1(a1,d2),a1
+
+			sub.w	#1,d1				; decrement so we can use dbra
+@loop		move.b	(a0),d2
+			lsr.b	#4,d2
+			and.w	#$f,d2
+			move.b	hexdig(d2),(a1)+
+			move.b	(a0)+,d2
+			and.w	#$f,d2
+			move.b	hexdig(d2),(a1)+
+			dbra	d1,@loop
+
+			rts
+
+			STRING	AsIs
+hexdig		dc.b	'0123456789abcdef'
+
+
+; PEA PStringToWhichToAppend
+; PEA NewPString
+; JSR StrCat
+StrCat		PROC	EXPORT
+
+			move.l	(sp)+,d0			; return addr
+			move.l	(sp)+,a0			; src pstring
+			move.l	(sp)+,a1			; dst pstring
+			move.l	d0,-(sp)			; re-push return addr so we can rts
+
+			move.b	(a1),-(sp)			; lengthen (a1) by (a0)
+			move.b	(a0),d0
+			add.b	d0,(a1)
+
+			moveq.l	#0,d0
+			move.b	(sp)+,d0
+			lea		1(a1,d0),a1			; now a1 = ptr where to write
+
+			moveq.l	#0,d0
+			move.b	(a0),d0
+			addq	#1,a0
+			dc.w	$a22e				; _BlockMoveData: d0 bytes from a0 to a1
+
+			rts
+
+
+			END
