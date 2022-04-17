@@ -1,13 +1,12 @@
 package main
 
 import (
-	"embed"
+	_ "embed"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
-	"strconv"
 	"strings"
 )
 
@@ -42,7 +41,6 @@ const (
 	kVCB            = 0xba000 // ????
 	kMenuList       = 0xbb000
 	kExpandMem      = 0xbc000
-	kPACKs          = 0xc0000
 	kFTrapTable     = 0xf0000  // 0x10000 above
 	kHeap           = 0x100000 // extends up
 	kHeapLimit      = 0x3f000000
@@ -52,10 +50,6 @@ const (
 	kLowestIllegal  = 0x40000000
 	kMemSize        = 0x40000008
 )
-
-// Embedded 68k code, remove when possible
-//go:embed "PACKs"
-var embedPACKs embed.FS
 
 //go:embed System.r
 var embedSystemFile []byte
@@ -318,17 +312,6 @@ func main() {
 			}
 			writel(tableAddr, executable_ftrap(0xf000|trap))
 		}
-	}
-
-	// Get some PACKs
-	pax, _ := embedPACKs.ReadDir("PACKs")
-	packAddr := uint32(kPACKs)
-	for _, de := range pax {
-		tbTrapNum, _ := strconv.ParseUint(strings.Split(de.Name(), ".")[0], 16, 10)
-		pack, _ := embedPACKs.ReadFile("PACKs/" + de.Name())
-		copy(mem[packAddr:], pack)
-		writel(kToolTable+4*uint32(tbTrapNum), packAddr)
-		packAddr += uint32(len(pack))
 	}
 
 	// Starting point for stack
