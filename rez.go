@@ -62,7 +62,7 @@ func rez_string_literal(string_with_quotes []byte) []byte {
 }
 
 var rezPattern = regexp.MustCompile(
-	`data\s*('(?:[^'\\]|\\.){4}')\s*` +
+	`\s*data\s*('(?:[^'\\]|\\.){4}')\s*` +
 		`\(\s*` +
 		`(-?\d+)\s*` +
 		`(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
