@@ -24,7 +24,6 @@ Usage:
 
 Environment variables:
 	MPSDEBUG=...                       # ` + allBugFlags + `
-	MPSRAW=[0..1]                      # don't convert paths in args to Mac
 	MPW=...                            # override default MPW path
 	                                   #    $HOME/mpw
 	                                   #    /usr/local/share/mpw
