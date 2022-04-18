@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // Stdin, stdout and stderr
 // Tool calls to the "Dev" streams are ignored by ToolServer, so we must patch.
 // ResourceManager.go calls ioCodePatch to patch.

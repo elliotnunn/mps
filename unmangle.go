@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 /*
 C++ name mangling grammer
 Macintosh C/C++ ABI Standard Specification v1.3 1996-12-05

@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 /*
 HighLevelHFSDispatch, aka HFS Pinafore
 

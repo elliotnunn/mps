@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // C interface to the routines in TAP.a
 
 pascal void LineAppend(unsigned char *);

@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // Mixed Go-68k stack traces (most useful when panicking)
 package main
 

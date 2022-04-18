@@ -1,3 +1,6 @@
+// Inside Mac I recommends including these "international resources" in
+// documents/applications to ensure predictable behaviour
+
 data 'INTL' (0, "U.S.", purgeable) {
 	$"2E2C 3B24 0000 D000 002F FF60 2041 4D00"            /* .,;$...../.` AM. */
 	$"2050 4D00 3A00 0000 0000 0000 0000 0001"            /*  PM.:........... */

@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 /*
 Standard Apple Numeric Environment
 the FP68K package reimplemented

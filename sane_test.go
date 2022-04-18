@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // SANE unit tests
 // Only for functions that can be isolated from a SANE binary,
 // which is found in TestTools/sane (use a Mac Plus ROM)

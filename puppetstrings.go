@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // The puppet strings manipulate ToolServer according to the command line.
 // When ToolServer is run, the FileMgr will communicate with us via
 // the puppetFilename and puppetContent channels.

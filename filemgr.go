@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 /*
 Give the MacOS environment a reasonable view of the host filesystem.
 

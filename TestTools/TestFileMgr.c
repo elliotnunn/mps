@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Elliot Nunn
+// Licensed under the MIT license
+
 // #include <stdarg.h>
 
 #include "TAP.h"
