@@ -19,8 +19,8 @@ var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
 
 Usage:
 	mps                                # interactive
-	mps tool_or_script_name [args...]  # batch-mode
-	mps -c script_string [args...]     # batch-mode
+	mps pathToToolOrScript [arg ...]   # batch-mode
+	mps -c 'shortScript' [arg ...]     # batch-mode
 
 Environment variables:
 	MPSDEBUG=...                       # ` + allBugFlags + `
