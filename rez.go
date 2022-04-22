@@ -83,10 +83,12 @@ func makeWhitespace(b byte) byte {
 	}
 }
 
+// covers every character
+var rezStringPattern = regexp.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`)
+
 func rez_string_literal(string_with_quotes []byte) []byte {
-	pattern := regexp.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`) // covers every character
 	string_alone := string_with_quotes[1 : len(string_with_quotes)-1]
-	splits := pattern.FindAllSubmatchIndex(string_alone, -1)
+	splits := rezStringPattern.FindAllSubmatchIndex(string_alone, -1)
 
 	var retval []byte
 
