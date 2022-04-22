@@ -438,12 +438,20 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		writel(pb+52, uint32(len(listing))) // ioDrNmFls
 	} else { // file
 		finfo := finderInfo(path)
+		if isPuppetFile(path) {
+			// hack to make puppet-string scripts executable
+			copy(finfo[:], "TEXTMPS ")
+		}
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
 
-		// hack to make puppet-string scripts executable
-		if isPuppetFile(path) {
-			copy(mem[pb+32:], "TEXTMPS ")
-		}
+		// might be worth caching these
+		sizeD := uint32(len(dataFork(path)))
+		sizeR := uint32(len(resourceFork(path)))
+
+		writel(pb+54, sizeD)            // ioFlLgLen
+		writel(pb+58, (sizeD+511)&^511) // ioFlPyLen
+		writel(pb+64, sizeR)            // ioFlRLgLen
+		writel(pb+68, (sizeR+511)&^511) // ioFlRPyLen
 	}
 
 	if trap&0xff == 0x60 {
