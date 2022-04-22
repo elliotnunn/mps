@@ -11,10 +11,76 @@ import (
 	"strings"
 )
 
-var rezStripPattern = regexp.MustCompile(`(?://[^\n]*|/\*.*?\*/|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'))`)
+// Much faster than a regexp-based version
+func spaceRezComments(buf []byte) {
+mainLoop:
+	for len(buf) >= 2 { // don't care if fewer than 2 characters
+		switch {
+		case buf[0] == '"' || buf[0] == '\'': // string: leave alone
+			quoteChar := buf[0]
+			buf = buf[1:]
 
-func rez_strip_comments(in []byte) []byte {
-	return rezStripPattern.ReplaceAll(in, []byte(`$1 `)) // keep quotes, append a space to be safe
+			for len(buf) != 0 {
+				switch {
+				case buf[0] == quoteChar:
+					buf = buf[1:]
+					continue mainLoop
+				case len(buf) >= 2 && buf[0] == '\\' && buf[1] == quoteChar:
+					buf = buf[2:]
+				case len(buf) >= 2 && buf[0] == '\\' && buf[1] == '\\':
+					buf = buf[2:]
+				default:
+					buf = buf[1:]
+				}
+			}
+
+		case buf[0] == '/' && buf[1] == '/': // line comment: convert to spaces
+			buf[0] = ' '
+			buf[1] = ' '
+			buf = buf[2:]
+
+			for len(buf) != 0 {
+				switch {
+				case buf[0] == '\r' || buf[0] == '\n':
+					buf = buf[1:]
+					continue mainLoop
+				default:
+					buf[0] = makeWhitespace(buf[0])
+					buf = buf[1:]
+				}
+			}
+
+		case buf[0] == '/' && buf[1] == '*': // block comment: convert to spaces
+			buf[0] = ' '
+			buf[1] = ' '
+			buf = buf[2:]
+
+			for len(buf) != 0 {
+				switch {
+				case len(buf) >= 2 && buf[0] == '*' && buf[1] == '/':
+					buf[0] = ' '
+					buf[1] = ' '
+					buf = buf[2:]
+					continue mainLoop
+				default:
+					buf[0] = makeWhitespace(buf[0])
+					buf = buf[1:]
+				}
+			}
+
+		default:
+			buf = buf[1:]
+		}
+	}
+}
+
+func makeWhitespace(b byte) byte {
+	switch b {
+	case '\n', '\r', '\t', '\v', '\f':
+		return b
+	default:
+		return ' '
+	}
 }
 
 func rez_string_literal(string_with_quotes []byte) []byte {
@@ -73,7 +139,7 @@ var rezPattern = regexp.MustCompile(
 		`\}\s*;\s*|.`)
 
 func rez(rez []byte) []byte {
-	rez = rez_strip_comments(rez)
+	spaceRezComments(rez)
 
 	type resource struct {
 		type_    uint32
