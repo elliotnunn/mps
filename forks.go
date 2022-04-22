@@ -177,7 +177,11 @@ func resourceFork(path string) []byte {
 			return nil
 		}
 
-		data = rez(data) // TODO: this panics, which is messy
+		data, err = rez(data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "#### %s\n#### %v\n", path2, err)
+			os.Exit(1)
+		}
 
 	case kOSX:
 		data, _ = os.ReadFile(path + "/..namedfork/rsrc")

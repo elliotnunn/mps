@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"regexp"
@@ -129,18 +130,73 @@ func rez_string_literal(string_with_quotes []byte) []byte {
 	return retval
 }
 
-var rezPattern = regexp.MustCompile(
-	`\s*data\s*('(?:[^'\\]|\\.){4}')\s*` +
-		`\(\s*` +
-		`(-?\d+)\s*` +
-		`(?:,\s*("(?:[^"\\]|\\.)*")\s*)?` +
-		`((?:,\s*(?:\$[0-9a-fA-F]|sysheap|purgeable|locked|protected|preload)\s*)*)` +
-		`\)\s*` +
-		`\{\s*` +
-		`((?:\$"[0-9A-Fa-f\s*]*"\s*)*)\s*` +
-		`\}\s*;\s*|.`)
+// Get the number of bytes in the initial string literal -- bit of a hack
+func rezStrLen(buf []byte) int {
+	origLen := len(buf)
 
-func rez(rez []byte) []byte {
+	quoteChar := buf[0]
+	buf = buf[1:]
+
+mainLoop:
+	for {
+		switch {
+		case buf[0] == quoteChar:
+			buf = buf[1:]
+			break mainLoop
+		case len(buf) >= 2 && buf[0] == '\\' && buf[1] == quoteChar:
+			buf = buf[2:]
+		case len(buf) >= 2 && buf[0] == '\\' && buf[1] == '\\':
+			buf = buf[2:]
+		default:
+			buf = buf[1:]
+		}
+	}
+
+	return origLen - len(buf)
+}
+
+func stripSpace(buf []byte) []byte {
+	for len(buf) != 0 &&
+		(buf[0] == ' ' ||
+			buf[0] == '\n' ||
+			buf[0] == '\r' ||
+			buf[0] == '\t' ||
+			buf[0] == '\v' ||
+			buf[0] == '\f') {
+		buf = buf[1:]
+	}
+	return buf
+}
+
+func rez(rez []byte) (result []byte, retErr error) {
+	errorStr := ""
+	origRez := rez
+
+	defer func() {
+		recover()
+
+		if result == nil {
+			lastWasCR := false
+			line := 1
+			for _, c := range origRez[:len(origRez)-len(rez)] {
+				switch c {
+				case '\r':
+					line++
+					lastWasCR = true
+				case '\n':
+					if !lastWasCR {
+						line++
+					}
+					lastWasCR = false
+				default:
+					lastWasCR = false
+				}
+			}
+
+			retErr = fmt.Errorf("line %d: %s", line, errorStr)
+		}
+	}()
+
 	spaceRezComments(rez)
 
 	type resource struct {
@@ -155,81 +211,195 @@ func rez(rez []byte) []byte {
 	type_order := make([]uint32, 0)
 	type_ids := make(map[uint32][]resource)
 
-	splits := rezPattern.FindAllSubmatchIndex(rez, -1)
-	for _, loc := range splits {
-		if loc[1]-loc[0] == 1 {
-			panic("bad rez")
+	// Tokens in somewhat strict order
+	for {
+		rez = stripSpace(rez)
+		if len(rez) == 0 {
+			break
 		}
-
-		for i := range loc {
-			if loc[i] == -1 {
-				loc[i] = 0
-			}
-		}
-
-		type_str := rez[loc[2]:loc[3]]
-		id_str := rez[loc[4]:loc[5]]
-		name_str := rez[loc[6]:loc[7]]
-		flags_str := rez[loc[8]:loc[9]]
-		data_str := rez[loc[10]:loc[11]]
 
 		var res resource
+		var tokLen int
 
-		res.type_ = binary.BigEndian.Uint32(rez_string_literal(type_str))
-		id, err := strconv.ParseInt(string(id_str), 10, 16)
-		if err != nil { // might fail with out-of-range number
-			panic("out-of-range ID in res file")
+		errorStr = "expected \"data\""
+		if !bytes.HasPrefix(rez, []byte("data")) {
+			return
+		}
+		rez = rez[4:]
+
+		rez = stripSpace(rez)
+
+		errorStr = "expected single-quoted resource type"
+		if rez[0] != '\'' {
+			return
+		}
+		tokLen = rezStrLen(rez)
+		res.type_ = binary.BigEndian.Uint32(rez_string_literal(rez[:tokLen]))
+		rez = rez[tokLen:]
+
+		rez = stripSpace(rez)
+
+		errorStr = "expected open-paren"
+		if rez[0] != '(' {
+			return
+		}
+		rez = rez[1:]
+
+		rez = stripSpace(rez)
+
+		errorStr = "expected resource ID -32768 to 32767"
+		tokLen = 0
+		if rez[tokLen] == '-' {
+			tokLen += 1
+		}
+		for '0' <= rez[tokLen] && rez[tokLen] <= '9' {
+			tokLen += 1
+		}
+		id, err := strconv.ParseInt(string(rez[:tokLen]), 10, 16)
+		if err != nil {
+			return
 		}
 		res.id = uint16(id)
+		rez = rez[tokLen:]
 
-		if len(name_str) > 0 {
+		rez = stripSpace(rez)
+
+		errorStr = "expected comma or close-paren"
+		if rez[0] != ',' {
+			goto expectCloseBracket
+		}
+		rez = rez[1:]
+
+		rez = stripSpace(rez)
+
+		errorStr = "expected double-quoted name or flags"
+		if rez[0] == '"' {
+			tokLen := rezStrLen(rez)
 			res.has_name = true
-			res.name = rez_string_literal(name_str)
+			res.name = rez_string_literal(rez[:tokLen])
+			rez = rez[tokLen:]
+
+			rez = stripSpace(rez)
+
+			errorStr = "expected comma or close-paren"
+			if rez[0] != ',' {
+				goto expectCloseBracket
+			}
+			rez = rez[1:]
+
+			rez = stripSpace(rez)
 		}
 
-		for _, arg := range strings.Split(string(flags_str), ",") {
-			arg = strings.TrimSpace(arg)
-			if len(arg) == 0 {
-				continue
+		errorStr = "expected flags"
+		if rez[0] == '$' {
+			errorStr = "expected hex flags $00-$ff"
+			flags, err := strconv.ParseInt(string(rez[1:3]), 16, 16)
+			if err != nil || flags < 0 || flags > 0xff {
+				return
 			}
+			res.flags = uint8(flags)
+			rez = rez[3:]
 
-			switch arg {
-			case "sysheap":
-				res.flags |= 0x40
-			case "purgeable":
-				res.flags |= 0x20
-			case "locked":
-				res.flags |= 0x10
-			case "protected":
-				res.flags |= 0x08
-			case "preload":
-				res.flags |= 0x04
-			default: // regex guarantees that this is $FF
-				theseflags, _ := strconv.ParseInt(arg[1:], 16, 8)
-				res.flags |= uint8(theseflags)
-			}
+			rez = stripSpace(rez)
+
+			goto expectCloseBracket
 		}
 
-		isFirstOfTwo := true
-		for _, hex := range data_str {
-			if '0' <= hex && hex <= '9' {
-				hex = hex - '0'
-			} else if 'a' <= hex && hex <= 'f' {
-				hex = hex - 'a' + 10
-			} else if 'A' <= hex && hex <= 'F' {
-				hex = hex - 'A' + 10
-			} else {
-				continue
+		for {
+			ok := false
+			for i, p := range []string{"preload", "protected", "locked", "purgeable", "sysheap"} {
+				if bytes.HasPrefix(rez, []byte(p)) {
+					res.flags |= 4 << i
+					rez = rez[len(p):]
+					ok = true
+					break
+				}
 			}
 
-			if isFirstOfTwo {
-				res.data = append(res.data, hex<<4)
-			} else {
-				res.data[len(res.data)-1] |= hex
+			if !ok {
+				errorStr = "expected preload/protected/locked/purgeable/sysheap"
+				return
 			}
-			isFirstOfTwo = !isFirstOfTwo
+
+			rez = stripSpace(rez)
+
+			if rez[0] != ',' {
+				goto expectCloseBracket
+			}
+			rez = rez[1:]
+
+			rez = stripSpace(rez)
 		}
 
+	expectCloseBracket:
+		errorStr = "expected close-paren"
+		if rez[0] != ')' {
+			return
+		}
+		rez = rez[1:]
+
+		rez = stripSpace(rez)
+
+		errorStr = "expected open-brace"
+		if rez[0] != '{' {
+			return
+		}
+		rez = rez[1:]
+
+		rez = stripSpace(rez)
+
+		for {
+			errorStr = "expected $-double-quoted hex or close-brace"
+			if rez[0] == '}' {
+				rez = rez[1:]
+				rez = stripSpace(rez)
+				break
+			}
+
+			if rez[0] != '$' || rez[1] != '"' {
+				return
+			}
+			rez = rez[2:]
+
+			isFirstOfTwo := true
+		hexCharLoop:
+			for {
+				hex := rez[0]
+				rez = rez[1:]
+
+				switch {
+				case '0' <= hex && hex <= '9':
+					hex = hex - '0'
+				case 'a' <= hex && hex <= 'f':
+					hex = hex - 'a' + 10
+				case 'A' <= hex && hex <= 'F':
+					hex = hex - 'A' + 10
+				case hex == '"':
+					break hexCharLoop
+				case hex == ' ' || hex == '\t':
+					continue hexCharLoop
+				}
+
+				if isFirstOfTwo {
+					res.data = append(res.data, hex<<4)
+				} else {
+					res.data[len(res.data)-1] |= hex
+				}
+				isFirstOfTwo = !isFirstOfTwo
+			}
+
+			rez = stripSpace(rez)
+		}
+
+		errorStr = "expected semicolon"
+		if rez[0] != ';' {
+			return
+		}
+		rez = rez[1:]
+
+		rez = stripSpace(rez)
+
+		// Add the resource to our list
 		if _, ok := type_ids[res.type_]; !ok {
 			type_order = append(type_order, res.type_)
 		}
@@ -292,7 +462,7 @@ func rez(rez []byte) []byte {
 	binary.BigEndian.PutUint32(fork[8:], uint32(boundary-256))
 	binary.BigEndian.PutUint32(fork[12:], uint32(len(fork)-boundary))
 
-	return fork
+	return fork, nil
 }
 
 func rezQuote(str string, dblQuotes bool) (esc string) {
