@@ -89,14 +89,6 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 
 	// Checks for file existence
 	path, errno := hostPath(number, ioName, true)
-
-	// If fnfErr and we are allowed to create the file, then create it
-	if errno == -43 && ioPermssn != 1 {
-		writeDataFork(path, nil)
-		errno = 0 // handled the case, so noErr
-		clearDirCache(filepath.Dir(path))
-	}
-
 	if errno != 0 {
 		return errno
 	}
