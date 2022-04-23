@@ -135,6 +135,8 @@ func main() {
 		os_base + 0x31:  tGetOSEvent,                    // _GetOSEvent
 		os_base + 0x32:  tMemMgrNop,                     // _FlushEvents
 		os_base + 0x36:  tMemMgrNop,                     // _MoreMasters
+		os_base + 0x39:  tReadDateTime,                  // _ReadDateTime
+		os_base + 0x3a:  tSetDateTime,                   // _SetDateTime
 		os_base + 0x3c:  tCmpString,                     // _CmpString
 		os_base + 0x40:  memErrD0Wrap(tPurgeOrResrvMem), // _ResrvMem
 		os_base + 0x44:  pbWrap(tSetFPos),               // _SetFPos
@@ -830,6 +832,16 @@ func tMicroseconds() {
 	usec := uint64(ticks) * 1000000 / 60
 	writel(a0ptr, uint32(usec>>32))
 	writel(d0ptr, uint32(usec))
+}
+
+func tReadDateTime() {
+	writel(readl(a0ptr), readl(0x20c)) // Time into buffer
+	writel(d0ptr, 0)                   // noErr
+}
+
+func tSetDateTime() {
+	writel(0x20c, readl(d0ptr)) // register into Time
+	writel(d0ptr, 0)            // noErr
 }
 
 // Trivial do-nothing traps
