@@ -804,7 +804,8 @@ func tCloseResFile() {
 
 		// If this is CurMap, pick something else
 		if refnum == readw(0xa5a) {
-			writew(0xa5a, readw(readl(0xa50)+20))
+			topMap := readl(readl(0xa50))
+			writew(0xa5a, readw(topMap+20))
 		}
 
 		// Release the resource map
