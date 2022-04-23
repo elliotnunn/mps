@@ -94,6 +94,7 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 	if errno == -43 && ioPermssn != 1 {
 		writeDataFork(path, nil)
 		errno = 0 // handled the case, so noErr
+		clearDirCache(filepath.Dir(path))
 	}
 
 	if errno != 0 {

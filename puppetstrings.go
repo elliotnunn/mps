@@ -71,6 +71,9 @@ func initPuppetStrings(args []string) {
 					os.Stdout.Write([]byte("• "))
 					cmd, _ := bufin.ReadString('\n')
 					if cmd, ok := unicodeToMac(cmd); ok {
+						// Interactive shell should tolerate filesystem changes between commands
+						clearDirCache("")
+
 						puppetContent <- cmd
 						break
 					}

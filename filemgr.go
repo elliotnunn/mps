@@ -231,7 +231,13 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 // Return a mac and host-format directory listing
 // The hostnames are exact, including Unicode normalisation
 // The macnames are guaranteed valid and in RelString order
+// Computing this is much more expensive than on HFS, so cache the answer.
 func readDir(path string) ([]existingNamePair, int) {
+	cachedSlice, isCached := dirCache[path]
+	if isCached && !gDebugFileMgr {
+		return cachedSlice, 0
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, macErrCode(err)
@@ -278,12 +284,48 @@ func readDir(path string) ([]existingNamePair, int) {
 		}
 	}
 
+	// Check cached answer against this one
+	if isCached && gDebugFileMgr {
+		matchOK := len(cachedSlice) == len(slice)
+		if matchOK {
+			for i := range cachedSlice {
+				if cachedSlice[i] != slice[i] {
+					matchOK = false
+					break
+				}
+			}
+		}
+
+		if !matchOK {
+			logf("incorrect cache listing for %q:", path)
+			for _, el := range cachedSlice {
+				logln("    " + el.host)
+			}
+			logln("updating cache with actual listing:")
+			for _, el := range slice {
+				logln("    " + el.host)
+			}
+		}
+	}
+
+	dirCache[path] = slice
+
 	return slice, 0
 }
 
 type existingNamePair struct {
 	mac  macstring
 	host string
+}
+
+var dirCache = make(map[string][]existingNamePair)
+
+func clearDirCache(dir string) {
+	if dir == "" {
+		dirCache = make(map[string][]existingNamePair)
+	} else {
+		delete(dirCache, dir)
+	}
 }
 
 // Convert some filesystem errors to MacOS error codes
@@ -347,6 +389,7 @@ func tCreate(pb uint32) int { // also DirCreate
 		} else { // Create
 			writeDataFork(path, nil)
 		}
+		clearDirCache(filepath.Dir(path))
 		return 0
 	default: // likely a containing folder not found, complain loudly
 		return errno
@@ -682,6 +725,15 @@ func tFSDispatch(pb uint32) int {
 					dirIDs[i] = newFile + p[len(file):]
 				}
 			}
+		}
+
+		// If we moved a folder, then many entries in the cache could have changed,
+		// simpler just to delete the cache
+		if isDir {
+			clearDirCache("")
+		} else {
+			clearDirCache(filepath.Dir(file)) // donor dir shorter
+			clearDirCache(dir)                // recipient dir longer
 		}
 
 	case 6: // DirCreate
