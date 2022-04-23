@@ -229,7 +229,7 @@ func codeResource(pc uint32) (ret uint64) {
 			curSegStart = start
 			curSegEnd = end
 			curRes = uint64(entry.rID) << 32
-			if resMap.mRefNum != readw(0x900) { // CurApRefNum
+			if resMap.mRefNum != tsRefNum {
 				curRes |= 0x1000000000000000
 			}
 

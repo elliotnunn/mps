@@ -14,6 +14,7 @@ import (
 )
 
 var systemFolder, mpwFolder string
+var tsRefNum uint16
 
 var kUsage = `mps: Macintosh Programmer's Workshop shell emulator
 
@@ -448,10 +449,10 @@ func main() {
 	writePstring(fileNamePtr, "ToolServer")
 	pushl(fileNamePtr) // pointer to the file string
 	lineA(0xa997)      // _OpenResFile
-	appRefNum := popw()
-	writew(0x900, appRefNum) // CurApRefNum
+	tsRefNum = popw()
+	writew(0x900, tsRefNum) // CurApRefNum
 
-	if appRefNum == 0xffff {
+	if tsRefNum == 0xffff {
 		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dirIDs[0])
 		os.Exit(1)
 	}
