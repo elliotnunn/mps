@@ -122,7 +122,7 @@ func verifyHandle(hand uint32) (ptr uint32) {
 func verifyPtr(ptr uint32) {
 	ptrBlock, ok := usedBlocks[ptr]
 	if !ok || ptrBlock.kind != pointerBlock {
-		panic("bad pointer")
+		panic(fmt.Sprintf("bad pointer %08x", ptr))
 	}
 }
 
