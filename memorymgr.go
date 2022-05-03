@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 )
 
 const maxBlock = 64 * 1024 * 1024
@@ -202,10 +203,28 @@ func tNewPtr() int {
 	return 0
 }
 
+var disposPtrAlreadyWarned = false
+
 func tDisposPtr() int {
 	ptr := readl(a0ptr)
 
-	verifyPtr(ptr)
+	ptrBlock, ok := usedBlocks[ptr]
+
+	// A version of MPW Link calls TempNewHandle then DisposPtr!
+	if ptrBlock.kind == handleBlock {
+		if !disposPtrAlreadyWarned {
+			f, _ := os.CreateTemp("", "StackTrace.*.txt")
+			f.Write([]byte(stacktrace()))
+			f.Close()
+			logf("Memory Manager Warning: Ignoring DisposPtr() on a handle block. Stack trace saved:\n%s\n", f.Name())
+			disposPtrAlreadyWarned = true
+		}
+		return 0
+	}
+
+	if !ok || ptrBlock.kind != pointerBlock {
+		panic(fmt.Sprintf("bad pointer %08x", ptr))
+	}
 
 	freeBlock(ptr)
 	return 0
