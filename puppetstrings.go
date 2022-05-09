@@ -24,43 +24,30 @@ var puppetContent = make(chan macstring)
 func initPuppetStrings(args []string) {
 	bad := false
 
-	// cwdCmd is Directory command into the cwd
 	cwd, _ := os.Getwd()
-	cwdSlice := []byte("_" + cwd)
-	for i, c := range cwdSlice {
-		switch c {
-		case '/':
-			cwdSlice[i] = ':'
-		case ':':
-			cwdSlice[i] = '/'
-		}
-	}
-	maccwd, ok := unicodeToMac(string(cwdSlice))
-	if !ok {
+
+	// Check that inputs are sane ahead of time
+	if _, ok := unicodeToMac(cwd); !ok {
 		bad = true
 		os.Stdout.Write([]byte("#### Working directory path not convertible to Mac Roman\n"))
 	}
-	cwdCmd := macstring("Directory ") + quote(maccwd) + macstring("\r")
 
-	// macargs is a parallel arg list in Mac Roman
-	macargs := make([]macstring, len(args))
-	for i, a := range args {
-		if m, ok := unicodeToMac(a); ok {
-			macargs[i] = m
-		} else {
+	for _, a := range args {
+		if _, ok := unicodeToMac(a); !ok {
 			bad = true
 			os.Stdout.Write([]byte("#### Arg not convertible to Mac Roman: " + a + "\n"))
 		}
 	}
 
-	// Let all the above failures be logged before quitting
 	if bad {
 		os.Exit(1)
 	}
 
+	cwdCmd := macstring("Directory ") + quote(unicodeToMacOrPanic(convertCWD(cwd))) + macstring("\r")
+
 	// Pick a goroutine to run the overall flow of the program
 	switch {
-	case len(macargs) == 0: // REPL
+	case len(args) == 0: // REPL
 		go func() {
 			<-puppetFilename
 			puppetContent <- cwdCmd + macstring("Set Exit 0; Loop; Execute "+puppetPrefix+".REPL; End")
@@ -91,16 +78,16 @@ func initPuppetStrings(args []string) {
 			if len(args) > 2 {
 				<-puppetFilename
 				callScript := macstring(puppetPrefix + ".Script")
-				for _, a := range macargs[2:] {
-					callScript += " " + quote(a)
+				for _, a := range args[2:] {
+					callScript += " " + quote(unicodeToMacOrPanic(a))
 				}
 				puppetContent <- cwdCmd + callScript
 
 				<-puppetFilename
-				puppetContent <- macargs[1]
+				puppetContent <- unicodeToMacOrPanic(args[1])
 			} else {
 				<-puppetFilename
-				puppetContent <- cwdCmd + macargs[1]
+				puppetContent <- cwdCmd + unicodeToMacOrPanic(args[1])
 
 			}
 
@@ -112,8 +99,8 @@ func initPuppetStrings(args []string) {
 		go func() {
 			<-puppetFilename
 			oneLine := macstring("")
-			for _, a := range macargs {
-				oneLine += quote(a) + " "
+			for _, a := range args {
+				oneLine += quote(unicodeToMacOrPanic(a)) + " "
 			}
 			puppetContent <- cwdCmd + oneLine
 
