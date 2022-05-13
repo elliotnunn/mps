@@ -8,18 +8,49 @@
 
 package main
 
-// Convert the OS's working directory path to Mac format
-// and trust it to be a real, absolute path
-func convertCWD(path string) string {
-	bytes := []byte(string(onlyVolName) + path)
-	for i := range bytes {
-		switch bytes[i] {
-		case ':':
-			bytes[i] = '/'
-		case '/':
-			bytes[i] = ':'
+import (
+	"strings"
+)
+
+func convertPath(path string) string {
+	if !strings.Contains(path, "/") || strings.Contains(path, "//") {
+		return path
+	}
+
+	absolute := strings.HasPrefix(path, "/")
+	if absolute {
+		path = path[1:]
+	}
+
+	trailingSep := strings.HasSuffix(path, "/")
+	if trailingSep {
+		path = path[:len(path)-1]
+	}
+
+	var bild strings.Builder
+	bild.Grow(len(path) + 1)
+
+	if absolute {
+		bild.WriteString(string(onlyVolName) + ":")
+	} else {
+		bild.WriteByte(':')
+	}
+
+	comps := strings.Split(path, "/")
+	for i, comp := range comps {
+		if comp == "." {
+			continue
+		}
+
+		if comp != ".." {
+			bild.WriteString(strings.ReplaceAll(comp, ":", "/"))
+		}
+
+		isLast := i == len(comps)-1
+		if !isLast || comp == ".." || trailingSep {
+			bild.WriteByte(':')
 		}
 	}
 
-	return string(bytes)
+	return bild.String()
 }

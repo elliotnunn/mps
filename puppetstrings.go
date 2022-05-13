@@ -43,7 +43,8 @@ func initPuppetStrings(args []string) {
 		os.Exit(1)
 	}
 
-	cwdCmd := macstring("Directory ") + quote(unicodeToMacOrPanic(convertCWD(cwd))) + macstring("\r")
+	args = convertArgPaths(args)
+	cwdCmd := macstring("Directory ") + quote(unicodeToMacOrPanic(convertPath(cwd))) + macstring("\r")
 
 	// Pick a goroutine to run the overall flow of the program
 	switch {
@@ -108,6 +109,26 @@ func initPuppetStrings(args []string) {
 			puppetContent <- "Quit"
 		}()
 	}
+}
+
+func convertArgPaths(args []string) []string {
+	newArgs := make([]string, 0, len(args))
+
+	for i := 0; i < len(args); i++ {
+		if args[i] == "%%%" {
+			for _, arg := range args[i+1:] {
+				newArgs = append(newArgs, convertPath(arg))
+			}
+			break
+		} else if args[i] == "%%" && i < len(args)-1 {
+			newArgs = append(newArgs, convertPath(args[i+1]))
+			i++
+		} else {
+			newArgs = append(newArgs, args[i])
+		}
+	}
+
+	return newArgs
 }
 
 // 2. Every WaitNextEvent returns a command keypress, forcing TS to call MenuKey.

@@ -23,6 +23,10 @@ Usage:
 	mps pathToToolOrScript [arg ...]   # batch-mode
 	mps -c 'shortScript' [arg ...]     # batch-mode
 
+Pathname conversion:
+	%% arg                             convert arg to HFS format (:sub:dir)
+	%%% [arg ...]                      convert all subsequent arguments to HFS
+
 Environment variables:
 	MPSDEBUG=...                       # ` + allBugFlags + `
 	MPW=...                            # override default MPW path
