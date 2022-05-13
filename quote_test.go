@@ -7,22 +7,24 @@ import (
 	"testing"
 )
 
-var quoteTestPairs = []string{
-	"", "''",
-	" ", "' '",
-	"x∂", "'x'∂∂''",
-	"x\n", "'x'∂n''",
-	"abc", "abc",
-	"abc def", "'abc def'",
+var quoteTestPairs = []struct {
+	in  string
+	out string
+}{
+	{"", "''"},
+	{" ", "' '"},
+	{"x∂", "'x'∂∂''"},
+	{"x\n", "'x'∂n''"},
+	{"abc", "abc"},
+	{"abc def", "'abc def'"},
 }
 
 func TestQuote(t *testing.T) {
-	for i := 0; i*2 < len(quoteTestPairs); i += 2 {
-		in := unicodeToMacOrPanic(quoteTestPairs[i])
-		out := unicodeToMacOrPanic(quoteTestPairs[i+1])
+	for _, testCase := range quoteTestPairs {
+		got := macToUnicode(quote(unicodeToMacOrPanic(testCase.in)))
 
-		if quote(in) != out {
-			t.Fatalf("expected %q, got %q", out, quote(in))
+		if testCase.out != got {
+			t.Errorf("expected quote(%q) == %q, got %q", testCase.in, testCase.out, got)
 		}
 	}
 }
