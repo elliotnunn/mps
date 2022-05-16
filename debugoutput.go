@@ -10,14 +10,13 @@ import (
 	"strings"
 )
 
-const allBugFlags = "6=68k|t=stacktrace|r=pprof|f=FileMgr|m=MemMgr|p=hoard+poison old MM blocks"
+const allBugFlags = "6=68k|r=pprof|f=FileMgr|m=MemMgr|p=hoard+poison old MM blocks"
 
 var bugFlags = os.Getenv("MPSDEBUG")
 
 var (
 	gDebugAny        = bugFlags != ""
 	gDebugEveryInst  = strings.ContainsRune(bugFlags, '6')
-	gDebugStackTrace = strings.ContainsRune(bugFlags, 't')
 	gProfile         = strings.ContainsRune(bugFlags, 'r')
 	gDebugFileMgr    = strings.ContainsRune(bugFlags, 'f')
 	gDebugMemoryMgr  = strings.ContainsRune(bugFlags, 'm')

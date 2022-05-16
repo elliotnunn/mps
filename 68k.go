@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"math/bits"
+	"os"
 	"strings"
 )
 
@@ -48,9 +49,6 @@ func run68(addr uint32) {
 			writel(0x16a, readl(0x16a)+1)
 		}
 
-		if gDebugStackTrace {
-			printCallStack()
-		}
 
 		if gDebugEveryInst {
 			printState()
@@ -1680,73 +1678,6 @@ func bitFieldInst(inst uint16) {
 	}
 
 	writeBitField(ea, eaIsRegister, bitOffset, bitWidth, field)
-}
-
-var callStack = []uint32{kStackBase}
-var callStackNames = []string{"root"}
-var lastPrinted = ""
-
-func printCallStack() {
-	sp := readl(spptr)
-
-	for callStack[len(callStack)-1] <= sp {
-		callStack = callStack[:len(callStack)-1]
-		callStackNames = callStackNames[:len(callStackNames)-1]
-	}
-
-	if callStack[len(callStack)-1] > sp {
-		callStack = append(callStack, sp)
-		callStackNames = append(callStackNames, curFunc(pc))
-	}
-
-	var toPrint []string
-	alreadyPrinted := callStackNames[0]
-	for _, printName := range callStackNames {
-		if printName != alreadyPrinted && len(printName) != 0 {
-			toPrint = append(toPrint, printName)
-			alreadyPrinted = printName
-		}
-	}
-
-	thisPrint := strings.Join(toPrint, " ")
-	if lastPrinted != thisPrint {
-		fmt.Printf("callstack: %s\n", thisPrint)
-		lastPrinted = thisPrint
-	}
-}
-
-var curFuncStart, curFuncEnd uint32
-var curFuncName string
-
-func curFunc(pc uint32) string {
-	if pc < 0x100000 {
-		return ""
-	}
-
-	if pc >= curFuncStart && pc < curFuncEnd {
-		return curFuncName
-	}
-
-	curFuncStart = pc
-	curFuncEnd = uint32(len(mem))
-	curFuncName = ""
-	for try := pc; try+130 <= uint32(len(mem)); try += 2 {
-		if mem[try] == 0x4e && (mem[try+1] == 0x75 || mem[try+1] == 0xd0) {
-			if mem[try+2]&0xc0 == 0x80 {
-				strlen := uint32(mem[try+2] & 0x3f)
-				curFuncName = string(mem[try+3:][:strlen])
-				for _, ch := range []byte(curFuncName) {
-					if ch < 32 || ch >= 127 {
-						curFuncName = ""
-					}
-				}
-			}
-			curFuncEnd = try + 2
-			break
-		}
-	}
-
-	return curFuncName
 }
 
 func printState() {
