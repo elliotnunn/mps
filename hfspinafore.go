@@ -97,8 +97,8 @@ func tHighLevelFSDispatch() {
 				writew(pb+22, readw(specPtr))   // ioVRefNum
 				writel(pb+48, readl(specPtr+2)) // ioDirID
 				writel(pb+18, specPtr+6)        // ioNamePtr
-				writel(pb+32, cCode)            // fdType
-				writel(pb+36, tCode)            // fdCreator
+				writel(pb+32, tCode)            // fdType
+				writel(pb+36, cCode)            // fdCreator
 				lineA(0xa20d)                   // _HSetFInfo
 			}
 		}
