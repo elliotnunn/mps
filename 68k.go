@@ -1681,77 +1681,45 @@ func bitFieldInst(inst uint16) {
 }
 
 func printState() {
-	printName := curFunc(pc)
+	var bild strings.Builder
 
-	if printName == "p2cstr" {
-		if readw(pc) == 0x202f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr)+4))))
+	for i := uint32(0); i < 16; i++ {
+		bild.WriteString(fmt.Sprintf("%08x", readl(regs+4*i)))
+		if i%8 == 7 {
+			bild.WriteByte('\n')
+		} else {
+			bild.WriteByte(' ')
 		}
-		return
 	}
 
-	if printName == "c2pstr" {
-		if readw(pc) == 0x202f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr)+4))))
-		}
-		return
-	}
-
-	if printName == "strcpy" {
-		if readw(pc) == 0x4cef {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readCstring(readl(readl(spptr)+8))))
-		}
-		return
-	}
-
-	if printName == "PLStrCpy" {
-		if readw(pc) == 0x201f {
-			fmt.Printf("%s: %s\n\n", printName, macToUnicode(readPstring(readl(readl(spptr)+4))))
-		}
-		return
-	}
-
-	if printName == "memcpy" {
-		if readw(pc) == 0x4cef {
-			sp := readl(spptr)
-			fmt.Printf("%s: %d b %x->%x\n\n", printName, readl(sp+12), readl(sp+8), readl(sp+4))
-		}
-		return
-	}
-
-	if printName == "memset" {
-		if readw(pc) == 0x4cef {
-			sp := readl(spptr)
-			fmt.Printf("%s: %d b of %02x -> %x\n\n", printName, readl(sp+12), readl(sp+8), readl(sp+4))
-		}
-		return
-	}
-
-	conds := []byte("xnzvc")
-	if x {
-		conds[0] = 'X'
-	}
-	if n {
-		conds[1] = 'N'
-	}
-	if z {
-		conds[2] = 'Z'
-	}
-	if v {
-		conds[3] = 'V'
-	}
-	if c {
-		conds[4] = 'C'
-	}
-
-	r := readRegs()
-	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7])
-	fmt.Printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15])
+	bild.WriteString("stack(")
 	sp := readl(spptr)
-	fmt.Printf("stack %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %s\n", mem[sp+0], mem[sp+1], mem[sp+2], mem[sp+3], mem[sp+4], mem[sp+5], mem[sp+6], mem[sp+7], mem[sp+8], mem[sp+9], mem[sp+10], mem[sp+11], string(conds))
-	fmt.Println("")
+	for i := uint32(0); i < 6; i++ {
+		if i != 0 {
+			bild.WriteByte(' ')
+		}
+		bild.WriteString(fmt.Sprintf("%04x", readw(sp+2*i)))
+	}
+	bild.WriteString(") ")
 
-	fmt.Printf("%x: %s %04x\n\n", pc, printName, readw(pc))
+	const letters = "xnzvc"
+
+	for i, bit := range []bool{x, n, z, v, c} {
+		letter := letters[i]
+		if bit {
+			letter += 'A'
+			letter -= 'a'
+		}
+		bild.WriteByte(letter)
+	}
+
+	bild.WriteString("\n\n")
+
+	bild.WriteString(fmt.Sprintf("%016x %04x", codeResource(pc), readw(pc)))
+
+	bild.WriteString("\n\n")
+
+	os.Stdout.Write([]byte(bild.String()))
 }
 
 var instCount uint16 = 0
