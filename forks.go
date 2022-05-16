@@ -22,7 +22,7 @@ const (
 
 // Panics if the file has conflicting storage formats
 func whichFormat(path string) int {
-	format := kFileExchange // should be read from environment variable
+	format := kRez // should be read from environment variable
 	var complain []string
 
 	fe1 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
