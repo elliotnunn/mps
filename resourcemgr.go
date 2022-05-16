@@ -1030,6 +1030,30 @@ func (deep *mapStruct) cleanForDisk() {
 	}
 }
 
+func extractRes(fork []byte, rtype string, rid int16) []byte {
+	mapstart := binary.BigEndian.Uint32(fork[4:])
+	maplen := binary.BigEndian.Uint32(fork[12:])
+
+	resMap := dumpMap(fork[mapstart:][:maplen])
+	for _, res := range resMap.list {
+		if rtype != string([]byte{byte(res.tType >> 24), byte(res.tType >> 16), byte(res.tType >> 8), byte(res.tType)}) {
+			continue
+		}
+
+		if rid != int16(res.rID) {
+			continue
+		}
+
+		dataStart := binary.BigEndian.Uint32(fork) // base of all data within fork
+		dataStart += res.rLocn & 0xffffff          // this res within fork
+		dataLen := binary.BigEndian.Uint32(fork[dataStart:])
+
+		return fork[dataStart+4:][:dataLen]
+	}
+
+	return nil
+}
+
 func tCreateResFile() {
 	namePtr := popl()
 	pushw(0) // vRefNum

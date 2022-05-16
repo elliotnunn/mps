@@ -22,6 +22,8 @@ Usage:
 	mps                                # interactive
 	mps pathToToolOrScript [arg ...]   # batch-mode
 	mps -c 'shortScript' [arg ...]     # batch-mode
+	mps -install [url | path]          # install ~/MPW from MPW-GM.img.bin
+	                                     (SHA256=99bbfa95bb9800c8ffc572fce6...)
 
 Pathname conversion:
 	%% arg                             convert arg to HFS format (:sub:dir)
@@ -30,7 +32,7 @@ Pathname conversion:
 Environment variables:
 	MPSDEBUG=...                       # ` + allBugFlags + `
 	MPW=...                            # override default MPW path
-	                                   #    $HOME/mpw
+	                                   #    ~/mpw
 	                                   #    /usr/local/share/mpw
 	                                   #    /usr/share/mpw
 `
@@ -62,6 +64,20 @@ const (
 var embedSystemFile []byte
 
 func main() {
+	if len(os.Args) >= 2 && len(os.Args) <= 3 && os.Args[1] == "-install" {
+		source := ""
+		if len(os.Args) >= 3 {
+			source = os.Args[2]
+		}
+
+		ok := installFrom(source)
+		if ok {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
+	}
+
 	// This must be the last defer to run, because it sets the exit status
 	defer func() {
 		if err := recover(); err != nil {
