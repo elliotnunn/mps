@@ -135,25 +135,25 @@ func installFrom(binFile string) bool {
 				// Modernise text files to UTF-8, LF line endings
 				// No Finder info nor resource fork
 				content.data = []byte(macToUnicode(macstring(content.data)))
-				err := os.WriteFile(path, content.data, 0o777)
+				err := os.WriteFile(path, content.data, 0o666)
 				if err != nil {
 					panic(err)
 				}
 			} else {
 				// Non-text: preserve Finder info and resource fork
-				err := os.WriteFile(path, content.data, 0o777)
+				err := os.WriteFile(path, content.data, 0o666)
 				if err != nil {
 					panic(err)
 				}
 
 				if len(content.rsrc) != 0 {
-					err = os.WriteFile(path+".rdump", deRez(content.rsrc), 0o777)
+					err = os.WriteFile(path+".rdump", deRez(content.rsrc), 0o666)
 					if err != nil {
 						panic(path)
 					}
 				}
 
-				err = os.WriteFile(path+".idump", content.finfo[:8], 0o777)
+				err = os.WriteFile(path+".idump", content.finfo[:8], 0o666)
 				if err != nil {
 					panic(err)
 				}
