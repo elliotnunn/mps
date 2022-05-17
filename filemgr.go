@@ -228,6 +228,25 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 	return path, errno
 }
 
+func hostPathFromSpec(spec uint32, leafMustExist bool) (string, int) {
+	vRefNum := readw(spec)
+	dirID := readl(spec + 2)
+	name := readPstring(spec + 6)
+
+	if dirID > 0xffff {
+		panic(fmt.Sprintf("dirID outside of range %#08x", dirID))
+	}
+
+	var number uint16
+	if dirID == 0 {
+		number = vRefNum
+	} else {
+		number = uint16(dirID)
+	}
+
+	return hostPath(number, name, leafMustExist)
+}
+
 // Return a mac and host-format directory listing
 // The hostnames are exact, including Unicode normalisation
 // The macnames are guaranteed valid and in RelString order

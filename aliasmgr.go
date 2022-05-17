@@ -64,12 +64,7 @@ func tResolveAliasFile() {
 		return
 	}
 
-	number := readw(theSpecPtr + 4) // lower bits of dirID
-	if number == 0 {
-		number = readw(theSpecPtr)
-	}
-
-	path, err := hostPath(number, readPstring(theSpecPtr+6), true)
+	path, err := hostPathFromSpec(theSpecPtr, true)
 	if err != 0 {
 		return
 	}
