@@ -609,7 +609,7 @@ func tGetVInfo(pb uint32) int {
 		writew(pb+56, 0x1000) // ioAlBlSt
 		//writel(pb+58, 0) // ioVNxtFNum
 		writew(pb+62, 0xfff0) // ioVFrBlk
-		//writew(pb+64, 0) // ioVSig2
+		writew(pb+64, 0x4244) // ioVSigWord = 'BD'
 		//writew(pb+66, 0) // ioVDrvInfo
 		writew(pb+68, 2) // ioVDRefNum
 		//writew(pb+70, 0) // ioVFSID
