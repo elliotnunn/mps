@@ -863,7 +863,7 @@ func tRmveResource() {
 		deep := dumpMap(getBlock(resMap))
 		for i, res := range deep.list {
 			if res.rHndl == handle {
-				if res.rAttr&0x20 != 0 { // not purgeable
+				if res.rAttr&resProtected != 0 {
 					setResError(-196) // rmvResFailed
 					return
 				} else {
