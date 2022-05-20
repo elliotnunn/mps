@@ -4,33 +4,10 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/hex"
-	"strings"
 	"testing"
 )
-
-func TestStdin2Char(t *testing.T) {
-	for _, pair1 := range utfMacPairList {
-		for _, pair2 := range utfMacPairList {
-			mac := pair1.mac + pair2.mac
-			utf := pair1.utf + pair2.utf
-			name := hex.EncodeToString([]byte(utf)) + "_" + hex.EncodeToString([]byte(mac))
-			t.Run(name, func(t *testing.T) { testStdinWithPair(t, mac, utf) })
-		}
-	}
-}
-
-func testStdinWithPair(t *testing.T, mac string, utf string) {
-	bufin = bufio.NewReader(strings.NewReader(utf))
-	slice := make([]byte, len(mac)+10)
-	n := stdinReadMac(slice)
-	slice = slice[:n]
-	if string(slice) != mac {
-		t.Fatalf("Got %s", hex.EncodeToString(slice))
-	}
-}
 
 func Test2CharToMac(t *testing.T) {
 	for _, pair1 := range utfMacPairList {

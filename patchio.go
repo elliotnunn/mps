@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"os"
 )
@@ -31,19 +32,37 @@ func ioCodePatch(code []byte) {
 
 // These Toolbox traps are called with autoPop, so they act as RTS
 
+var stdin = bufio.NewReader(os.Stdin)
+var stdinLine macstring
+
 // Replaces DevRead
 func tSpecialStdin() {
+	if len(stdinLine) == 0 {
+		line, _ := stdin.ReadString('\n')
+		romanLine, ok := unicodeToMac(line)
+		if !ok {
+			logln("Stdin not convertible to Mac Roman")
+			os.Exit(1)
+		}
+		stdinLine = romanLine
+	}
+
 	writel(d0ptr, 0) // always
 
 	fstruct := readl(readl(spptr))
 
-	cnt := readl(fstruct + 12)
 	ptr := readl(fstruct + 16)
-	slice := mem[ptr:][:cnt]
+	want := int(readl(fstruct + 12))
 
-	n := stdinReadMac(slice)
+	get := want
+	if get > len(stdinLine) {
+		get = len(stdinLine)
+	}
 
-	writel(fstruct+12, cnt-uint32(n))
+	copy(mem[ptr:], stdinLine[:get])
+	stdinLine = stdinLine[get:]
+
+	writel(fstruct+12, uint32(want-get))
 	writew(fstruct+2, 0) // never seems to return eofErr
 }
 

@@ -8,6 +8,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"strings"
 )
@@ -57,7 +58,12 @@ func initPuppetStrings(args []string) {
 				<-puppetFilename
 				for {
 					os.Stdout.Write([]byte("• "))
-					cmd, _ := bufin.ReadString('\n')
+
+					cmd, err := stdin.ReadString('\n')
+					if err == io.EOF {
+						cmd = "quit"
+					}
+
 					if cmd, ok := unicodeToMac(cmd); ok {
 						// Interactive shell should tolerate filesystem changes between commands
 						clearDirCache("")
