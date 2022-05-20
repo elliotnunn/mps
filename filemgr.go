@@ -426,6 +426,7 @@ func tDelete(pb uint32) int {
 	}
 
 	deleteForks(path)
+	clearDirCache(filepath.Dir(path))
 
 	return 0
 }
