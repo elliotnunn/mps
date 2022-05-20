@@ -1892,10 +1892,10 @@ func timesExp10(f Float, decimalExp int, inexact bool) Float {
 	oldState := getFPState()
 	oldRndMode := oldState >> 13 & 3
 
-	//              ++++ ++++ ---- ----  sign of mantissa
-	//              ++++ ---- ++++ ----  sign of exponent
-	//              ~^v0 ~^v0 ~^v0 ~^v0  rounding dir (near/up/down/zero)
-	modeLookup := 0x0122_0211_0212_0121
+	//                     ++++ ++++ ---- ----  sign of mantissa
+	//                     ++++ ---- ++++ ----  sign of exponent
+	//                     ~^v0 ~^v0 ~^v0 ~^v0  rounding dir (near/up/down/zero)
+	modeLookup := uint64(0x0122_0211_0212_0121)
 	modeLookup <<= oldRndMode * 4
 	if f.sign {
 		modeLookup <<= 32
