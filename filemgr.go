@@ -45,7 +45,7 @@ import (
 
 // The single volume
 const (
-	onlyVolName = macstring("_")
+	onlyVolName = macstring("FS")
 	onlyVRefNum = 2
 )
 

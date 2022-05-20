@@ -13,10 +13,10 @@ var pathTestPairs = []struct {
 }{
 	{"", ""},
 	{"//", "//"},
-	{"/", "_:"},
-	{"/subdir", "_:subdir"},
-	{"/sub:dir", "_:sub/dir"},
-	{"/subdir/", "_:subdir:"},
+	{"/", "FS:"},
+	{"/subdir", "FS:subdir"},
+	{"/sub:dir", "FS:sub/dir"},
+	{"/subdir/", "FS:subdir:"},
 	{"dir", "dir"},
 	{"dir/", ":dir:"},
 	{"dir/.", ":dir:"},
@@ -36,10 +36,6 @@ func TestConvertPath(t *testing.T) {
 
 		if testCase.out != got {
 			t.Errorf("expected convertPath(%q) == %q, got %q", testCase.in, testCase.out, got)
-		}
-
-		if len(testCase.out) > len(testCase.in)+1 {
-			t.Errorf("expected len(convertPath(%q)) <= %d, got %d", testCase.in, len(testCase.in)+1, len(testCase.out))
 		}
 	}
 }
