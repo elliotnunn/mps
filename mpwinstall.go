@@ -36,12 +36,15 @@ var mpwSHA256 = [...]byte{
 // Install MPW for the user.
 // A messy tour through vintage Macintosh data formats.
 func installFrom(binFile string) bool {
-	home, ok := os.LookupEnv("HOME")
+	// $MPW or $HOME/MPW or ./MPW
+	dest, ok := os.LookupEnv("MPW")
 	if !ok {
-		logf("No $HOME folder to save MPW in")
-		return false
+		if home, ok := os.LookupEnv("HOME"); ok {
+			dest = filepath.Join(home, "MPW")
+		} else {
+			dest = "MPW"
+		}
 	}
-	dest := filepath.Join(home, "MPW")
 
 	// Download MPW if not already present
 	if binFile == "" || strings.HasPrefix(binFile, "http") {
@@ -50,7 +53,11 @@ func installFrom(binFile string) bool {
 			mirrors = []string{binFile}
 		}
 
-		binFile = filepath.Join(home, "MPW-GM.img.bin")
+		// $HOME/ or ./
+		binFile = "MPW-GM.img.bin"
+		if home, ok := os.LookupEnv("HOME"); ok {
+			binFile = filepath.Join(home, binFile)
+		}
 
 		// Download file if not already in home directory
 		if _, err := os.Stat(binFile); os.IsNotExist(err) {
@@ -166,6 +173,6 @@ func installFrom(binFile string) bool {
 		}
 	}
 
-	fmt.Println("MPW 3.5 (Golden Master) installed:", dest)
+	logln("MPW 3.5 (Golden Master) installed:", dest)
 	return true
 }

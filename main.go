@@ -22,7 +22,7 @@ Usage:
 	mps                                # interactive
 	mps pathToToolOrScript [arg ...]   # batch-mode
 	mps -c 'shortScript' [arg ...]     # batch-mode
-	mps -install [url | path]          # install ~/MPW from MPW-GM.img.bin
+	mps -install [url | path]          # install MPW 3.5 from MPW-GM.img.bin
 	                                     (SHA256=99bbfa95bb9800c8ffc572fce6...)
 
 Pathname conversion:

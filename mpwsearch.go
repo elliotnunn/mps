@@ -63,5 +63,7 @@ func mpwSearch() string {
 		return p
 	}
 
-	panic("Did not find an MPW")
+	logf("MPW not yet installed. Run: %s -install", os.Args[0])
+	os.Exit(1)
+	return ""
 }
