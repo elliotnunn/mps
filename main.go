@@ -308,11 +308,6 @@ func main() {
 		tb_base + 0x3ff: tDebugStr,                      // _DebugStr
 	}
 
-	// Set CurVol to the MPW distribution
-	mpwFolder = mpwSearch()
-	dirID(mpwFolder)
-	dirIDs[0] = mpwFolder
-
 	// System Folder is ephemeral, containing temp stuff mainly
 	systemFolder, _ = ioutil.TempDir("", "System Folder ")
 	defer os.RemoveAll(systemFolder)
@@ -463,19 +458,56 @@ func main() {
 	writel(0xa54, readl(0xa50)) // SysMapHndl = TopMapHndl
 	writew(0xa58, readw(0xa5a)) // SysMap = CurMap
 
-	pushzero(32)
-	fileNamePtr := readl(spptr)
-	pushw(0) // refnum return
-	writePstring(fileNamePtr, "ToolServer")
-	pushl(fileNamePtr) // pointer to the file string
-	lineA(0xa997)      // _OpenResFile
-	tsRefNum = popw()
-	writew(0x900, tsRefNum) // CurApRefNum
+	// Strategies to find an MPW distribution
+	var search []string
+	if os.Getenv("MPW") != "" {
+		search = append(search, os.Getenv("MPW"))
+	} else {
+		if os.Getenv("HOME") != "" {
+			search = append(search, filepath.Join(os.Getenv("HOME"), "MPW"))
+		}
 
-	if tsRefNum == 0xffff {
-		fmt.Fprintf(os.Stderr, "#### ToolServer app not found in %s\n", dirIDs[0])
+		// Cheating way of finding Unix paths
+		if os.PathSeparator == '/' {
+			search = append(search, "/usr/local/share/mpw")
+			search = append(search, "/usr/share/mpw")
+		}
+	}
+
+	// Try to launch ToolServer from each candidate
+	refNum := uint16(0xffff)
+	for _, try := range search {
+		try = filepath.Join(try, "ToolServer")
+
+		macPath, ok := unicodeToMac(convertPath(try))
+		if !ok {
+			continue
+		}
+
+		pathPtr, oldsp := pushzero(256)
+		writePstring(pathPtr, macPath)
+
+		pushw(0)       // refnum return
+		pushl(pathPtr) // pointer to the file string
+		lineA(0xa997)  // _OpenResFile
+		refNum = popw()
+
+		writel(spptr, oldsp)
+
+		if refNum != 0xffff {
+			break // Success!
+		}
+	}
+
+	if refNum == 0xffff {
+		logf("MPW not yet installed. Run: %s -install", os.Args[0])
 		os.Exit(1)
 	}
+
+	tsRefNum = refNum
+	writew(0x900, refNum) // CurApRefNum
+	mpwFolder = filepath.Dir(openPaths[refNum].hostpath)
+	dirIDs[0] = mpwFolder // ToolServer uses GetVol to find its containing dir
 
 	pushl(0)          // handle return
 	pushl(0x434f4445) // CODE
