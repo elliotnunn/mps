@@ -1,4 +1,4 @@
-// +build darwin
+//go:build darwin
 
 // Copyright (c) 2021 Elliot Nunn
 // Licensed under the MIT license
