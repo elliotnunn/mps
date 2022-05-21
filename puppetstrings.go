@@ -8,7 +8,6 @@ package main
 import (
 	_ "embed"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -49,16 +48,16 @@ func initPuppetStrings(args []string) {
 	}
 
 	args = convertArgPaths(args)
-	script := macstring("Directory ") + quote(unicodeToMacOrPanic(convertPath(cwd))) + macstring("\r")
+	script := macstring("Directory ") + quote(unicodeToMacOrPanic(platPathToMac(cwd))) + macstring("\r")
 
 	switch {
 	case len(args) == 0: // REPL
 		script += unicodeToMacOrPanic(REPL)
 
 		// This Tool is necessary for a REPL (sadly)
-		os.Create(filepath.Join(systemFolder, "ReadLine"))
-		os.WriteFile(filepath.Join(systemFolder, "ReadLine.rdump"), embedReadLineTool, 0o644)
-		os.WriteFile(filepath.Join(systemFolder, "ReadLine.idump"), []byte("MPSTMPS "), 0o644)
+		os.Create(platPathJoin(systemFolder, "ReadLine"))
+		os.WriteFile(platPathJoin(systemFolder, "ReadLine.rdump"), embedReadLineTool, 0o644)
+		os.WriteFile(platPathJoin(systemFolder, "ReadLine.idump"), []byte("MPSTMPS "), 0o644)
 
 	case strings.HasPrefix(args[0], "-"): // -c inline_script [args...]
 		if args[0] != "-c" || len(args) < 2 {
@@ -91,11 +90,11 @@ func convertArgPaths(args []string) []string {
 	for i := 0; i < len(args); i++ {
 		if args[i] == "%%%" {
 			for _, arg := range args[i+1:] {
-				newArgs = append(newArgs, convertPath(arg))
+				newArgs = append(newArgs, platPathToMac(arg))
 			}
 			break
 		} else if args[i] == "%%" && i < len(args)-1 {
-			newArgs = append(newArgs, convertPath(args[i+1]))
+			newArgs = append(newArgs, platPathToMac(args[i+1]))
 			i++
 		} else {
 			newArgs = append(newArgs, args[i])
@@ -106,8 +105,8 @@ func convertArgPaths(args []string) []string {
 }
 
 func putScript(name string, content macstring) {
-	os.WriteFile(filepath.Join(systemFolder, name), []byte(content), 0o644)
-	os.WriteFile(filepath.Join(systemFolder, name+".idump"), []byte("TEXTMPS "), 0o644)
+	os.WriteFile(platPathJoin(systemFolder, name), []byte(content), 0o644)
+	os.WriteFile(platPathJoin(systemFolder, name+".idump"), []byte("TEXTMPS "), 0o644)
 	clearDirCache(systemFolder)
 }
 
@@ -203,7 +202,7 @@ func tPack3() {
 		writeb(replyPtr, 0xff)             // good
 		writeb(replyPtr+1, 0xff)           // replacing
 		copy(mem[replyPtr+2:], ftype)      // type
-		writew(replyPtr+6, 2)              // FSSpec vRefNum
+		writew(replyPtr+6, rootID)         // FSSpec vRefNum
 		writel(replyPtr+8, uint32(number)) // FSSpec dirID
 		writePstring(replyPtr+12, name)    // FSSpec name
 		writew(replyPtr+76, 0)             // script

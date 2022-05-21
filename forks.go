@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -25,8 +24,8 @@ func whichFormat(path string) int {
 	format := kRez // should be read from environment variable
 	var complain []string
 
-	fe1 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
-	fe2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+	fe1 := platPathJoin(platPathDir(path), "FINDER.DAT", platPathBase(path))
+	fe2 := platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path))
 	if existsAsFile(fe1) || existsAsFile(fe2) {
 		format = kFileExchange
 		complain = append(complain, "File Exchange")
@@ -80,7 +79,7 @@ func finderInfoWithoutTextHack(path string) [16]byte {
 
 	switch whichFormat(path) {
 	case kFileExchange:
-		path2 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+		path2 := platPathJoin(platPathDir(path), "FINDER.DAT", platPathBase(path))
 		if data, err := os.ReadFile(path2); err == nil {
 			copy(finfo[:], data)
 		}
@@ -113,12 +112,12 @@ func writeFinderInfo(path string, finfo [16]byte) {
 
 	switch whichFormat(path) {
 	case kFileExchange:
-		path2 := filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path))
+		path2 := platPathJoin(platPathDir(path), "FINDER.DAT", platPathBase(path))
 		if string(finfo[:8]) == "????????" {
 			os.Remove(path2)
-			os.Remove(filepath.Dir(path2))
+			os.Remove(platPathDir(path2))
 		} else {
-			os.Mkdir(filepath.Dir(path2), 0o755)
+			os.Mkdir(platPathDir(path2), 0o755)
 			os.WriteFile(path2, finfo[:], 0o644)
 		}
 
@@ -156,7 +155,7 @@ func dataFork(path string) []byte {
 
 func writeDataFork(path string, fork []byte) {
 	os.WriteFile(path, fork, 0o666) // ignore error
-	nowMtime(path)
+	writeMtimeFile(path, readl(0x20c))
 }
 
 func resourceFork(path string) []byte {
@@ -164,7 +163,7 @@ func resourceFork(path string) []byte {
 
 	switch whichFormat(path) {
 	case kFileExchange:
-		path2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+		path2 := platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path))
 		data, _ = os.ReadFile(path2) // accept a nonexistent file
 
 	case kRez:
@@ -200,10 +199,10 @@ func writeResourceFork(path string, fork []byte) {
 
 	switch whichFormat(path) {
 	case kFileExchange:
-		path2 := filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))
+		path2 := platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path))
 		if len(fork) > 256 {
-			os.Mkdir(filepath.Dir(path2), 0o777) // ignore error
-			os.WriteFile(path2, fork, 0o666)     // ignore error
+			os.Mkdir(platPathDir(path2), 0o777) // ignore error
+			os.WriteFile(path2, fork, 0o666)    // ignore error
 		} else {
 			os.Remove(path2) // ignore error
 		}
@@ -220,17 +219,43 @@ func writeResourceFork(path string, fork []byte) {
 		os.WriteFile(path+"/..namedfork/rsrc", fork, 0o666) // ignore error
 	}
 
-	nowMtime(path)
+	writeMtimeFile(path, readl(0x20c))
 }
 
 var frozenTime = time.Now()
 
+func epochToMac(host time.Time) uint32 {
+	if host.Unix() == 0 {
+		return 0
+	}
+
+	// Lowmem Time is unchanging and corresponds with frozenTime
+	mac := int64(readl(0x20c)) + int64(host.Sub(frozenTime))/1e9
+
+	// Clip to earliest and latest practical Mac times
+	if mac < 0x80000000 {
+		return 0x80000000
+	} else if mac > 0xffffffff {
+		return 0xffffffff
+	} else {
+		return uint32(mac)
+	}
+}
+
+func epochToHost(mac uint32) time.Time {
+	if mac == 0 {
+		return time.Unix(0, 0)
+	}
+
+	return frozenTime.Add(time.Duration((int64(mac) - int64(readl(0x20c))) * 1e9))
+}
+
 // Map a zero Unix time to a zero Macintosh time
 // (which tends to indicate a corrupt file)
-func mtime(path string) uint32 {
+func mtimeFile(path string) uint32 {
 	var modTime time.Time
 	// Check forks, but ignore the files containing Finder info
-	for _, p := range []string{path, path + ".rdump", filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))} {
+	for _, p := range []string{path, path + ".rdump", platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path))} {
 		if stat, err := os.Stat(p); err == nil {
 			t := stat.ModTime()
 			if t.Unix() == 0 {
@@ -242,40 +267,48 @@ func mtime(path string) uint32 {
 		}
 	}
 
-	// Lowmem Time is unchanging and corresponds with frozenTime
-	macTime := int64(readl(0x20c)) + int64(modTime.Sub(frozenTime))/1e9
-
-	// Clip to earliest and latest practical Mac times
-	if macTime < 0x80000000 {
-		return 0x80000000
-	}
-	if macTime > 0xffffffff {
-		return 0xffffffff
-	}
-
-	return uint32(macTime)
+	return epochToMac(modTime)
 }
 
-func writeMtime(path string, macTime uint32) {
+func mtimeDir(path string) uint32 {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+
+	modTime := stat.ModTime()
+	if modTime.Unix() == 0 {
+		return 0
+	}
+
+	return epochToMac(modTime)
+}
+
+func writeMtimeFile(path string, macTime uint32) {
 	// Do not set the time if it would make no difference anyway,
 	// to prevent subtly altering files when setting only the type/creator
-	if macTime == mtime(path) {
+	if macTime == mtimeFile(path) {
 		return
 	}
 
-	t := time.Unix(0, 0)
-	if macTime != 0 {
-		t = frozenTime.Add(time.Duration((int64(macTime) - int64(readl(0x20c))) * 1e9))
-	}
+	t := epochToHost(macTime)
 
 	// Do not touch the files containing the Finder info
-	for _, p := range []string{path, path + ".rdump", filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path))} {
+	for _, p := range []string{path, path + ".rdump", platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path))} {
 		os.Chtimes(p, t, t)
 	}
 }
 
-func nowMtime(path string) {
-	writeMtime(path, readl(0x20c))
+func writeMtimeDir(path string, macTime uint32) {
+	// Do not set the time if it would make no difference anyway,
+	// to prevent subtly altering files when setting only the type/creator
+	if macTime == mtimeFile(path) {
+		return
+	}
+
+	t := epochToHost(macTime)
+
+	os.Chtimes(path, t, t)
 }
 
 func deleteForks(path string) {
@@ -289,7 +322,7 @@ func underlyingPaths(path string) []string {
 		path,
 		path + ".idump",
 		path + ".rdump",
-		filepath.Join(filepath.Dir(path), "RESOURCE.FRK", filepath.Base(path)),
-		filepath.Join(filepath.Dir(path), "FINDER.DAT", filepath.Base(path)),
+		platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path)),
+		platPathJoin(platPathDir(path), "FINDER.DAT", platPathBase(path)),
 	}
 }

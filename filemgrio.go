@@ -22,10 +22,6 @@ The size of the FCB table is stored in a word at the base of the table.
 
 package main
 
-import (
-	"path/filepath"
-)
-
 // the contents of every open fork
 var openBuffers = make(map[uint16]*[]byte)
 var openPaths = make(map[uint16]forkPath)
@@ -84,7 +80,6 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 	ioNamePtr := readl(pb + 18)
 	ioName := readPstring(ioNamePtr)
 	ioPermssn := readb(pb + 27)
-
 	number := paramBlkDirID()
 
 	// Checks for file existence
@@ -94,8 +89,8 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 	}
 
 	// Canonical dirID and name
-	number = dirID(filepath.Dir(path))
-	ioName, _ = macName(filepath.Base(path))
+	number = dirID(platPathDir(path))
+	ioName, _ = macName(platPathBase(path))
 
 	forkPath := forkPath{hostpath: path, isRsrc: forkIsRsrc}
 	oldRefNum, ok := forkRefNum(forkPath)
@@ -330,7 +325,7 @@ func tGetFCBInfo(pb uint32) int {
 	}
 
 	writew(pb+24, ioRefNum)
-	writew(pb+52, 2)             // ioFCBVRefNum
+	writew(pb+52, rootID)        // ioFCBVRefNum
 	writel(pb+54, 0)             // ioFCBClpSiz, don't care
 	writel(pb+58, readl(fcb+58)) // ioFCBParID
 

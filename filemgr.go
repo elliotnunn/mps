@@ -2,7 +2,9 @@
 // Licensed under the MIT license
 
 /*
-Give the MacOS environment a reasonable view of the host filesystem.
+The platform-independent part of the File Manager
+
+Present the single-rooted tree from filemgr_*.go to the MacOS as a single volume.
 
 The relationship of MacOS filenames to host filenames is:
     different-case macnames : one true macname : multiple hostnames
@@ -16,9 +18,6 @@ with both macname and hostname.
 Converting macname>hostname requires a full directory listing, which is filtered
 for the matching hostname.
 
-We emulate a system with a single mounted volume, exposing the system root.
-What to do on Windows?
-
 MacOS commonly refers to directories by a 32-bit catalog node ID or "dirID".
 For compatibility with pre-HFS apps, the system kept a limited array of
 "working directories", which mapped between 32-bit dirID and 16-bit volume ID.
@@ -28,7 +27,7 @@ and their index gives the dirID.
 
 0, 1 and 2 are reserved, for reasons documented in the slice declaration.
 
-File CNIDs exist but are not needed by the APIs, so not implemented.
+File CNIDs are not needed by the APIs, so not implemented.
 */
 
 package main
@@ -38,26 +37,27 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
 
 // The single volume
 const (
-	onlyVolName = macstring("FS")
-	onlyVRefNum = 2
+	onlyVolName   = macstring("FS")
+	curDirID      = 0
+	rootsParentID = 1
+	rootID        = 2
 )
 
 // Directories appended here as they are encountered, starting with ID 3
 var dirIDs = []string{
 	// a nil dirID/vRefNum means "current dir/vol"
-	"/",
+	platRoot,
 	// 1 is returned when asking about the "parent" of root
-	"",
+	"\x00\x01",
 	// the dirID of the root of an HFS volume is 2
 	// convenient to also consider the vRefNum as 2
-	"/",
+	platRoot,
 }
 
 func dirID(hostPath string) uint16 {
@@ -72,27 +72,22 @@ func dirID(hostPath string) uint16 {
 
 // hostname>macname conversion
 func macName(host string) (macstring, bool) {
-	// Disallow nulls, newlines, other control characters
-	for _, char := range []byte(host) {
-		if char < 0x20 || char == 0x7f {
-			return "", false
-		}
+	if strings.ContainsRune(host, platPathSep) {
+		panic("macName passed string with a path sep: " + host)
 	}
 
-	for _, char := range []byte(host) {
-		if os.IsPathSeparator(char) {
-			panic("path separator passed to macName")
-		}
-	}
-
-	// Unix "and:or" appears as Mac "and/or"
-	host = strings.ReplaceAll(host, ":", "/")
-
-	// This test more to prevent a Mac app from creating one of these names
-	if host == "." || host == ".." {
+	// Disallow control and platform-specific chars
+	if platNameForbid(host) {
 		return "", false
 	}
-	// ... could also test for WinNT forbidden names?
+
+	// Disallow dotfiles
+	if strings.HasPrefix(host, ".") {
+		return "", false
+	}
+
+	// Host "and:or" appears as Mac "and/or"
+	host = strings.ReplaceAll(host, ":", "/")
 
 	// These special files belong to my "Rez" system
 	if strings.HasSuffix(host, ".idump") || strings.HasSuffix(host, ".rdump") {
@@ -125,15 +120,12 @@ func macName(host string) (macstring, bool) {
 func hostName(mac macstring) (string, bool) {
 	host := macToUnicode(mac)
 
-	// We interconvert between : and /
-	// but this means we cannot allow Windows \
-	for _, char := range []byte(host) {
-		if char != '/' && os.IsPathSeparator(char) {
-			return "", false
-		}
+	// Mac path separator shouldn't get through
+	if strings.ContainsRune(host, ':') {
+		panic("hostName passed string with a path sep: " + host)
 	}
 
-	// Mac "and/or" appears as Unix "and:or"
+	// Mac "and/or" appears as host "and:or"
 	host = strings.ReplaceAll(host, "/", ":")
 
 	// Also run the tests for length etc in our sister function below
@@ -148,19 +140,19 @@ func hostName(mac macstring) (string, bool) {
 // Resolve a dirID/path pair to a host path.
 // Follows the unusual MacOS rules for absolute and relative paths.
 // Allows for differing Unicode normalisation by listing the directory.
-func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
-	// If string is abolute then ignore the number, use the special root ID
-	if strings.Contains(string(name), ":") && !strings.HasPrefix(string(name), ":") {
-		number = 2
-		root_and_name := strings.SplitN(string(name), ":", 2)
-		name = macstring(root_and_name[1])
-
-		if macstring(root_and_name[0]) != onlyVolName {
-			return "", -43 // fnfErr
-		}
+func hostPath(number uint16, name macstring, leafMustExist bool) (path string, errno int) {
+	if gDebugFileMgr {
+		defer func(number uint16, name macstring, leafMustExist bool) {
+			logf("hostPath(%v, %q, %v) = (%q, %v)", number, name, leafMustExist, path, errno)
+		}(number, name, leafMustExist)
 	}
 
-	path := dirIDs[number]
+	// If name is an absolute path, then start evaluating from "parent of root"
+	if !strings.HasPrefix(string(name), ":") && strings.Contains(string(name), ":") {
+		number = rootsParentID
+	}
+
+	path = dirIDs[number]
 
 	var components []macstring
 	for _, component := range strings.Split(string(name), ":") {
@@ -175,20 +167,30 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 		components = components[:len(components)-1]
 	}
 
-	errno := 0
 	for i, mac := range components {
 		if len(mac) == 0 { // treat :: like ..
-			path = filepath.Dir(path)
+			if path == dirIDs[rootsParentID] || path == dirIDs[rootID] {
+				return path, -120 // dirNFErr
+			}
+
+			path = platPathDir(path)
 			continue
 		}
 
-		// Fake out the pipe
-		if path == mpwFolder && strings.HasPrefix(string(mac), "MPW.MinPipe") {
-			path = filepath.Join(systemFolder, "Temporary Items")
+		// Create the illusion of a single hard drive inside "parent of root"
+		if path == dirIDs[rootsParentID] {
+			if relString(onlyVolName, mac, false, true) != 0 {
+				return path, -120 // dirNFErr
+			}
+
+			path = dirIDs[rootID]
+			continue
 		}
 
-		// List the directory to find the matching unix name
-		listing, _ := readDir(path)
+		// Move annoying files out of the way
+		if path == mpwFolder && strings.HasPrefix(string(mac), "MPW.MinPipe") {
+			path = platPathJoin(systemFolder, "Temporary Items")
+		}
 
 		host, ok := hostName(mac)
 		if !ok {
@@ -196,6 +198,14 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 		}
 		name := existingNamePair{mac, host}
 
+		// Handle Windows drive letters
+		if platPathImaginary(path) {
+			path = platPathJoin(path, host)
+			continue
+		}
+
+		// List the directory to find the matching unix name
+		listing, _ := readDir(path)
 		exists := false
 		for _, existingName := range listing {
 			if relString(name.mac, existingName.mac, false, true) == 0 {
@@ -207,7 +217,7 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 
 		// If matching file exists, use the unicode name supplied by the OS
 		// Otherwise, use the unicode name that we made up
-		path = filepath.Join(path, name.host)
+		path = platPathJoin(path, name.host)
 
 		if !exists && errno == 0 { // can tolerate a nonexistent leaf file if instructed
 			if i == len(components)-1 {
@@ -403,7 +413,7 @@ func tCreate(pb uint32) int { // also DirCreate
 		} else { // Create
 			writeDataFork(path, nil)
 		}
-		clearDirCache(filepath.Dir(path))
+		clearDirCache(platPathDir(path))
 		return 0
 	default: // likely a containing folder not found, complain loudly
 		return errno
@@ -421,7 +431,7 @@ func tDelete(pb uint32) int {
 	}
 
 	deleteForks(path)
-	clearDirCache(filepath.Dir(path))
+	clearDirCache(platPathDir(path))
 
 	return 0
 }
@@ -429,13 +439,14 @@ func tDelete(pb uint32) int {
 // A bit like stat
 func tGetFInfo(pb uint32) int { // also GetCatInfo
 	trap := readw(d1ptr + 2)
-
 	ioFDirIndex := int16(readw(pb + 28))
 	ioNamePtr := readl(pb + 18)
-
 	dirid := paramBlkDirID()
 
-	// removed "weird case for _HGetFInfo"
+	// clear our block of return values, which is longer for GetCatInfo
+	for i := 30; i < 80 || (trap&0xff == 0x60 && i < 108); i++ {
+		writeb(pb+uint32(i), 0)
+	}
 
 	returnIOName := false
 	path := ""
@@ -449,6 +460,9 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		returnIOName = true
 
 		path = dirIDs[dirid]
+		if platPathImaginary(path) {
+			return -43 // fnfErr
+		}
 
 		listing, errno := readDir(path)
 		if errno != 0 {
@@ -459,7 +473,7 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 			return -43 // fnfErr
 		}
 
-		path = filepath.Join(path, listing[ioFDirIndex-1].host)
+		path = platPathJoin(path, listing[ioFDirIndex-1].host)
 	} else { // zero or (if GetFInfo) negative
 		// file named "ioNamePtr" within "dirID"
 		subPath, errno := hostPath(dirid, readPstring(ioNamePtr), true)
@@ -469,31 +483,34 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		path = subPath
 	}
 
-	// at this point, we know that the file exists. let's try listing
-	listing, listErr := readDir(path)
-
-	// clear our block of return values, which is longer for GetCatInfo
-	endOfReturnValues := 80
-	if trap&0xff == 0x60 {
-		endOfReturnValues = 108
-	}
-	for i := 30; i < endOfReturnValues; i++ {
-		writeb(pb+uint32(i), 0)
+	// -1 meaning file, otherwise meaning count of contained folders
+	arity := 0
+	if !platPathImaginary(path) {
+		listing, listErr := readDir(path)
+		if listErr == 0 {
+			arity = len(listing)
+		} else {
+			arity = -1
+		}
 	}
 
 	if returnIOName && ioNamePtr != 0 {
-		host := filepath.Base(path)
-		mac := onlyVolName
-		if host != "/" {
-			mac, _ = macName(host)
+		if path == platRoot {
+			writePstring(ioNamePtr, onlyVolName)
+		} else {
+			mac, _ := macName(platPathBase(path))
+			writePstring(ioNamePtr, mac)
 		}
-		writePstring(ioNamePtr, mac)
 	}
 
-	if listErr == 0 { // folder
-		writeb(pb+30, 1<<4)                 // is a directory
-		writel(pb+48, uint32(dirID(path)))  // ioDrDirID
-		writel(pb+52, uint32(len(listing))) // ioDrNmFls
+	if arity != -1 { // folder
+		writeb(pb+30, 1<<4)                // is a directory
+		writel(pb+48, uint32(dirID(path))) // ioDrDirID
+		writel(pb+52, uint32(arity))       // ioDrNmFls
+
+		t := mtimeDir(path)
+		writel(pb+72, t) // ioFlCrDat
+		writel(pb+76, t) // ioFlMdDat
 	} else { // file
 		finfo := finderInfo(path)
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
@@ -506,19 +523,19 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		writel(pb+58, (sizeD+511)&^511) // ioFlPyLen
 		writel(pb+64, sizeR)            // ioFlRLgLen
 		writel(pb+68, (sizeR+511)&^511) // ioFlRPyLen
+
+		t := mtimeFile(path)
+		writel(pb+72, t) // ioFlCrDat
+		writel(pb+76, t) // ioFlMdDat
 	}
 
 	if trap&0xff == 0x60 {
 		parID := uint32(1) // parent of root
-		if path != filepath.Dir(path) {
-			parID = uint32(dirID(filepath.Dir(path)))
+		if path != platRoot {
+			parID = uint32(dirID(platPathDir(path)))
 		}
 		writel(pb+100, parID) // ioFlParID
 	}
-
-	t := mtime(path)
-	writel(pb+72, t) // ioFlCrDat
-	writel(pb+76, t) // ioFlMdDat
 
 	return 0
 }
@@ -537,7 +554,7 @@ func tSetFInfo(pb uint32) int { // also SetCatInfo
 		copy(finfo[:], mem[pb+32:])
 		writeFinderInfo(path, finfo)
 
-		writeMtime(path, readl(pb+76)) // ioFlMdDat
+		writeMtimeFile(path, readl(pb+76)) // ioFlMdDat
 	}
 
 	return 0
@@ -550,25 +567,22 @@ func tGetVol(pb uint32) int {
 	trap := readw(d1ptr + 2)
 
 	if trap&0x200 != 0 { // HGetVol
-		writew(pb+22, 2)                        // ioVRefNum = 2
-		writel(pb+48, uint32(dirID(dirIDs[0]))) // ioDirID = number
+		writew(pb+22, rootID)                          // ioVRefNum
+		writel(pb+48, uint32(dirID(dirIDs[curDirID]))) // ioDirID = number
 	} else { // plain GetVol
-		writew(pb+22, dirID(dirIDs[0])) // ioVRefNum = number
+		writew(pb+22, dirID(dirIDs[curDirID])) // ioVRefNum = number
 	}
 
 	ioVNPtr := readl(pb + 18)
 	if ioVNPtr != 0 {
-		mac, ok := macName(filepath.Base(dirIDs[0]))
-		if !ok {
-			panic("macName failed on a path in dirIDs")
-		}
+		mac, _ := macName(platPathBase(dirIDs[curDirID]))
 		writePstring(ioVNPtr, mac)
 	}
 
 	return 0
 }
 
-// "Set current directory", i.e. set dirIDs[0]
+// "Set current directory", i.e. set dirIDs[curDirID]
 func tSetVol(pb uint32) int {
 	trap := readw(d1ptr + 2)
 
@@ -584,11 +598,11 @@ func tSetVol(pb uint32) int {
 			return errno
 		}
 
-		dirIDs[0] = path
+		dirIDs[curDirID] = path
 	} else if trap&0x200 != 0 { // HSetVol
-		dirIDs[0] = dirIDs[readw(pb+48+2)] // ioDirID
+		dirIDs[curDirID] = dirIDs[readw(pb+48+2)] // ioDirID
 	} else { // plain SetVol
-		dirIDs[0] = dirIDs[readw(pb+22)] // ioVRefNum
+		dirIDs[curDirID] = dirIDs[readw(pb+22)] // ioVRefNum
 	}
 
 	return 0
@@ -601,7 +615,7 @@ func tGetVInfo(pb uint32) int {
 	if ioVNPtr != 0 {
 		writePstring(ioVNPtr, onlyVolName)
 	}
-	writew(pb+22, 2) // ioVRefNum: our "root volume" is 2
+	writew(pb+22, rootID) // ioVRefNum: our "root volume" is 2
 
 	writel(pb+30, 0)      // ioVCrDate
 	writel(pb+34, 0)      // ioVLsMod
@@ -622,7 +636,7 @@ func tGetVInfo(pb uint32) int {
 		writew(pb+62, 0xfff0) // ioVFrBlk
 		writew(pb+64, 0x4244) // ioVSigWord = 'BD'
 		//writew(pb+66, 0) // ioVDrvInfo
-		writew(pb+68, 2) // ioVDRefNum
+		writew(pb+68, rootID) // ioVDRefNum
 		//writew(pb+70, 0) // ioVFSID
 		//writel(pb+72, 0) // ioVBkUp
 		//writew(pb+76, 0) // ioVSeqNum
@@ -681,7 +695,7 @@ func tFSDispatch(pb uint32) int {
 		}
 
 		// Dest must not already exist
-		newFile := filepath.Join(dir, filepath.Base(file))
+		newFile := platPathJoin(dir, platPathBase(file))
 		if _, err := os.Stat(newFile); err == nil || !os.IsNotExist(err) {
 			return -37 // bdNamErr, dest already exists
 		}
@@ -708,17 +722,17 @@ func tFSDispatch(pb uint32) int {
 			os.Rename(file+".rdump", newFile+".rdump") // ignore error
 			os.Rename(file+".idump", newFile+".idump") // ignore error
 
-			res := filepath.Join(filepath.Dir(file), "RESOURCE.FRK", filepath.Base(file))
-			newRes := filepath.Join(filepath.Dir(newFile), "RESOURCE.FRK", filepath.Base(file))
+			res := platPathJoin(platPathDir(file), "RESOURCE.FRK", platPathBase(file))
+			newRes := platPathJoin(platPathDir(newFile), "RESOURCE.FRK", platPathBase(file))
 			if _, err := os.Stat(res); err == nil || !os.IsNotExist(err) {
-				os.Mkdir(filepath.Dir(newRes), 0o755)
+				os.Mkdir(platPathDir(newRes), 0o755)
 				os.Rename(res, newRes)
 			}
 
-			inf := filepath.Join(filepath.Dir(file), "FINDER.DAT", filepath.Base(file))
-			newInf := filepath.Join(filepath.Dir(newFile), "FINDER.DAT", filepath.Base(file))
+			inf := platPathJoin(platPathDir(file), "FINDER.DAT", platPathBase(file))
+			newInf := platPathJoin(platPathDir(newFile), "FINDER.DAT", platPathBase(file))
 			if _, err := os.Stat(inf); err == nil || !os.IsNotExist(err) {
-				os.Mkdir(filepath.Dir(newInf), 0o755)
+				os.Mkdir(platPathDir(newInf), 0o755)
 				os.Rename(inf, newInf)
 			}
 		}
@@ -743,8 +757,8 @@ func tFSDispatch(pb uint32) int {
 		if isDir {
 			clearDirCache("")
 		} else {
-			clearDirCache(filepath.Dir(file)) // donor dir shorter
-			clearDirCache(dir)                // recipient dir longer
+			clearDirCache(platPathDir(file)) // donor dir shorter
+			clearDirCache(dir)               // recipient dir longer
 		}
 
 	case 6: // DirCreate
@@ -753,7 +767,7 @@ func tFSDispatch(pb uint32) int {
 	case 7: // GetWDInfo
 		// the opposite transformation to OpenWD
 		writel(pb+48, uint32(readw(pb+22))) // ioWDDirID = ioVRefNum
-		writew(pb+32, 2)                    // ioWDVRefNum = 2 (our root)
+		writew(pb+32, rootsParentID)        // ioWDVRefNum
 		writel(pb+28, 0)                    // ioWDProcID = who cares who created it
 
 	case 8: // GetFCBInfo
@@ -778,8 +792,8 @@ func tFSDispatch(pb uint32) int {
 			return errno
 		}
 
-		writew(ioMisc, 2) // vRefNum = 2 always
-		writel(ioMisc+2, uint32(dirID(filepath.Dir(path))))
+		writew(ioMisc, rootID) // vRefNum
+		writel(ioMisc+2, uint32(dirID(platPathDir(path))))
 		writePstring(ioMisc+6, ioName)
 
 	case 48: // GetVolParms
@@ -807,5 +821,5 @@ func tFSDispatch(pb uint32) int {
 }
 
 func sameOrChildOf(inner, outer string) bool {
-	return inner == outer || strings.HasPrefix(inner, outer+string(os.PathSeparator))
+	return inner == outer || strings.HasPrefix(inner, outer+string(platPathSep))
 }

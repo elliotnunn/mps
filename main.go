@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime/pprof"
 	"strings"
 )
@@ -361,7 +360,7 @@ func main() {
 		writew(kVCB+uint32(i), 0)
 	}
 	writew(kVCB+8, 0x4244)             // vcbSigWord
-	writew(kVCB+78, 2)                 // vcbVRefNum
+	writew(kVCB+78, rootID)            // vcbVRefNum
 	writePstring(kVCB+44, onlyVolName) // vcbVName
 
 	// VCB header...
@@ -433,16 +432,16 @@ func main() {
 
 	// Create some useful folders
 	for _, n := range []string{"Preferences", "Desktop Folder", "Trash", "Temporary Items"} {
-		os.Mkdir(filepath.Join(systemFolder, n), 0o777)
+		os.Mkdir(platPathJoin(systemFolder, n), 0o777)
 	}
 
 	// Disable the status window in preferences
-	os.MkdirAll(filepath.Join(systemFolder, "Preferences", "MPW"), 0o777)
-	os.WriteFile(filepath.Join(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
+	os.MkdirAll(platPathJoin(systemFolder, "Preferences", "MPW"), 0o777)
+	os.WriteFile(platPathJoin(systemFolder, "Preferences", "MPW", "ToolServer Prefs"), make([]byte, 9), 0o777)
 
 	// Create and open System file
-	os.Create(filepath.Join(systemFolder, "System"))
-	os.WriteFile(filepath.Join(systemFolder, "System.rdump"), embedSystemFile, 0o644)
+	os.Create(platPathJoin(systemFolder, "System"))
+	os.WriteFile(platPathJoin(systemFolder, "System.rdump"), embedSystemFile, 0o644)
 
 	writePstring(0xad8, "System") // SysResName
 	pushw(0)                      // space to return refnum
@@ -464,7 +463,7 @@ func main() {
 		search = append(search, os.Getenv("MPW"))
 	} else {
 		if os.Getenv("HOME") != "" {
-			search = append(search, filepath.Join(os.Getenv("HOME"), "MPW"))
+			search = append(search, platPathJoin(os.Getenv("HOME"), "MPW"))
 		}
 
 		// Cheating way of finding Unix paths
@@ -477,9 +476,9 @@ func main() {
 	// Try to launch ToolServer from each candidate
 	refNum := uint16(0xffff)
 	for _, try := range search {
-		try = filepath.Join(try, "ToolServer")
+		try = platPathJoin(try, "ToolServer")
 
-		macPath, ok := unicodeToMac(convertPath(try))
+		macPath, ok := unicodeToMac(platPathToMac(try))
 		if !ok {
 			continue
 		}
@@ -506,8 +505,8 @@ func main() {
 
 	tsRefNum = refNum
 	writew(0x900, refNum) // CurApRefNum
-	mpwFolder = filepath.Dir(openPaths[refNum].hostpath)
-	dirIDs[0] = mpwFolder // ToolServer uses GetVol to find its containing dir
+	mpwFolder = platPathDir(openPaths[refNum].hostpath)
+	dirIDs[curDirID] = mpwFolder // ToolServer uses GetVol to find its containing dir
 
 	pushl(0)          // handle return
 	pushl(0x434f4445) // CODE

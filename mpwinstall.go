@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -40,7 +39,7 @@ func installFrom(binFile string) bool {
 	dest, ok := os.LookupEnv("MPW")
 	if !ok {
 		if home, ok := os.LookupEnv("HOME"); ok {
-			dest = filepath.Join(home, "MPW")
+			dest = platPathJoin(home, "MPW")
 		} else {
 			dest = "MPW"
 		}
@@ -56,7 +55,7 @@ func installFrom(binFile string) bool {
 		// $HOME/ or ./
 		binFile = "MPW-GM.img.bin"
 		if home, ok := os.LookupEnv("HOME"); ok {
-			binFile = filepath.Join(home, binFile)
+			binFile = platPathJoin(home, binFile)
 		}
 
 		// Download file if not already in home directory
@@ -119,8 +118,8 @@ func installFrom(binFile string) bool {
 		for i := range slice {
 			switch slice[i] {
 			case ':':
-				slice[i] = filepath.Separator
-			case filepath.Separator:
+				slice[i] = '/'
+			case '/':
 				slice[i] = ':'
 			}
 		}
@@ -129,9 +128,9 @@ func installFrom(binFile string) bool {
 		// Slightly rearrange things to keep homedirs tidy
 		// MPW's startup scripts allow this "old-style" structure
 		if _, sub, ok := strings.Cut(path, pathsep+"MPW"+pathsep); ok {
-			path = filepath.Join(dest, sub)
+			path = dest + pathsep + sub
 		} else if _, sub, ok := strings.Cut(path, pathsep+"Interfaces&Libraries"+pathsep); ok {
-			path = filepath.Join(dest, sub)
+			path = dest + pathsep + sub
 		} else {
 			continue
 		}

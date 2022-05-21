@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"path/filepath"
 )
 
 const (
@@ -1085,7 +1084,7 @@ func tHCreateResFile() {
 	case -43: // fnfErr (which we expect)
 		empty := []byte{0x2: 0x01, 0x6: 0x01, 0xf: 0x1e, 0x119: 0x1c, 0x11b: 0x1e, 0x11c: 0xff, 0x11d: 0xff}
 		writeResourceFork(path, empty)
-		clearDirCache(filepath.Dir(path))
+		clearDirCache(platPathDir(path))
 		setResError(0) // noErr
 	default:
 		setResError(int16(errno))

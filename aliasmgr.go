@@ -13,7 +13,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -68,8 +67,8 @@ const (
 // Create an alias record fit for an absolute or relative path search
 func aliasRecord(to, from string) []byte {
 	// Still Unicode strings, but colon-separated
-	to = strings.TrimRight(convertPath(to), ":")
-	from = strings.TrimRight(convertPath(from), ":")
+	to = strings.TrimRight(platPathToMac(to), ":")
+	from = strings.TrimRight(platPathToMac(from), ":")
 
 	var nLevelTo, nLevelFrom int
 	if from != "" {
@@ -272,18 +271,18 @@ func tFindFolder() {
 	var path string
 	switch folderType {
 	case "pref", "sprf":
-		path = filepath.Join(systemFolder, "Preferences")
+		path = platPathJoin(systemFolder, "Preferences")
 	case "desk", "sdsk":
-		path = filepath.Join(systemFolder, "Desktop Folder")
+		path = platPathJoin(systemFolder, "Desktop Folder")
 	case "trsh", "strs", "empt":
-		path = filepath.Join(systemFolder, "Trash")
+		path = platPathJoin(systemFolder, "Trash")
 	case "temp":
-		path = filepath.Join(systemFolder, "Temporary Items")
+		path = platPathJoin(systemFolder, "Temporary Items")
 	default:
 		path = systemFolder
 	}
 
-	writew(foundVRefNum, 2)
+	writew(foundVRefNum, rootID)
 	writel(foundDirID, uint32(dirID(path)))
 }
 
@@ -366,10 +365,10 @@ func tResolveAlias() {
 		return
 	}
 
-	dirID := dirID(filepath.Dir(found[0]))
-	name, _ := macName(filepath.Base(found[0]))
+	dirID := dirID(platPathDir(found[0]))
+	name, _ := macName(platPathBase(found[0]))
 
-	writew(target, 2)               // vRefNum
+	writew(target, rootID)          // vRefNum
 	writel(target+2, uint32(dirID)) // dirID
 	writePstring(target+6, name)
 
@@ -446,8 +445,8 @@ func tMatchAlias() {
 			break
 		}
 
-		dirID := dirID(filepath.Dir(path))
-		name, _ := macName(filepath.Base(path))
+		dirID := dirID(platPathDir(path))
+		name, _ := macName(platPathBase(path))
 
 		// Give the callback a chance to cancel this alias or the entire operation
 		if aliasFilter != 0 {
@@ -457,7 +456,7 @@ func tMatchAlias() {
 			// GetCatInfo
 			pb, _ := pushzero(128)
 			writel(pb+18, namePtr)
-			writew(pb+22, 2) // vRefNum
+			writew(pb+22, rootID) // vRefNum
 			writel(pb+48, uint32(dirID))
 			writel(a0ptr, pb)
 			writel(d0ptr, 9)
@@ -487,7 +486,7 @@ func tMatchAlias() {
 
 		// Append the FSSpec to the alias array
 		spec := aliasList + 70*uint32(readw(aliasCountPtr))
-		writew(spec, 2)               // vRefNum
+		writew(spec, rootID)          // vRefNum
 		writel(spec+2, uint32(dirID)) // dirID
 		writePstring(spec+6, name)
 		writew(aliasCountPtr, readw(aliasCountPtr)+1)
@@ -648,7 +647,7 @@ func tResolveAliasFile() {
 
 	writeb(wasAliasedPtr, 0)
 
-	writew(theSpecPtr, 2) // volID
-	writel(theSpecPtr+2, uint32(dirID(filepath.Dir(path))))
-	writePstring(theSpecPtr+6, unicodeToMacOrPanic(filepath.Base(path)))
+	writew(theSpecPtr, rootID) // volID
+	writel(theSpecPtr+2, uint32(dirID(platPathDir(path))))
+	writePstring(theSpecPtr+6, unicodeToMacOrPanic(platPathBase(path)))
 }
