@@ -49,7 +49,6 @@ func run68(addr uint32) {
 			writel(0x16a, readl(0x16a)+1)
 		}
 
-
 		if gDebugEveryInst {
 			printState()
 		}
