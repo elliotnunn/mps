@@ -1,0 +1,46 @@
+; MPW Tool to read one line from stdin to stdout.
+; Truncate to 1k and ignore the remainder
+; StreamEdit can't do this because it always reads at least 2 lines.
+
+; Asm ReadLine.a && Link ReadLine.a.o -o ReadLine -t MPST -c "MPS "
+
+BufSize equ 1024
+
+	MAIN
+	link	a6,#-BufSize-64
+	movem.l d3-d7/a2-a4,-BufSize-64(a6)
+
+	lea		-BufSize(a6),a2 ; a2 -> buffer
+	move.l	$316,a3
+	move.l	4(a3),a3
+	move.l	$1c(a3),a3 ; a3 -> stdin file struct
+	lea		20(a3),a4 ; a4 -> stdout file struct
+
+	move.l	#BufSize,12(a3) ; buffer size
+	move.l	a2,16(a3) ; buffer location
+	move.l	4(a3),a0 ; table of function pointers
+	move.l	12(a0),a0 ; a0 points to read func ptr
+	move.l	a3,-(sp) ; pass it a ptr
+	jsr		(a0)
+	addq	#4,sp
+
+	move.l	#BufSize,d0
+	sub.l	12(a3),d0 ; unread chars
+	beq.s	exit
+
+	move.l	d0,12(a4) ; buffer size
+	move.l	a2,16(a4) ; buffer location
+	move.l	4(a4),a0 ; table of function pointers
+	move.l	16(a0),a0 ; a0 points to write func ptr
+	move.l	a4,-(sp) ; pass it a ptr
+	jsr		(a0)
+	addq	#4,sp
+
+exit
+	movem.l -BufSize-64(a6),d3-d7/a2-a4
+	unlk	a6
+	rts
+
+	STRING	AsIs
+	dc.b	$8c, 'ReadLineTool', 0
+	END

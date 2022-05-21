@@ -103,9 +103,7 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 		openBuffers[ioRefNum] = openBuffers[oldRefNum]
 	} else {
 		var buf []byte
-		if isPuppetFile(path) { // special name
-			buf = puppetFile(path)
-		} else if forkIsRsrc {
+		if forkIsRsrc {
 			buf = resourceFork(path)
 		} else {
 			buf = dataFork(path)

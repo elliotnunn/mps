@@ -187,11 +187,6 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (string, int) {
 			path = filepath.Join(systemFolder, "Temporary Items")
 		}
 
-		// Return a special recognisable (non-slash-prefixed) path for "puppet string" scripts
-		if i == len(components)-1 && isPuppetFile(string(mac)) {
-			return string(mac), 0
-		}
-
 		// List the directory to find the matching unix name
 		listing, _ := readDir(path)
 
@@ -501,10 +496,6 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		writel(pb+52, uint32(len(listing))) // ioDrNmFls
 	} else { // file
 		finfo := finderInfo(path)
-		if isPuppetFile(path) {
-			// hack to make puppet-string scripts executable
-			copy(finfo[:], "TEXTMPS ")
-		}
 		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
 
 		// might be worth caching these

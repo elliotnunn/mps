@@ -1,26 +1,30 @@
 // Copyright (c) 2021 Elliot Nunn
 // Licensed under the MIT license
 
-// The puppet strings manipulate ToolServer according to the command line.
-// When ToolServer is run, the FileMgr will communicate with us via
-// the puppetFilename and puppetContent channels.
+// Force ToolServer to run scripts determined by the mps command line
 
 package main
 
 import (
-	"io"
+	_ "embed"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-const puppetPrefix = ".MPS"
+const REPL = `
+Set Exit 0
+Loop
+	Echo -n '• '
+	"{SystemFolder}ReadLine" >"{TempFolder}REPL"
+	"{TempFolder}REPL"
+End
+`
 
-var puppetMaster func() (mainScript string, scripts map[string][]byte)
-var puppetFlag = false // whether next SFGetFile is for puppet
-var puppetFilename = make(chan string)
-var puppetContent = make(chan macstring)
+//go:embed ReadLine.r
+var embedReadLineTool []byte
 
-// 1. Args parsed, and a goroutine is chosen to pull the puppet strings
+// 1. Args parsed, and 1-2 script files are written out
 
 func initPuppetStrings(args []string) {
 	bad := false
@@ -45,76 +49,40 @@ func initPuppetStrings(args []string) {
 	}
 
 	args = convertArgPaths(args)
-	cwdCmd := macstring("Directory ") + quote(unicodeToMacOrPanic(convertPath(cwd))) + macstring("\r")
+	script := macstring("Directory ") + quote(unicodeToMacOrPanic(convertPath(cwd))) + macstring("\r")
 
-	// Pick a goroutine to run the overall flow of the program
 	switch {
 	case len(args) == 0: // REPL
-		go func() {
-			<-puppetFilename
-			puppetContent <- cwdCmd + macstring("Set Exit 0; Loop; Execute "+puppetPrefix+".REPL; End")
+		script += unicodeToMacOrPanic(REPL)
 
-			for {
-				<-puppetFilename
-				for {
-					os.Stdout.Write([]byte("• "))
-
-					cmd, err := stdin.ReadString('\n')
-					if err == io.EOF {
-						cmd = "quit"
-					}
-
-					if cmd, ok := unicodeToMac(cmd); ok {
-						// Interactive shell should tolerate filesystem changes between commands
-						clearDirCache("")
-
-						puppetContent <- cmd
-						break
-					}
-					os.Stdout.Write([]byte("#### Line not convertible to Mac Roman\n"))
-				}
-			}
-		}()
+		// This Tool is necessary for a REPL (sadly)
+		os.Create(filepath.Join(systemFolder, "ReadLine"))
+		os.WriteFile(filepath.Join(systemFolder, "ReadLine.rdump"), embedReadLineTool, 0o644)
+		os.WriteFile(filepath.Join(systemFolder, "ReadLine.idump"), []byte("MPSTMPS "), 0o644)
 
 	case strings.HasPrefix(args[0], "-"): // -c inline_script [args...]
 		if args[0] != "-c" || len(args) < 2 {
 			printUsageAndQuit()
 		}
 
-		go func() {
-			if len(args) > 2 {
-				<-puppetFilename
-				callScript := macstring(puppetPrefix + ".Script")
-				for _, a := range args[2:] {
-					callScript += " " + quote(unicodeToMacOrPanic(a))
-				}
-				puppetContent <- cwdCmd + callScript
+		if len(args) > 2 {
+			putScript("InnerScript", unicodeToMacOrPanic(args[1]))
 
-				<-puppetFilename
-				puppetContent <- unicodeToMacOrPanic(args[1])
-			} else {
-				<-puppetFilename
-				puppetContent <- cwdCmd + unicodeToMacOrPanic(args[1])
-
+			script += macstring(`"{SystemFolder}InnerScript"`)
+			for _, a := range args[2:] {
+				script += " " + quote(unicodeToMacOrPanic(a))
 			}
-
-			<-puppetFilename
-			puppetContent <- "Quit"
-		}()
+		} else {
+			script += unicodeToMacOrPanic(args[1])
+		}
 
 	default: // scriptPath [args...]
-		go func() {
-			<-puppetFilename
-			oneLine := macstring("")
-			for _, a := range args {
-				oneLine += quote(unicodeToMacOrPanic(a)) + " "
-			}
-			puppetContent <- cwdCmd + oneLine
-
-			<-puppetFilename
-			puppetContent <- "Quit"
-		}()
+		for _, a := range args {
+			script += quote(unicodeToMacOrPanic(a)) + " "
+		}
 	}
+
+	putScript("Script", script)
 }
 
 func convertArgPaths(args []string) []string {
@@ -135,6 +103,12 @@ func convertArgPaths(args []string) []string {
 	}
 
 	return newArgs
+}
+
+func putScript(name string, content macstring) {
+	os.WriteFile(filepath.Join(systemFolder, name), []byte(content), 0o644)
+	os.WriteFile(filepath.Join(systemFolder, name+".idump"), []byte("TEXTMPS "), 0o644)
+	clearDirCache(systemFolder)
 }
 
 // 2. Every WaitNextEvent returns a command keypress, forcing TS to call MenuKey.
@@ -164,15 +138,24 @@ func tWaitNextEvent() {
 	tGetNextEvent()
 }
 
-// 3. Every command keypress chooses File > Execute
+// 3. First File > Execute, then File > Quit
+
+var sentExecute = false
+var puppetFlag = false // whether next SFGetFile is for puppet
 
 func tMenuKey() {
 	puppetFlag = true
-	popw()                           // ignore the key code
-	writel(readl(spptr), 0x00810002) // File > Execute
+	popw() // ignore the key code
+
+	if sentExecute {
+		writel(readl(spptr), 0x00810005) // File > Quit
+	} else {
+		writel(readl(spptr), 0x00810002) // File > Execute}
+		sentExecute = true
+	}
 }
 
-// 4. The following SFGetFile is directed to the file named puppetPrefix
+// 4. The following SFGetFile is directed to {SystemFolder}Script
 
 func tPack3() {
 	selector := popw()
@@ -208,8 +191,8 @@ func tPack3() {
 	var name macstring
 	if puppetFlag {
 		puppetFlag = false
-		number = 2 // root
-		name = macstring(puppetPrefix)
+		number = dirID(systemFolder)
+		name = macstring("Script")
 	} else {
 		panic("GetFile unimplemented")
 	}
@@ -235,15 +218,4 @@ func tPack3() {
 		writew(replyPtr+8, 0)           // version
 		writePstring(replyPtr+10, name) // name
 	}
-}
-
-// 5. FileMgr calls these functions to consume files from the goroutine above
-
-func isPuppetFile(name string) bool {
-	return strings.HasPrefix(name, puppetPrefix)
-}
-
-func puppetFile(name string) []byte {
-	puppetFilename <- name
-	return []byte(<-puppetContent)
 }
