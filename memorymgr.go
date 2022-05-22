@@ -69,7 +69,7 @@ func newBlock(size uint32, expandable bool) uint32 {
 
 	// Zero-init
 	for i := uint32(0); i < block.total; i++ {
-		writeb(addr+i, 0)
+		mem[addr+i] = 0
 	}
 
 	usedBlocks[addr] = &block
@@ -240,7 +240,7 @@ func tSetPtrSize() int {
 	// Expand anywhere up to its original size
 	if newSize <= block.original {
 		for i := block.size; i < newSize; i++ {
-			writeb(ptr+i, 0)
+			mem[ptr+i] = 0
 		}
 		block.size = newSize
 		return 0
@@ -319,7 +319,7 @@ func tSetHandleSize() int {
 	// Fit within existing block
 	if newSize <= block.max {
 		for i := block.size; i < newSize; i++ {
-			writeb(ptr+i, 0)
+			mem[ptr+i] = 0
 		}
 		block.size = newSize
 
