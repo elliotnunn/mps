@@ -147,7 +147,10 @@ func tMenuKey() {
 	popw() // ignore the key code
 
 	if sentExecute {
-		writel(readl(spptr), 0x00810005) // File > Quit
+		// writel(readl(spptr), 0x00810005) // File > Quit
+
+		// Respect deferred calls
+		panic(exitToShell{})
 	} else {
 		writel(readl(spptr), 0x00810002) // File > Execute}
 		sentExecute = true
