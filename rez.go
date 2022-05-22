@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -84,52 +83,6 @@ func makeWhitespace(b byte) byte {
 	}
 }
 
-// covers every character
-var rezStringPattern = regexp.MustCompile(`(?:\\0x[0-9a-fA-F]{2}|\\.|.)`)
-
-func rez_string_literal(string_with_quotes []byte) []byte {
-	string_alone := string_with_quotes[1 : len(string_with_quotes)-1]
-	splits := rezStringPattern.FindAllSubmatchIndex(string_alone, -1)
-
-	var retval []byte
-
-	for _, loc := range splits {
-		start := loc[0]
-		end := loc[1]
-
-		char := byte('?')
-		switch end - start {
-		case 1:
-			char = string_alone[start]
-		case 2:
-			switch string_alone[start+1] {
-			case 'b':
-				char = 8 // backspace
-			case 't':
-				char = 9 // tab
-			case 'r':
-				char = 10 // LF (opposite to convention)
-			case 'v':
-				char = 11 // vertical tab
-			case 'f':
-				char = 12 // form feed
-			case 'n':
-				char = 13 // CR (opposite to convention)
-			case '?':
-				char = 127 // backspace
-			default:
-				char = string_alone[start+1]
-			}
-		case 5:
-			wide, _ := strconv.ParseUint(string(string_alone[start+3:start+5]), 16, 8)
-			char = byte(wide)
-		}
-		retval = append(retval, char)
-	}
-
-	return retval
-}
-
 // Get the number of bytes in the initial string literal -- bit of a hack
 func rezStrLen(buf []byte) int {
 	origLen := len(buf)
@@ -153,6 +106,54 @@ mainLoop:
 	}
 
 	return origLen - len(buf)
+}
+
+func rezStr(buf []byte) []byte {
+	buf = buf[1 : len(buf)-1]
+	result := make([]byte, 0, len(buf))
+
+	i := 0
+	for i < len(buf) {
+		char := buf[i]
+		i++
+
+		if char != '\\' {
+			goto ok
+		}
+
+		char = buf[i]
+		i++
+
+		switch char {
+		case 'b': // backspace
+			char = 8
+		case 't': // tab
+			char = 9
+		case 'r': // LF (opposite to convention)
+			char = 10
+		case 'v': // vertical tab
+			char = 11
+		case 'f': // form feed
+			char = 12
+		case 'n': // CR (opposite to convention)
+			char = 13
+		case '?': // backspace
+			char = 127
+		case '0': // hex literal
+			if i+3 <= len(buf) && buf[i] == 'x' {
+				wide, err := strconv.ParseUint(string(buf[i+1:][:2]), 16, 8)
+				if err == nil {
+					char = byte(wide)
+					i += 3
+				}
+			}
+		}
+
+	ok:
+		result = append(result, char)
+	}
+
+	return result
 }
 
 func stripSpace(buf []byte) []byte {
@@ -234,7 +235,7 @@ func rez(rez []byte) (result []byte, retErr error) {
 			return
 		}
 		tokLen = rezStrLen(rez)
-		res.type_ = binary.BigEndian.Uint32(rez_string_literal(rez[:tokLen]))
+		res.type_ = binary.BigEndian.Uint32(rezStr(rez[:tokLen]))
 		rez = rez[tokLen:]
 
 		rez = stripSpace(rez)
@@ -276,7 +277,7 @@ func rez(rez []byte) (result []byte, retErr error) {
 		if rez[0] == '"' {
 			tokLen := rezStrLen(rez)
 			res.has_name = true
-			res.name = rez_string_literal(rez[:tokLen])
+			res.name = rezStr(rez[:tokLen])
 			rez = rez[tokLen:]
 
 			rez = stripSpace(rez)
