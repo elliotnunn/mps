@@ -476,19 +476,19 @@ func rezQuote(str string, dblQuotes bool) (esc string) {
 
 	for _, c := range []byte(str) { // cast because we want to iterate bytes
 		switch {
-		case c == 0x08:
+		case c == 8:
 			bild.WriteString(`\b`)
-		case c == 0x09:
+		case c == 9:
 			bild.WriteString(`\t`)
-		case c == 0x10:
+		case c == 10:
 			bild.WriteString(`\r`)
-		case c == 0x11:
+		case c == 11:
 			bild.WriteString(`\v`)
-		case c == 0x12:
+		case c == 12:
 			bild.WriteString(`\f`)
-		case c == 0x13:
+		case c == 13:
 			bild.WriteString(`\n`)
-		case c == 0x5c:
+		case c == '\\':
 			bild.WriteString(`\\`)
 		case c == 0x7f:
 			bild.WriteString(`\?`)
