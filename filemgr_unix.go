@@ -109,7 +109,7 @@ func platPathToMac(path string) string {
 	}
 
 	var bild strings.Builder
-	bild.Grow(len(path) + 1)
+	bild.Grow(len(path) + 4) // safe margin
 
 	if absolute {
 		bild.WriteString(string(onlyVolName) + ":")
