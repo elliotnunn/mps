@@ -14,7 +14,7 @@ import (
 const REPL = `
 Set Exit 0
 Loop
-	Echo -n '• '
+	Echo -n ` + "`Directory`'$ '" + `
 	"{SystemFolder}ReadLine" >"{TempFolder}REPL"
 	"{TempFolder}REPL"
 End
@@ -48,11 +48,11 @@ func initPuppetStrings(args []string) {
 	}
 
 	args = convertArgPaths(args)
-	script := macstring("Directory ") + quote(unicodeToMacOrPanic(platPathToMac(cwd))) + macstring("\r")
+	chdir := macstring("Directory ") + quote(unicodeToMacOrPanic(platPathToMac(cwd))) + macstring("\r")
 
 	switch {
 	case len(args) == 0: // REPL
-		script += unicodeToMacOrPanic(REPL)
+		putScript("Script", chdir+unicodeToMacOrPanic(REPL))
 
 		// This Tool is necessary for a REPL (sadly)
 		os.Create(platPathJoin(systemFolder, "ReadLine"))
@@ -64,24 +64,23 @@ func initPuppetStrings(args []string) {
 			printUsageAndQuit()
 		}
 
-		if len(args) > 2 {
-			putScript("InnerScript", unicodeToMacOrPanic(args[1]))
-
-			script += macstring(`"{SystemFolder}InnerScript"`)
-			for _, a := range args[2:] {
-				script += " " + quote(unicodeToMacOrPanic(a))
-			}
-		} else {
-			script += unicodeToMacOrPanic(args[1])
+		// This script name, when called as a relative path, results in
+		// "### ToolServer - Execution of inline script terminated."
+		outer := macstring(`Set Exit 0; Directory "{SystemFolder}"; "inline script"`)
+		for _, a := range args[2:] {
+			outer += " " + quote(unicodeToMacOrPanic(a))
 		}
+		putScript("Script", outer)
+
+		putScript("inline script", chdir+"Set Exit 1\r"+unicodeToMacOrPanic(args[1]))
 
 	default: // scriptPath [args...]
+		script := chdir + "Set Exit 0\r"
 		for _, a := range args {
 			script += quote(unicodeToMacOrPanic(a)) + " "
 		}
+		putScript("Script", script)
 	}
-
-	putScript("Script", script)
 }
 
 func convertArgPaths(args []string) []string {
