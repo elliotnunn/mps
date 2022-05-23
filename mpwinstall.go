@@ -38,7 +38,7 @@ func installFrom(binFile string) bool {
 	// $MPW or $HOME/MPW or ./MPW
 	dest, ok := os.LookupEnv("MPW")
 	if !ok {
-		if home, ok := os.LookupEnv("HOME"); ok {
+		if home, err := os.UserHomeDir(); err == nil {
 			dest = platPathJoin(home, "MPW")
 		} else {
 			dest = "MPW"
@@ -54,7 +54,7 @@ func installFrom(binFile string) bool {
 
 		// $HOME/ or ./
 		binFile = "MPW-GM.img.bin"
-		if home, ok := os.LookupEnv("HOME"); ok {
+		if home, err := os.UserHomeDir(); err == nil {
 			binFile = platPathJoin(home, binFile)
 		}
 
@@ -110,6 +110,7 @@ func installFrom(binFile string) bool {
 	// Dump files from raw disk image
 	paths, fileContent := hfs(data)
 	for _, path := range paths {
+		println(path)
 		content, isFile := fileContent[path]
 
 		// Convert the path to agree with the OS
@@ -118,7 +119,7 @@ func installFrom(binFile string) bool {
 		for i := range slice {
 			switch slice[i] {
 			case ':':
-				slice[i] = '/'
+				slice[i] = os.PathSeparator
 			case '/':
 				slice[i] = ':'
 			}

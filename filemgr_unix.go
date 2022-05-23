@@ -135,3 +135,7 @@ func platPathToMac(path string) string {
 
 	return bild.String()
 }
+
+func fix83Names(p string) string {
+	return p
+}

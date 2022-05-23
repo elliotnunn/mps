@@ -29,6 +29,7 @@ func initPuppetStrings(args []string) {
 	bad := false
 
 	cwd, _ := os.Getwd()
+	cwd = fix83Names(cwd)
 
 	// Check that inputs are sane ahead of time
 	if _, ok := unicodeToMac(cwd); !ok {

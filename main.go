@@ -309,6 +309,7 @@ func main() {
 
 	// System Folder is ephemeral, containing temp stuff mainly
 	systemFolder, _ = ioutil.TempDir("", "System Folder ")
+	systemFolder = fix83Names(systemFolder)
 	defer os.RemoveAll(systemFolder)
 
 	// Poison low memory
@@ -459,11 +460,13 @@ func main() {
 
 	// Strategies to find an MPW distribution
 	var search []string
-	if os.Getenv("MPW") != "" {
-		search = append(search, os.Getenv("MPW"))
+	if mpw, ok := os.LookupEnv("MPW"); ok {
+		mpw = fix83Names(mpw)
+		search = append(search, mpw)
 	} else {
-		if os.Getenv("HOME") != "" {
-			search = append(search, platPathJoin(os.Getenv("HOME"), "MPW"))
+		if home, err := os.UserHomeDir(); err == nil {
+			home = fix83Names(home)
+			search = append(search, platPathJoin(home, "MPW"))
 		}
 
 		// Cheating way of finding Unix paths

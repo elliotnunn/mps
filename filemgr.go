@@ -179,6 +179,7 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (path string, e
 
 		// Create the illusion of a single hard drive inside "parent of root"
 		if path == dirIDs[rootsParentID] {
+			// ToolServer sometimes fails to catch "Dev:Stdout" before the FS
 			if relString(onlyVolName, mac, false, true) != 0 {
 				return path, -120 // dirNFErr
 			}
@@ -262,24 +263,21 @@ func readDir(path string) ([]existingNamePair, int) {
 		return cachedSlice, 0
 	}
 
-	f, err := os.Open(path)
+	stat, err := os.Stat(path)
 	if err != nil {
-		return nil, macErrCode(err)
-	}
-	defer f.Close()
-
-	stat, err := f.Stat()
-	if err != nil {
-		return nil, macErrCode(err)
+		panic(err) // should never happen
 	}
 
+	// Exists, but is a file
 	if !stat.Mode().IsDir() {
 		return nil, -120 // dirNFErr
 	}
 
-	dirents, err := f.ReadDir(-1)
-	if err != nil {
-		return nil, macErrCode(err)
+	dirents, err := os.ReadDir(path)
+	if errors.Is(err, fs.ErrPermission) {
+		return nil, -54 // permErr
+	} else if err != nil {
+		panic(err)
 	}
 
 	slice := make([]existingNamePair, 0, len(dirents))
@@ -349,21 +347,6 @@ func clearDirCache(dir string) {
 		dirCache = make(map[string][]existingNamePair)
 	} else {
 		delete(dirCache, dir)
-	}
-}
-
-// Convert some filesystem errors to MacOS error codes
-func macErrCode(err error) int {
-	if err == nil {
-		return 0 // noErr
-	} else if errors.Is(err, fs.ErrExist) {
-		return -48 // dupFNErr
-	} else if errors.Is(err, fs.ErrNotExist) {
-		return -43 // fnfErr
-	} else if errors.Is(err, fs.ErrPermission) {
-		return -54 // permErr
-	} else {
-		panic(err)
 	}
 }
 
