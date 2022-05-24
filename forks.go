@@ -4,8 +4,10 @@ package main
 // Licensed under the MIT license
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -56,22 +58,48 @@ func existsAsFile(path string) bool {
 	return err == nil && stat.Mode().IsRegular()
 }
 
-// Assume the existence of the file
-func finderInfo(path string) [16]byte {
-	finfo := finderInfoWithoutTextHack(path)
+// Fast access to datafork size and finfo, applying the text file hack.
+// Compute them together so we only read potential text files once.
+// fastButInaccurate will overestimate the size of text files over 32MB to avoid
+// reading them. This is acceptable for speed when listing directories, but not
+// e.g. when duplicating the file.
+func dataForkSizeFinderInfo(path string, fastButInaccurate bool) (size uint32, finfo [16]byte) {
+	finfo = finderInfoWithoutTextHack(path)
+	ftype := string(finfo[:4])
 
-	// Present as text file if persuaded that it is one
-	if string(finfo[:4]) == "????" {
-		if data, err := os.ReadFile(path); err == nil {
-			if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
-				if _, ok := unicodeToMac(string(data)); ok {
-					copy(finfo[:], "TEXTMPS ")
-				}
-			}
+	stat, err := os.Stat(path)
+	if err == nil && stat.Size() <= 0x7fffffff {
+		size = uint32(stat.Size())
+	}
+
+	if size == 0 {
+		return
+	}
+
+	if size > 32*1024*1024 && fastButInaccurate {
+		return
+	}
+
+	if ftype != "????" && ftype != "TEXT" {
+		return
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	reader := bufio.NewReaderSize(f, 4*1024*1024)
+	if textSize, ok := isTextFile(reader); ok {
+		size = uint32(textSize)
+
+		if ftype == "????" {
+			copy(finfo[:], "TEXTMPS ")
 		}
 	}
 
-	return finfo
+	return
 }
 
 func finderInfoWithoutTextHack(path string) [16]byte {
@@ -136,21 +164,24 @@ func writeFinderInfo(path string, finfo [16]byte) {
 	}
 }
 
-func dataFork(path string) []byte {
-	data, _ := os.ReadFile(path)
+func dataFork(path string) (data []byte) {
+	data, _ = os.ReadFile(path)
 
 	// Convert the data fork if persuaded it is a text file
 	finfo := finderInfoWithoutTextHack(path)
 	ftype := string(finfo[:4])
-	if ftype == "TEXT" || ftype == "????" {
-		if bytes.Contains(data, []byte{'\n'}) && !bytes.Contains(data, []byte{'\r'}) {
-			if data2, ok := unicodeToMac(string(data)); ok {
-				data = []byte(data2)
-			}
-		}
+
+	if ftype != "????" && ftype != "TEXT" {
+		return
 	}
 
-	return data
+	reader := bytes.NewReader(data)
+	if _, ok := isTextFile(reader); !ok {
+		return
+	}
+
+	// Use "unsafe" for zero-copy conversion?
+	return []byte(unicodeToMacOrPanic(string(data)))
 }
 
 func writeDataFork(path string, fork []byte) {
@@ -325,4 +356,134 @@ func underlyingPaths(path string) []string {
 		platPathJoin(platPathDir(path), "RESOURCE.FRK", platPathBase(path)),
 		platPathJoin(platPathDir(path), "FINDER.DAT", platPathBase(path)),
 	}
+}
+
+// Is this a UTF-8+LF/CRLF text file that can be converted to MacRoman+CR?
+// If not, fail early, before reading a very large file!
+// More stringent than unicodeToMac() by checking line endings and
+// forbidding control characters, but returns the same length as unicodeToMac().
+func isTextFile(reader io.RuneReader) (size int, ok bool) {
+	anyNewline := false
+	prev := rune(0)
+	for {
+		r, _, err := reader.ReadRune()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+
+		// CR must be followed by LF
+		if prev == '\r' && r != '\n' {
+			return 0, false
+		}
+
+		switch {
+		case r == '\n':
+			size++
+			anyNewline = true
+
+		case r == '\r':
+			// Don't count CR as a character because it is paired with LF
+
+		case r == '\t':
+			size++
+
+		case r < 0x20 || r == 0x7f: // control characters except \r\n\t
+			return 0, false
+
+		case r < 0x7f: // ordinary ASCII (but not DEL)
+			size++
+
+		case r == 0xc4 || r == 0xc5 || r == 0xc7 || r == 0xc9 || r == 0xd1 ||
+			r == 0xd6 || r == 0xdc || r == 0xe1 || r == 0xe0 || r == 0xe2 ||
+			r == 0xe4 || r == 0xe3 || r == 0xe5 || r == 0xe7 || r == 0xe9 ||
+			r == 0xe8 || r == 0xea || r == 0xeb || r == 0xed || r == 0xec ||
+			r == 0xee || r == 0xef || r == 0xf1 || r == 0xf3 || r == 0xf2 ||
+			r == 0xf4 || r == 0xf6 || r == 0xf5 || r == 0xfa || r == 0xf9 ||
+			r == 0xfb || r == 0xfc || r == 0x2020 || r == 0xb0 || r == 0xa2 ||
+			r == 0xa3 || r == 0xa7 || r == 0x2022 || r == 0xb6 || r == 0xdf ||
+			r == 0xae || r == 0xa9 || r == 0x2122 || r == 0xb4 || r == 0xa8 ||
+			r == 0x2260 || r == 0xc6 || r == 0xd8 || r == 0x221e || r == 0xb1 ||
+			r == 0x2264 || r == 0x2265 || r == 0xa5 || r == 0xb5 || r == 0x2202 ||
+			r == 0x2211 || r == 0x220f || r == 0x3c0 || r == 0x222b || r == 0xaa ||
+			r == 0xba || r == 0x3a9 || r == 0xe6 || r == 0xf8 || r == 0xbf ||
+			r == 0xa1 || r == 0xac || r == 0x221a || r == 0x192 || r == 0x2248 ||
+			r == 0x2206 || r == 0xab || r == 0xbb || r == 0x2026 || r == 0xa0 ||
+			r == 0xc0 || r == 0xc3 || r == 0xd5 || r == 0x152 || r == 0x153 ||
+			r == 0x2013 || r == 0x2014 || r == 0x201c || r == 0x201d || r == 0x2018 ||
+			r == 0x2019 || r == 0xf7 || r == 0x25ca || r == 0xff || r == 0x178 ||
+			r == 0x2044 || r == 0xa4 || r == 0x20ac || r == 0x2039 || r == 0x203a ||
+			r == 0xfb01 || r == 0xfb02 || r == 0x2021 || r == 0xb7 || r == 0x201a ||
+			r == 0x201e || r == 0x2030 || r == 0xc2 || r == 0xca || r == 0xc1 ||
+			r == 0xcb || r == 0xc8 || r == 0xcd || r == 0xce || r == 0xcf ||
+			r == 0xcc || r == 0xd3 || r == 0xd4 || r == 0xf8ff || r == 0xd2 ||
+			r == 0xda || r == 0xdb || r == 0xd9 || r == 0x131 || r == 0x2c6 ||
+			r == 0x2dc || r == 0xaf || r == 0x2d8 || r == 0x2d9 || r == 0x2da ||
+			r == 0xb8 || r == 0x2dd || r == 0x2db || r == 0x2c7: // single code points
+			size++
+
+		case r == 0x300: // COMBINING GRAVE ACCENT
+			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
+				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
+				return 0, false
+			}
+
+		case r == 0x301: // COMBINING ACUTE ACCENT
+			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
+				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
+				return 0, false
+			}
+
+		case r == 0x302: // COMBINING CIRCUMFLEX ACCENT
+			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
+				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
+				return 0, false
+			}
+
+		case r == 0x303: // COMBINING TILDE
+			if !(prev == 'A' || prev == 'N' || prev == 'O' || prev == 'a' || prev == 'n' ||
+				prev == 'o') {
+				return 0, false
+			}
+
+		case r == 0x308: // COMBINING DIAERESIS
+			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
+				prev == 'Y' || prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' ||
+				prev == 'u' || prev == 'y') {
+				return 0, false
+			}
+
+		case r == 0x30a: // COMBINING RING ABOVE
+			if !(prev == 'A' || prev == 'a') {
+				return 0, false
+			}
+
+		case r == 0x327: // COMBINING CEDILLA
+			if !(prev == 'C' || prev == 'c') {
+				return 0, false
+			}
+
+		case r == 0x338: // COMBINING LONG SOLIDUS OVERLAY
+			if !(prev == '=') {
+				return 0, false
+			}
+
+		default:
+			return 0, false
+		}
+
+		prev = r
+	}
+
+	// Can't end with a CR, because CR is only permitted in CRLF
+	if prev == '\r' {
+		return 0, false
+	}
+
+	if !anyNewline {
+		return 0, false
+	}
+
+	return size, true
 }

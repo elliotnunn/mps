@@ -512,15 +512,15 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		writel(pb+72, t) // ioFlCrDat
 		writel(pb+76, t) // ioFlMdDat
 	} else { // file
-		finfo := finderInfo(path)
-		copy(mem[pb+32:], finfo[:]) // ioFlFndrInfo (16b)
+		fastButInaccurate := ioFDirIndex > 0
+		sizeD, finfo := dataForkSizeFinderInfo(path, fastButInaccurate)
 
-		// might be worth caching these
-		sizeD := uint32(len(dataFork(path)))
-		sizeR := uint32(len(resourceFork(path)))
-
+		copy(mem[pb+32:], finfo[:])     // ioFlFndrInfo (16b)
 		writel(pb+54, sizeD)            // ioFlLgLen
 		writel(pb+58, (sizeD+511)&^511) // ioFlPyLen
+
+		sizeR := uint32(len(resourceFork(path)))
+
 		writel(pb+64, sizeR)            // ioFlRLgLen
 		writel(pb+68, (sizeR+511)&^511) // ioFlRPyLen
 
