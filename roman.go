@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"unsafe"
 )
 
 // Different because believed to be macRoman formatted!
@@ -181,7 +182,8 @@ func unicodeToMacOrPanic(str string) macstring {
 
 // Slightly overcooked code that turnes (de)composed UTF-8 and gives Mac Roman
 func unicodeToMac(str string) (retval macstring, ok bool) {
-	var macstr []byte
+	// Return will be same size or slightly shorter
+	macstr := make([]byte, 0, len(str))
 
 	defer func() {
 		if recover() != nil {
@@ -616,7 +618,9 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 		macstr = append(macstr, macbyte)
 	}
 
-	return macstring(macstr), true
+	// Avoid a copy
+	// Quick and dirty, depends on layout of SliceHeader and StringHeader
+	return *(*macstring)(unsafe.Pointer(&macstr)), true
 }
 
 func translateByTable(in macstring, table *[256]byte) macstring {
