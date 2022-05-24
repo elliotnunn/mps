@@ -481,7 +481,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'u':
 				macstr[len(macstr)-1] = 0x9d
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x301: // COMBINING ACUTE ACCENT
@@ -507,7 +507,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'u':
 				macstr[len(macstr)-1] = 0x9c
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x302: // COMBINING CIRCUMFLEX ACCENT
@@ -533,7 +533,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'u':
 				macstr[len(macstr)-1] = 0x9e
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x303: // COMBINING TILDE
@@ -551,7 +551,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'o':
 				macstr[len(macstr)-1] = 0x9b
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x308: // COMBINING DIAERESIS
@@ -581,7 +581,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'y':
 				macstr[len(macstr)-1] = 0xd8
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x30a: // COMBINING RING ABOVE
@@ -591,7 +591,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'a':
 				macstr[len(macstr)-1] = 0x8c
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x327: // COMBINING CEDILLA
@@ -601,7 +601,7 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case 'c':
 				macstr[len(macstr)-1] = 0x8d
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		case codepoint == 0x338: // COMBINING LONG SOLIDUS OVERLAY
@@ -609,11 +609,11 @@ func unicodeToMac(str string) (retval macstring, ok bool) {
 			case '=':
 				macstr[len(macstr)-1] = 0xad
 			default:
-				panic("unicode")
+				return "", false
 			}
 			continue
 		default:
-			panic("unicode")
+			return "", false
 		}
 		macstr = append(macstr, macbyte)
 	}
