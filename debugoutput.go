@@ -23,6 +23,15 @@ var (
 	gPoisonOldBlocks = strings.ContainsRune(bugFlags, 'p')
 )
 
+func logTrace() {
+	trace := strings.Join(shortStacktrace(), " ")
+	_, trace, _ = strings.Cut(trace, "main.logTrap ")
+	trace = "Trace(" + trace + ")"
+	trace = lineWrap(trace, 80)
+	trace = strings.ReplaceAll(trace, "\n", "\n      ")
+	logln("\n" + trace)
+}
+
 // called before and after every trap when debugging is on
 func logTrap(inst uint16, isPre bool) {
 	_, isMM := mmTraps[inst&0x8ff]
@@ -31,11 +40,17 @@ func logTrap(inst uint16, isPre bool) {
 	case inst&0x8ff <= 0x18 || inst&0x8ff == 0x44 || inst&0x8ff == 0x60:
 		// File Manager
 		if gDebugFileMgr {
+			if isPre {
+				logTrace()
+			}
 			logFileMgrTrap(inst, isPre)
 		}
 
 	case isMM:
 		if gDebugMemoryMgr {
+			if isPre {
+				logTrace()
+			}
 			logMemoryMgrTrap(inst, isPre)
 		}
 	}
@@ -58,6 +73,23 @@ func logf(format string, a ...interface{}) {
 
 func logln(a ...interface{}) {
 	logf("%s", fmt.Sprintln(a...))
+}
+
+// Wraps by byte width... would choke badly on real Unicode
+func lineWrap(s string, width int) string {
+	b := []byte(s)
+
+	line := 0
+	for i, char := range b {
+		if char == ' ' && line >= width {
+			b[i] = '\n'
+			line = 0
+		} else {
+			line++
+		}
+	}
+
+	return string(b)
 }
 
 func writeOutDebugInfo() {

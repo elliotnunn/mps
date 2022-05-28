@@ -87,6 +87,25 @@ func stacktrace() string {
 	return strings.TrimSpace(bild.String())
 }
 
+func shortStacktrace() (funcNames []string) {
+	lines := strings.Split(stacktrace(), "\n")
+
+	for _, line := range lines {
+		if line == "" || line[0] == '\t' {
+			continue
+		}
+
+		line, _, _ = strings.Cut(line, "(")
+		if _, after, hasSpace := strings.Cut(line, " "); hasSpace {
+			line = after
+		}
+
+		funcNames = append(funcNames, line)
+	}
+
+	return funcNames
+}
+
 // 68k call stack, formatted quite like runtime.Stack(),
 // with a blank line separating invocations of run68()
 func stack68() string {
