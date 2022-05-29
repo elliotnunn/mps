@@ -423,49 +423,45 @@ func isTextFile(reader io.RuneReader) (size int, ok bool) {
 			r == 0xb8 || r == 0x2dd || r == 0x2db || r == 0x2c7: // single code points
 			size++
 
-		case r == 0x300: // COMBINING GRAVE ACCENT
-			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
-				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
-				return 0, false
-			}
-
-		case r == 0x301: // COMBINING ACUTE ACCENT
-			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
-				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
-				return 0, false
-			}
-
-		case r == 0x302: // COMBINING CIRCUMFLEX ACCENT
-			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
-				prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' || prev == 'u') {
+		case r == 0x300 || r == 0x301 || r == 0x302: // COMBINING GRAVE/ACUTE/CIRCUMFLEX ACCENT
+			if upper := prev &^ 0x20; upper == 'A' || upper == 'E' || upper == 'I' || upper == 'O' || upper == 'U' {
+				size++
+			} else {
 				return 0, false
 			}
 
 		case r == 0x303: // COMBINING TILDE
-			if !(prev == 'A' || prev == 'N' || prev == 'O' || prev == 'a' || prev == 'n' ||
-				prev == 'o') {
+			if upper := prev &^ 0x20; upper == 'A' || upper == 'N' || upper == 'O' {
+				size++
+			} else {
 				return 0, false
 			}
 
 		case r == 0x308: // COMBINING DIAERESIS
-			if !(prev == 'A' || prev == 'E' || prev == 'I' || prev == 'O' || prev == 'U' ||
-				prev == 'Y' || prev == 'a' || prev == 'e' || prev == 'i' || prev == 'o' ||
-				prev == 'u' || prev == 'y') {
+			if upper := prev &^ 0x20; upper == 'A' || upper == 'E' || upper == 'I' || upper == 'O' || upper == 'U' || upper == 'Y' {
+				size++
+			} else {
 				return 0, false
 			}
 
 		case r == 0x30a: // COMBINING RING ABOVE
-			if !(prev == 'A' || prev == 'a') {
+			if upper := prev &^ 0x20; upper == 'A' {
+				size++
+			} else {
 				return 0, false
 			}
 
 		case r == 0x327: // COMBINING CEDILLA
-			if !(prev == 'C' || prev == 'c') {
+			if upper := prev &^ 0x20; upper == 'C' {
+				size++
+			} else {
 				return 0, false
 			}
 
 		case r == 0x338: // COMBINING LONG SOLIDUS OVERLAY
-			if !(prev == '=') {
+			if prev == '=' {
+				size++
+			} else {
 				return 0, false
 			}
 
