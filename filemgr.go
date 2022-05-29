@@ -386,6 +386,11 @@ func tCreate(pb uint32) int { // also DirCreate
 
 	number := paramBlkDirID()
 	path, errno := hostPath(number, ioName, true)
+
+	if platPathDir(path) == mpwFolder && platPathBase(path) == "ToolServer.Log" {
+		return -120 // dirNFErr
+	}
+
 	switch errno {
 	case 0: // noErr: already exists
 		return -48 // dupFNErr
