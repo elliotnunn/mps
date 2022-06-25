@@ -302,8 +302,17 @@ func tCurResFile() {
 }
 
 func tUseResFile() {
-	writew(0xa5a, popw()) // CurMap
-	setResError(0)
+	refNum := popw()
+
+	for _, resMap := range allResMaps() {
+		if readw(resMap+20) == refNum {
+			writew(0xa5a, refNum) // CurMap
+			setResError(0)
+			return
+		}
+	}
+
+	setResError(-193) // ResFNotFound
 }
 
 func tOpenResFile() {
