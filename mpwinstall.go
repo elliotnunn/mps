@@ -110,7 +110,6 @@ func installFrom(binFile string) bool {
 	// Dump files from raw disk image
 	paths, fileContent := hfs(data)
 	for _, path := range paths {
-		println(path)
 		content, isFile := fileContent[path]
 
 		// Convert the path to agree with the OS
