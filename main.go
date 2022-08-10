@@ -280,7 +280,7 @@ func main() {
 		tb_base + 0x1c0: tPop2RetZero,                   // _GetNewMBar
 		tb_base + 0x1c4: tOpenRFPerm,                    // _OpenRFPerm
 		tb_base + 0x1c6: tSecs2Date,                     // _Secs2Date
-		tb_base + 0x1c8: tNop,                           // _SysBeep
+		tb_base + 0x1c8: tPop2,                          // _SysBeep
 		tb_base + 0x1c9: tSysError,                      // _SysError
 		tb_base + 0x1cc: tNop,                           // _TEInit
 		tb_base + 0x1e1: tHandToHand,                    // _HandToHand
