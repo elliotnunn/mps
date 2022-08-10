@@ -211,7 +211,7 @@ func tDisposPtr() int {
 	ptrBlock, ok := usedBlocks[ptr]
 
 	// A version of MPW Link calls TempNewHandle then DisposPtr!
-	if ptrBlock.kind == handleBlock {
+	if ok && ptrBlock.kind == handleBlock {
 		if !disposPtrAlreadyWarned {
 			f, _ := os.CreateTemp("", "StackTrace.*.txt")
 			f.Write([]byte(stacktrace()))
