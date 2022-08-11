@@ -661,8 +661,10 @@ func dumpPBField(f string) {
 		logField(f, readl(pb+48))
 	case "ioFlStBlk", "ioFCBVRefNum":
 		logField(f, readw(pb+52))
-	case "ioVClpSiz", "ioDrNmFls":
+	case "ioVClpSiz":
 		logField(f, readl(pb+52))
+	case "ioDrNmFls":
+		logField(f, readw(pb+52))
 	case "ioFlLgLen", "ioFCBClpSiz":
 		logField(f, readl(pb+54))
 	case "ioAlBlSt":

@@ -501,7 +501,7 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 	if arity != -1 { // folder
 		writeb(pb+30, 1<<4)                // is a directory
 		writel(pb+48, uint32(dirID(path))) // ioDrDirID
-		writel(pb+52, uint32(arity))       // ioDrNmFls
+		writew(pb+52, uint16(arity))       // ioDrNmFls
 
 		t := mtimeDir(path)
 		writel(pb+72, t) // ioFlCrDat
