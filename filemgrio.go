@@ -22,6 +22,10 @@ The size of the FCB table is stored in a word at the base of the table.
 
 package main
 
+import (
+	"strings"
+)
+
 // the contents of every open fork
 var openBuffers = make(map[uint16]*[]byte)
 var openPaths = make(map[uint16]forkPath)
@@ -33,6 +37,29 @@ func forkRefNum(f forkPath) (uint16, bool) {
 		}
 	}
 	return 0, false
+}
+
+// When the path of an open file changes, it must be saved in the new location.
+func fixRenamedOpenFiles(oldPath, newPath string) {
+	for refNum, fork := range openPaths {
+		// Was the file itself renamed, or an ancestor directory?
+		if !strings.HasPrefix(fork.hostpath+string(platPathSep), oldPath+string(platPathSep)) {
+			continue
+		}
+
+		// Fix internal structure
+		subdir := fork.hostpath[len(fork.hostpath):]
+		fork.hostpath = newPath + subdir
+		openPaths[refNum] = fork
+
+		// Fix FCB: fcbDirID, fcbCName
+		dirID := dirID(platPathDir(newPath))
+		name := unicodeToMacOrPanic(platPathBase(newPath))
+
+		fcbPtr := fcbFromRefnum(refNum)
+		writel(fcbPtr+58, uint32(dirID))
+		writePstring(fcbPtr+62, name)
+	}
 }
 
 type forkPath struct {

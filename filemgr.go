@@ -70,6 +70,18 @@ func dirID(hostPath string) uint16 {
 	return uint16(len(dirIDs)) - 1
 }
 
+func fixRenamedDirIDs(oldPath, newPath string) {
+	// Fix up the global CNID<->path mapping
+	for i, path := range dirIDs {
+		if !strings.HasPrefix(path+string(platPathSep), oldPath+string(platPathSep)) {
+			continue
+		}
+
+		trailing := path[len(oldPath):]
+		dirIDs[i] = newPath + trailing
+	}
+}
+
 // hostname>macname conversion
 func macName(host string) (macstring, bool) {
 	if strings.ContainsRune(host, platPathSep) {
@@ -732,19 +744,10 @@ func tFSDispatch(pb uint32) int {
 			}
 		}
 
+		fixRenamedOpenFiles(file, newFile)
+
 		if isDir {
-			for k, v := range openPaths {
-				if sameOrChildOf(v.hostpath, file) {
-					v.hostpath = newFile + v.hostpath[len(file):]
-					openPaths[k] = v
-				}
-			}
-		} else {
-			for i, p := range dirIDs {
-				if sameOrChildOf(p, file) {
-					dirIDs[i] = newFile + p[len(file):]
-				}
-			}
+			fixRenamedDirIDs(file, newFile)
 		}
 
 		// If we moved a folder, then many entries in the cache could have changed,
@@ -824,4 +827,72 @@ func tFSDispatch(pb uint32) int {
 
 func sameOrChildOf(inner, outer string) bool {
 	return inner == outer || strings.HasPrefix(inner, outer+string(platPathSep))
+}
+
+func tRename(pb uint32) int {
+	// Some reverse engineering then eyeballing https://github.com/autc04/multiversal/blob/master/defs/FileMgr.yaml
+	ioName := readPstring(readl(pb + 18))    // ioNamePtr
+	ioNewName := readPstring(readl(pb + 28)) // ioMisc
+
+	file, errno := hostPath(paramBlkDirID(), ioName, true)
+	if errno != 0 {
+		return errno
+	}
+
+	stat, _ := os.Stat(file)
+	isDir := stat.Mode().IsDir()
+
+	// Forbid renaming "FS:", "FS:C:".
+	// Is this the only case that new-name contains colons?
+	if file == platRoot || platPathImaginary(platPathDir(file)) {
+		return -45 // fLckdErr
+	}
+
+	if len(ioNewName) == 0 || strings.Contains(string(ioNewName), ":\x00") {
+		return -37 // bdNamErr
+	}
+
+	// Dest must not already exist
+	newFile, errno := hostPath(dirID(platPathDir(file)), ioNewName, false)
+	if _, err := os.Stat(newFile); !errors.Is(err, fs.ErrNotExist) {
+		return -48 // dupFNErr
+	}
+
+	err := os.Rename(file, newFile)
+	if errors.Is(err, fs.ErrPermission) {
+		return -46 // vLckdErr
+	} else if errors.Is(err, fs.ErrInvalid) {
+		return -37 // bdNamErr
+	} else if err != nil {
+		panic(err)
+	}
+
+	// For simplicity, handle errors only when moving the main file
+	if !isDir {
+		os.Rename(file+".rdump", newFile+".rdump")
+		os.Rename(file+".idump", newFile+".idump")
+
+		os.Rename(platPathJoin(platPathDir(file), "RESOURCE.FRK", platPathBase(file)),
+			platPathJoin(platPathDir(newFile), "RESOURCE.FRK", platPathBase(file)))
+
+		os.Rename(platPathJoin(platPathDir(file), "FINDER.DAT", platPathBase(file)),
+			platPathJoin(platPathDir(newFile), "FINDER.DAT", platPathBase(file)))
+	}
+
+	fixRenamedOpenFiles(file, newFile)
+
+	if isDir {
+		fixRenamedDirIDs(file, newFile)
+	}
+
+	// If we moved a folder, then many entries in the cache could have changed,
+	// simpler just to delete the cache
+	if isDir {
+		clearDirCache("")
+	} else {
+		clearDirCache(platPathDir(file))    // donor dir shorter
+		clearDirCache(platPathDir(newFile)) // recipient dir longer
+	}
+
+	return 0
 }

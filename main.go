@@ -121,6 +121,7 @@ func main() {
 		os_base + 0x08:  pbWrap(tCreate),                // _Create
 		os_base + 0x09:  pbWrap(tDelete),                // _Delete
 		os_base + 0x0a:  pbWrap(tOpenRF),                // _OpenRF
+		os_base + 0x0b:  pbWrap(tRename),                // _Rename
 		os_base + 0x0c:  pbWrap(tGetFInfo),              // _GetFInfo
 		os_base + 0x0d:  pbWrap(tSetFInfo),              // _SetFInfo
 		os_base + 0x10:  pbWrap(tAllocate),              // _Allocate
