@@ -342,10 +342,16 @@ func writeMtimeDir(path string, macTime uint32) {
 	os.Chtimes(path, t, t)
 }
 
-func deleteForks(path string) {
-	for _, p := range underlyingPaths(path) {
-		os.Remove(p)
+func deleteForks(path string) error {
+	var returnErr error
+	for i, p := range underlyingPaths(path) {
+		err := os.Remove(p)
+		if i == 0 {
+			returnErr = err
+		}
 	}
+
+	return returnErr
 }
 
 func underlyingPaths(path string) []string {

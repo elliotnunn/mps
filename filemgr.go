@@ -418,8 +418,15 @@ func tDelete(pb uint32) int {
 		return errno
 	}
 
-	deleteForks(path)
 	clearDirCache(platPathDir(path))
+	err := deleteForks(path)
+	if err == nil {
+		return 0
+	} else if errors.Is(err, fs.ErrPermission) {
+		return -45 // fLckdErr
+	} else {
+		return -47 // fBsyErr
+	}
 
 	return 0
 }
