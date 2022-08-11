@@ -229,6 +229,15 @@ func main() {
 		tb_base + 0x100: tGetFNum,                       // _GetFNum
 		tb_base + 0x106: tNewString,                     // _NewString
 		tb_base + 0x112: tNop,                           // _InitWindows
+		tb_base + 0x115: tShowWindow,                    // _ShowWindow
+		tb_base + 0x116: tPop4,                          // _HideWindow
+		tb_base + 0x11a: tPop8,                          // _SetWTitle
+		tb_base + 0x11b: tPop10,                         // _MoveWindow
+		tb_base + 0x11f: tPop4,                          // _SelectWindow
+		tb_base + 0x120: tPop4,                          // _BringToFront
+		tb_base + 0x121: tPop4,                          // _SendBehind
+		tb_base + 0x122: tPop4,                          // _BeginUpdate
+		tb_base + 0x123: tPop4,                          // _EndUpdate
 		tb_base + 0x124: tRetZero,                       // _FrontWindow
 		tb_base + 0x130: tNop,                           // _InitMenus
 		tb_base + 0x137: tNop,                           // _DrawMenuBar
@@ -241,9 +250,25 @@ func main() {
 		tb_base + 0x14d: tPop8,                          // _AppendResMenu
 		tb_base + 0x170: tGetNextEvent,                  // _GetNextEvent
 		tb_base + 0x175: tTickCount,                     // _TickCount
+		tb_base + 0x178: tPop8,                          // _UpdtDialog
 		tb_base + 0x179: tPop2,                          // _CouldDialog
+		tb_base + 0x17a: tPop2,                          // _FreeDialog
 		tb_base + 0x17b: tNop,                           // _InitDialogs
-		tb_base + 0x17c: tPop10RetZero,                  // _GetNewDialog
+		tb_base + 0x17c: tGetNewDialog,                  // _GetNewDialog
+		tb_base + 0x17d: tNewDialog,                     // _NewDialog
+		tb_base + 0x17e: tPop10,                         // _SelIText
+		tb_base + 0x17f: tPop4RetZeroW,                  // _IsDialogEvent
+		tb_base + 0x181: tPop4,                          // _DrawDialog
+		tb_base + 0x182: tCloseDialog,                   // _CloseDialog
+		tb_base + 0x183: tDisposDialog,                  // _DisposDialog
+		tb_base + 0x189: tPop2,                          // _CouldAlert
+		tb_base + 0x18a: tPop2,                          // _FreeAlert
+		tb_base + 0x18b: tParamText,                     // _ParamText
+		tb_base + 0x18d: tGetDItem,                      // _GetDItem
+		tb_base + 0x18e: tSetDItem,                      // _SetDItem
+		tb_base + 0x18f: tSetIText,                      // _SetIText
+		tb_base + 0x190: tGetIText,                      // _GetIText
+		tb_base + 0x191: tModalDialog,                   // _ModalDialog
 		tb_base + 0x192: tDetachResource,                // _DetachResource
 		tb_base + 0x194: tCurResFile,                    // _CurResFile
 		tb_base + 0x197: tOpenResFile,                   // _OpenResFile
@@ -266,6 +291,7 @@ func main() {
 		tb_base + 0x1a8: tGetResInfo,                    // _GetResInfo
 		tb_base + 0x1aa: tChangedResource,               // _ChangedResource
 		tb_base + 0x1ab: tAddResource,                   // _AddResource
+		tb_base + 0x1ac: tPop4,                          // _ErrorSound
 		tb_base + 0x1ad: tRmveResource,                  // _RmveResource
 		tb_base + 0x1af: tResError,                      // _ResError
 		tb_base + 0x1b0: tWriteResource,                 // _WriteResource
@@ -301,6 +327,7 @@ func main() {
 		tb_base + 0x1f7: tSetResFileAttrs,               // _SetResFileAttrs
 		tb_base + 0x1fa: tRetZero,                       // _UnlodeScrap
 		tb_base + 0x1fb: tRetZero,                       // _LodeScrap
+		tb_base + 0x24b: tNewDialog,                     // _NewCDialog
 		tb_base + 0x252: tHighLevelFSDispatch,           // _HighLevelFSDispatch
 		tb_base + 0x3fd: tSpecialStdoutStderr,           // (inauthentic)
 		tb_base + 0x3fe: tSpecialStdin,                  // (inauthentic)
@@ -951,6 +978,12 @@ func tPop4RetZero() {
 	sp := readl(spptr) + 4
 	writel(spptr, sp)
 	writel(sp, 0)
+}
+
+func tPop4RetZeroW() {
+	sp := readl(spptr) + 4
+	writel(spptr, sp)
+	writew(sp, 0)
 }
 
 func tPop6RetZero() {
