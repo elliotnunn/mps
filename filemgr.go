@@ -760,6 +760,13 @@ func tFSDispatch(pb uint32) int {
 		return tCreate(pb)
 
 	case 7: // GetWDInfo
+		// Indexed lookups make no sense to us
+		// Fail so MPW doesn't go into an infinite WD search loop
+		ioWDIndex := readw(pb + 26)
+		if ioWDIndex != 0 {
+			return -35 // nsvErr
+		}
+
 		// the opposite transformation to OpenWD
 		writel(pb+48, uint32(readw(pb+22))) // ioWDDirID = ioVRefNum
 		writew(pb+32, rootsParentID)        // ioWDVRefNum
