@@ -745,6 +745,10 @@ func compactResFile(resMap uint32) {
 		}
 	}
 
+	// Update the in-memory resource map
+	copy(mem[resMap:], mkMap(rmap))
+
+	// Write out the on-disk resource map
 	midpoint := uint32(len(newFork)) // end of data, start of map
 	rmap.cleanForDisk()              // zero out many useless fields
 	newFork = append(newFork, mkMap(rmap)...)
