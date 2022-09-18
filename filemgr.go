@@ -150,13 +150,30 @@ func hostName(mac macstring) (string, bool) {
 }
 
 // Resolve a dirID/path pair to a host path.
-// Follows the unusual MacOS rules for absolute and relative paths.
-// Allows for differing Unicode normalisation by listing the directory.
-func hostPath(number uint16, name macstring, leafMustExist bool) (path string, errno int) {
+// - Follows the unusual MacOS rules for absolute and relative paths.
+// - Allows for differing Unicode normalisation by listing the directory.
+// - Find an existing file: use leafMustExist on pain of dirNFErr
+// - Get path for not yet created file: use leafMustNotExist on pain of dupFNErr
+// - A nonexistent path (other than the leaf part) will always return dirNFErr
+// - Returned path is meaningless if errno is non-zero
+type leafExist uint8
+
+const (
+	leafMustExist leafExist = iota
+	leafMustNotExist
+	leafMayExist
+	leafExistLimit
+)
+
+func hostPath(number uint16, name macstring, allow leafExist) (path string, errno int) {
 	if gDebugFileMgr {
-		defer func(number uint16, name macstring, leafMustExist bool) {
-			logf("hostPath(%v, %q, %v) = (%q, %v)", number, name, leafMustExist, path, errno)
-		}(number, name, leafMustExist)
+		defer func(number uint16, name macstring, allow leafExist) {
+			logf("hostPath(%v, %q, %v, %v) = (%q, %v)", number, name, allow, path, errno)
+		}(number, name, allow)
+	}
+
+	if allow >= leafExistLimit {
+		panic(allow)
 	}
 
 	// If name is an absolute path, then start evaluating from "parent of root"
@@ -182,7 +199,7 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (path string, e
 	for i, mac := range components {
 		if len(mac) == 0 { // treat :: like ..
 			if path == dirIDs[rootsParentID] || path == dirIDs[rootID] {
-				return path, -120 // dirNFErr
+				return "", -120 // dirNFErr
 			}
 
 			path = platPathDir(path)
@@ -193,7 +210,7 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (path string, e
 		if path == dirIDs[rootsParentID] {
 			// ToolServer sometimes fails to catch "Dev:Stdout" before the FS
 			if relString(onlyVolName, mac, false, true) != 0 {
-				return path, -120 // dirNFErr
+				return "", -120 // dirNFErr
 			}
 
 			path = dirIDs[rootID]
@@ -232,21 +249,22 @@ func hostPath(number uint16, name macstring, leafMustExist bool) (path string, e
 		// Otherwise, use the unicode name that we made up
 		path = platPathJoin(path, name.host)
 
-		if !exists && errno == 0 { // can tolerate a nonexistent leaf file if instructed
-			if i == len(components)-1 {
-				if leafMustExist {
-					errno = -43 // fnfErr
-				}
-			} else {
-				errno = -120 // dirNFErr
-			}
+		// Can tolerate a nonexistent leaf file if instructed
+		isLeaf := i == len(components)-1
+		switch {
+		case isLeaf && !exists && allow == leafMustExist:
+			return "", -43 // fnfErr
+		case isLeaf && exists && allow == leafMustNotExist:
+			return "", -48 // dupFNErr
+		case !isLeaf && !exists:
+			return "", -120 // dirNFErr
 		}
 	}
 
-	return path, errno
+	return path, 0 // noErr
 }
 
-func hostPathFromSpec(spec uint32, leafMustExist bool) (string, int) {
+func hostPathFromSpec(spec uint32, allow leafExist) (string, int) {
 	vRefNum := readw(spec)
 	dirID := readl(spec + 2)
 	name := readPstring(spec + 6)
@@ -262,7 +280,7 @@ func hostPathFromSpec(spec uint32, leafMustExist bool) (string, int) {
 		number = uint16(dirID)
 	}
 
-	return hostPath(number, name, leafMustExist)
+	return hostPath(number, name, allow)
 }
 
 // Return a mac and host-format directory listing
@@ -397,27 +415,23 @@ func tCreate(pb uint32) int { // also DirCreate
 	ioName := readPstring(ioNamePtr)
 
 	number := paramBlkDirID()
-	path, errno := hostPath(number, ioName, true)
+	path, errno := hostPath(number, ioName, leafMustNotExist)
+	if errno != 0 {
+		return errno
+	}
 
 	if platPathDir(path) == mpwFolder && platPathBase(path) == "ToolServer.Log" {
 		return -120 // dirNFErr
 	}
 
-	switch errno {
-	case 0: // noErr: already exists
-		return -48 // dupFNErr
-	case -43: // fnfErr: create the file/folder
-		if readb(d1ptr+3) == 0x60 { // DirCreate
-			os.Mkdir(path, 0o755)
-			writel(pb+48, uint32(dirID(path))) // return ioDirID
-		} else { // Create
-			writeDataFork(path, nil)
-		}
-		clearDirCache(platPathDir(path))
-		return 0
-	default: // likely a containing folder not found, complain loudly
-		return errno
+	if readb(d1ptr+3) == 0x60 { // DirCreate
+		os.Mkdir(path, 0o755)
+		writel(pb+48, uint32(dirID(path))) // return ioDirID
+	} else { // Create
+		writeDataFork(path, nil)
 	}
+	clearDirCache(platPathDir(path))
+	return 0
 }
 
 func tDelete(pb uint32) int {
@@ -425,7 +439,7 @@ func tDelete(pb uint32) int {
 	ioName := readPstring(ioNamePtr)
 
 	number := paramBlkDirID()
-	path, errno := hostPath(number, ioName, true)
+	path, errno := hostPath(number, ioName, leafMustExist)
 	if errno != 0 {
 		return errno
 	}
@@ -483,7 +497,7 @@ func tGetFInfo(pb uint32) int { // also GetCatInfo
 		path = platPathJoin(path, listing[ioFDirIndex-1].host)
 	} else { // zero or (if GetFInfo) negative
 		// file named "ioNamePtr" within "dirID"
-		subPath, errno := hostPath(dirid, readPstring(ioNamePtr), true)
+		subPath, errno := hostPath(dirid, readPstring(ioNamePtr), leafMustExist)
 		if errno != 0 { // could be nonexistent
 			return errno
 		}
@@ -551,7 +565,7 @@ func tSetFInfo(pb uint32) int { // also SetCatInfo
 	ioName := readPstring(readl(pb + 18))
 	dirid := paramBlkDirID()
 
-	path, errno := hostPath(dirid, ioName, true)
+	path, errno := hostPath(dirid, ioName, leafMustExist)
 	if errno != 0 {
 		return errno
 	}
@@ -600,7 +614,7 @@ func tSetVol(pb uint32) int {
 			volname += ":"
 		}
 
-		path, errno := hostPath(2, volname, true)
+		path, errno := hostPath(2, volname, leafMustExist)
 		if errno != 0 {
 			return errno
 		}
@@ -665,7 +679,7 @@ func tFSDispatch(pb uint32) int {
 		ioName := readPstring(readl(pb + 18))
 		ioWDDirID := readw(pb + 48 + 2)
 
-		path, errno := hostPath(ioWDDirID, ioName, true)
+		path, errno := hostPath(ioWDDirID, ioName, leafMustExist)
 		if errno != 0 {
 			return errno
 		}
@@ -677,12 +691,12 @@ func tFSDispatch(pb uint32) int {
 		// do nothing
 
 	case 5: // CatMove
-		file, errno := hostPath(paramBlkDirID(), readPstring(readl(pb+18)), true)
+		file, errno := hostPath(paramBlkDirID(), readPstring(readl(pb+18)), leafMustExist)
 		if errno != 0 {
 			return errno
 		}
 
-		dir, errno := hostPath(uint16(readl(pb+36)), readPstring(readl(pb+28)), true)
+		dir, errno := hostPath(uint16(readl(pb+36)), readPstring(readl(pb+28)), leafMustExist)
 		if errno != 0 {
 			return errno
 		}
@@ -792,7 +806,7 @@ func tFSDispatch(pb uint32) int {
 		ioName := readPstring(readl(pb + 18))
 		ioMisc := readl(pb + 28)
 
-		path, errno := hostPath(ioDirID, ioName, false)
+		path, errno := hostPath(ioDirID, ioName, leafMayExist)
 		if errno != 0 {
 			return errno
 		}
@@ -834,7 +848,7 @@ func tRename(pb uint32) int {
 	ioName := readPstring(readl(pb + 18))    // ioNamePtr
 	ioNewName := readPstring(readl(pb + 28)) // ioMisc
 
-	file, errno := hostPath(paramBlkDirID(), ioName, true)
+	file, errno := hostPath(paramBlkDirID(), ioName, leafMustExist)
 	if errno != 0 {
 		return errno
 	}
@@ -853,9 +867,9 @@ func tRename(pb uint32) int {
 	}
 
 	// Dest must not already exist
-	newFile, errno := hostPath(dirID(platPathDir(file)), ioNewName, false)
-	if _, err := os.Stat(newFile); !errors.Is(err, fs.ErrNotExist) {
-		return -48 // dupFNErr
+	newFile, errno := hostPath(dirID(platPathDir(file)), ioNewName, leafMustNotExist)
+	if errno != 0 {
+		return errno
 	}
 
 	err := os.Rename(file, newFile)

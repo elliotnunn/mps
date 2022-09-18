@@ -1084,24 +1084,20 @@ func tHCreateResFile() {
 		dirID = vRefNum
 	}
 
-	path, errno := hostPath(dirID, readPstring(namePtr), true)
-
-	// Treat a file with no valid resource fork as nonexistent
-	if errno == 0 && len(resourceFork(path)) <= 256 {
-		errno = -43 // fnfErr
+	path, errno := hostPath(dirID, readPstring(namePtr), leafMayExist)
+	if errno != 0 {
+		setResError(int16(errno))
+		return
 	}
 
-	switch errno {
-	case 0: // noErr (but file should NOT already exist)
-		setResError(-48) // dupFNErr
-	case -43: // fnfErr (which we expect)
+	// Hack, to allow CreateResFile if there is a corrupt or truncated fork
+	if len(resourceFork(path)) <= 256 {
 		empty := []byte{0x2: 0x01, 0x6: 0x01, 0xf: 0x1e, 0x119: 0x1c, 0x11b: 0x1e, 0x11c: 0xff, 0x11d: 0xff}
 		writeResourceFork(path, empty)
 		clearDirCache(platPathDir(path))
-		setResError(0) // noErr
-	default:
-		setResError(int16(errno))
 	}
+
+	setResError(0)
 }
 
 func tGetResAttrs() {

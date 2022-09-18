@@ -110,7 +110,7 @@ func tOpenFork(pb uint32, forkIsRsrc bool) int {
 	number := paramBlkDirID()
 
 	// Checks for file existence
-	path, errno := hostPath(number, ioName, true)
+	path, errno := hostPath(number, ioName, leafMustExist)
 	if errno != 0 {
 		return errno
 	}

@@ -174,7 +174,7 @@ func resolveAlias(alias []byte, baseNum uint16, base macstring, relFirst bool) (
 
 	// See if either of our schemes work
 	for _, try := range searchOrder {
-		path, errno := hostPath(baseNum, try, true)
+		path, errno := hostPath(baseNum, try, leafMustExist)
 
 		if errno != 0 {
 			continue
@@ -300,7 +300,7 @@ func tNewAlias() {
 		return
 	}
 
-	toPath, err := hostPathFromSpec(toSpec, true)
+	toPath, err := hostPathFromSpec(toSpec, leafMustExist)
 	if err != 0 {
 		writew(readl(spptr), uint16(err))
 		return
@@ -308,7 +308,7 @@ func tNewAlias() {
 
 	fromPath := ""
 	if fromSpec != 0 {
-		fromPath, err = hostPathFromSpec(fromSpec, true)
+		fromPath, err = hostPathFromSpec(fromSpec, leafMustExist)
 		if err != 0 {
 			writew(readl(spptr), uint16(err))
 			return
@@ -351,7 +351,7 @@ func tResolveAlias() {
 
 		baseStr = readPstring(fromFile + 6)
 
-		basePath, _ = hostPath(baseNum, baseStr, false)
+		basePath, _ = hostPath(baseNum, baseStr, leafMayExist)
 	}
 
 	aliasOK, needsUpdate, found := resolveAlias(mem[readl(aliasHand):], baseNum, baseStr, false)
@@ -508,7 +508,7 @@ func tUpdateAlias() {
 		return
 	}
 
-	targetPath, err := hostPathFromSpec(target, true)
+	targetPath, err := hostPathFromSpec(target, leafMustExist)
 	if err != 0 {
 		writew(readl(spptr), uint16(err))
 		return
@@ -516,7 +516,7 @@ func tUpdateAlias() {
 
 	fromPath := ""
 	if fromFile != 0 {
-		fromPath, err = hostPathFromSpec(fromFile, true)
+		fromPath, err = hostPathFromSpec(fromFile, leafMustExist)
 		if err != 0 {
 			writew(readl(spptr), uint16(err))
 			return
@@ -576,7 +576,7 @@ func tNewAliasMinimal() {
 		return
 	}
 
-	toPath, err := hostPathFromSpec(toSpec, true)
+	toPath, err := hostPathFromSpec(toSpec, leafMustExist)
 	if err != 0 {
 		writew(readl(spptr), uint16(err))
 		return
@@ -604,7 +604,7 @@ func tNewAliasMinimalFromFullPath() {
 		return
 	}
 
-	toPath, err := hostPath(2, macstring(mem[pathPtr:][:pathLen]), true)
+	toPath, err := hostPath(2, macstring(mem[pathPtr:][:pathLen]), leafMustExist)
 	if err != 0 {
 		writew(readl(spptr), uint16(err))
 		return
@@ -634,7 +634,7 @@ func tResolveAliasFile() {
 		return
 	}
 
-	path, err := hostPathFromSpec(theSpecPtr, true)
+	path, err := hostPathFromSpec(theSpecPtr, leafMustExist)
 	if err != 0 {
 		return
 	}
